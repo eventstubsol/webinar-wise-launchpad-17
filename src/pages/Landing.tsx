@@ -195,8 +195,8 @@ const Landing = () => {
                 <div className="relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1 ring-background bg-background">
                   <img
                     className="bg-background aspect-[15/8] relative rounded-2xl"
-                    src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=800&fit=crop&crop=center"
-                    alt="Webinar Analytics Dashboard Preview"
+                    src="/lovable-uploads/e3e54f25-b5ef-4ab3-8150-975ea1840b98.png"
+                    alt="Email Interface Preview"
                     width="2700"
                     height="1440"
                   />
