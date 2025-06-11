@@ -1,7 +1,7 @@
 
 import { Users, GraduationCap, Building, Briefcase } from "lucide-react";
 import { motion } from "framer-motion";
-import { LampContainer } from "@/components/ui/lamp";
+import { BeamsBackground } from "@/components/ui/beams-background";
 import { BentoGrid, type BentoItem } from "@/components/ui/bento-grid";
 
 const targetAudienceItems: BentoItem[] = [
@@ -36,8 +36,8 @@ const targetAudienceItems: BentoItem[] = [
 
 export const TargetAudienceSection = () => {
   return (
-    <LampContainer className="min-h-screen">
-      <div className="container mx-auto max-w-6xl w-full">
+    <BeamsBackground className="min-h-screen" intensity="medium">
+      <div className="container mx-auto max-w-6xl w-full flex flex-col items-center justify-center min-h-screen px-4">
         <div className="text-center mb-12">
           <motion.h2
             initial={{ opacity: 0.5, y: 100 }}
@@ -61,11 +61,11 @@ export const TargetAudienceSection = () => {
             duration: 0.8,
             ease: "easeInOut",
           }}
-          className="dark"
+          className="dark w-full"
         >
           <BentoGrid items={targetAudienceItems} />
         </motion.div>
       </div>
-    </LampContainer>
+    </BeamsBackground>
   );
 };
