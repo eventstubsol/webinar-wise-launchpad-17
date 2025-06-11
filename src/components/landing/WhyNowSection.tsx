@@ -1,15 +1,39 @@
 
+import { SparklesCore } from "@/components/ui/sparkles-core";
+
 export const WhyNowSection = () => {
   return (
-    <section className="py-16 px-4 bg-white">
-      <div className="container mx-auto max-w-4xl text-center">
-        <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-          Why Now?
-        </h2>
-        <p className="text-xl text-gray-600 mb-8">
+    <section className="h-[40rem] w-full bg-black flex flex-col items-center justify-center overflow-hidden">
+      <h1 className="md:text-7xl text-3xl lg:text-9xl font-bold text-center text-white relative z-20 mb-8">
+        Why Now?
+      </h1>
+      <div className="w-[40rem] h-40 relative">
+        {/* Gradients */}
+        <div className="absolute inset-x-20 top-0 bg-gradient-to-r from-transparent via-indigo-500 to-transparent h-[2px] w-3/4 blur-sm" />
+        <div className="absolute inset-x-20 top-0 bg-gradient-to-r from-transparent via-indigo-500 to-transparent h-px w-3/4" />
+        <div className="absolute inset-x-60 top-0 bg-gradient-to-r from-transparent via-sky-500 to-transparent h-[5px] w-1/4 blur-sm" />
+        <div className="absolute inset-x-60 top-0 bg-gradient-to-r from-transparent via-sky-500 to-transparent h-px w-1/4" />
+
+        {/* Core component */}
+        <SparklesCore
+          background="transparent"
+          minSize={0.4}
+          maxSize={1}
+          particleDensity={1200}
+          className="w-full h-full"
+          particleColor="#FFFFFF"
+        />
+
+        {/* Radial Gradient to prevent sharp edges */}
+        <div className="absolute inset-0 w-full h-full bg-black [mask-image:radial-gradient(350px_200px_at_top,transparent_20%,white)]"></div>
+      </div>
+      
+      {/* Content below the sparkles */}
+      <div className="text-center mt-8 max-w-4xl px-4 relative z-20">
+        <p className="text-xl text-gray-300 mb-4">
           Because you're spending hours cleaning data when you should be learning from it.
         </p>
-        <p className="text-lg text-gray-700">
+        <p className="text-lg text-gray-400">
           Webinar Wise turns every Zoom event into a strategic advantage — instantly.
         </p>
       </div>
