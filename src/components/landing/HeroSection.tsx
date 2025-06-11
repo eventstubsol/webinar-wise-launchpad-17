@@ -8,7 +8,7 @@ import { ArrowRight } from "lucide-react";
 export const HeroSection = () => {
   return (
     <AuroraBackground className="overflow-hidden">
-      <div className="relative pt-32 sm:pt-36 md:pt-44 lg:pt-36 w-full">
+      <div className="relative pt-20 sm:pt-24 md:pt-32 lg:pt-40 w-full">
         <div className="mx-auto max-w-7xl px-6">
           <div className="text-center sm:mx-auto lg:mr-auto lg:mt-0">
             <AnimatedGroup preset="blur-slide">
