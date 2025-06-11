@@ -1,3 +1,4 @@
+
 import { Sparkles } from "@/components/ui/sparkles";
 import { useTheme } from "next-themes";
 
@@ -40,4 +41,30 @@ export const CustomerLogosSection = () => {
 // Company Logo Components
 const Retool = () => (
   <svg viewBox="0 0 180 56" fill="currentColor" className="w-full">
-    <path d="M34 18.2a2.2 
+    <path d="M34 18.2a2.2 2.2 0 0 0-2.2-2.2H20.2A2.2 2.2 0 0 0 18 18.2v11.6c0 1.2 1 2.2 2.2 2.2h11.6a2.2 2.2 0 0 0 2.2-2.2V18.2z" />
+  </svg>
+);
+
+const Vercel = () => (
+  <svg viewBox="0 0 180 56" fill="currentColor" className="w-full">
+    <path d="M90 16L78 38h24L90 16z" />
+  </svg>
+);
+
+const Remote = () => (
+  <svg viewBox="0 0 180 56" fill="currentColor" className="w-full">
+    <path d="M90 18c-6.6 0-12 5.4-12 12s5.4 12 12 12 12-5.4 12-12-5.4-12-12-12zm0 18c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6z" />
+  </svg>
+);
+
+const Arc = () => (
+  <svg viewBox="0 0 180 56" fill="currentColor" className="w-full">
+    <path d="M90 38c11 0 20-9 20-20s-9-20-20-20-20 9-20 20 9 20 20 20zm0-32c6.6 0 12 5.4 12 12s-5.4 12-12 12-12-5.4-12-12 5.4-12 12-12z" />
+  </svg>
+);
+
+const Raycast = () => (
+  <svg viewBox="0 0 180 56" fill="currentColor" className="w-full">
+    <path d="M84 16v8h8v-8h-8zm8 8v8h8v-8h-8zm-8 8v8h8v-8h-8zm-8-8v8h8v-8h-8z" />
+  </svg>
+);
