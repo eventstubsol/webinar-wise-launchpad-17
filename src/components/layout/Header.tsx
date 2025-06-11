@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
@@ -79,7 +80,8 @@ export const Header = ({ className, isAuthenticated = false, onSignOut }: Header
                   <li key={index}>
                     <a
                       href={item.href}
-                      className="text-muted-foreground hover:text-accent-foreground block duration-150">
+                      className="hover:text-accent-foreground block duration-150"
+                      style={{ color: '#0f172a' }}>
                       <span>{item.name}</span>
                     </a>
                   </li>
@@ -88,7 +90,8 @@ export const Header = ({ className, isAuthenticated = false, onSignOut }: Header
                   <li>
                     <Link
                       to="/dashboard"
-                      className="text-muted-foreground hover:text-accent-foreground block duration-150">
+                      className="hover:text-accent-foreground block duration-150"
+                      style={{ color: '#0f172a' }}>
                       <span>Dashboard</span>
                     </Link>
                   </li>
@@ -103,7 +106,8 @@ export const Header = ({ className, isAuthenticated = false, onSignOut }: Header
                     <li key={index}>
                       <a
                         href={item.href}
-                        className="text-muted-foreground hover:text-accent-foreground block duration-150">
+                        className="hover:text-accent-foreground block duration-150"
+                        style={{ color: '#0f172a' }}>
                         <span>{item.name}</span>
                       </a>
                     </li>
@@ -112,7 +116,8 @@ export const Header = ({ className, isAuthenticated = false, onSignOut }: Header
                     <li>
                       <Link
                         to="/dashboard"
-                        className="text-muted-foreground hover:text-accent-foreground block duration-150">
+                        className="hover:text-accent-foreground block duration-150"
+                        style={{ color: '#0f172a' }}>
                         <span>Dashboard</span>
                       </Link>
                     </li>
