@@ -62,7 +62,7 @@ export const HeroSection = () => {
 
         <AnimatedGroup preset="zoom">
           <div className="relative -mr-56 mt-8 overflow-hidden px-2 sm:mr-0 sm:mt-12 md:mt-20">
-            <div aria-hidden className="bg-gradient-to-b to-background absolute inset-0 z-[1] from-transparent from-80% opacity-40 pointer-events-none" />
+            <div aria-hidden className="bg-gradient-to-b from-transparent via-transparent to-background absolute inset-0 z-[1] from-0% via-60% to-100% opacity-90 pointer-events-none" />
             <div className="relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1 ring-background bg-background z-[2]">
               <img className="bg-background aspect-[15/8] relative rounded-2xl" alt="Email Interface Preview" width="2700" height="1440" src="/lovable-uploads/72117dd5-e795-4677-a0d6-6aac40197a81.jpg" />
             </div>
