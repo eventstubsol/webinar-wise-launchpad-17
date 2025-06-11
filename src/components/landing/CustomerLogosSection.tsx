@@ -1,3 +1,4 @@
+
 import { Sparkles } from "@/components/ui/sparkles";
 import { useTheme } from "next-themes";
 import { useState } from "react";
@@ -101,5 +102,3 @@ const LogoItem = ({ name, src }: { name: string; src: string }) => {
     </div>
   );
 };
-
-</edits_to_apply>
