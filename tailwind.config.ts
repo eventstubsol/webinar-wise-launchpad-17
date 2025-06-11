@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 const {
@@ -120,13 +119,6 @@ export default {
 			maxWidth: {
 				'8xl': '88rem',
 				'9xl': '96rem',
-				'container': '80rem',
-			},
-			boxShadow: {
-				'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
-				'medium': '0 4px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-				'large': '0 10px 40px -10px rgba(0, 0, 0, 0.1), 0 2px 10px -2px rgba(0, 0, 0, 0.04)',
-				'glow': '0 -16px 128px 0 hsla(var(--brand-foreground) / 0.5) inset, 0 -16px 32px 0 hsla(var(--brand) / 0.5) inset',
 			},
 			keyframes: {
 				'accordion-down': {
@@ -183,16 +175,6 @@ export default {
 						transform: 'scale(1)'
 					}
 				},
-				'fade-in-up': {
-					'0%': { 
-						opacity: '0',
-						transform: 'translateY(10px)'
-					},
-					'100%': {
-						opacity: '1',
-						transform: 'translateY(0)'
-					}
-				},
 				appear: {
 					"0%": { opacity: "0", transform: "translateY(10px)" },
 					"100%": { opacity: "1", transform: "translateY(0)" }
@@ -225,11 +207,15 @@ export default {
 				'slide-up': 'slide-up 0.6s ease-out',
 				'slide-down': 'slide-down 0.6s ease-out',
 				'scale-in': 'scale-in 0.2s ease-out',
-				'fade-in-up': 'fade-in-up 0.5s ease-out forwards',
 				appear: "appear 0.5s ease-out forwards",
 				"appear-zoom": "appear-zoom 0.5s ease-out forwards",
 				aurora: "aurora 60s linear infinite",
 				"meteor-effect": "meteor 5s linear infinite",
+			},
+			boxShadow: {
+				'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
+				'medium': '0 4px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+				'large': '0 10px 40px -10px rgba(0, 0, 0, 0.1), 0 2px 10px -2px rgba(0, 0, 0, 0.04)',
 			},
 			screens: {
 				'xs': '475px',
