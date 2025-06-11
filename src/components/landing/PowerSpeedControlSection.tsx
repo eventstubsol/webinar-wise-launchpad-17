@@ -1,7 +1,7 @@
-
 import { Megaphone, GraduationCap, Laptop2, Building, Mic, CalendarClock } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { FeatureCard } from '@/components/ui/grid-feature-cards';
+import { WavyBackground } from '@/components/ui/wavy-background';
 
 const personas = [
 	{
@@ -38,7 +38,15 @@ const personas = [
 
 export const PowerSpeedControlSection = () => {
 	return (
-		<section className="py-20 md:py-36 bg-background">
+		<WavyBackground
+			containerClassName="py-20 md:py-36 bg-background"
+			colors={["#e0f2fe", "#bae6fd", "#f3e8ff", "#e9d5ff", "#f0fdfa"]}
+			backgroundFill="white"
+			waveOpacity={0.3}
+			blur={8}
+			speed="slow"
+			waveWidth={40}
+		>
 			<div className="mx-auto w-full max-w-6xl space-y-12 px-4">
 				<AnimatedContainer className="mx-auto max-w-3xl text-center">
 					<h2 className="text-3xl font-bold tracking-wide text-balance md:text-4xl lg:text-5xl xl:font-extrabold">
@@ -58,7 +66,7 @@ export const PowerSpeedControlSection = () => {
 					))}
 				</AnimatedContainer>
 			</div>
-		</section>
+		</WavyBackground>
 	);
 };
 
