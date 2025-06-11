@@ -312,7 +312,7 @@ function BentoGridCard({ item, index }: { item: BentoItem; index: number }) {
 
 function BentoGrid({ items }: BentoGridProps) {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 p-4 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 max-w-7xl mx-auto">
             {items.map((item, index) => (
                 <BentoGridCard key={index} item={item} index={index} />
             ))}
