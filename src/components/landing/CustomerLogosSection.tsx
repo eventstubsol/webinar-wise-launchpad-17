@@ -32,7 +32,7 @@ export const CustomerLogosSection = () => {
   
   return (
     <div className="h-screen w-full overflow-hidden">
-      <div className="mx-auto w-full max-w-2xl">
+      <div className="mx-auto w-full max-w-4xl">
         <div className="text-center text-3xl text-foreground">
           <span className="text-indigo-900 dark:text-indigo-200">
             Trusted by experts.
@@ -79,14 +79,14 @@ const LogoItem = ({ name, src }: { name: string; src: string }) => {
   return (
     <div className="flex items-center justify-center">
       {imageError ? (
-        <div className="h-12 w-24 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center text-xs text-gray-500">
+        <div className="h-18 w-36 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center text-xs text-gray-500">
           {name.split(' ')[0]}
         </div>
       ) : (
         <img
           src={src}
           alt={`${name} logo`}
-          className="h-12 w-auto max-w-full opacity-60 hover:opacity-100 transition-opacity duration-200 filter grayscale hover:grayscale-0"
+          className="h-18 w-auto max-w-full opacity-60 hover:opacity-100 transition-opacity duration-200 filter grayscale hover:grayscale-0"
           onError={handleImageError}
           onLoad={handleImageLoad}
         />
