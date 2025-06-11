@@ -181,21 +181,6 @@ export function BeamsBackground({
                 style={{ filter: "blur(15px)" }}
             />
 
-            <motion.div
-                className="absolute inset-0 bg-neutral-950/5"
-                animate={{
-                    opacity: [0.05, 0.15, 0.05],
-                }}
-                transition={{
-                    duration: 10,
-                    ease: "easeInOut",
-                    repeat: Number.POSITIVE_INFINITY,
-                }}
-                style={{
-                    backdropFilter: "blur(50px)",
-                }}
-            />
-
             <div className="relative z-10">
                 {children}
             </div>
