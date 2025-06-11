@@ -48,8 +48,8 @@ export const FeaturesSection = () => {
             <div key={index} className="w-full relative max-w-xs mx-auto">
               <div className="absolute inset-0 h-full w-full bg-gradient-to-r from-blue-500 to-teal-500 transform scale-[0.80] rounded-full blur-3xl" />
               <div className="relative shadow-xl bg-gray-900 border border-gray-800 px-6 py-8 h-full overflow-hidden rounded-2xl flex flex-col justify-start items-start">
-                <div className="h-6 w-6 rounded-full border flex items-center justify-center mb-6 border-gray-500">
-                  <feature.icon className="h-3 w-3 text-gray-300" />
+                <div className="h-10 w-10 rounded-full border flex items-center justify-center mb-6 border-gray-500">
+                  <feature.icon className="h-5 w-5 text-white" />
                 </div>
 
                 <h3 className="font-bold text-xl text-white mb-4 relative z-50">
@@ -71,8 +71,8 @@ export const FeaturesSection = () => {
             <div key={index + 3} className="w-full relative max-w-xs mx-auto">
               <div className="absolute inset-0 h-full w-full bg-gradient-to-r from-blue-500 to-teal-500 transform scale-[0.80] rounded-full blur-3xl" />
               <div className="relative shadow-xl bg-gray-900 border border-gray-800 px-6 py-8 h-full overflow-hidden rounded-2xl flex flex-col justify-start items-start">
-                <div className="h-6 w-6 rounded-full border flex items-center justify-center mb-6 border-gray-500">
-                  <feature.icon className="h-3 w-3 text-gray-300" />
+                <div className="h-10 w-10 rounded-full border flex items-center justify-center mb-6 border-gray-500">
+                  <feature.icon className="h-5 w-5 text-white" />
                 </div>
 
                 <h3 className="font-bold text-xl text-white mb-4 relative z-50">
