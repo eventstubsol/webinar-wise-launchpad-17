@@ -40,7 +40,7 @@ export const HeroSection = () => {
               <div className="bg-foreground/10 rounded-[14px] border p-0.5">
                 <Button asChild size="lg" className="rounded-xl px-5 text-base">
                   <Link to="/register">
-                    <span className="text-nowrap">Get Started Free</span>
+                    <span className="text-nowrap">Join the Waitlist</span>
                   </Link>
                 </Button>
               </div>
