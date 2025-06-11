@@ -32,7 +32,7 @@ export const CustomerLogosSection = () => {
   
   return (
     <div className="h-screen w-full overflow-hidden">
-      <div className="mx-auto mt-32 w-full max-w-2xl">
+      <div className="mx-auto w-full max-w-2xl">
         <div className="text-center text-3xl text-foreground">
           <span className="text-indigo-900 dark:text-indigo-200">
             Trusted by experts.
