@@ -66,14 +66,14 @@ export const HeroSection = () => {
               <div className="relative">
                 <img className="bg-background aspect-[15/8] relative rounded-2xl" alt="Email Interface Preview" width="2700" height="1440" src="/lovable-uploads/72117dd5-e795-4677-a0d6-6aac40197a81.jpg" />
               </div>
-              {/* Gradient overlay applied to entire container to fade out border, shadow, and background */}
-              <div className="absolute bottom-0 left-0 right-0 h-64 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none z-10" />
+              {/* Extended gradient overlay to completely fade out entire container including borders and shadow */}
+              <div className="absolute -bottom-16 -left-8 -right-8 h-96 bg-gradient-to-t from-background via-background/98 via-background/90 via-background/70 to-transparent pointer-events-none z-10" />
             </div>
           </div>
         </AnimatedGroup>
 
-        {/* Gradient overlay that extends beyond the image to create smooth transition */}
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-background via-background/80 to-transparent z-[3] pointer-events-none" />
+        {/* Additional gradient overlay extending beyond the image container for seamless transition */}
+        <div className="absolute bottom-0 left-0 right-0 h-64 bg-gradient-to-t from-background via-background/95 via-background/80 to-transparent z-[3] pointer-events-none" />
       </div>
     </AuroraBackground>
   );
