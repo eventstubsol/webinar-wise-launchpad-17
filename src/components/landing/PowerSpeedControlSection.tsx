@@ -1,52 +1,51 @@
 
-'use client';
 import { Zap, Cpu, Fingerprint, Pencil, Settings2, Sparkles } from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { FeatureCard } from '@/components/ui/grid-feature-cards';
 
 const features = [
 	{
-		title: 'Faaast',
+		title: 'Lightning Fast Sync',
 		icon: Zap,
-		description: 'It supports an entire helping developers and innovate.',
+		description: 'Connect your Zoom account and sync webinar data in seconds, not hours.',
 	},
 	{
-		title: 'Powerful',
+		title: 'Powerful Analytics',
 		icon: Cpu,
-		description: 'It supports an entire helping developers and businesses.',
+		description: 'Advanced algorithms process your webinar data to reveal hidden insights.',
 	},
 	{
-		title: 'Security',
+		title: 'Enterprise Security',
 		icon: Fingerprint,
-		description: 'It supports an helping developers businesses.',
+		description: 'Bank-grade security ensures your webinar data stays private and protected.',
 	},
 	{
-		title: 'Customization',
+		title: 'Custom Reports',
 		icon: Pencil,
-		description: 'It supports helping developers and businesses innovate.',
+		description: 'Tailor your reports and dashboards to match your exact business needs.',
 	},
 	{
-		title: 'Control',
+		title: 'Full Control',
 		icon: Settings2,
-		description: 'It supports helping developers and businesses innovate.',
+		description: 'Own your data, control exports, and manage access with precision.',
 	},
 	{
-		title: 'Built for AI',
+		title: 'AI-Powered Insights',
 		icon: Sparkles,
-		description: 'It supports helping developers and businesses innovate.',
+		description: 'Machine learning identifies patterns and opportunities you might miss.',
 	},
 ];
 
-export default function DemoOne() {
+export const PowerSpeedControlSection = () => {
 	return (
-		<section className="py-16 md:py-32">
+		<section className="py-16 md:py-32 bg-background">
 			<div className="mx-auto w-full max-w-5xl space-y-8 px-4">
 				<AnimatedContainer className="mx-auto max-w-3xl text-center">
 					<h2 className="text-3xl font-bold tracking-wide text-balance md:text-4xl lg:text-5xl xl:font-extrabold">
 						Power. Speed. Control.
 					</h2>
 					<p className="text-muted-foreground mt-4 text-sm tracking-wide text-balance md:text-base">
-						Everything you need to build fast, secure, scalable apps.
+						Everything you need to transform webinar data into business intelligence.
 					</p>
 				</AnimatedContainer>
 
@@ -61,7 +60,7 @@ export default function DemoOne() {
 			</div>
 		</section>
 	);
-}
+};
 
 type ViewAnimationProps = {
 	delay?: number;
@@ -73,7 +72,7 @@ function AnimatedContainer({ className, delay = 0.1, children }: ViewAnimationPr
 	const shouldReduceMotion = useReducedMotion();
 
 	if (shouldReduceMotion) {
-		return children;
+		return <div className={className}>{children}</div>;
 	}
 
 	return (
