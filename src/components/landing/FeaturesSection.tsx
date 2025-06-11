@@ -1,5 +1,6 @@
 import { Zap, Brain, BarChart3, FileText, Shield } from "lucide-react";
 import { Meteors } from "@/components/ui/meteors";
+import { TextColor } from "@/components/ui/text-color";
 
 const features = [
   {
@@ -33,6 +34,8 @@ export const FeaturesSection = () => {
   return (
     <section className="relative -mt-64 pt-28 pb-[164px] px-4 bg-gradient-to-b from-transparent via-transparent to-white z-10">
       <div className="container mx-auto max-w-6xl pt-10">
+        <TextColor />
+        
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
             Why Webinar Wise?
