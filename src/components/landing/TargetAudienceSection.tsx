@@ -34,8 +34,8 @@ const targetAudienceItems: BentoItem[] = [
 
 export const TargetAudienceSection = () => {
   return (
-    <BeamsBackground className="min-h-screen" intensity="medium">
-      <div className="container mx-auto max-w-6xl w-full flex flex-col items-center justify-center min-h-screen px-4">
+    <BeamsBackground className="py-20" intensity="medium">
+      <div className="container mx-auto max-w-6xl w-full px-4">
         <div className="text-center mb-12">
           <motion.h2
             initial={{ opacity: 0.5, y: 100 }}
