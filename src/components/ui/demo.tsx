@@ -1,6 +1,5 @@
 
-import React from "react";
-import { Link } from "react-router-dom";
+import React from 'react';
 import { 
   Brain, 
   Facebook, 
@@ -12,11 +11,10 @@ import {
   Phone,
   MapPin
 } from 'lucide-react';
-import type { BaseComponentProps } from "@/types";
 
-export const Footer = ({ className }: BaseComponentProps) => {
+const Footer: React.FC = () => {
   return (
-    <footer className={`relative bg-gradient-to-br from-white via-gray-50 to-gray-100 pt-32 pb-12 overflow-hidden ${className}`}>
+    <footer className="relative bg-gradient-to-br from-white via-gray-50 to-gray-100 pt-32 pb-12 overflow-hidden">
       {/* Background patterns */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
@@ -31,11 +29,11 @@ export const Footer = ({ className }: BaseComponentProps) => {
                 <Brain className="h-6 w-6" />
               </div>
               <span className="ml-3 text-xl font-bold tracking-tight bg-gradient-to-r from-black via-gray-800 to-gray-600 bg-clip-text text-transparent">
-                Webinar Wise
+                Chillbion
               </span>
             </div>
             <p className="text-gray-600 leading-relaxed mb-8">
-              Transform your Zoom webinar data into actionable business intelligence with professional analytics and insights.
+              Helping startups transform ideas into reality with cutting-edge technology solutions.
             </p>
             <div className="flex space-x-4">
               {[
@@ -57,20 +55,20 @@ export const Footer = ({ className }: BaseComponentProps) => {
           </div>
 
           <div>
-            <h4 className="text-lg font-bold tracking-tight mb-6 bg-gradient-to-r from-black via-gray-800 to-gray-600 bg-clip-text text-transparent">Product</h4>
+            <h4 className="text-lg font-bold tracking-tight mb-6 bg-gradient-to-r from-black via-gray-800 to-gray-600 bg-clip-text text-transparent">Services</h4>
             <ul className="space-y-4">
               {[
-                { name: "Features", href: "/" },
-                { name: "Analytics Dashboard", href: "/" },
-                { name: "Export Reports", href: "/" },
-                { name: "Zoom Integration", href: "/" },
-                { name: "Data Insights", href: "/" }
-              ].map((item, idx) => (
+                "MVP Development",
+                "Full-Stack Development",
+                "AI Solutions",
+                "LLM Applications",
+                "Data Engineering"
+              ].map((service, idx) => (
                 <li key={idx}>
-                  <Link to={item.href} className="text-gray-600 hover:text-black transition-colors duration-300 flex items-center group">
+                  <a href="#" className="text-gray-600 hover:text-black transition-colors duration-300 flex items-center group">
                     <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 mr-2 opacity-0 group-hover:opacity-100 transition-opacity"></span>
-                    {item.name}
-                  </Link>
+                    {service}
+                  </a>
                 </li>
               ))}
             </ul>
@@ -80,46 +78,40 @@ export const Footer = ({ className }: BaseComponentProps) => {
             <h4 className="text-lg font-bold tracking-tight mb-6 bg-gradient-to-r from-black via-gray-800 to-gray-600 bg-clip-text text-transparent">Company</h4>
             <ul className="space-y-4">
               {[
-                { name: "About", href: "/" },
-                { name: "Blog", href: "/" },
-                { name: "Careers", href: "/" },
-                { name: "Contact", href: "/" },
-                { name: "Privacy Policy", href: "/" }
+                "About Us",
+                "Team",
+                "Case Studies",
+                "Blog",
+                "Careers"
               ].map((item, idx) => (
                 <li key={idx}>
-                  <Link to={item.href} className="text-gray-600 hover:text-black transition-colors duration-300 flex items-center group">
+                  <a href="#" className="text-gray-600 hover:text-black transition-colors duration-300 flex items-center group">
                     <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 mr-2 opacity-0 group-hover:opacity-100 transition-opacity"></span>
-                    {item.name}
-                  </Link>
+                    {item}
+                  </a>
                 </li>
               ))}
             </ul>
           </div>
 
           <div>
-            <h4 className="text-lg font-bold tracking-tight mb-6 bg-gradient-to-r from-black via-gray-800 to-gray-600 bg-clip-text text-transparent">Support</h4>
+            <h4 className="text-lg font-bold tracking-tight mb-6 bg-gradient-to-r from-black via-gray-800 to-gray-600 bg-clip-text text-transparent">Contact</h4>
             <ul className="space-y-4">
               <li className="text-gray-600 flex items-center">
                 <MapPin className="w-5 h-5 mr-2 text-gray-400" />
-                San Francisco, CA
+                Dhaka, Bangladesh
               </li>
               <li>
-                <a href="mailto:support@webinarwise.com" className="text-gray-600 hover:text-black transition-colors duration-300 flex items-center group">
+                <a href="mailto:contact@chillbion.com" className="text-gray-600 hover:text-black transition-colors duration-300 flex items-center group">
                   <Mail className="w-5 h-5 mr-2 text-gray-400" />
-                  support@webinarwise.com
+                  contact@chillbion.com
                 </a>
               </li>
               <li>
-                <Link to="/" className="text-gray-600 hover:text-black transition-colors duration-300 flex items-center group">
-                  <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 mr-2 opacity-0 group-hover:opacity-100 transition-opacity"></span>
-                  Help Center
-                </Link>
-              </li>
-              <li>
-                <Link to="/" className="text-gray-600 hover:text-black transition-colors duration-300 flex items-center group">
-                  <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 mr-2 opacity-0 group-hover:opacity-100 transition-opacity"></span>
-                  Documentation
-                </Link>
+                <a href="tel:+18001234567" className="text-gray-600 hover:text-black transition-colors duration-300 flex items-center group">
+                  <Phone className="w-5 h-5 mr-2 text-gray-400" />
+                  +1 (800) 123-4567
+                </a>
               </li>
             </ul>
           </div>
@@ -127,10 +119,12 @@ export const Footer = ({ className }: BaseComponentProps) => {
 
         <div className="mt-24 pt-8 border-t border-black/10 text-center">
           <p className="text-gray-500 text-sm font-medium">
-            © {new Date().getFullYear()} Webinar Wise. All rights reserved.
+            © {new Date().getFullYear()} Chillbion. All rights reserved.
           </p>
         </div>
       </div>
     </footer>
   );
 };
+
+export default Footer;
