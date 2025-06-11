@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { AnimatedGroup } from "@/components/ui/animated-group";
 import { AuroraBackground } from "@/components/ui/aurora-background";
@@ -29,8 +28,8 @@ export const HeroSection = () => {
               </Link>
     
               <h1 className="mt-8 max-w-4xl mx-auto text-balance text-6xl md:text-7xl lg:mt-16 xl:text-[5.25rem] font-bold text-gray-900 dark:text-white">
-                <span className="block">Turn Zoom Webinar Report</span>
-                <span className="text-primary block">Chaos into Clarity</span>
+                <span className="block">Turn Zoom Webinar</span>
+                <span className="text-primary block">Report Chaos into Clarity</span>
               </h1>
               
               <p className="mx-auto mt-8 max-w-2xl text-balance text-lg text-gray-600 dark:text-gray-300">
