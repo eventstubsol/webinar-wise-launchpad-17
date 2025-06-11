@@ -1,3 +1,4 @@
+
 import { Sparkles } from "@/components/ui/sparkles";
 import { useTheme } from "next-themes";
 
@@ -40,3 +41,35 @@ export const CustomerLogosSection = () => {
 // Company Logo Components
 const Retool = () => (
   <svg viewBox="0 0 180 56" fill="currentColor" className="w-full">
+    <path d="M34 18.2a2.2 2.2 0 012.2-2.2h8.6a2.2 2.2 0 012.2 2.2v1.7a1.1 1.1 0 01-1.1 1.1H35.1a1.1 1.1 0 01-1.1-1.1v-1.7zM34 25.1a1.1 1.1 0 011.1-1.1h20.7a2.2 2.2 0 012.2 2.2v5.7a1.1 1.1 0 01-1.1 1.1H36.2a2.2 2.2 0 01-2.2-2.2v-5.7zM45 37.1a1.1 1.1 0 011.1-1.1h10.8a1.1 1.1 0 011.1 1.1v.7a2.2 2.2 0 01-2.2 2.2h-8.6a2.2 2.2 0 01-2.2-2.2v-.7z" />
+  </svg>
+);
+
+const Vercel = () => (
+  <svg viewBox="0 0 180 56" fill="currentColor" className="w-full">
+    <path d="M89 28l11-19h-22l11 19z" />
+  </svg>
+);
+
+const Remote = () => (
+  <svg viewBox="0 0 180 56" fill="currentColor" className="w-full">
+    <rect x="45" y="20" width="90" height="16" rx="8" />
+    <circle cx="65" cy="28" r="4" />
+    <circle cx="115" cy="28" r="4" />
+  </svg>
+);
+
+const Arc = () => (
+  <svg viewBox="0 0 180 56" fill="currentColor" className="w-full">
+    <path d="M90 15c-20 0-36 16-36 36h8c0-15 13-28 28-28s28 13 28 28h8c0-20-16-36-36-36z" />
+  </svg>
+);
+
+const Raycast = () => (
+  <svg viewBox="0 0 180 56" fill="currentColor" className="w-full">
+    <rect x="60" y="18" width="60" height="4" />
+    <rect x="60" y="26" width="60" height="4" />
+    <rect x="60" y="34" width="60" height="4" />
+    <circle cx="45" cy="28" r="6" />
+  </svg>
+);
