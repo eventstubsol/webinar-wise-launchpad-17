@@ -41,7 +41,7 @@ export const CustomerLogosSection = () => {
           <span>Used by the leaders.</span>
         </div>
 
-        <div className="mt-14 flex justify-between items-center gap-4 text-zinc-900 dark:text-white">
+        <div className="mt-14 grid grid-cols-5 text-zinc-900 dark:text-white">
           {logos.map((logo, index) => (
             <LogoItem key={index} name={logo.name} src={logo.src} />
           ))}
@@ -77,16 +77,16 @@ const LogoItem = ({ name, src }: { name: string; src: string }) => {
   };
 
   return (
-    <div className="flex items-center justify-center flex-1">
+    <div className="flex items-center justify-center">
       {imageError ? (
-        <div className="h-18 w-auto min-w-24 max-w-full bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center text-xs text-gray-500">
+        <div className="h-12 w-24 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center text-xs text-gray-500">
           {name.split(' ')[0]}
         </div>
       ) : (
         <img
           src={src}
           alt={`${name} logo`}
-          className="h-18 w-auto max-w-24 opacity-60 hover:opacity-100 transition-opacity duration-200 filter grayscale hover:grayscale-0"
+          className="h-12 w-auto max-w-full opacity-60 hover:opacity-100 transition-opacity duration-200 filter grayscale hover:grayscale-0"
           onError={handleImageError}
           onLoad={handleImageLoad}
         />
