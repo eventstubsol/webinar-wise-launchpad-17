@@ -13,7 +13,6 @@ export interface BentoItem {
     tags?: string[];
     meta?: string;
     cta?: string;
-    colSpan?: number;
     hasPersistentHover?: boolean;
 }
 
@@ -48,10 +47,7 @@ function BentoGridCard({ item, index }: { item: BentoItem; index: number }) {
     return (
         <motion.div
             ref={cardRef}
-            className={cn(
-                "relative rounded-xl overflow-hidden cursor-pointer",
-                item.colSpan === 2 ? "md:col-span-2" : "col-span-1"
-            )}
+            className="relative rounded-xl overflow-hidden cursor-pointer"
             style={{
                 minHeight: "280px",
                 transformStyle: "preserve-3d",
@@ -316,7 +312,7 @@ function BentoGridCard({ item, index }: { item: BentoItem; index: number }) {
 
 function BentoGrid({ items }: BentoGridProps) {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-4 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 p-4 max-w-7xl mx-auto">
             {items.map((item, index) => (
                 <BentoGridCard key={index} item={item} index={index} />
             ))}

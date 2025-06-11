@@ -10,7 +10,6 @@ const targetAudienceItems: BentoItem[] = [
     description: "Who run webinars every month and hate digging through spreadsheets",
     icon: <Users className="w-6 h-6 text-cyan-400" />,
     status: "Popular",
-    colSpan: 2,
     hasPersistentHover: true,
   },
   {
@@ -24,7 +23,6 @@ const targetAudienceItems: BentoItem[] = [
     description: "Running onboarding, demos, and community sessions",
     icon: <Building className="w-6 h-6 text-cyan-400" />,
     status: "Active",
-    colSpan: 2,
   },
   {
     title: "Agencies",
