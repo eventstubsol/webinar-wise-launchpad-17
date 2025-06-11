@@ -6,7 +6,7 @@ import { useState } from "react";
 export const CustomerLogosSection = () => {
   const { theme } = useTheme();
   
-  // Updated with actual uploaded logo paths
+  // Updated with 5 logos (removed Automation Anywhere and Ingram Micro)
   const logos = [
     {
       name: "Future IT Summit",
@@ -25,16 +25,8 @@ export const CustomerLogosSection = () => {
       src: "/lovable-uploads/0bbe944b-43b1-4e63-86ae-6a75569cea7a.png"
     },
     {
-      name: "Automation Anywhere",
-      src: "/lovable-uploads/f9cadb1e-0cfc-4719-aeef-3f7aaadc9067.png"
-    },
-    {
       name: "Cisco",
       src: "/lovable-uploads/d3011340-f45f-4d8c-b42a-3c95a640618a.png"
-    },
-    {
-      name: "Ingram Micro",
-      src: "/lovable-uploads/29629da3-33c9-4127-9a17-fa0af1a1d94f.png"
     }
   ];
   
@@ -49,7 +41,7 @@ export const CustomerLogosSection = () => {
           <span>Used by the leaders.</span>
         </div>
 
-        <div className="mt-14 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-8 items-center justify-items-center">
+        <div className="mt-14 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 items-center justify-items-center">
           {logos.map((logo, index) => (
             <LogoItem key={index} name={logo.name} src={logo.src} />
           ))}
@@ -69,7 +61,7 @@ export const CustomerLogosSection = () => {
   );
 };
 
-// Logo Component with error handling
+// Logo Component with error handling and increased size
 const LogoItem = ({ name, src }: { name: string; src: string }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -87,14 +79,14 @@ const LogoItem = ({ name, src }: { name: string; src: string }) => {
   return (
     <div className="flex items-center justify-center">
       {imageError ? (
-        <div className="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center text-xs text-gray-500">
+        <div className="h-12 w-24 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center text-xs text-gray-500">
           {name.split(' ')[0]}
         </div>
       ) : (
         <img
           src={src}
           alt={`${name} logo`}
-          className="h-8 w-auto max-w-full opacity-60 hover:opacity-100 transition-opacity duration-200 filter grayscale hover:grayscale-0"
+          className="h-12 w-auto max-w-full opacity-60 hover:opacity-100 transition-opacity duration-200 filter grayscale hover:grayscale-0"
           onError={handleImageError}
           onLoad={handleImageLoad}
         />
