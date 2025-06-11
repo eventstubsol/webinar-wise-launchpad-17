@@ -1,31 +1,29 @@
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
-import { auth } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 import { isValidEmail } from "@/lib/utils";
 import { LightLogin } from "@/components/ui/sign-in";
-import type { LoginCredentials } from "@/types";
 
 const Login = () => {
-  const [credentials, setCredentials] = useState<LoginCredentials>({
-    email: "",
-    password: ""
-  });
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
+  const { signIn } = useAuth();
   const navigate = useNavigate();
 
   const validateForm = () => {
-    if (!credentials.email) {
+    if (!email) {
       setError("Email is required");
       return false;
     }
-    if (!isValidEmail(credentials.email)) {
+    if (!isValidEmail(email)) {
       setError("Please enter a valid email");
       return false;
     }
-    if (!credentials.password) {
+    if (!password) {
       setError("Password is required");
       return false;
     }
@@ -40,7 +38,7 @@ const Login = () => {
 
     setLoading(true);
     try {
-      const { error } = await auth.signIn(credentials.email, credentials.password);
+      const { error } = await signIn(email, password);
       
       if (error) throw error;
 
@@ -58,12 +56,12 @@ const Login = () => {
   };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCredentials(prev => ({ ...prev, email: e.target.value }));
+    setEmail(e.target.value);
     if (error) setError("");
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCredentials(prev => ({ ...prev, password: e.target.value }));
+    setPassword(e.target.value);
     if (error) setError("");
   };
 
@@ -71,16 +69,21 @@ const Login = () => {
     navigate("/register");
   };
 
+  const handleForgotPasswordClick = () => {
+    navigate("/forgot-password");
+  };
+
   return (
     <LightLogin
-      email={credentials.email}
-      password={credentials.password}
+      email={email}
+      password={password}
       loading={loading}
       error={error}
       onEmailChange={handleEmailChange}
       onPasswordChange={handlePasswordChange}
       onSubmit={handleSubmit}
       onSignUpClick={handleSignUpClick}
+      onForgotPasswordClick={handleForgotPasswordClick}
     />
   );
 };

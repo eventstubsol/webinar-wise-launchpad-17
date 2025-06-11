@@ -2,39 +2,37 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
-import { auth } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 import { isValidEmail, isValidPassword } from "@/lib/utils";
 import { LightSignUp } from "@/components/ui/sign-up";
-import type { RegisterCredentials } from "@/types";
 
 const Register = () => {
-  const [credentials, setCredentials] = useState<RegisterCredentials>({
-    email: "",
-    password: "",
-    full_name: ""
-  });
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
+  const { signUp } = useAuth();
   const navigate = useNavigate();
 
   const validateForm = () => {
-    if (!credentials.full_name.trim()) {
+    if (!fullName.trim()) {
       setError("Full name is required");
       return false;
     }
-    if (!credentials.email) {
+    if (!email) {
       setError("Email is required");
       return false;
     }
-    if (!isValidEmail(credentials.email)) {
+    if (!isValidEmail(email)) {
       setError("Please enter a valid email");
       return false;
     }
-    if (!credentials.password) {
+    if (!password) {
       setError("Password is required");
       return false;
     }
-    if (!isValidPassword(credentials.password)) {
+    if (!isValidPassword(password)) {
       setError("Password must be at least 8 characters with uppercase, lowercase, and number");
       return false;
     }
@@ -49,10 +47,10 @@ const Register = () => {
 
     setLoading(true);
     try {
-      const { error } = await auth.signUp(
-        credentials.email, 
-        credentials.password,
-        { full_name: credentials.full_name }
+      const { error } = await signUp(
+        email, 
+        password,
+        { full_name: fullName }
       );
       
       if (error) throw error;
@@ -71,17 +69,17 @@ const Register = () => {
   };
 
   const handleFullNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCredentials(prev => ({ ...prev, full_name: e.target.value }));
+    setFullName(e.target.value);
     if (error) setError("");
   };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCredentials(prev => ({ ...prev, email: e.target.value }));
+    setEmail(e.target.value);
     if (error) setError("");
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCredentials(prev => ({ ...prev, password: e.target.value }));
+    setPassword(e.target.value);
     if (error) setError("");
   };
 
@@ -91,9 +89,9 @@ const Register = () => {
 
   return (
     <LightSignUp
-      fullName={credentials.full_name}
-      email={credentials.email}
-      password={credentials.password}
+      fullName={fullName}
+      email={email}
+      password={password}
       loading={loading}
       error={error}
       onFullNameChange={handleFullNameChange}

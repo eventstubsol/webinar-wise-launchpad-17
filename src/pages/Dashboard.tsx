@@ -1,243 +1,100 @@
-import { useState, useEffect } from "react";
+
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Header } from "@/components/layout/Header";
-import { LoadingSpinner } from "@/components/common/LoadingSpinner";
-import { useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
-import { auth, db } from "@/lib/supabase";
-import { Plus, Calendar, Users, Video, TrendingUp } from "lucide-react";
-import type { User, Webinar } from "@/types";
+import { LogOut, User } from "lucide-react";
 
 const Dashboard = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [webinars, setWebinars] = useState<Webinar[]>([]);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    checkAuth();
-    loadWebinars();
-  }, []);
-
-  const checkAuth = async () => {
-    try {
-      const { data: { user }, error } = await auth.getCurrentUser();
-      if (error || !user) {
-        navigate('/login');
-        return;
-      }
-      setUser(user as User);
-    } catch (error) {
-      navigate('/login');
-    }
-  };
-
-  const loadWebinars = async () => {
-    try {
-      const response = await db.getWebinars();
-      if (response.error) throw response.error;
-      setWebinars(response.data || []);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Failed to load webinars",
-        description: "Please try refreshing the page.",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { user, signOut } = useAuth();
 
   const handleSignOut = async () => {
     try {
-      await auth.signOut();
-      navigate('/');
-    } catch (error) {
+      await signOut();
       toast({
+        title: "Signed out",
+        description: "You have been successfully signed out.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to sign out. Please try again.",
         variant: "destructive",
-        title: "Error signing out",
-        description: "Please try again.",
       });
     }
   };
 
-  const stats = [
-    {
-      title: "Total Webinars",
-      value: webinars.length,
-      icon: Video,
-      color: "text-blue-600"
-    },
-    {
-      title: "Scheduled",
-      value: webinars.filter(w => w.status === 'scheduled').length,
-      icon: Calendar,
-      color: "text-green-600"
-    },
-    {
-      title: "Total Registrations",
-      value: "0", // This would come from actual registration data
-      icon: Users,
-      color: "text-purple-600"
-    },
-    {
-      title: "Engagement Rate",
-      value: "0%", // This would be calculated from analytics
-      icon: TrendingUp,
-      color: "text-orange-600"
-    }
-  ];
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header isAuthenticated onSignOut={handleSignOut} />
-        <div className="flex items-center justify-center py-20">
-          <LoadingSpinner size="lg" />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header isAuthenticated onSignOut={handleSignOut} />
-      
-      <div className="container mx-auto px-4 py-8">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome back, {user?.full_name || user?.email}!
-          </h1>
-          <p className="text-gray-600">
-            Manage your webinars and track your performance from your dashboard.
-          </p>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat, index) => (
-            <Card key={index}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  {stat.title}
-                </CardTitle>
-                <stat.icon className={`w-4 h-4 ${stat.color}`} />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Recent Webinars</CardTitle>
-                  <CardDescription>
-                    Your latest webinar activities
-                  </CardDescription>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <User className="w-5 h-5 text-white" />
                 </div>
-                <Button size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Webinar
+                <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-gray-600">
+                Welcome, {user?.email}
+              </div>
+              <Button
+                onClick={handleSignOut}
+                variant="outline"
+                size="sm"
+                className="flex items-center space-x-2"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            Welcome to your Dashboard
+          </h2>
+          <p className="text-gray-600 mb-6">
+            You are successfully authenticated! This is a protected area that requires login.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="bg-blue-50 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Account Info</h3>
+              <p className="text-gray-600">Email: {user?.email}</p>
+              <p className="text-gray-600">ID: {user?.id}</p>
+              <p className="text-gray-600">
+                Email Verified: {user?.email_confirmed_at ? 'Yes' : 'No'}
+              </p>
+            </div>
+            
+            <div className="bg-green-50 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Quick Actions</h3>
+              <div className="space-y-2">
+                <Button variant="outline" size="sm" className="w-full">
+                  Update Profile
+                </Button>
+                <Button variant="outline" size="sm" className="w-full">
+                  Change Password
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              {webinars.length === 0 ? (
-                <div className="text-center py-8">
-                  <Video className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No webinars yet
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    Create your first webinar to get started with hosting.
-                  </p>
-                  <Button>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Your First Webinar
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {webinars.slice(0, 3).map((webinar) => (
-                    <div key={webinar.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div>
-                        <h4 className="font-medium">{webinar.title}</h4>
-                        <p className="text-sm text-gray-600">
-                          {new Date(webinar.scheduled_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          webinar.status === 'scheduled' ? 'bg-green-100 text-green-800' :
-                          webinar.status === 'live' ? 'bg-blue-100 text-blue-800' :
-                          webinar.status === 'completed' ? 'bg-gray-100 text-gray-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {webinar.status}
-                        </span>
-                        <Button variant="outline" size="sm">
-                          View
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>
-                Common tasks and shortcuts
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button className="w-full justify-start" variant="outline">
-                <Plus className="w-4 h-4 mr-2" />
-                Schedule New Webinar
-              </Button>
-              <Button className="w-full justify-start" variant="outline">
-                <Users className="w-4 h-4 mr-2" />
-                View Registrations
-              </Button>
-              <Button className="w-full justify-start" variant="outline">
-                <TrendingUp className="w-4 h-4 mr-2" />
-                Analytics Report
-              </Button>
-              <Button className="w-full justify-start" variant="outline">
-                <Video className="w-4 h-4 mr-2" />
-                Test Your Setup
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Upcoming Events */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Upcoming Events</CardTitle>
-            <CardDescription>
-              Your scheduled webinars for the next 7 days
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center py-8 text-gray-500">
-              <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-              <p>No upcoming events scheduled</p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            
+            <div className="bg-purple-50 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Features</h3>
+              <p className="text-gray-600 text-sm">
+                More features will be added here as the application grows.
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 };
