@@ -1,3 +1,4 @@
+
 "use client";
 import React from "react";
 import { motion } from "framer-motion";
@@ -102,5 +103,3 @@ export const LampContainer = ({
     </div>
   );
 };
-
-</edits_to_apply>
