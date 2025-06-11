@@ -124,9 +124,9 @@ export const HeroSection = () => {
             <div className="relative -mr-56 mt-8 overflow-hidden px-2 sm:mr-0 sm:mt-12 md:mt-20">
               <div
                 aria-hidden
-                className="bg-gradient-to-b to-background absolute inset-0 z-10 from-transparent from-35%"
+                className="bg-gradient-to-b to-background absolute inset-0 z-[1] from-transparent from-80% opacity-60 pointer-events-none"
               />
-              <div className="relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1 ring-background bg-background">
+              <div className="relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1 ring-background bg-background z-[2]">
                 <img
                   className="bg-background aspect-[15/8] relative rounded-2xl"
                   src="/lovable-uploads/e3e54f25-b5ef-4ab3-8150-975ea1840b98.png"
