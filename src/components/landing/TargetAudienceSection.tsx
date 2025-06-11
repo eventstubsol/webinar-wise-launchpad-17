@@ -47,7 +47,7 @@ export const TargetAudienceSection = () => {
               duration: 0.8,
               ease: "easeInOut",
             }}
-            className="bg-gradient-to-br from-slate-300 to-slate-500 bg-clip-text text-center text-3xl md:text-4xl font-bold tracking-tight text-transparent mb-4"
+            className="text-center text-3xl md:text-4xl font-bold tracking-tight text-white mb-4"
           >
             Who's It For?
           </motion.h2>
