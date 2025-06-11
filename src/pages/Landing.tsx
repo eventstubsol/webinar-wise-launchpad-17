@@ -7,7 +7,6 @@ import { FeaturesSection } from "@/components/landing/FeaturesSection";
 import { PowerSpeedControlSection } from "@/components/landing/PowerSpeedControlSection";
 import { InteractiveCTASection } from "@/components/landing/InteractiveCTASection";
 import { FinalCTASection } from "@/components/landing/FinalCTASection";
-import { WhyNowSection } from "@/components/landing/WhyNowSection";
 import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
 
 const Landing = () => {
@@ -19,7 +18,6 @@ const Landing = () => {
       <FeaturesSection />
       <PowerSpeedControlSection />
       <InteractiveCTASection />
-      <WhyNowSection />
       <HowItWorksSection />
       <FinalCTASection />
       <Footer />
