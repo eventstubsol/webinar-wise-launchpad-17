@@ -1,38 +1,40 @@
 
 import { Sparkles } from "@/components/ui/sparkles";
 import { useTheme } from "next-themes";
+import { useState } from "react";
 
 export const CustomerLogosSection = () => {
   const { theme } = useTheme();
   
+  // Using placeholder.svg as fallback until we can verify the actual uploaded image paths
   const logos = [
     {
       name: "Future IT Summit",
-      src: "/lovable-uploads/6cc24532-a2cf-4194-84cc-f75d76c5a2f7.png"
+      src: "/placeholder.svg"
     },
     {
       name: "The World CIO 200 Roadshow", 
-      src: "/lovable-uploads/11c3d4cc-3c50-4163-85d5-27f105aff634.png"
+      src: "/placeholder.svg"
     },
     {
       name: "GenWorks",
-      src: "/lovable-uploads/29ed6a8e-f408-4f8a-9d74-aeaa25bb9155.png"
+      src: "/placeholder.svg"
     },
     {
       name: "GCF Unite Virtual Summit",
-      src: "/lovable-uploads/ce769fca-b30e-401b-ac8d-0d2b3961fd45.png"
+      src: "/placeholder.svg"
     },
     {
       name: "Automation Anywhere",
-      src: "/lovable-uploads/8f567799-3d94-4dac-af62-159f1dc8d1fd.png"
+      src: "/placeholder.svg"
     },
     {
       name: "Cisco",
-      src: "/lovable-uploads/6706f24d-9da2-4c4e-8ff0-ff4ac927e3b1.png"
+      src: "/placeholder.svg"
     },
     {
       name: "Ingram Micro",
-      src: "/lovable-uploads/9033886c-59ad-401b-bf94-e2b184f4ed96.png"
+      src: "/placeholder.svg"
     }
   ];
   
@@ -67,13 +69,36 @@ export const CustomerLogosSection = () => {
   );
 };
 
-// Logo Component
-const LogoItem = ({ name, src }: { name: string; src: string }) => (
-  <div className="flex items-center justify-center">
-    <img
-      src={src}
-      alt={`${name} logo`}
-      className="h-8 w-auto max-w-full opacity-60 hover:opacity-100 transition-opacity duration-200 filter grayscale hover:grayscale-0"
-    />
-  </div>
-);
+// Logo Component with error handling
+const LogoItem = ({ name, src }: { name: string; src: string }) => {
+  const [imageError, setImageError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  const handleImageError = () => {
+    console.error(`Failed to load image: ${src} for ${name}`);
+    setImageError(true);
+  };
+
+  const handleImageLoad = () => {
+    console.log(`Successfully loaded image: ${src} for ${name}`);
+    setImageLoaded(true);
+  };
+
+  return (
+    <div className="flex items-center justify-center">
+      {imageError ? (
+        <div className="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center text-xs text-gray-500">
+          {name.split(' ')[0]}
+        </div>
+      ) : (
+        <img
+          src={src}
+          alt={`${name} logo`}
+          className="h-8 w-auto max-w-full opacity-60 hover:opacity-100 transition-opacity duration-200 filter grayscale hover:grayscale-0"
+          onError={handleImageError}
+          onLoad={handleImageLoad}
+        />
+      )}
+    </div>
+  );
+};
