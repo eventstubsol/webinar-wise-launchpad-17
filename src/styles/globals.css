@@ -122,6 +122,12 @@
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-gray-400;
   }
+
+  /* Fix for backdrop-blur */
+  .backdrop-blur-lg {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
 }
 
 @layer components {
@@ -136,6 +142,16 @@
 
   .text-gradient {
     @apply bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent;
+  }
+
+  /* Custom blur animation utility */
+  .blur-xs {
+    filter: blur(2px);
+  }
+
+  /* Height utilities for buttons */
+  .h-10\.5 {
+    height: 2.625rem;
   }
 }
 
@@ -168,6 +184,27 @@
   }
   .delay-1000 {
     animation-delay: 1000ms;
+  }
+
+  /* Aspect ratio utilities */
+  .aspect-15\/8 {
+    aspect-ratio: 15 / 8;
+  }
+
+  /* Size utilities */
+  .size-6 {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .size-fit {
+    width: fit-content;
+    height: fit-content;
+  }
+
+  /* Contain utilities */
+  .contain-strict {
+    contain: strict;
   }
 }
 
