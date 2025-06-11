@@ -1,87 +1,58 @@
 
 import { Link, Zap } from "lucide-react";
+import RadialOrbitalTimeline from "@/components/ui/radial-orbital-timeline";
 
 export const HowItWorksSection = () => {
-  const steps = [
+  const timelineData = [
     {
-      number: "01",
+      id: 1,
       title: "Connect",
-      description: "Integrate with your Zoom account in a few clicks",
+      date: "Step 1",
+      content: "Seamlessly integrate with your Zoom account in just a few clicks. Our secure OAuth connection ensures your data remains protected while giving us access to your webinar metrics.",
+      category: "Integration",
       icon: Link,
+      relatedIds: [2],
+      status: "completed" as const,
+      energy: 100,
     },
     {
-      number: "02", 
+      id: 2,
       title: "Analyze",
-      description: "Our AI processes and organizes your webinar data",
+      date: "Step 2",
+      content: "Our AI processes and organizes your webinar data, identifying patterns, engagement levels, and participant behaviors to extract meaningful insights.",
+      category: "Processing",
       icon: Zap,
+      relatedIds: [1, 3],
+      status: "completed" as const,
+      energy: 90,
     },
     {
-      number: "03",
-      title: "Visualize", 
-      description: "Access interactive dashboards and reports",
+      id: 3,
+      title: "Visualize",
+      date: "Step 3",
+      content: "Access interactive dashboards and comprehensive reports that transform raw data into clear, actionable visualizations for better decision-making.",
+      category: "Dashboard",
       icon: Link,
+      relatedIds: [2, 4],
+      status: "in-progress" as const,
+      energy: 75,
     },
     {
-      number: "04",
+      id: 4,
       title: "Optimize",
-      description: "Implement AI-suggested improvements",
+      date: "Step 4",
+      content: "Implement AI-suggested improvements based on data-driven insights to enhance future webinar performance and engagement rates.",
+      category: "Enhancement",
       icon: Zap,
+      relatedIds: [3],
+      status: "pending" as const,
+      energy: 60,
     },
   ];
 
   return (
-    <section className="py-24 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-foreground mb-4">
-            How Webinar Wise Works
-          </h2>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Get started in minutes with our simple setup process
-          </p>
-        </div>
-
-        {/* Steps Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {steps.map((step, index) => {
-            const IconComponent = step.icon;
-            return (
-              <div key={index} className="text-center group">
-                {/* Step Number */}
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary font-bold text-lg mb-6 group-hover:bg-primary/20 transition-colors duration-300">
-                  {step.number}
-                </div>
-
-                {/* Icon */}
-                <div className="flex justify-center mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                    <IconComponent className="w-6 h-6 text-foreground" />
-                  </div>
-                </div>
-
-                {/* Content */}
-                <h3 className="text-xl font-semibold text-foreground mb-3">
-                  {step.title}
-                </h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  {step.description}
-                </p>
-
-                {/* Connector Line (except for last item) */}
-                {index < steps.length - 1 && (
-                  <div className="hidden lg:block absolute top-8 left-1/2 w-full h-0.5 bg-border transform translate-x-8 -translate-y-1/2" />
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Bottom decorative element */}
-        <div className="mt-16 flex justify-center">
-          <div className="w-24 h-1 bg-gradient-to-r from-primary to-primary/60 rounded-full" />
-        </div>
-      </div>
+    <section className="relative">
+      <RadialOrbitalTimeline timelineData={timelineData} />
     </section>
   );
 };
