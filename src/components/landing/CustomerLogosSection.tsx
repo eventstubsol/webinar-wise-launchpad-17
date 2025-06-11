@@ -31,10 +31,10 @@ export const CustomerLogosSection = () => {
   ];
   
   return (
-    <div className="w-full overflow-hidden py-16">
+    <div className="w-full overflow-hidden py-16 bg-[#111827]">
       <div className="mx-auto mt-8 w-full max-w-4xl">
-        <div className="text-center text-3xl text-foreground">
-          <span className="text-indigo-900 dark:text-indigo-200">
+        <div className="text-center text-3xl text-white">
+          <span className="text-indigo-300">
             Trusted by experts.
           </span>
           <br />
@@ -79,7 +79,7 @@ const LogoItem = ({ name, src }: { name: string; src: string }) => {
   return (
     <div className="flex items-center justify-center">
       {imageError ? (
-        <div className="h-12 w-24 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center text-xs text-gray-500">
+        <div className="h-12 w-24 bg-gray-600 rounded flex items-center justify-center text-xs text-gray-300">
           {name.split(' ')[0]}
         </div>
       ) : (
