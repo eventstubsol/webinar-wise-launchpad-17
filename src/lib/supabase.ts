@@ -14,6 +14,11 @@ const createMockClient = () => ({
     onAuthStateChange: () => ({ data: { subscription: null } })
   },
   from: () => {
+    const mockResponse = { 
+      data: [], 
+      error: new Error('Supabase not configured') 
+    };
+    
     const mockChain = {
       select: () => mockChain,
       order: () => mockChain,
@@ -21,7 +26,10 @@ const createMockClient = () => ({
       insert: () => mockChain,
       update: () => mockChain,
       delete: () => mockChain,
-      single: () => ({ error: new Error('Supabase not configured') })
+      single: () => mockResponse,
+      // Add the missing properties that Dashboard expects
+      data: [],
+      error: new Error('Supabase not configured')
     };
     return mockChain;
   }
