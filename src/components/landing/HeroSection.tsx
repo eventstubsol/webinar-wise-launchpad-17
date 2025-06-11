@@ -3,10 +3,8 @@ import { AnimatedGroup } from "@/components/ui/animated-group";
 import { AuroraBackground } from "@/components/ui/aurora-background";
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
-
 export const HeroSection = () => {
-  return (
-    <AuroraBackground className="overflow-hidden">
+  return <AuroraBackground className="overflow-hidden">
       <div className="relative pt-20 sm:pt-24 md:pt-32 lg:pt-40 w-full">
         <div className="mx-auto max-w-7xl px-6">
           <div className="text-center sm:mx-auto lg:mr-auto lg:mt-0">
@@ -47,9 +45,7 @@ export const HeroSection = () => {
                 </Button>
               </div>
               <Button asChild size="lg" variant="ghost" className="h-10.5 rounded-xl px-5">
-                <a href="#demo">
-                  <span className="text-nowrap">Watch Demo</span>
-                </a>
+                
               </Button>
             </AnimatedGroup>
             
@@ -74,6 +70,5 @@ export const HeroSection = () => {
         {/* Additional gradient overlay extending beyond the image container for seamless transition */}
         <div className="absolute bottom-0 left-0 right-0 h-64 bg-gradient-to-t from-background via-background/95 via-background/80 to-transparent z-[3] pointer-events-none" />
       </div>
-    </AuroraBackground>
-  );
+    </AuroraBackground>;
 };
