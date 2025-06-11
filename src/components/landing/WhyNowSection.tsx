@@ -2,7 +2,7 @@ import { SparklesCore } from "@/components/ui/sparkles-core";
 
 export const WhyNowSection = () => {
   return (
-    <section className="h-[40rem] w-full bg-black flex flex-col items-center justify-center overflow-hidden">
+    <section className="h-[40rem] w-full flex flex-col items-center justify-center overflow-hidden" style={{ backgroundColor: '#020617' }}>
       <h1 className="text-2xl font-bold text-center text-white relative z-20 mb-8">
         Why Now?
       </h1>
@@ -24,7 +24,7 @@ export const WhyNowSection = () => {
         />
 
         {/* Radial Gradient to prevent sharp edges */}
-        <div className="absolute inset-0 w-full h-full bg-black [mask-image:radial-gradient(350px_200px_at_top,transparent_20%,white)]"></div>
+        <div className="absolute inset-0 w-full h-full" style={{ backgroundColor: '#020617', maskImage: 'radial-gradient(350px 200px at top, transparent 20%, white)' }}></div>
       </div>
       
       {/* Content below the sparkles */}
