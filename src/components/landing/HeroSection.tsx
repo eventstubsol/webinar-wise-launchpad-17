@@ -27,7 +27,7 @@ export const HeroSection = () => {
                 </div>
               </Link>
     
-              <h1 className="mt-8 max-w-4xl mx-auto text-balance text-6xl md:text-7xl lg:mt-16 xl:text-[5.25rem] font-bold text-gray-900 dark:text-white">
+              <h1 className="mt-8 max-w-4xl mx-auto text-balance text-4xl md:text-5xl lg:mt-16 xl:text-6xl font-bold text-gray-900 dark:text-white">
                 <span className="block">Turn Zoom Webinar</span>
                 <span className="text-primary block">Report Chaos into Clarity</span>
               </h1>
