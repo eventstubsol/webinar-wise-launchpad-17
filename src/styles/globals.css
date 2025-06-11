@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -47,13 +46,12 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* Blue brand colors instead of orange */
-    --brand: 214 100% 50%;
-    --brand-foreground: 217 91% 60%;
+    --brand: 27 96% 61%;
+    --brand-foreground: 31 97% 72%;
 
     /* Sparkles effect colors */
-    --gradient-color: #3b82f6;
-    --sparkles-color: #3b82f6;
+    --gradient-color: #8350e8;
+    --sparkles-color: #8350e8;
   }
 
   .dark {
@@ -94,12 +92,11 @@
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* Blue brand colors for dark mode */
-    --brand: 217 91% 60%;
-    --brand-foreground: 214 100% 50%;
+    --brand: 31 97% 72%;
+    --brand-foreground: 27 96% 61%;
 
     /* Sparkles effect colors for dark mode */
-    --gradient-color: #3b82f6;
+    --gradient-color: #8350e8;
     --sparkles-color: #ffffff;
   }
 }
@@ -186,33 +183,14 @@
   .delay-100 {
     animation-delay: 100ms;
   }
-  .delay-200 {
-    animation-delay: 200ms;
-  }
   .delay-300 {
     animation-delay: 300ms;
-  }
-  .delay-500 {
-    animation-delay: 500ms;
   }
   .delay-700 {
     animation-delay: 700ms;
   }
   .delay-1000 {
     animation-delay: 1000ms;
-  }
-
-  .fade-top-lg {
-    mask-image: linear-gradient(to bottom, 
-      transparent, 
-      rgba(0, 0, 0, 1) 8rem
-    );
-  }
-
-  .animate-in {
-    animation-duration: 1000ms;
-    animation-fill-mode: forwards;
-    animation-timing-function: ease-out;
   }
 
   /* Aspect ratio utilities */
