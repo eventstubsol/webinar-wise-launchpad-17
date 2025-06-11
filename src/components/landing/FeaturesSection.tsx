@@ -32,7 +32,7 @@ const features = [
 
 export const FeaturesSection = () => {
   return (
-    <section className="relative -mt-64 pt-64 pb-16 px-4 bg-gradient-to-b from-transparent via-transparent via-white to-white z-10">
+    <section className="relative -mt-32 pt-32 pb-16 px-4 bg-gradient-to-b from-transparent via-white to-white z-10">
       <div className="container mx-auto max-w-6xl">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
