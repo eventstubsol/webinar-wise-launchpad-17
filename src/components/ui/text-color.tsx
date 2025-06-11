@@ -10,7 +10,7 @@ export function TextColor() {
       <div className=" mb-10 mt-4 md:mt-6">
         <div className="px-2">
           <div className="relative p-4 w-full h-full border border-slate-200 dark:border-slate-800 [mask-image:radial-gradient(200rem_24rem_at_center,white,transparent)] max-w-[1440px] mx-auto">
-            <h1 className="tracking-tighter flex select-none px-1 py-1 flex-col text-center text-4xl font-extrabold leading-none sm:text-5xl md:flex-row">
+            <h1 className="tracking-tighter flex select-none px-1 py-1 flex-col text-center text-4xl font-extrabold leading-none sm:text-5xl md:flex-row justify-center items-center">
               <Plus className="absolute -left-4 -top-4 h-8 w-8 text-indigo-500" />
               <Plus className="absolute -bottom-4 -left-4 h-8 w-8 text-indigo-500" />
               <Plus className="absolute -right-4 -top-4 h-8 w-8 text-indigo-500" />
