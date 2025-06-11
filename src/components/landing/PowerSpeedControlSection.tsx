@@ -1,3 +1,4 @@
+
 import { Megaphone, GraduationCap, Laptop2, Building, Mic, CalendarClock } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { FeatureCard } from '@/components/ui/grid-feature-cards';
@@ -37,8 +38,8 @@ const personas = [
 
 export const PowerSpeedControlSection = () => {
 	return (
-		<section className="py-16 md:py-32 bg-background">
-			<div className="mx-auto w-full max-w-5xl space-y-8 px-4">
+		<section className="py-20 md:py-36 bg-background">
+			<div className="mx-auto w-full max-w-6xl space-y-12 px-4">
 				<AnimatedContainer className="mx-auto max-w-3xl text-center">
 					<h2 className="text-3xl font-bold tracking-wide text-balance md:text-4xl lg:text-5xl xl:font-extrabold">
 						Who's It For?
@@ -50,7 +51,7 @@ export const PowerSpeedControlSection = () => {
 
 				<AnimatedContainer
 					delay={0.4}
-					className="grid grid-cols-1 divide-x divide-y divide-dashed border border-dashed sm:grid-cols-2 md:grid-cols-3"
+					className="grid grid-cols-1 divide-x divide-y divide-dashed border border-dashed sm:grid-cols-2 md:grid-cols-3 gap-0"
 				>
 					{personas.map((persona, i) => (
 						<FeatureCard key={i} feature={persona} />
