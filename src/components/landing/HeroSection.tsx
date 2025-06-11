@@ -5,33 +5,13 @@ import { AuroraBackground } from "@/components/ui/aurora-background";
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 
-const transitionVariants = {
-  item: {
-    hidden: {
-      opacity: 0,
-      filter: 'blur(12px)',
-      y: 12
-    },
-    visible: {
-      opacity: 1,
-      filter: 'blur(0px)',
-      y: 0,
-      transition: {
-        type: 'spring',
-        bounce: 0.3,
-        duration: 1.5
-      }
-    }
-  }
-};
-
 export const HeroSection = () => {
   return (
     <AuroraBackground className="overflow-hidden">
       <div className="relative pt-24 md:pt-36 w-full">
         <div className="mx-auto max-w-7xl px-6">
           <div className="text-center sm:mx-auto lg:mr-auto lg:mt-0">
-            <AnimatedGroup variants={transitionVariants}>
+            <AnimatedGroup preset="blur-slide">
               <Link to="/register" className="hover:bg-background dark:hover:border-t-border bg-muted group mx-auto flex w-fit items-center gap-4 rounded-full border p-1 pl-4 shadow-md shadow-black/5 transition-all duration-300 dark:border-t-white/5 dark:shadow-zinc-950">
                 <span className="text-foreground text-sm">Introducing Webinar Wise Analytics</span>
                 <span className="dark:border-background block h-4 w-0.5 border-l bg-white dark:bg-zinc-700"></span>
@@ -52,23 +32,14 @@ export const HeroSection = () => {
                 Turn Zoom Webinar Chaos
                 <span className="text-primary block">into Clarity</span>
               </h1>
+              
               <p className="mx-auto mt-8 max-w-2xl text-balance text-lg text-gray-600 dark:text-gray-300">
                 Say goodbye to CSV headaches. Webinar Wise connects to Zoom, cleans your data, 
                 and delivers beautiful insights, dashboards, and reports — automatically.
               </p>
             </AnimatedGroup>
 
-            <AnimatedGroup variants={{
-            container: {
-              visible: {
-                transition: {
-                  staggerChildren: 0.05,
-                  delayChildren: 0.75
-                }
-              }
-            },
-            ...transitionVariants
-          }} className="mt-12 flex flex-col items-center justify-center gap-2 md:flex-row">
+            <AnimatedGroup preset="scale" className="mt-12 flex flex-col items-center justify-center gap-2 md:flex-row">
               <div className="bg-foreground/10 rounded-[14px] border p-0.5">
                 <Button asChild size="lg" className="rounded-xl px-5 text-base">
                   <Link to="/register">
@@ -89,17 +60,7 @@ export const HeroSection = () => {
           </div>
         </div>
 
-        <AnimatedGroup variants={{
-        container: {
-          visible: {
-            transition: {
-              staggerChildren: 0.05,
-              delayChildren: 0.75
-            }
-          }
-        },
-        ...transitionVariants
-      }}>
+        <AnimatedGroup preset="zoom">
           <div className="relative -mr-56 mt-8 overflow-hidden px-2 sm:mr-0 sm:mt-12 md:mt-20">
             <div aria-hidden className="bg-gradient-to-b to-background absolute inset-0 z-[1] from-transparent from-80% opacity-40 pointer-events-none" />
             <div className="relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1 ring-background bg-background z-[2]">
