@@ -13,12 +13,19 @@ const createMockClient = () => ({
     getUser: async () => ({ data: { user: null }, error: new Error('Supabase not configured') }),
     onAuthStateChange: () => ({ data: { subscription: null } })
   },
-  from: () => ({
-    select: () => ({ order: () => ({ error: new Error('Supabase not configured') }) }),
-    insert: () => ({ select: () => ({ single: () => ({ error: new Error('Supabase not configured') }) }) }),
-    update: () => ({ eq: () => ({ select: () => ({ single: () => ({ error: new Error('Supabase not configured') }) }) }) }),
-    delete: () => ({ eq: () => ({ error: new Error('Supabase not configured') }) })
-  })
+  from: () => {
+    const mockChain = {
+      select: () => mockChain,
+      order: () => mockChain,
+      eq: () => mockChain,
+      insert: () => mockChain,
+      update: () => mockChain,
+      delete: () => mockChain,
+      single: () => ({ error: new Error('Supabase not configured') }),
+      then: () => Promise.resolve({ error: new Error('Supabase not configured') })
+    };
+    return mockChain;
+  }
 });
 
 export const supabase = (supabaseUrl && supabaseAnonKey) 

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,9 +35,9 @@ const Dashboard = () => {
 
   const loadWebinars = async () => {
     try {
-      const { data, error } = await db.getWebinars();
-      if (error) throw error;
-      setWebinars(data || []);
+      const response = await db.getWebinars();
+      if (response.error) throw response.error;
+      setWebinars(response.data || []);
     } catch (error) {
       toast({
         variant: "destructive",
