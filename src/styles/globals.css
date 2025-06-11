@@ -678,10 +678,10 @@
   animation: gradient-background-4 10s infinite;
 }
 
-.before\:px-2::before {
+.before\:px-1::before {
   content: "";
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
 }
 
 .before\:text-center::before {
