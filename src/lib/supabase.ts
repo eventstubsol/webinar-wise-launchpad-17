@@ -21,8 +21,7 @@ const createMockClient = () => ({
       insert: () => mockChain,
       update: () => mockChain,
       delete: () => mockChain,
-      single: () => ({ error: new Error('Supabase not configured') }),
-      then: () => Promise.resolve({ error: new Error('Supabase not configured') })
+      single: () => ({ error: new Error('Supabase not configured') })
     };
     return mockChain;
   }
@@ -84,7 +83,7 @@ export const db = {
   // Webinars
   getWebinars: async () => {
     if (!supabaseUrl || !supabaseAnonKey) {
-      return { data: [], error: new Error('Please connect to Supabase to enable database functionality') };
+      return Promise.resolve({ data: [], error: new Error('Please connect to Supabase to enable database functionality') });
     }
     return await supabase
       .from('webinars')
@@ -94,7 +93,7 @@ export const db = {
 
   createWebinar: async (webinar: any) => {
     if (!supabaseUrl || !supabaseAnonKey) {
-      return { data: null, error: new Error('Please connect to Supabase to enable database functionality') };
+      return Promise.resolve({ data: null, error: new Error('Please connect to Supabase to enable database functionality') });
     }
     return await supabase
       .from('webinars')
@@ -105,7 +104,7 @@ export const db = {
 
   updateWebinar: async (id: string, updates: any) => {
     if (!supabaseUrl || !supabaseAnonKey) {
-      return { data: null, error: new Error('Please connect to Supabase to enable database functionality') };
+      return Promise.resolve({ data: null, error: new Error('Please connect to Supabase to enable database functionality') });
     }
     return await supabase
       .from('webinars')
@@ -117,7 +116,7 @@ export const db = {
 
   deleteWebinar: async (id: string) => {
     if (!supabaseUrl || !supabaseAnonKey) {
-      return { error: new Error('Please connect to Supabase to enable database functionality') };
+      return Promise.resolve({ error: new Error('Please connect to Supabase to enable database functionality') });
     }
     return await supabase
       .from('webinars')
@@ -128,7 +127,7 @@ export const db = {
   // Registrations
   registerForWebinar: async (webinarId: string, userId: string) => {
     if (!supabaseUrl || !supabaseAnonKey) {
-      return { error: new Error('Please connect to Supabase to enable database functionality') };
+      return Promise.resolve({ error: new Error('Please connect to Supabase to enable database functionality') });
     }
     return await supabase
       .from('webinar_registrations')
@@ -140,7 +139,7 @@ export const db = {
 
   getUserRegistrations: async (userId: string) => {
     if (!supabaseUrl || !supabaseAnonKey) {
-      return { data: [], error: new Error('Please connect to Supabase to enable database functionality') };
+      return Promise.resolve({ data: [], error: new Error('Please connect to Supabase to enable database functionality') });
     }
     return await supabase
       .from('webinar_registrations')
