@@ -36,7 +36,7 @@ export const FeaturesSection = () => {
       <div className="container mx-auto max-w-6xl pt-10">
         <TextColor />
         
-        <div className="text-center mb-12">
+        <div className="text-center mb-12 mt-10">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
             Why Webinar Wise?
           </h2>
