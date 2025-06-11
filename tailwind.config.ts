@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 const {
@@ -192,6 +191,14 @@ export default {
 						backgroundPosition: "350% 50%, 350% 50%",
 					},
 				},
+				meteor: {
+					"0%": { transform: "rotate(215deg) translateX(0)", opacity: "1" },
+					"70%": { opacity: "1" },
+					"100%": {
+						transform: "rotate(215deg) translateX(-500px)",
+						opacity: "0",
+					},
+				},
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
@@ -203,6 +210,7 @@ export default {
 				appear: "appear 0.5s ease-out forwards",
 				"appear-zoom": "appear-zoom 0.5s ease-out forwards",
 				aurora: "aurora 60s linear infinite",
+				"meteor-effect": "meteor 5s linear infinite",
 			},
 			boxShadow: {
 				'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',

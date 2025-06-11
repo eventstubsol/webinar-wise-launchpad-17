@@ -1,6 +1,6 @@
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Zap, Brain, BarChart3, FileText, Shield } from "lucide-react";
+import { Meteors } from "@/components/ui/meteors";
 
 const features = [
   {
@@ -45,37 +45,47 @@ export const FeaturesSection = () => {
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {features.slice(0, 3).map((feature, index) => (
-            <Card key={index} className="text-center hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <feature.icon className="w-8 h-8 text-primary" />
+            <div key={index} className="w-full relative max-w-xs mx-auto">
+              <div className="absolute inset-0 h-full w-full bg-gradient-to-r from-blue-500 to-teal-500 transform scale-[0.80] rounded-full blur-3xl" />
+              <div className="relative shadow-xl bg-gray-900 border border-gray-800 px-6 py-8 h-full overflow-hidden rounded-2xl flex flex-col justify-start items-start">
+                <div className="h-6 w-6 rounded-full border flex items-center justify-center mb-6 border-gray-500">
+                  <feature.icon className="h-3 w-3 text-gray-300" />
                 </div>
-                <CardTitle className="text-xl">{feature.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-gray-600">
+
+                <h3 className="font-bold text-xl text-white mb-4 relative z-50">
+                  {feature.title}
+                </h3>
+
+                <p className="font-normal text-base text-slate-500 mb-4 relative z-50">
                   {feature.description}
-                </CardDescription>
-              </CardContent>
-            </Card>
+                </p>
+
+                <Meteors number={20} />
+              </div>
+            </div>
           ))}
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8 max-w-4xl mx-auto">
           {features.slice(3).map((feature, index) => (
-            <Card key={index + 3} className="text-center hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <feature.icon className="w-8 h-8 text-primary" />
+            <div key={index + 3} className="w-full relative max-w-xs mx-auto">
+              <div className="absolute inset-0 h-full w-full bg-gradient-to-r from-blue-500 to-teal-500 transform scale-[0.80] rounded-full blur-3xl" />
+              <div className="relative shadow-xl bg-gray-900 border border-gray-800 px-6 py-8 h-full overflow-hidden rounded-2xl flex flex-col justify-start items-start">
+                <div className="h-6 w-6 rounded-full border flex items-center justify-center mb-6 border-gray-500">
+                  <feature.icon className="h-3 w-3 text-gray-300" />
                 </div>
-                <CardTitle className="text-xl">{feature.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-gray-600">
+
+                <h3 className="font-bold text-xl text-white mb-4 relative z-50">
+                  {feature.title}
+                </h3>
+
+                <p className="font-normal text-base text-slate-500 mb-4 relative z-50">
                   {feature.description}
-                </CardDescription>
-              </CardContent>
-            </Card>
+                </p>
+
+                <Meteors number={20} />
+              </div>
+            </div>
           ))}
         </div>
       </div>
