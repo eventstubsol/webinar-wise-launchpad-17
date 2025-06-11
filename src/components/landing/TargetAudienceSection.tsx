@@ -63,22 +63,6 @@ export const TargetAudienceSection = () => {
           }}
           className="dark"
         >
-          <style jsx>{`
-            .dark .group:hover {
-              box-shadow: 0 2px 12px rgba(6, 182, 212, 0.1) !important;
-            }
-            .dark [class*="border-gray-100"] {
-              border-color: rgb(71 85 105 / 0.7) !important;
-            }
-            .dark [class*="bg-white"] {
-              background-color: rgb(30 41 59 / 0.5) !important;
-              backdrop-filter: blur(4px) !important;
-            }
-            .dark [class*="bg-black"] {
-              background-color: rgb(30 41 59 / 0.5) !important;
-              backdrop-filter: blur(4px) !important;
-            }
-          `}</style>
           <BentoGrid items={targetAudienceItems} />
         </motion.div>
       </div>
