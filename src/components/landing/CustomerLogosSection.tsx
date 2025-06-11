@@ -1,4 +1,3 @@
-
 import { Sparkles } from "@/components/ui/sparkles";
 import { useTheme } from "next-themes";
 import { useState } from "react";
@@ -6,35 +5,35 @@ import { useState } from "react";
 export const CustomerLogosSection = () => {
   const { theme } = useTheme();
   
-  // Using placeholder.svg as fallback until we can verify the actual uploaded image paths
+  // Updated with actual uploaded logo paths
   const logos = [
     {
       name: "Future IT Summit",
-      src: "/placeholder.svg"
+      src: "/lovable-uploads/73267402-2106-4770-b8d9-ab1d51646a02.png"
     },
     {
       name: "The World CIO 200 Roadshow", 
-      src: "/placeholder.svg"
+      src: "/lovable-uploads/a8265af5-8c1b-4f2c-9b64-461f85c35498.png"
     },
     {
       name: "GenWorks",
-      src: "/placeholder.svg"
+      src: "/lovable-uploads/273d45d8-b475-459a-9158-10837812c8b2.png"
     },
     {
       name: "GCF Unite Virtual Summit",
-      src: "/placeholder.svg"
+      src: "/lovable-uploads/0bbe944b-43b1-4e63-86ae-6a75569cea7a.png"
     },
     {
       name: "Automation Anywhere",
-      src: "/placeholder.svg"
+      src: "/lovable-uploads/f9cadb1e-0cfc-4719-aeef-3f7aaadc9067.png"
     },
     {
       name: "Cisco",
-      src: "/placeholder.svg"
+      src: "/lovable-uploads/d3011340-f45f-4d8c-b42a-3c95a640618a.png"
     },
     {
       name: "Ingram Micro",
-      src: "/placeholder.svg"
+      src: "/lovable-uploads/29629da3-33c9-4127-9a17-fa0af1a1d94f.png"
     }
   ];
   
@@ -102,3 +101,5 @@ const LogoItem = ({ name, src }: { name: string; src: string }) => {
     </div>
   );
 };
+
+</edits_to_apply>
