@@ -9,8 +9,6 @@ export function BackgroundBoxesDemo() {
 
       <Boxes />
       <h1 className={cn("md:text-4xl text-xl text-white relative z-20")}>Ready to transform your webinar analytics?</h1>
-      <p className="text-center mt-2 text-neutral-300 relative z-20">
-        Framer motion is the best animation library ngl
-      </p>
+      <p className="text-center mt-2 text-neutral-300 relative z-20">Join our early access program and be the first to leverage the power of Webinar Wise for your organization.</p>
     </div>;
 }
