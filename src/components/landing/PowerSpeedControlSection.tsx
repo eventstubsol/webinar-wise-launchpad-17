@@ -1,38 +1,37 @@
-
-import { Zap, Cpu, Fingerprint, Pencil, Settings2, Sparkles } from 'lucide-react';
+import { Megaphone, GraduationCap, Laptop2, Building, Mic, CalendarClock } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { FeatureCard } from '@/components/ui/grid-feature-cards';
 
-const features = [
+const personas = [
 	{
-		title: 'Lightning Fast Sync',
-		icon: Zap,
-		description: 'Connect your Zoom account and sync webinar data in seconds, not hours.',
+		title: 'Marketers',
+		icon: Megaphone,
+		description: 'Run webinars and need clean, instant analytics',
 	},
 	{
-		title: 'Powerful Analytics',
-		icon: Cpu,
-		description: 'Advanced algorithms process your webinar data to reveal hidden insights.',
+		title: 'Educators & Trainers',
+		icon: GraduationCap,
+		description: 'Measure engagement and learning outcomes',
 	},
 	{
-		title: 'Enterprise Security',
-		icon: Fingerprint,
-		description: 'Bank-grade security ensures your webinar data stays private and protected.',
+		title: 'SaaS Teams',
+		icon: Laptop2,
+		description: 'Onboarding, demos, and community growth via Zoom',
 	},
 	{
-		title: 'Custom Reports',
-		icon: Pencil,
-		description: 'Tailor your reports and dashboards to match your exact business needs.',
+		title: 'Agencies',
+		icon: Building,
+		description: 'Manage events for multiple clients and need clean reporting',
 	},
 	{
-		title: 'Full Control',
-		icon: Settings2,
-		description: 'Own your data, control exports, and manage access with precision.',
+		title: 'Consultants & Coaches',
+		icon: Mic,
+		description: 'Host knowledge sessions and prove their value',
 	},
 	{
-		title: 'AI-Powered Insights',
-		icon: Sparkles,
-		description: 'Machine learning identifies patterns and opportunities you might miss.',
+		title: 'Event Planners',
+		icon: CalendarClock,
+		description: 'Deliver clean post-event data to sponsors and stakeholders',
 	},
 ];
 
@@ -42,10 +41,10 @@ export const PowerSpeedControlSection = () => {
 			<div className="mx-auto w-full max-w-5xl space-y-8 px-4">
 				<AnimatedContainer className="mx-auto max-w-3xl text-center">
 					<h2 className="text-3xl font-bold tracking-wide text-balance md:text-4xl lg:text-5xl xl:font-extrabold">
-						Power. Speed. Control.
+						Who's It For?
 					</h2>
 					<p className="text-muted-foreground mt-4 text-sm tracking-wide text-balance md:text-base">
-						Everything you need to transform webinar data into business intelligence.
+						Built for teams who need actionable webinar insights.
 					</p>
 				</AnimatedContainer>
 
@@ -53,8 +52,8 @@ export const PowerSpeedControlSection = () => {
 					delay={0.4}
 					className="grid grid-cols-1 divide-x divide-y divide-dashed border border-dashed sm:grid-cols-2 md:grid-cols-3"
 				>
-					{features.map((feature, i) => (
-						<FeatureCard key={i} feature={feature} />
+					{personas.map((persona, i) => (
+						<FeatureCard key={i} feature={persona} />
 					))}
 				</AnimatedContainer>
 			</div>
