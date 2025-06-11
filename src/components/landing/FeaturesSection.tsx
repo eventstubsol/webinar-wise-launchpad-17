@@ -56,7 +56,7 @@ export const FeaturesSection = () => {
                   {feature.title}
                 </h3>
 
-                <p className="font-normal text-base text-slate-500 mb-4 relative z-50">
+                <p className="font-normal text-base text-white mb-4 relative z-50">
                   {feature.description}
                 </p>
 
@@ -79,7 +79,7 @@ export const FeaturesSection = () => {
                   {feature.title}
                 </h3>
 
-                <p className="font-normal text-base text-slate-500 mb-4 relative z-50">
+                <p className="font-normal text-base text-white mb-4 relative z-50">
                   {feature.description}
                 </p>
 
