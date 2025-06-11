@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -180,10 +179,6 @@ export function BeamsBackground({
                 className="absolute inset-0"
                 style={{ filter: "blur(15px)" }}
             />
-
-            <div className="relative z-10">
-                {children}
-            </div>
         </div>
     );
 }
