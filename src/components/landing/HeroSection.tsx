@@ -65,8 +65,8 @@ export const HeroSection = () => {
             <div className="relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1 ring-background bg-background z-[2]">
               <div className="relative">
                 <img className="bg-background aspect-[15/8] relative rounded-2xl" alt="Email Interface Preview" width="2700" height="1440" src="/lovable-uploads/72117dd5-e795-4677-a0d6-6aac40197a81.jpg" />
-                {/* Gradient overlay on the image itself */}
-                <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background via-background/60 to-transparent rounded-b-2xl pointer-events-none" />
+                {/* Stronger gradient overlay to completely hide bottom of image */}
+                <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-background via-background/90 to-transparent rounded-b-2xl pointer-events-none" />
               </div>
             </div>
           </div>
