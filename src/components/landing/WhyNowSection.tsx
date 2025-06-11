@@ -1,10 +1,9 @@
-
 import { SparklesCore } from "@/components/ui/sparkles-core";
 
 export const WhyNowSection = () => {
   return (
     <section className="h-[40rem] w-full bg-black flex flex-col items-center justify-center overflow-hidden">
-      <h1 className="md:text-7xl text-3xl lg:text-9xl font-bold text-center text-white relative z-20 mb-8">
+      <h1 className="text-2xl font-bold text-center text-white relative z-20 mb-8">
         Why Now?
       </h1>
       <div className="w-[40rem] h-40 relative">
