@@ -40,6 +40,14 @@ export function TextColor() {
                 Visualize.
                 </span>
               </span>
+              <span
+                data-content="Optimize."
+                className="before:animate-gradient-background-4 relative before:absolute before:bottom-1 before:left-0 before:top-0 before:z-0 before:w-full before:px-2 before:content-[attr(data-content)] sm:before:top-0"
+              >
+                <span className="from-gradient-4-start to-gradient-4-end animate-gradient-foreground-4 bg-gradient-to-r bg-clip-text px-2 text-transparent sm:px-5">
+                Optimize.
+                </span>
+              </span>
             </h1>
           </div>
         </div>

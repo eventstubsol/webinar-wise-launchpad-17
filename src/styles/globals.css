@@ -401,18 +401,18 @@
 
 @keyframes gradient-foreground-1 {
   from,
-  16.667%,
+  12.5%,
   to {
     opacity: 1;
   }
-  33.333%,
-  83.333% {
+  25%,
+  87.5% {
     opacity: 0;
   }
 }
 
 .animate-gradient-foreground-1 {
-  animation: gradient-foreground-1 8s infinite;
+  animation: gradient-foreground-1 10s infinite;
 }
 
 @keyframes gradient-foreground-2 {
@@ -420,34 +420,50 @@
   to {
     opacity: 0;
   }
-  33.333%,
-  50% {
+  25%,
+  37.5% {
     opacity: 1;
   }
-  16.667%,
-  66.667% {
+  12.5%,
+  50% {
     opacity: 0;
   }
 }
 
 .animate-gradient-foreground-2 {
-  animation: gradient-foreground-2 8s infinite;
+  animation: gradient-foreground-2 10s infinite;
 }
 
 @keyframes gradient-foreground-3 {
   from,
-  50%,
+  37.5%,
   to {
     opacity: 0;
   }
-  66.667%,
-  83.333% {
+  50%,
+  62.5% {
     opacity: 1;
   }
 }
 
 .animate-gradient-foreground-3 {
-  animation: gradient-foreground-3 8s infinite;
+  animation: gradient-foreground-3 10s infinite;
+}
+
+@keyframes gradient-foreground-4 {
+  from,
+  62.5%,
+  to {
+    opacity: 0;
+  }
+  75%,
+  87.5% {
+    opacity: 1;
+  }
+}
+
+.animate-gradient-foreground-4 {
+  animation: gradient-foreground-4 10s infinite;
 }
 
 .select-none {
@@ -485,6 +501,15 @@
 
 .to-gradient-3-end {
   --tw-gradient-to: #00f0ff; /* Electric blue */
+}
+
+.from-gradient-4-start {
+  --tw-gradient-from: #ff00ff; /* Neon magenta */
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(255, 0, 255, 0));
+}
+
+.to-gradient-4-end {
+  --tw-gradient-to: #39ff14; /* Neon green */
 }
 
 /* AI Variants */
@@ -582,19 +607,19 @@
 
 @keyframes gradient-background-1 {
   from,
-  16.667%,
+  12.5%,
   to {
     opacity: 0;
   }
-  25%,
-  91.667% {
+  20%,
+  95% {
     opacity: 1;
   }
 }
 
 .before\:animate-gradient-background-1::before {
   content: "";
-  animation: gradient-background-1 8s infinite;
+  animation: gradient-background-1 10s infinite;
 }
 
 @keyframes gradient-background-2 {
@@ -602,37 +627,55 @@
   to {
     opacity: 1;
   }
-  33.333%,
-  50% {
+  25%,
+  37.5% {
     opacity: 0;
   }
-  25%,
-  58.333% {
+  20%,
+  45% {
     opacity: 1;
   }
 }
 
 .before\:animate-gradient-background-2::before {
   content: "";
-  animation: gradient-background-2 8s infinite;
+  animation: gradient-background-2 10s infinite;
 }
 
 @keyframes gradient-background-3 {
   from,
-  58.333%,
-  91.667%,
+  45%,
+  95%,
   to {
     opacity: 1;
   }
-  66.667%,
-  83.333% {
+  50%,
+  62.5% {
     opacity: 0;
   }
 }
 
 .before\:animate-gradient-background-3::before {
   content: "";
-  animation: gradient-background-3 8s infinite;
+  animation: gradient-background-3 10s infinite;
+}
+
+@keyframes gradient-background-4 {
+  from,
+  70%,
+  95%,
+  to {
+    opacity: 1;
+  }
+  75%,
+  87.5% {
+    opacity: 0;
+  }
+}
+
+.before\:animate-gradient-background-4::before {
+  content: "";
+  animation: gradient-background-4 10s infinite;
 }
 
 .before\:px-2::before {
