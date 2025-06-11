@@ -1,5 +1,6 @@
 
 import { Sparkles } from "@/components/ui/sparkles";
+import { CTASection } from "@/components/ui/cta-with-rectangle";
 import { useTheme } from "next-themes";
 
 export const CustomerLogosSection = () => {
@@ -34,6 +35,20 @@ export const CustomerLogosSection = () => {
           color={theme === "dark" ? "#ffffff" : "#000000"}
         />
       </div>
+
+      {/* Add CTA Section */}
+      <CTASection
+        badge={{
+          text: "Get started"
+        }}
+        title="Start building with Webinar Wise"
+        description="Transform your Zoom webinar data into actionable business intelligence in no time"
+        action={{
+          text: "Get Started Free",
+          href: "/register",
+          variant: "default"
+        }}
+      />
     </div>
   );
 };
