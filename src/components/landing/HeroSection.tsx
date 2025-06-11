@@ -61,13 +61,15 @@ export const HeroSection = () => {
         </div>
 
         <AnimatedGroup preset="zoom">
-          <div className="relative -mr-56 mt-8 overflow-hidden px-2 sm:mr-0 sm:mt-12 md:mt-20">
-            <div aria-hidden className="bg-gradient-to-b from-transparent via-transparent to-background absolute inset-0 z-[1] from-0% via-60% to-100% opacity-90 pointer-events-none" />
+          <div className="relative -mr-56 mt-8 overflow-hidden px-2 sm:mr-0 sm:mt-12 md:mt-20 pb-32">
             <div className="relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1 ring-background bg-background z-[2]">
               <img className="bg-background aspect-[15/8] relative rounded-2xl" alt="Email Interface Preview" width="2700" height="1440" src="/lovable-uploads/72117dd5-e795-4677-a0d6-6aac40197a81.jpg" />
             </div>
           </div>
         </AnimatedGroup>
+
+        {/* Gradient overlay that extends beyond the image to create smooth transition */}
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-background via-background/80 to-transparent z-[3] pointer-events-none" />
       </div>
     </AuroraBackground>
   );
