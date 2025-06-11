@@ -52,6 +52,13 @@
     /* Sparkles effect colors */
     --gradient-color: #8350e8;
     --sparkles-color: #8350e8;
+
+    /* Gradient text colors */
+    --color-1: 330 100% 40%; /* Dark Neon Pink */
+    --color-2: 140 100% 55%; /* Bright Electric Green */
+    --color-3: 210 100% 30%; /* Deep Neon Blue */
+    --color-4: 60 100% 70%; /* Light Neon Yellow */
+    --color-5: 295 100% 45%; /* Dark Neon Purple */
   }
 
   .dark {
@@ -98,6 +105,13 @@
     /* Sparkles effect colors for dark mode */
     --gradient-color: #8350e8;
     --sparkles-color: #ffffff;
+
+    /* Gradient text colors */
+    --color-1: 330 100% 40%; /* Dark Neon Pink */
+    --color-2: 140 100% 55%; /* Bright Electric Green */
+    --color-3: 210 100% 30%; /* Deep Neon Blue */
+    --color-4: 60 100% 70%; /* Light Neon Yellow */
+    --color-5: 295 100% 45%; /* Dark Neon Purple */
   }
 }
 
