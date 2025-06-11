@@ -1,15 +1,13 @@
-
 import { Button } from "@/components/ui/button";
 import { AnimatedGroup } from "@/components/ui/animated-group";
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
-
 const transitionVariants = {
   item: {
     hidden: {
       opacity: 0,
       filter: 'blur(12px)',
-      y: 12,
+      y: 12
     },
     visible: {
       opacity: 1,
@@ -18,18 +16,14 @@ const transitionVariants = {
       transition: {
         type: 'spring',
         bounce: 0.3,
-        duration: 1.5,
-      },
-    },
-  },
+        duration: 1.5
+      }
+    }
+  }
 };
-
 export const HeroSection = () => {
-  return (
-    <main className="overflow-hidden">
-      <div
-        aria-hidden
-        className="z-[2] absolute inset-0 pointer-events-none isolate opacity-50 contain-strict hidden lg:block">
+  return <main className="overflow-hidden">
+      <div aria-hidden className="z-[2] absolute inset-0 pointer-events-none isolate opacity-50 contain-strict hidden lg:block">
         <div className="w-[35rem] h-[80rem] -translate-y-[350px] absolute left-0 top-0 -rotate-45 rounded-full bg-[radial-gradient(68.54%_68.72%_at_55.02%_31.46%,hsla(0,0%,85%,.08)_0,hsla(0,0%,55%,.02)_50%,hsla(0,0%,45%,0)_80%)]" />
         <div className="h-[80rem] absolute left-0 top-0 w-56 -rotate-45 rounded-full bg-[radial-gradient(50%_50%_at_50%_50%,hsla(0,0%,85%,.06)_0,hsla(0,0%,45%,.02)_80%,transparent_100%)] [translate:5%_-50%]" />
         <div className="h-[80rem] -translate-y-[350px] absolute left-0 top-0 w-56 -rotate-45 bg-[radial-gradient(50%_50%_at_50%_50%,hsla(0,0%,85%,.04)_0,hsla(0,0%,45%,.02)_80%,transparent_100%)]" />
@@ -41,9 +35,7 @@ export const HeroSection = () => {
           <div className="mx-auto max-w-7xl px-6">
             <div className="text-center sm:mx-auto lg:mr-auto lg:mt-0">
               <AnimatedGroup variants={transitionVariants}>
-                <Link
-                  to="/register"
-                  className="hover:bg-background dark:hover:border-t-border bg-muted group mx-auto flex w-fit items-center gap-4 rounded-full border p-1 pl-4 shadow-md shadow-black/5 transition-all duration-300 dark:border-t-white/5 dark:shadow-zinc-950">
+                <Link to="/register" className="hover:bg-background dark:hover:border-t-border bg-muted group mx-auto flex w-fit items-center gap-4 rounded-full border p-1 pl-4 shadow-md shadow-black/5 transition-all duration-300 dark:border-t-white/5 dark:shadow-zinc-950">
                   <span className="text-foreground text-sm">Introducing Webinar Wise Analytics</span>
                   <span className="dark:border-background block h-4 w-0.5 border-l bg-white dark:bg-zinc-700"></span>
 
@@ -69,34 +61,25 @@ export const HeroSection = () => {
                 </p>
               </AnimatedGroup>
 
-              <AnimatedGroup
-                variants={{
-                  container: {
-                    visible: {
-                      transition: {
-                        staggerChildren: 0.05,
-                        delayChildren: 0.75,
-                      },
-                    },
-                  },
-                  ...transitionVariants,
-                }}
-                className="mt-12 flex flex-col items-center justify-center gap-2 md:flex-row">
+              <AnimatedGroup variants={{
+              container: {
+                visible: {
+                  transition: {
+                    staggerChildren: 0.05,
+                    delayChildren: 0.75
+                  }
+                }
+              },
+              ...transitionVariants
+            }} className="mt-12 flex flex-col items-center justify-center gap-2 md:flex-row">
                 <div className="bg-foreground/10 rounded-[14px] border p-0.5">
-                  <Button
-                    asChild
-                    size="lg"
-                    className="rounded-xl px-5 text-base">
+                  <Button asChild size="lg" className="rounded-xl px-5 text-base">
                     <Link to="/register">
                       <span className="text-nowrap">Get Started Free</span>
                     </Link>
                   </Button>
                 </div>
-                <Button
-                  asChild
-                  size="lg"
-                  variant="ghost"
-                  className="h-10.5 rounded-xl px-5">
+                <Button asChild size="lg" variant="ghost" className="h-10.5 rounded-xl px-5">
                   <a href="#demo">
                     <span className="text-nowrap">Watch Demo</span>
                   </a>
@@ -109,36 +92,25 @@ export const HeroSection = () => {
             </div>
           </div>
 
-          <AnimatedGroup
-            variants={{
-              container: {
-                visible: {
-                  transition: {
-                    staggerChildren: 0.05,
-                    delayChildren: 0.75,
-                  },
-                },
-              },
-              ...transitionVariants,
-            }}>
+          <AnimatedGroup variants={{
+          container: {
+            visible: {
+              transition: {
+                staggerChildren: 0.05,
+                delayChildren: 0.75
+              }
+            }
+          },
+          ...transitionVariants
+        }}>
             <div className="relative -mr-56 mt-8 overflow-hidden px-2 sm:mr-0 sm:mt-12 md:mt-20">
-              <div
-                aria-hidden
-                className="bg-gradient-to-b to-background absolute inset-0 z-[1] from-transparent from-80% opacity-60 pointer-events-none"
-              />
+              <div aria-hidden className="bg-gradient-to-b to-background absolute inset-0 z-[1] from-transparent from-80% opacity-60 pointer-events-none" />
               <div className="relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1 ring-background bg-background z-[2]">
-                <img
-                  className="bg-background aspect-[15/8] relative rounded-2xl"
-                  src="/lovable-uploads/e3e54f25-b5ef-4ab3-8150-975ea1840b98.png"
-                  alt="Email Interface Preview"
-                  width="2700"
-                  height="1440"
-                />
+                <img className="bg-background aspect-[15/8] relative rounded-2xl" alt="Email Interface Preview" width="2700" height="1440" src="/lovable-uploads/72117dd5-e795-4677-a0d6-6aac40197a81.jpg" />
               </div>
             </div>
           </AnimatedGroup>
         </div>
       </section>
-    </main>
-  );
+    </main>;
 };
