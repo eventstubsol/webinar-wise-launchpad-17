@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
@@ -24,7 +23,7 @@ const Logo = ({ className }: { className?: string }) => {
       <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
         <span className="text-white font-bold text-sm">WW</span>
       </div>
-      <span className="font-semibold text-xl text-gray-900">Webinar Wise</span>
+      <span className="font-semibold text-xl" style={{ color: '#0f172a' }}>Webinar Wise</span>
     </div>
   );
 };
