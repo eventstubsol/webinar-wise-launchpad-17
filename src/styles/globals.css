@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -49,6 +48,10 @@
 
     --brand: 27 96% 61%;
     --brand-foreground: 31 97% 72%;
+
+    /* Sparkles effect colors */
+    --gradient-color: #8350e8;
+    --sparkles-color: #8350e8;
   }
 
   .dark {
@@ -90,7 +93,11 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
 
     --brand: 31 97% 72%;
-    --brand-foreground: 27 96% 61%
+    --brand-foreground: 27 96% 61%;
+
+    /* Sparkles effect colors for dark mode */
+    --gradient-color: #8350e8;
+    --sparkles-color: #ffffff;
   }
 }
 
