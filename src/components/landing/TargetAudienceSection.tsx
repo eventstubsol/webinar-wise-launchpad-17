@@ -1,29 +1,36 @@
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, GraduationCap, Building, Briefcase } from "lucide-react";
 import { motion } from "framer-motion";
 import { LampContainer } from "@/components/ui/lamp";
+import { BentoGrid, type BentoItem } from "@/components/ui/bento-grid";
 
-const targetAudience = [
+const targetAudienceItems: BentoItem[] = [
   {
-    icon: Users,
     title: "Marketers",
-    description: "Who run webinars every month and hate digging through spreadsheets"
+    description: "Who run webinars every month and hate digging through spreadsheets",
+    icon: <Users className="w-6 h-6 text-cyan-400" />,
+    status: "Popular",
+    colSpan: 2,
+    hasPersistentHover: true,
   },
   {
-    icon: GraduationCap,
     title: "Educators & Trainers",
-    description: "Who want to measure learner engagement"
+    description: "Who want to measure learner engagement",
+    icon: <GraduationCap className="w-6 h-6 text-cyan-400" />,
+    status: "Growing",
   },
   {
-    icon: Building,
     title: "SaaS Teams",
-    description: "Running onboarding, demos, and community sessions"
+    description: "Running onboarding, demos, and community sessions",
+    icon: <Building className="w-6 h-6 text-cyan-400" />,
+    status: "Active",
+    colSpan: 2,
   },
   {
-    icon: Briefcase,
     title: "Agencies",
-    description: "Managing webinars for multiple clients"
+    description: "Managing webinars for multiple clients",
+    icon: <Briefcase className="w-6 h-6 text-cyan-400" />,
+    status: "Pro",
   }
 ];
 
@@ -54,34 +61,25 @@ export const TargetAudienceSection = () => {
             duration: 0.8,
             ease: "easeInOut",
           }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+          className="dark"
         >
-          {targetAudience.map((audience, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 50 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{
-                delay: 0.7 + index * 0.1,
-                duration: 0.6,
-                ease: "easeInOut",
-              }}
-            >
-              <Card className="text-center hover:shadow-lg transition-shadow bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-                <CardHeader>
-                  <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <audience.icon className="w-6 h-6 text-cyan-400" />
-                  </div>
-                  <CardTitle className="text-lg text-slate-200">{audience.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-slate-400 text-sm">
-                    {audience.description}
-                  </CardDescription>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+          <style jsx>{`
+            .dark .group:hover {
+              box-shadow: 0 2px 12px rgba(6, 182, 212, 0.1) !important;
+            }
+            .dark [class*="border-gray-100"] {
+              border-color: rgb(71 85 105 / 0.7) !important;
+            }
+            .dark [class*="bg-white"] {
+              background-color: rgb(30 41 59 / 0.5) !important;
+              backdrop-filter: blur(4px) !important;
+            }
+            .dark [class*="bg-black"] {
+              background-color: rgb(30 41 59 / 0.5) !important;
+              backdrop-filter: blur(4px) !important;
+            }
+          `}</style>
+          <BentoGrid items={targetAudienceItems} />
         </motion.div>
       </div>
     </LampContainer>
