@@ -28,7 +28,7 @@ export const FinalCTASection = () => {
         />
         
         {/* Overlay content with button */}
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute top-1/4 left-1/4 w-1/2 h-1/2 flex items-center justify-center">
           <div className="relative z-20 container mx-auto px-4 md:px-6">
             <div className="max-w-3xl mx-auto text-center">
               <motion.div
