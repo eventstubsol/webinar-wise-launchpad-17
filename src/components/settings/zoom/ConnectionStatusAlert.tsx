@@ -19,7 +19,7 @@ export const ConnectionStatusAlert: React.FC<ConnectionStatusAlertProps> = ({
       <Alert>
         <Clock className="h-4 w-4" />
         <AlertTitle>Loading</AlertTitle>
-        <AlertDescription>Checking connection status...</AlertDescription>
+        <AlertDescription>Checking validation status...</AlertDescription>
       </Alert>
     );
   }
@@ -28,9 +28,9 @@ export const ConnectionStatusAlert: React.FC<ConnectionStatusAlertProps> = ({
     return (
       <Alert>
         <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Not Connected</AlertTitle>
+        <AlertTitle>Not Validated</AlertTitle>
         <AlertDescription>
-          Connect your Zoom account to start syncing webinar data and analytics.
+          Validate your Zoom credentials to start syncing webinar data and analytics.
         </AlertDescription>
       </Alert>
     );
@@ -40,9 +40,9 @@ export const ConnectionStatusAlert: React.FC<ConnectionStatusAlertProps> = ({
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Connection Expired</AlertTitle>
+        <AlertTitle>Validation Expired</AlertTitle>
         <AlertDescription>
-          Your Zoom connection has expired. Please reconnect to continue syncing data.
+          Your Zoom credentials need to be revalidated. Please validate them again.
         </AlertDescription>
       </Alert>
     );
@@ -51,9 +51,9 @@ export const ConnectionStatusAlert: React.FC<ConnectionStatusAlertProps> = ({
   return (
     <Alert className="border-green-200 bg-green-50">
       <CheckCircle className="h-4 w-4 text-green-600" />
-      <AlertTitle className="text-green-800">Connected</AlertTitle>
+      <AlertTitle className="text-green-800">Credentials Validated</AlertTitle>
       <AlertDescription className="text-green-700">
-        Your Zoom account is connected and active.
+        Your Zoom credentials are validated and ready for data syncing.
       </AlertDescription>
     </Alert>
   );

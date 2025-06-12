@@ -1,45 +1,40 @@
 
 /**
- * Token encryption/decryption utilities for Zoom tokens
- * Uses simple Base64 encoding for demo purposes
+ * Utility functions for token management and encryption
  */
 export class TokenUtils {
   /**
-   * Simple token encryption using Base64 (for demo purposes)
-   * In production, this should use proper encryption
+   * Check if a token has expired
+   * For Server-to-Server connections, we use a much longer expiry (1 year)
+   * since they don't have traditional token expiration
+   */
+  static isTokenExpired(expiresAt: string): boolean {
+    if (!expiresAt) return true;
+    
+    const expirationTime = new Date(expiresAt).getTime();
+    const currentTime = Date.now();
+    const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+    
+    return currentTime >= (expirationTime - bufferTime);
+  }
+
+  /**
+   * Encrypt token (placeholder implementation)
+   * In a real implementation, this would use proper encryption
    */
   static encryptToken(token: string): string {
-    try {
-      return btoa(token);
-    } catch (error) {
-      console.error('Token encryption failed:', error);
-      throw new Error('Failed to encrypt token');
-    }
+    // For Server-to-Server connections, we often don't store actual tokens
+    // This is a placeholder for when encryption is needed
+    return token;
   }
 
   /**
-   * Simple token decryption using Base64
+   * Decrypt token (placeholder implementation)
+   * In a real implementation, this would use proper decryption
    */
   static decryptToken(encryptedToken: string): string {
-    try {
-      return atob(encryptedToken);
-    } catch (error) {
-      console.error('Token decryption failed:', error);
-      throw new Error('Failed to decrypt token');
-    }
-  }
-
-  /**
-   * Check if the access token is expired
-   */
-  static isTokenExpired(tokenExpiresAt: string | null): boolean {
-    if (!tokenExpiresAt) return true;
-    
-    const expirationTime = new Date(tokenExpiresAt);
-    const now = new Date();
-    
-    // Add 5-minute buffer before actual expiration
-    const bufferTime = 5 * 60 * 1000; // 5 minutes in milliseconds
-    return (expirationTime.getTime() - bufferTime) <= now.getTime();
+    // For Server-to-Server connections, we often don't store actual tokens
+    // This is a placeholder for when decryption is needed
+    return encryptedToken;
   }
 }

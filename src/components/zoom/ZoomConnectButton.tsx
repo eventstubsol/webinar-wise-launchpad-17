@@ -28,7 +28,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const { credentials } = useZoomCredentials();
 
   // Query to get current connection status
@@ -45,8 +45,8 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
     },
   });
 
-  // Mutation to handle OAuth initiation
-  const initiateOAuthMutation = useMutation({
+  // Mutation to validate Zoom credentials
+  const validateCredentialsMutation = useMutation({
     mutationFn: async () => {
       if (!user?.id) {
         throw new Error('User not authenticated');
@@ -56,65 +56,6 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
         throw new Error('Zoom credentials not configured');
       }
 
-      // Generate secure state parameter
-      const state = crypto.randomUUID();
-      
-      // Store state in sessionStorage for validation
-      sessionStorage.setItem('zoom_oauth_state', state);
-      
-      // Construct OAuth URL using user's credentials
-      const baseUrl = 'https://zoom.us/oauth/authorize';
-      const redirectUri = `${window.location.origin}/auth/zoom/callback`;
-      const scope = 'webinar:read:admin webinar:write:admin user:read:admin';
-      
-      const oauthUrl = new URL(baseUrl);
-      oauthUrl.searchParams.set('response_type', 'code');
-      oauthUrl.searchParams.set('client_id', credentials.client_id);
-      oauthUrl.searchParams.set('redirect_uri', redirectUri);
-      oauthUrl.searchParams.set('scope', scope);
-      oauthUrl.searchParams.set('state', state);
-      
-      return oauthUrl.toString();
-    },
-    onSuccess: (oauthUrl) => {
-      setIsConnecting(true);
-      // Redirect to Zoom OAuth
-      window.location.href = oauthUrl;
-    },
-    onError: (error: Error) => {
-      const errorMessage = error.message || 'Failed to initiate Zoom connection';
-      toast({
-        title: "Connection Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      onConnectionError?.(errorMessage);
-      setIsConnecting(false);
-    },
-  });
-
-  // Check for OAuth callback on component mount
-  React.useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    const state = urlParams.get('state');
-    const storedState = sessionStorage.getItem('zoom_oauth_state');
-
-    if (code && state && storedState === state) {
-      handleOAuthCallback(code, state);
-      
-      // Clean up URL parameters
-      const cleanUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, cleanUrl);
-    }
-  }, []);
-
-  const handleOAuthCallback = async (code: string, state: string) => {
-    if (!user?.id || !credentials) return;
-
-    setIsConnecting(true);
-    
-    try {
       // Get the session token for authentication
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -122,55 +63,48 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
         throw new Error('No valid session found');
       }
 
-      // Call the edge function to exchange the code for tokens
-      const response = await fetch('/api/zoom-oauth-exchange', {
+      // Call the edge function to validate credentials
+      const response = await fetch('/functions/v1/validate-zoom-credentials', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          code,
-          state,
-          redirectUri: `${window.location.origin}/auth/zoom/callback`,
-        }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to complete OAuth exchange');
+        throw new Error(error.error || 'Failed to validate credentials');
       }
 
-      const result = await response.json();
+      return await response.json();
+    },
+    onSuccess: (result) => {
+      setIsValidating(false);
       
-      if (result.success) {
-        // Clear OAuth state
-        sessionStorage.removeItem('zoom_oauth_state');
-        
-        // Refresh connection query
-        queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
-        
-        toast({
-          title: "Success!",
-          description: "Your Zoom account has been connected successfully.",
-        });
-        
-        if (result.connection) {
-          onConnectionSuccess?.(result.connection);
-        }
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to complete Zoom connection';
+      // Refresh connection query
+      queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
+      
       toast({
-        title: "Connection Failed",
+        title: "Success!",
+        description: "Your Zoom credentials have been validated and connection established.",
+      });
+      
+      if (result.connection) {
+        onConnectionSuccess?.(result.connection);
+      }
+    },
+    onError: (error: Error) => {
+      setIsValidating(false);
+      const errorMessage = error.message || 'Failed to validate Zoom credentials';
+      toast({
+        title: "Validation Failed",
         description: errorMessage,
         variant: "destructive",
       });
       onConnectionError?.(errorMessage);
-    } finally {
-      setIsConnecting(false);
-    }
-  };
+    },
+  });
 
   const handleDisconnect = async () => {
     if (!connection) return;
@@ -194,11 +128,11 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
   };
 
   const getButtonContent = () => {
-    if (isLoadingConnection || isConnecting) {
+    if (isLoadingConnection || isValidating) {
       return (
         <>
           <Loader className="h-4 w-4 animate-spin" />
-          <span>{isConnecting ? 'Connecting...' : 'Loading...'}</span>
+          <span>{isValidating ? 'Validating...' : 'Loading...'}</span>
         </>
       );
     }
@@ -210,7 +144,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
         return (
           <>
             <AlertCircle className="h-4 w-4" />
-            <span>Reconnect Zoom</span>
+            <span>Revalidate Credentials</span>
           </>
         );
       }
@@ -218,7 +152,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
       return (
         <>
           <CheckCircle className="h-4 w-4" />
-          <span>Connected to Zoom</span>
+          <span>Credentials Validated</span>
         </>
       );
     }
@@ -226,7 +160,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
     return (
       <>
         <Link className="h-4 w-4" />
-        <span>Connect Zoom Account</span>
+        <span>Validate Credentials</span>
       </>
     );
   };
@@ -243,7 +177,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
     if (!user) {
       toast({
         title: "Authentication Required",
-        description: "Please log in to connect your Zoom account.",
+        description: "Please log in to validate your Zoom credentials.",
         variant: "destructive",
       });
       return;
@@ -261,19 +195,21 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
     if (connection) {
       const isExpired = ZoomConnectionService.isTokenExpired(connection.token_expires_at);
       if (isExpired) {
-        // Reconnect flow
-        initiateOAuthMutation.mutate();
+        // Revalidate credentials
+        setIsValidating(true);
+        validateCredentialsMutation.mutate();
       } else {
         // Show disconnect option
         handleDisconnect();
       }
     } else {
-      // Start connection flow
-      initiateOAuthMutation.mutate();
+      // Start validation
+      setIsValidating(true);
+      validateCredentialsMutation.mutate();
     }
   };
 
-  const isDisabled = isLoadingConnection || isConnecting || !user || (!credentials && !connection);
+  const isDisabled = isLoadingConnection || isValidating || !user || (!credentials && !connection);
 
   return (
     <div className="space-y-2">
@@ -289,13 +225,13 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
       
       {connection && !ZoomConnectionService.isTokenExpired(connection.token_expires_at) && (
         <div className="text-xs text-muted-foreground">
-          Connected as: {connection.zoom_email}
+          Validated for: {connection.zoom_email}
         </div>
       )}
       
       {!credentials && !connection && (
         <div className="text-xs text-muted-foreground">
-          Configure OAuth credentials to enable connection
+          Configure OAuth credentials to enable validation
         </div>
       )}
     </div>
