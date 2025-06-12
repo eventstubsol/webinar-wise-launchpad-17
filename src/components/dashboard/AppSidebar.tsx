@@ -29,9 +29,10 @@ import {
   LogOut,
   Zap
 } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 
 const navigationItems = [
-  { title: "Dashboard", icon: LayoutDashboard, url: "/dashboard", active: true },
+  { title: "Dashboard", icon: LayoutDashboard, url: "/dashboard" },
   { title: "Webinars", icon: Video, url: "/webinars" },
   { title: "Analytics", icon: BarChart3, url: "/analytics" },
   { title: "Reports", icon: FileText, url: "/reports" },
@@ -48,6 +49,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ onProfileSetup, onSignOut }: AppSidebarProps) {
   const { user, profile, profileLoading } = useAuth();
+  const location = useLocation();
 
   const userInitials = profile?.full_name
     ? profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase()
@@ -74,10 +76,10 @@ export function AppSidebar({ onProfileSetup, onSignOut }: AppSidebarProps) {
             </Avatar>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
+            <p className="text-sm font-medium text-sidebar-foreground truncate">
               {profile?.full_name || user?.email}
             </p>
-            <p className="text-xs text-gray-500 truncate">
+            <p className="text-xs text-sidebar-foreground/70 truncate">
               {profile?.job_title ? (
                 `${profile.job_title}${profile.company ? ` at ${profile.company}` : ''}`
               ) : (
@@ -89,9 +91,9 @@ export function AppSidebar({ onProfileSetup, onSignOut }: AppSidebarProps) {
 
         {/* Profile Completion Alert */}
         {profileCompletion < 100 && (
-          <Alert className="bg-blue-50 border-blue-200">
-            <Zap className="h-4 w-4 text-blue-600" />
-            <AlertDescription className="text-blue-700 text-xs">
+          <Alert className="bg-sidebar-accent border-sidebar-border">
+            <Zap className="h-4 w-4 text-sidebar-accent-foreground" />
+            <AlertDescription className="text-sidebar-accent-foreground text-xs">
               Profile {profileCompletion}% complete.{' '}
               <button 
                 onClick={onProfileSetup}
@@ -109,21 +111,24 @@ export function AppSidebar({ onProfileSetup, onSignOut }: AppSidebarProps) {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navigationItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={item.active}>
-                    <a href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                      {item.active && (
-                        <Badge variant="secondary" className="ml-auto bg-blue-100 text-blue-700">
-                          Current
-                        </Badge>
-                      )}
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {navigationItems.map((item) => {
+                const isActive = location.pathname === item.url;
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive}>
+                      <a href={item.url}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                        {isActive && (
+                          <Badge variant="secondary" className="ml-auto bg-sidebar-accent text-sidebar-accent-foreground">
+                            Current
+                          </Badge>
+                        )}
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -133,7 +138,7 @@ export function AppSidebar({ onProfileSetup, onSignOut }: AppSidebarProps) {
         <Button
           onClick={onSignOut}
           variant="ghost"
-          className="w-full justify-start text-gray-700 hover:bg-gray-50 hover:text-red-600"
+          className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-destructive"
         >
           <LogOut className="mr-3 h-4 w-4" />
           Sign out
