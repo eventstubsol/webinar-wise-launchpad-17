@@ -16,6 +16,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import Dashboard from "./pages/Dashboard";
+import Settings from "./pages/Settings";
 import ZoomOAuthCallback from "./pages/auth/zoom/callback";
 import NotFound from "./pages/NotFound";
 
@@ -48,6 +49,14 @@ const App = () => (
                     element={
                       <ProtectedRoute>
                         <Dashboard />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/settings" 
+                    element={
+                      <ProtectedRoute>
+                        <Settings />
                       </ProtectedRoute>
                     } 
                   />
