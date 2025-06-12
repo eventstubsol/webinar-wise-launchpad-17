@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
@@ -87,6 +86,10 @@ const Register = () => {
     navigate("/login");
   };
 
+  const handleBackToHomepage = () => {
+    navigate("/");
+  };
+
   return (
     <LightSignUp
       fullName={fullName}
@@ -99,6 +102,7 @@ const Register = () => {
       onPasswordChange={handlePasswordChange}
       onSubmit={handleSubmit}
       onSignInClick={handleSignInClick}
+      onBackToHomepage={handleBackToHomepage}
     />
   );
 };

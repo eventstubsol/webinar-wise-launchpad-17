@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { EyeIcon, EyeOffIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon, ArrowLeft } from "lucide-react";
 
 export function LightSignUp({
   fullName,
@@ -19,6 +19,7 @@ export function LightSignUp({
   onPasswordChange,
   onSubmit,
   onSignInClick,
+  onBackToHomepage,
 }: {
   fullName: string;
   email: string;
@@ -30,6 +31,7 @@ export function LightSignUp({
   onPasswordChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSubmit: (e: React.FormEvent) => void;
   onSignInClick: () => void;
+  onBackToHomepage: () => void;
 }) {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -38,6 +40,16 @@ export function LightSignUp({
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
           <div className="p-8">
+            <div className="mb-6">
+              <button
+                onClick={onBackToHomepage}
+                className="flex items-center text-sm text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4 mr-1" />
+                Back to homepage
+              </button>
+            </div>
+
             <div className="text-center mb-8">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Create account</h1>
               <p className="text-gray-600">Get started with your free account</p>
