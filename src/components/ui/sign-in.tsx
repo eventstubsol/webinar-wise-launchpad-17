@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { EyeIcon, EyeOffIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon, ArrowLeft } from "lucide-react";
 
 export function LightLogin({
   email,
@@ -18,6 +18,7 @@ export function LightLogin({
   onSubmit,
   onSignUpClick,
   onForgotPasswordClick,
+  onBackToHomepage,
 }: {
   email: string;
   password: string;
@@ -28,6 +29,7 @@ export function LightLogin({
   onSubmit: (e: React.FormEvent) => void;
   onSignUpClick: () => void;
   onForgotPasswordClick: () => void;
+  onBackToHomepage: () => void;
 }) {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -36,6 +38,16 @@ export function LightLogin({
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
           <div className="p-8">
+            <div className="mb-6">
+              <button
+                onClick={onBackToHomepage}
+                className="flex items-center text-sm text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4 mr-1" />
+                Back to homepage
+              </button>
+            </div>
+
             <div className="text-center mb-8">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome back</h1>
               <p className="text-gray-600">Sign in to your account to continue</p>

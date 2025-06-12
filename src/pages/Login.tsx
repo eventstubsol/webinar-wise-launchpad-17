@@ -73,6 +73,10 @@ const Login = () => {
     navigate("/forgot-password");
   };
 
+  const handleBackToHomepage = () => {
+    navigate("/");
+  };
+
   return (
     <LightLogin
       email={email}
@@ -84,6 +88,7 @@ const Login = () => {
       onSubmit={handleSubmit}
       onSignUpClick={handleSignUpClick}
       onForgotPasswordClick={handleForgotPasswordClick}
+      onBackToHomepage={handleBackToHomepage}
     />
   );
 };
