@@ -2,6 +2,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, Calendar, Users, Clock, Activity } from 'lucide-react';
+import { useZoom } from '@/hooks/useZoom';
 
 interface MetricCardProps {
   title: string;
@@ -35,51 +36,65 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, change, trend, ic
 };
 
 export function MetricsCards() {
+  const { dashboardStats, loading } = useZoom();
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="animate-pulse">
+            <div className="h-28 bg-gray-200 rounded-lg"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   const metrics = [
     {
       title: "Total Webinars",
-      value: "24",
-      change: "+12% from last month",
+      value: dashboardStats.hasActiveConnection ? dashboardStats.totalWebinars.toString() : "0",
+      change: dashboardStats.hasActiveConnection ? "+12% from last month" : "Connect Zoom to see data",
       trend: "up" as const,
       icon: Calendar,
       bgColor: "bg-blue-50",
     },
     {
       title: "Total Registrants", 
-      value: "3,247",
-      change: "+8% from last month",
+      value: dashboardStats.hasActiveConnection ? dashboardStats.totalRegistrants.toLocaleString() : "0",
+      change: dashboardStats.hasActiveConnection ? "+8% from last month" : "Connect Zoom to see data",
       trend: "up" as const,
       icon: Users,
       bgColor: "bg-green-50",
     },
     {
       title: "Total Attendees",
-      value: "2,156",
-      change: "+15% from last month", 
+      value: dashboardStats.hasActiveConnection ? dashboardStats.totalAttendees.toLocaleString() : "0",
+      change: dashboardStats.hasActiveConnection ? "+15% from last month" : "Connect Zoom to see data", 
       trend: "up" as const,
       icon: Activity,
       bgColor: "bg-purple-50",
     },
     {
       title: "Attendance Rate",
-      value: "66.4%",
-      change: "-2% from last month",
+      value: dashboardStats.hasActiveConnection ? `${dashboardStats.avgAttendanceRate}%` : "0%",
+      change: dashboardStats.hasActiveConnection ? "-2% from last month" : "Connect Zoom to see data",
       trend: "down" as const,
       icon: TrendingUp,
       bgColor: "bg-orange-50",
     },
     {
       title: "Total Engagement",
-      value: "847h",
-      change: "+22% from last month",
+      value: dashboardStats.hasActiveConnection ? "847h" : "0h",
+      change: dashboardStats.hasActiveConnection ? "+22% from last month" : "Connect Zoom to see data",
       trend: "up" as const,
       icon: Clock,
       bgColor: "bg-pink-50",
     },
     {
       title: "Average Duration",
-      value: "42m",
-      change: "+5% from last month",
+      value: dashboardStats.hasActiveConnection ? "42m" : "0m",
+      change: dashboardStats.hasActiveConnection ? "+5% from last month" : "Connect Zoom to see data",
       trend: "up" as const,
       icon: Clock,
       bgColor: "bg-yellow-50",

@@ -9,6 +9,7 @@ import { MetricsCards } from '@/components/dashboard/MetricsCards';
 import { ChartsSection } from '@/components/dashboard/ChartsSection';
 import { DataTables } from '@/components/dashboard/DataTables';
 import { ProfileSettings } from '@/components/dashboard/ProfileSettings';
+import { ZoomIntegrationSection } from '@/components/dashboard/ZoomIntegrationSection';
 import { AppSidebar } from '@/components/dashboard/AppSidebar';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
@@ -76,6 +77,9 @@ const Dashboard = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Zoom Integration Section */}
+              <ZoomIntegrationSection />
 
               {/* Metrics Cards */}
               <MetricsCards />
