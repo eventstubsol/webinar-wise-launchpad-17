@@ -53,17 +53,30 @@ serve(async (req) => {
 
     console.log('Validating credentials for user:', user.id, 'account:', credentials.account_id);
 
-    // Validate credentials using Zoom's Server-to-Server OAuth
+    // Request token with explicit scopes
+    const requiredScopes = [
+      'account:read:admin',
+      'account:read:sub_account:master', 
+      'user:read:admin',
+      'webinar:read:admin',
+      'meeting:read:admin'
+    ];
+
+    const tokenRequestBody = new URLSearchParams({
+      grant_type: 'account_credentials',
+      account_id: credentials.account_id,
+      scope: requiredScopes.join(' ') // Explicitly request scopes
+    });
+
+    console.log('Token request body:', tokenRequestBody.toString());
+
     const tokenResponse = await fetch('https://zoom.us/oauth/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': `Basic ${btoa(`${credentials.client_id}:${credentials.client_secret}`)}`,
       },
-      body: new URLSearchParams({
-        grant_type: 'account_credentials',
-        account_id: credentials.account_id,
-      }),
+      body: tokenRequestBody,
     });
 
     if (!tokenResponse.ok) {
@@ -73,49 +86,103 @@ serve(async (req) => {
         JSON.stringify({ 
           error: 'Invalid Zoom credentials',
           details: 'Unable to authenticate with Zoom API. Please verify your Client ID, Client Secret, and Account ID.',
-          statusCode: tokenResponse.status
+          statusCode: tokenResponse.status,
+          zoomError: errorText
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const tokenData = await tokenResponse.json();
-    console.log('Token obtained successfully');
+    console.log('Token obtained successfully. Scopes:', tokenData.scope);
 
-    // Get account information using the correct endpoint for Server-to-Server OAuth
-    const accountResponse = await fetch(`https://api.zoom.us/v2/accounts/${credentials.account_id}`, {
+    // Try /users/me first as a simpler endpoint to test the token
+    console.log('Testing token with /users/me endpoint...');
+    const userTestResponse = await fetch('https://api.zoom.us/v2/users/me', {
       headers: {
         'Authorization': `Bearer ${tokenData.access_token}`,
       },
     });
 
-    if (!accountResponse.ok) {
+    if (!userTestResponse.ok) {
+      const userErrorText = await userTestResponse.text();
+      console.error('User endpoint test failed:', userTestResponse.status, userErrorText);
+    } else {
+      const userData = await userTestResponse.json();
+      console.log('User endpoint test successful. User ID:', userData.id);
+    }
+
+    // Try different account endpoints to find which works
+    let accountData = null;
+    let accountEndpoint = '';
+
+    // Option 1: Try /accounts/{accountId}
+    console.log('Trying /accounts/{accountId} endpoint...');
+    let accountResponse = await fetch(`https://api.zoom.us/v2/accounts/${credentials.account_id}`, {
+      headers: {
+        'Authorization': `Bearer ${tokenData.access_token}`,
+      },
+    });
+
+    if (accountResponse.ok) {
+      accountData = await accountResponse.json();
+      accountEndpoint = `/accounts/${credentials.account_id}`;
+      console.log('Success with /accounts/{accountId}');
+    } else {
       const errorText = await accountResponse.text();
-      console.error('Failed to get account info:', accountResponse.status, errorText);
+      console.log('Failed /accounts/{accountId}:', accountResponse.status, errorText);
+
+      // Option 2: Try /accounts/me
+      console.log('Trying /accounts/me endpoint...');
+      accountResponse = await fetch('https://api.zoom.us/v2/accounts/me', {
+        headers: {
+          'Authorization': `Bearer ${tokenData.access_token}`,
+        },
+      });
+
+      if (accountResponse.ok) {
+        accountData = await accountResponse.json();
+        accountEndpoint = '/accounts/me';
+        console.log('Success with /accounts/me');
+      } else {
+        const errorText2 = await accountResponse.text();
+        console.log('Failed /accounts/me:', accountResponse.status, errorText2);
+
+        // Option 3: Try /users/me as fallback (treating user as account)
+        if (userTestResponse.ok) {
+          accountData = await userTestResponse.json();
+          accountEndpoint = '/users/me (fallback)';
+          console.log('Using /users/me as fallback account data');
+        }
+      }
+    }
+
+    if (!accountData) {
       return new Response(
         JSON.stringify({ 
           error: 'Failed to retrieve account information',
-          details: `Zoom API returned ${accountResponse.status}: ${errorText}`,
-          statusCode: accountResponse.status
+          details: 'Unable to access account data with any endpoint. Check account permissions.',
+          tokenScopes: tokenData.scope,
+          attemptedEndpoints: ['/accounts/{accountId}', '/accounts/me', '/users/me']
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const accountData = await accountResponse.json();
-    console.log('Account data retrieved successfully for account:', accountData.id);
+    console.log('Account data retrieved successfully using:', accountEndpoint);
+    console.log('Account data:', { id: accountData.id, email: accountData.email || accountData.owner_email });
 
     // Create or update zoom connection record
     const connectionData = {
       user_id: user.id,
       zoom_user_id: accountData.id,
       zoom_account_id: accountData.id,
-      zoom_email: accountData.owner_email || 'Unknown',
-      zoom_account_type: accountData.plan_type || 'Unknown',
+      zoom_email: accountData.email || accountData.owner_email || 'Unknown',
+      zoom_account_type: accountData.plan_type || accountData.type || 'Unknown',
       access_token: 'validated', // We don't store the actual token for Server-to-Server
       refresh_token: 'not_applicable',
       token_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year from now
-      scopes: ['account:read:admin', 'webinar:read:admin'],
+      scopes: tokenData.scope ? tokenData.scope.split(' ') : ['account:read:admin', 'webinar:read:admin'],
       connection_status: 'active',
       is_primary: true,
       auto_sync_enabled: true,
@@ -173,8 +240,12 @@ serve(async (req) => {
         connection: connection,
         accountInfo: {
           id: accountData.id,
-          email: accountData.owner_email,
-          plan_type: accountData.plan_type,
+          email: accountData.email || accountData.owner_email,
+          plan_type: accountData.plan_type || accountData.type,
+        },
+        debugInfo: {
+          endpointUsed: accountEndpoint,
+          tokenScopes: tokenData.scope
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
