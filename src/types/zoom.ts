@@ -5,12 +5,12 @@ export interface ZoomConnection {
   zoom_user_id: string;
   zoom_email: string;
   zoom_account_id: string;
-  zoom_account_type?: 'basic' | 'pro' | 'business' | 'enterprise';
+  zoom_account_type?: string; // Changed from union type to string
   access_token: string;
   refresh_token: string;
   token_expires_at: string;
   scopes?: string[];
-  connection_status: 'active' | 'expired' | 'revoked' | 'error';
+  connection_status: string; // Changed from union type to string
   is_primary: boolean;
   auto_sync_enabled: boolean;
   sync_frequency_hours: number;
@@ -35,7 +35,7 @@ export interface ZoomWebinar {
   host_id: string;
   host_email?: string;
   alternative_hosts?: string[];
-  status?: 'scheduled' | 'started' | 'finished' | 'cancelled';
+  status?: string; // Changed from union type to string
   registration_required: boolean;
   registration_type?: number;
   approval_type?: number;
@@ -71,9 +71,9 @@ export interface WebinarAnalyticsSummary {
 export interface ZoomSyncLog {
   id: string;
   connection_id: string;
-  sync_type: 'initial' | 'incremental' | 'manual' | 'webhook';
-  sync_status: 'started' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
-  resource_type?: 'all' | 'webinars' | 'participants' | 'registrants' | 'polls' | 'qna' | 'recordings';
+  sync_type: string; // Changed from union type to string
+  sync_status: string; // Changed from union type to string
+  resource_type?: string; // Changed from union type to string
   resource_id?: string;
   total_items?: number;
   processed_items: number;
@@ -87,4 +87,37 @@ export interface ZoomSyncLog {
   rate_limit_hits: number;
   created_at: string;
   updated_at: string;
+}
+
+// Input types for creating/updating
+export interface CreateZoomConnectionInput {
+  user_id: string;
+  zoom_user_id: string;
+  zoom_email: string;
+  zoom_account_id: string;
+  zoom_account_type?: string;
+  access_token: string;
+  refresh_token: string;
+  token_expires_at: string;
+  scopes?: string[];
+  connection_status?: string;
+  is_primary?: boolean;
+  auto_sync_enabled?: boolean;
+  sync_frequency_hours?: number;
+}
+
+export interface CreateZoomSyncLogInput {
+  connection_id: string;
+  sync_type: string;
+  sync_status: string;
+  resource_type?: string;
+  resource_id?: string;
+  total_items?: number;
+  processed_items?: number;
+  failed_items?: number;
+  started_at?: string;
+  error_message?: string;
+  error_details?: any;
+  api_calls_made?: number;
+  rate_limit_hits?: number;
 }

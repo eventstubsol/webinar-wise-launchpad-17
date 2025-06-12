@@ -1,6 +1,14 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomConnection, ZoomWebinar, WebinarAnalyticsSummary, ZoomSyncLog } from '@/types/zoom';
+import { Tables } from '@/integrations/supabase/types';
+import { 
+  ZoomConnection, 
+  ZoomWebinar, 
+  WebinarAnalyticsSummary, 
+  ZoomSyncLog,
+  CreateZoomConnectionInput,
+  CreateZoomSyncLogInput
+} from '@/types/zoom';
 
 export class ZoomService {
   // Zoom Connections
@@ -12,7 +20,7 @@ export class ZoomService {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return (data || []) as ZoomConnection[];
   }
 
   static async getPrimaryConnection(userId: string): Promise<ZoomConnection | null> {
@@ -24,10 +32,10 @@ export class ZoomService {
       .single();
 
     if (error && error.code !== 'PGRST116') throw error;
-    return data;
+    return data as ZoomConnection | null;
   }
 
-  static async createConnection(connection: Partial<ZoomConnection>): Promise<ZoomConnection> {
+  static async createConnection(connection: CreateZoomConnectionInput): Promise<ZoomConnection> {
     const { data, error } = await supabase
       .from('zoom_connections')
       .insert(connection)
@@ -35,10 +43,10 @@ export class ZoomService {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as ZoomConnection;
   }
 
-  static async updateConnection(id: string, updates: Partial<ZoomConnection>): Promise<ZoomConnection> {
+  static async updateConnection(id: string, updates: Partial<Tables<'zoom_connections'>['Update']>): Promise<ZoomConnection> {
     const { data, error } = await supabase
       .from('zoom_connections')
       .update(updates)
@@ -47,7 +55,7 @@ export class ZoomService {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as ZoomConnection;
   }
 
   static async deleteConnection(id: string): Promise<void> {
@@ -68,7 +76,7 @@ export class ZoomService {
       .order('start_time', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return (data || []) as ZoomWebinar[];
   }
 
   static async getWebinarsByUser(userId: string): Promise<ZoomWebinar[]> {
@@ -82,7 +90,7 @@ export class ZoomService {
       .order('start_time', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return (data || []) as ZoomWebinar[];
   }
 
   static async getWebinarAnalytics(userId: string): Promise<WebinarAnalyticsSummary[]> {
@@ -93,7 +101,7 @@ export class ZoomService {
       .order('start_time', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return (data || []) as WebinarAnalyticsSummary[];
   }
 
   // Sync Operations
@@ -106,10 +114,10 @@ export class ZoomService {
       .limit(limit);
 
     if (error) throw error;
-    return data || [];
+    return (data || []) as ZoomSyncLog[];
   }
 
-  static async createSyncLog(syncLog: Partial<ZoomSyncLog>): Promise<ZoomSyncLog> {
+  static async createSyncLog(syncLog: CreateZoomSyncLogInput): Promise<ZoomSyncLog> {
     const { data, error } = await supabase
       .from('zoom_sync_logs')
       .insert(syncLog)
@@ -117,10 +125,10 @@ export class ZoomService {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as ZoomSyncLog;
   }
 
-  static async updateSyncLog(id: string, updates: Partial<ZoomSyncLog>): Promise<ZoomSyncLog> {
+  static async updateSyncLog(id: string, updates: Partial<Tables<'zoom_sync_logs'>['Update']>): Promise<ZoomSyncLog> {
     const { data, error } = await supabase
       .from('zoom_sync_logs')
       .update(updates)
@@ -129,7 +137,7 @@ export class ZoomService {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as ZoomSyncLog;
   }
 
   // OAuth URL Generation
