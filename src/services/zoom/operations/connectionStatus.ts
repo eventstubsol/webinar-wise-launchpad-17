@@ -7,7 +7,7 @@ import { TokenUtils } from '../utils/tokenUtils';
 /**
  * Connection status management operations
  */
-export class ConnectionStatus {
+export class ConnectionStatusOperations {
   /**
    * Get the primary connection for a user
    */

@@ -1,0 +1,30 @@
+
+import { ConnectionCrud } from './operations/connectionCrud';
+import { ConnectionStatusOperations } from './operations/connectionStatus';
+import { TokenUtils } from './utils/tokenUtils';
+import { ZoomConnection, ZoomConnectionInsert, ZoomConnectionUpdate, ConnectionStatus } from '@/types/zoom';
+
+/**
+ * Main service for managing Zoom connections
+ * This service acts as a facade for all Zoom connection operations
+ */
+export class ZoomConnectionService {
+  // CRUD Operations
+  static createConnection = ConnectionCrud.createConnection;
+  static getConnection = ConnectionCrud.getConnection;
+  static getUserConnections = ConnectionCrud.getUserConnections;
+  static updateConnection = ConnectionCrud.updateConnection;
+  static deleteConnection = ConnectionCrud.deleteConnection;
+
+  // Connection Status Operations
+  static getPrimaryConnection = ConnectionStatusOperations.getPrimaryConnection;
+  static setPrimaryConnection = ConnectionStatusOperations.setPrimaryConnection;
+  static updateConnectionStatus = ConnectionStatusOperations.updateConnectionStatus;
+  static checkConnectionStatus = ConnectionStatusOperations.checkConnectionStatus;
+  static refreshToken = ConnectionStatusOperations.refreshToken;
+
+  // Token Utilities
+  static isTokenExpired = TokenUtils.isTokenExpired;
+  static encryptToken = TokenUtils.encryptToken;
+  static decryptToken = TokenUtils.decryptToken;
+}
