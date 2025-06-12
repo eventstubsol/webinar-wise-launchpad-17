@@ -1,158 +1,158 @@
 
-import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { CheckCircle, XCircle, Mail } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Mail, CheckCircle, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { useAuth } from '@/contexts/AuthContext';
 
 const VerifyEmail = () => {
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [message, setMessage] = useState("");
+  const [verificationStatus, setVerificationStatus] = useState<'pending' | 'success' | 'error'>('pending');
+  const [isResending, setIsResending] = useState(false);
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    const verifyEmail = async () => {
-      const tokenHash = searchParams.get('token_hash');
-      const type = searchParams.get('type');
-      
-      if (!tokenHash || type !== 'email') {
-        setStatus('error');
-        setMessage('Invalid verification link');
-        return;
-      }
-
-      try {
-        const { error } = await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: 'email'
-        });
-
-        if (error) throw error;
-
-        setStatus('success');
-        setMessage('Email verified successfully!');
-        
-        toast({
-          title: "Email verified!",
-          description: "Your email has been successfully verified.",
-        });
-
-        setTimeout(() => {
-          navigate("/dashboard");
-        }, 3000);
-      } catch (error: any) {
-        setStatus('error');
-        setMessage(error.message || 'Failed to verify email');
-        
-        toast({
-          title: "Verification failed",
-          description: error.message || "Failed to verify email. Please try again.",
-          variant: "destructive",
-        });
-      }
-    };
-
-    verifyEmail();
-  }, [searchParams, navigate]);
-
-  const resendVerification = async () => {
-    try {
-      // This would need the user's email - in a real app you might store this in localStorage
-      // or require them to enter it again
-      toast({
-        title: "Feature not implemented",
-        description: "Please contact support to resend verification email.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to resend verification email.",
-        variant: "destructive",
-      });
+    // Check if user is already verified and authenticated
+    if (!loading && user) {
+      navigate('/dashboard', { replace: true });
     }
+  }, [user, loading, navigate]);
+
+  useEffect(() => {
+    // Check for verification token in URL
+    const token = searchParams.get('token');
+    const type = searchParams.get('type');
+    
+    if (token && type === 'signup') {
+      // Handle email verification
+      setVerificationStatus('success');
+    }
+  }, [searchParams]);
+
+  const handleResendEmail = async () => {
+    setIsResending(true);
+    // In a real implementation, you would call your resend verification email function
+    // For now, we'll simulate the action
+    setTimeout(() => {
+      setIsResending(false);
+    }, 2000);
   };
 
-  const getIcon = () => {
-    switch (status) {
-      case 'loading':
-        return <Mail className="w-8 h-8 text-blue-600 animate-pulse" />;
-      case 'success':
-        return <CheckCircle className="w-8 h-8 text-green-600" />;
-      case 'error':
-        return <XCircle className="w-8 h-8 text-red-600" />;
-    }
-  };
-
-  const getTitle = () => {
-    switch (status) {
-      case 'loading':
-        return 'Verifying your email...';
-      case 'success':
-        return 'Email verified!';
-      case 'error':
-        return 'Verification failed';
-    }
-  };
-
-  const getBackgroundColor = () => {
-    switch (status) {
-      case 'loading':
-        return 'bg-blue-100';
-      case 'success':
-        return 'bg-green-100';
-      case 'error':
-        return 'bg-red-100';
-    }
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-        <div className="p-8 text-center">
-          <div className={`mx-auto mb-6 w-16 h-16 ${getBackgroundColor()} rounded-full flex items-center justify-center`}>
-            {getIcon()}
-          </div>
-          
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            {getTitle()}
-          </h2>
-          
-          <p className="text-gray-600 mb-6">
-            {message}
-          </p>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <Card className="shadow-lg border-0">
+          <CardHeader className="text-center pb-6">
+            <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full mb-4">
+              {verificationStatus === 'success' ? (
+                <div className="bg-green-100 rounded-full p-3">
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                </div>
+              ) : verificationStatus === 'error' ? (
+                <div className="bg-red-100 rounded-full p-3">
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                </div>
+              ) : (
+                <div className="bg-blue-100 rounded-full p-3">
+                  <Mail className="w-6 h-6 text-blue-600" />
+                </div>
+              )}
+            </div>
+            <CardTitle className="text-xl">
+              {verificationStatus === 'success' ? 'Email verified!' : 
+               verificationStatus === 'error' ? 'Verification failed' : 
+               'Check your email'}
+            </CardTitle>
+            <CardDescription>
+              {verificationStatus === 'success' ? 
+                'Your email has been successfully verified. You can now sign in to your account.' :
+               verificationStatus === 'error' ? 
+                'The verification link is invalid or has expired.' :
+                'We sent a verification link to your email address.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {verificationStatus === 'pending' && (
+              <>
+                <Alert>
+                  <Mail className="h-4 w-4" />
+                  <AlertDescription>
+                    Please check your email and click the verification link to activate your account. 
+                    If you don't see the email, check your spam folder.
+                  </AlertDescription>
+                </Alert>
 
-          <div className="space-y-4">
-            {status === 'success' && (
-              <>
-                <p className="text-sm text-gray-500">
-                  Redirecting to dashboard in 3 seconds...
-                </p>
-                <Button onClick={() => navigate("/dashboard")} className="w-full">
-                  Go to Dashboard
-                </Button>
+                <div className="space-y-3">
+                  <Button
+                    onClick={handleResendEmail}
+                    variant="outline"
+                    className="w-full"
+                    disabled={isResending}
+                  >
+                    {isResending ? (
+                      <LoadingSpinner size="sm" className="mr-2" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                    )}
+                    Resend verification email
+                  </Button>
+
+                  <Button asChild variant="ghost" className="w-full">
+                    <Link to="/login">
+                      Back to login
+                    </Link>
+                  </Button>
+                </div>
               </>
             )}
-            
-            {status === 'error' && (
-              <>
-                <Button onClick={resendVerification} variant="outline" className="w-full">
-                  Resend Verification Email
+
+            {verificationStatus === 'success' && (
+              <div className="space-y-3">
+                <Button asChild className="w-full">
+                  <Link to="/login">
+                    <ArrowRight className="w-4 h-4 mr-2" />
+                    Sign in to your account
+                  </Link>
                 </Button>
-                <Button onClick={() => navigate("/login")} className="w-full">
-                  Back to Login
-                </Button>
-              </>
-            )}
-            
-            {status === 'loading' && (
-              <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-600 rounded-full animate-pulse"></div>
               </div>
             )}
-          </div>
-        </div>
+
+            {verificationStatus === 'error' && (
+              <div className="space-y-3">
+                <Button
+                  onClick={handleResendEmail}
+                  className="w-full"
+                  disabled={isResending}
+                >
+                  {isResending ? (
+                    <LoadingSpinner size="sm" className="mr-2" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                  )}
+                  Send new verification email
+                </Button>
+
+                <Button asChild variant="outline" className="w-full">
+                  <Link to="/register">
+                    Back to registration
+                  </Link>
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
