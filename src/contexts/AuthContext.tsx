@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -111,8 +112,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Handle auth state changes with profile loading
-  const handleAuthStateChange = async (event: string, session: Session | null) => {
+  // Memoized auth state change handler to prevent re-creation on every render
+  const handleAuthStateChange = useCallback(async (event: string, session: Session | null) => {
     console.log('AuthProvider: Auth state changed', { event, hasSession: !!session });
     
     setSession(session);
@@ -139,9 +140,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setProfileLoading(false);
     }
 
+    // Always set loading to false after handling auth state change
     setLoading(false);
 
-    // Handle auth events
+    // Handle auth events with toast notifications
     if (event === 'SIGNED_IN') {
       toast({
         title: "Welcome!",
@@ -153,7 +155,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         description: "You have been signed out successfully.",
       });
     }
-  };
+  }, []); // Empty dependency array since we don't want this to change
 
   // Initialize auth state
   useEffect(() => {
@@ -171,7 +173,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('AuthProvider: Cleaning up auth subscription');
       subscription.unsubscribe();
     };
-  }, []);
+  }, [handleAuthStateChange]); // Only depend on the memoized handler
 
   // Profile management methods
   const updateProfile = async (updates: Partial<Profile>) => {
