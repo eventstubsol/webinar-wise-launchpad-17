@@ -3,11 +3,13 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
+import { useProfile } from '@/contexts/ProfileContext';
 import { Search, Bell, LogOut, RefreshCw, Wifi } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 
 export function DashboardHeader() {
   const { user, signOut } = useAuth();
+  const { profile } = useProfile();
 
   const handleSignOut = async () => {
     try {
@@ -16,6 +18,8 @@ export function DashboardHeader() {
       console.error('Error signing out:', error);
     }
   };
+
+  const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
 
   return (
     <header className="border-b border-gray-200 bg-white">
@@ -53,9 +57,11 @@ export function DashboardHeader() {
           <div className="flex items-center space-x-3">
             <div className="text-right">
               <div className="text-sm font-medium text-gray-900">
-                {user?.email?.split('@')[0] || 'User'}
+                {displayName}
               </div>
-              <div className="text-xs text-gray-500">{user?.email}</div>
+              <div className="text-xs text-gray-500">
+                {profile?.company || user?.email}
+              </div>
             </div>
             <Button
               onClick={handleSignOut}
