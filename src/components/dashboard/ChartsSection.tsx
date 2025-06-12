@@ -23,7 +23,7 @@ const registrationData = [
 
 export function ChartsSection() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       <Card>
         <CardHeader>
           <CardTitle className="text-lg font-semibold text-gray-900">
