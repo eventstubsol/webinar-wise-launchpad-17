@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/dashboard/AppSidebar';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
@@ -8,8 +8,20 @@ import { ChartsSection } from '@/components/dashboard/ChartsSection';
 import { DataTables } from '@/components/dashboard/DataTables';
 
 const Dashboard = () => {
+  // Get saved sidebar state from localStorage, default to open
+  const getSavedSidebarState = () => {
+    const saved = localStorage.getItem('sidebar:state');
+    return saved === 'false' ? false : true; // Default to open (true)
+  };
+
+  const defaultOpen = getSavedSidebarState();
+
+  const handleOpenChange = (open: boolean) => {
+    localStorage.setItem('sidebar:state', open.toString());
+  };
+
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={defaultOpen} onOpenChange={handleOpenChange}>
       <div className="min-h-screen flex w-full bg-gray-50">
         <AppSidebar />
         <SidebarInset>

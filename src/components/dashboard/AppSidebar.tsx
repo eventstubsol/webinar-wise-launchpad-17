@@ -69,13 +69,13 @@ const menuItems = [
 
 export function AppSidebar() {
   return (
-    <Sidebar className="border-r border-blue-100">
+    <Sidebar collapsible="icon" className="border-r border-blue-100">
       <SidebarHeader className="p-4 border-b border-blue-100">
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
             <Activity className="w-5 h-5 text-white" />
           </div>
-          <div>
+          <div className="group-data-[collapsible=icon]:hidden">
             <h2 className="text-lg font-semibold text-blue-900">WebinarWise</h2>
             <p className="text-xs text-blue-600">Analytics Dashboard</p>
           </div>
@@ -84,7 +84,7 @@ export function AppSidebar() {
       
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-blue-700 font-medium">
+          <SidebarGroupLabel className="text-blue-700 font-medium group-data-[collapsible=icon]:hidden">
             Navigation
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -94,6 +94,7 @@ export function AppSidebar() {
                   <SidebarMenuButton 
                     asChild 
                     isActive={item.isActive}
+                    tooltip={item.title}
                     className="hover:bg-blue-50 hover:text-blue-700 data-[active=true]:bg-blue-100 data-[active=true]:text-blue-700 data-[active=true]:font-medium"
                   >
                     <a href={item.url} className="flex items-center space-x-3">
@@ -109,7 +110,7 @@ export function AppSidebar() {
       </SidebarContent>
       
       <SidebarFooter className="p-4 border-t border-blue-100">
-        <div className="text-xs text-blue-600">
+        <div className="text-xs text-blue-600 group-data-[collapsible=icon]:hidden">
           © 2024 WebinarWise
         </div>
       </SidebarFooter>
