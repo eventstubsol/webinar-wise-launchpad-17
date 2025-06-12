@@ -1,60 +1,38 @@
 
-import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate, Link } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { isValidEmail } from "@/lib/utils";
+import { forgotPasswordSchema, type ForgotPasswordFormData } from "@/lib/validations/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ArrowLeft, Mail } from "lucide-react";
+import { useState } from "react";
 
 const ForgotPassword = () => {
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const { resetPassword } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!email) {
-      toast({
-        title: "Email required",
-        description: "Please enter your email address.",
-        variant: "destructive",
-      });
-      return;
-    }
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    getValues,
+  } = useForm<ForgotPasswordFormData>({
+    resolver: zodResolver(forgotPasswordSchema),
+  });
 
-    if (!isValidEmail(email)) {
-      toast({
-        title: "Invalid email",
-        description: "Please enter a valid email address.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
+  const onSubmit = async (data: ForgotPasswordFormData) => {
     try {
-      const { error } = await resetPassword(email);
+      const { error } = await resetPassword(data.email);
       
-      if (error) throw error;
-
-      setSent(true);
-      toast({
-        title: "Reset link sent!",
-        description: "Check your email for a password reset link.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send reset email. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+      if (!error) {
+        setSent(true);
+      }
+    } catch (error) {
+      console.error("Reset password error:", error);
     }
   };
 
@@ -70,7 +48,7 @@ const ForgotPassword = () => {
               Check your email
             </h2>
             <p className="text-gray-600 mb-6">
-              We've sent a password reset link to <strong>{email}</strong>
+              We've sent a password reset link to <strong>{getValues("email")}</strong>
             </p>
             <div className="space-y-4">
               <Button onClick={() => navigate("/login")} className="w-full">
@@ -110,27 +88,29 @@ const ForgotPassword = () => {
             Enter your email address and we'll send you a link to reset your password.
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium text-gray-700">
                 Email Address
-              </label>
+              </Label>
               <Input
+                id="email"
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                {...register("email")}
                 placeholder="Enter your email"
-                required
-                className="h-12"
+                className={`h-12 ${errors.email ? "border-red-500 focus-visible:ring-red-500" : ""}`}
               />
+              {errors.email && (
+                <p className="text-sm text-red-500">{errors.email.message}</p>
+              )}
             </div>
 
             <Button 
               type="submit" 
-              disabled={loading}
+              disabled={isSubmitting}
               className="w-full h-12"
             >
-              {loading ? "Sending..." : "Send Reset Link"}
+              {isSubmitting ? "Sending..." : "Send Reset Link"}
             </Button>
           </form>
 

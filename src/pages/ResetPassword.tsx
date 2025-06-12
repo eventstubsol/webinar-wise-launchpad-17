@@ -1,21 +1,29 @@
 
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { isValidPassword } from "@/lib/utils";
+import { resetPasswordSchema, type ResetPasswordFormData } from "@/lib/validations/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { CheckCircle } from "lucide-react";
 
 const ResetPassword = () => {
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const { updatePassword } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ResetPasswordFormData>({
+    resolver: zodResolver(resetPasswordSchema),
+  });
 
   useEffect(() => {
     // Check if we have the necessary tokens in the URL
@@ -32,59 +40,18 @@ const ResetPassword = () => {
     }
   }, [searchParams, navigate]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!password) {
-      toast({
-        title: "Password required",
-        description: "Please enter a new password.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!isValidPassword(password)) {
-      toast({
-        title: "Invalid password",
-        description: "Password must be at least 8 characters with uppercase, lowercase, and number.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      toast({
-        title: "Passwords don't match",
-        description: "Please make sure both passwords are identical.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
+  const onSubmit = async (data: ResetPasswordFormData) => {
     try {
-      const { error } = await updatePassword(password);
+      const { error } = await updatePassword(data.password);
       
-      if (error) throw error;
-
-      setSuccess(true);
-      toast({
-        title: "Password updated!",
-        description: "Your password has been successfully updated.",
-      });
-      
-      setTimeout(() => {
-        navigate("/login");
-      }, 2000);
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update password. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+      if (!error) {
+        setSuccess(true);
+        setTimeout(() => {
+          navigate("/login");
+        }, 2000);
+      }
+    } catch (error) {
+      console.error("Reset password error:", error);
     }
   };
 
@@ -122,41 +89,45 @@ const ResetPassword = () => {
             Enter your new password below.
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-medium text-gray-700">
                 New Password
-              </label>
+              </Label>
               <Input
+                id="password"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                {...register("password")}
                 placeholder="Enter new password"
-                required
-                className="h-12"
+                className={`h-12 ${errors.password ? "border-red-500 focus-visible:ring-red-500" : ""}`}
               />
+              {errors.password && (
+                <p className="text-sm text-red-500">{errors.password.message}</p>
+              )}
             </div>
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
                 Confirm New Password
-              </label>
+              </Label>
               <Input
+                id="confirmPassword"
                 type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                {...register("confirmPassword")}
                 placeholder="Confirm new password"
-                required
-                className="h-12"
+                className={`h-12 ${errors.confirmPassword ? "border-red-500 focus-visible:ring-red-500" : ""}`}
               />
+              {errors.confirmPassword && (
+                <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>
+              )}
             </div>
 
             <Button 
               type="submit" 
-              disabled={loading}
+              disabled={isSubmitting}
               className="w-full h-12"
             >
-              {loading ? "Updating..." : "Update Password"}
+              {isSubmitting ? "Updating..." : "Update Password"}
             </Button>
           </form>
         </div>
