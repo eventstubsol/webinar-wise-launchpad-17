@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
-import { Search, Bell, RefreshCw, Wifi, Menu } from 'lucide-react';
+import { Search, Bell, RefreshCw, Wifi } from 'lucide-react';
 
 export function DashboardHeader() {
   const { user, profile } = useAuth();
@@ -15,7 +15,7 @@ export function DashboardHeader() {
     <header className="border-b border-gray-200 bg-white sticky top-0 z-10">
       <div className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center space-x-4">
-          <SidebarTrigger className="h-8 w-8" />
+          <SidebarTrigger />
           <div className="flex items-center space-x-2">
             <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
             <div className="flex items-center text-sm text-green-600 bg-green-50 px-2 py-1 rounded-full">
