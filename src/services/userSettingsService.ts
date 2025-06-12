@@ -1,15 +1,10 @@
 
 import { supabase } from '@/integrations/supabase/client';
+import { Tables } from '@/integrations/supabase/types';
 
-export interface UserSettings {
-  id: string;
-  email_notifications: boolean;
-  marketing_emails: boolean;
+export type UserSettings = Tables<'user_settings'> & {
   theme_preference: 'light' | 'dark' | 'system';
-  timezone: string;
-  created_at: string;
-  updated_at: string;
-}
+};
 
 export const userSettingsService = {
   async getUserSettings(userId: string): Promise<UserSettings | null> {
@@ -24,7 +19,7 @@ export const userSettingsService = {
       throw error;
     }
 
-    return data;
+    return data as UserSettings | null;
   },
 
   async updateUserSettings(userId: string, updates: Partial<UserSettings>): Promise<UserSettings> {
@@ -40,7 +35,7 @@ export const userSettingsService = {
       throw error;
     }
 
-    return data;
+    return data as UserSettings;
   },
 
   async createUserSettings(userId: string): Promise<UserSettings> {
@@ -55,6 +50,6 @@ export const userSettingsService = {
       throw error;
     }
 
-    return data;
+    return data as UserSettings;
   }
 };
