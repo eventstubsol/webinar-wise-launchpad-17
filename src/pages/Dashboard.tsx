@@ -16,6 +16,7 @@ import { ChartsSection } from '@/components/dashboard/ChartsSection';
 import { DataTables } from '@/components/dashboard/DataTables';
 import { ProfileSettings } from '@/components/profile/ProfileSettings';
 import { AccountSettings } from '@/components/dashboard/AccountSettings';
+import { AuthTestSuite } from '@/components/auth/AuthTestSuite';
 
 const Dashboard = () => {
   const { user, loading, signOut } = useAuth();
@@ -116,6 +117,21 @@ const Dashboard = () => {
                 <Settings className="mr-3 h-4 w-4" />
                 Settings
               </button>
+
+              {/* Testing tab (development only) */}
+              {process.env.NODE_ENV === 'development' && (
+                <button
+                  onClick={() => setActiveTab('testing')}
+                  className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    activeTab === 'testing'
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Shield className="mr-3 h-4 w-4" />
+                  Testing
+                </button>
+              )}
             </nav>
 
             {/* Sign Out Button */}
@@ -163,6 +179,13 @@ const Dashboard = () => {
             {activeTab === 'settings' && (
               <div className="space-y-6">
                 <AccountSettings />
+              </div>
+            )}
+
+            {/* Testing tab (development only) */}
+            {activeTab === 'testing' && process.env.NODE_ENV === 'development' && (
+              <div className="space-y-6">
+                <AuthTestSuite />
               </div>
             )}
           </div>
