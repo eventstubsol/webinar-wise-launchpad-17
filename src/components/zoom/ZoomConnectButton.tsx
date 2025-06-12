@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -57,8 +56,8 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
       
       // Construct OAuth URL
       const baseUrl = 'https://zoom.us/oauth/authorize';
-      const clientId = import.meta.env.VITE_ZOOM_CLIENT_ID || 'your_zoom_client_id';
-      const redirectUri = `${window.location.origin}/dashboard`; // Redirect back to dashboard
+      const clientId = 'your_zoom_client_id'; // This should be set in environment
+      const redirectUri = `${window.location.origin}/auth/zoom/callback`;
       const scope = 'webinar:read:admin webinar:write:admin user:read:admin';
       
       const oauthUrl = new URL(baseUrl);

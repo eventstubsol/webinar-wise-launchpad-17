@@ -16,6 +16,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import Dashboard from "./pages/Dashboard";
+import ZoomOAuthCallback from "./pages/auth/zoom/callback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,6 +50,10 @@ const App = () => (
                         <Dashboard />
                       </ProtectedRoute>
                     } 
+                  />
+                  <Route 
+                    path="/auth/zoom/callback" 
+                    element={<ZoomOAuthCallback />} 
                   />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
