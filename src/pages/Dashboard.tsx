@@ -11,11 +11,13 @@ import { ProfileSettings } from '@/components/dashboard/ProfileSettings';
 import { AppSidebar } from '@/components/dashboard/AppSidebar';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { useSidebarState } from '@/hooks/useSidebarState';
 
 const Dashboard = () => {
   const { user, profile, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useSidebarState(true);
 
   useEffect(() => {
     // Redirect if not authenticated
@@ -48,7 +50,7 @@ const Dashboard = () => {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
       <div className="min-h-screen flex w-full bg-gray-50">
         <AppSidebar 
           onProfileSetup={handleProfileSetup}
@@ -60,7 +62,7 @@ const Dashboard = () => {
           <DashboardHeader />
 
           {/* Main Content */}
-          <div className="flex-1 sm:p-6">
+          <div className="flex-1 p-6">
             <div className="w-full space-y-6">
               {/* Welcome Header */}
               <div className="mb-8">

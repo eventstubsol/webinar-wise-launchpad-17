@@ -54,11 +54,11 @@ export function AppSidebar({ onProfileSetup, onSignOut }: AppSidebarProps) {
   const userRole = profile?.job_title || 'Webinar Analytics';
 
   return (
-    <Sidebar className="border-r border-gray-200">
+    <Sidebar collapsible="icon" className="border-r border-gray-200">
       {/* Header with Branding */}
       <SidebarHeader className="px-6 py-4 border-b border-gray-100">
         <div className="flex items-center space-x-3">
-          <div className="flex items-center justify-center w-8 h-8 bg-blue-600 rounded-lg">
+          <div className="flex items-center justify-center w-8 h-8 bg-blue-600 rounded-lg flex-shrink-0">
             <TrendingUp className="w-5 h-5 text-white" />
           </div>
           <div className="group-data-[collapsible=icon]:hidden">
@@ -78,6 +78,7 @@ export function AppSidebar({ onProfileSetup, onSignOut }: AppSidebarProps) {
                   <SidebarMenuButton 
                     asChild 
                     isActive={item.active}
+                    tooltip={item.title}
                     className="w-full justify-start px-3 py-2.5 text-sm font-medium rounded-lg transition-colors hover:bg-gray-100 data-[active=true]:bg-blue-50 data-[active=true]:text-blue-700 data-[active=true]:border-blue-200"
                   >
                     <a href={item.url} className="flex items-center space-x-3">
