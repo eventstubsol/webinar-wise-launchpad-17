@@ -29,26 +29,16 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
         throw new Error('Zoom credentials not configured');
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        throw new Error('No valid session found');
-      }
-
-      const response = await fetch('/functions/v1/validate-zoom-credentials', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
+      // Use Supabase client to call the edge function with proper URL
+      const { data, error } = await supabase.functions.invoke('validate-zoom-credentials', {
+        body: {},
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to validate credentials');
+      if (error) {
+        throw new Error(error.message || 'Failed to validate credentials');
       }
 
-      return await response.json();
+      return data;
     },
     onSuccess: (result) => {
       setIsValidating(false);

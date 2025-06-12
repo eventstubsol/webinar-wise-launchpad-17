@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection, ConnectionStatus } from '@/types/zoom';
 import { toast } from '@/hooks/use-toast';
@@ -19,14 +18,15 @@ export class ConnectionStatusOperations {
         .eq('user_id', userId)
         .eq('is_primary', true)
         .eq('connection_status', 'active')
-        .single();
+        .maybeSingle();
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          return null; // No primary connection found
-        }
         console.error('Failed to get primary connection:', error);
         return null;
+      }
+
+      if (!data) {
+        return null; // No primary connection found
       }
 
       // Decrypt tokens and cast types
