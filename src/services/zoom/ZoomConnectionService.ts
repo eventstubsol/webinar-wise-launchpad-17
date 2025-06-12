@@ -81,7 +81,13 @@ export class ZoomConnectionService {
         description: "Zoom account connected successfully!",
       });
 
-      return data;
+      // Cast and decrypt tokens for return
+      return {
+        ...data,
+        access_token: this.decryptToken(data.access_token),
+        refresh_token: this.decryptToken(data.refresh_token),
+        connection_status: data.connection_status as ConnectionStatus,
+      } as ZoomConnection;
     } catch (error) {
       console.error('Unexpected error creating connection:', error);
       toast({
@@ -117,12 +123,13 @@ export class ZoomConnectionService {
         return null;
       }
 
-      // Decrypt tokens for use
+      // Decrypt tokens and cast types for use
       return {
         ...data,
         access_token: this.decryptToken(data.access_token),
         refresh_token: this.decryptToken(data.refresh_token),
-      };
+        connection_status: data.connection_status as ConnectionStatus,
+      } as ZoomConnection;
     } catch (error) {
       console.error('Unexpected error getting connection:', error);
       toast({
@@ -155,12 +162,13 @@ export class ZoomConnectionService {
         return [];
       }
 
-      // Decrypt tokens for all connections
+      // Decrypt tokens and cast types for all connections
       return data.map(connection => ({
         ...connection,
         access_token: this.decryptToken(connection.access_token),
         refresh_token: this.decryptToken(connection.refresh_token),
-      }));
+        connection_status: connection.connection_status as ConnectionStatus,
+      })) as ZoomConnection[];
     } catch (error) {
       console.error('Unexpected error getting user connections:', error);
       toast({
@@ -193,12 +201,13 @@ export class ZoomConnectionService {
         return null;
       }
 
-      // Decrypt tokens
+      // Decrypt tokens and cast types
       return {
         ...data,
         access_token: this.decryptToken(data.access_token),
         refresh_token: this.decryptToken(data.refresh_token),
-      };
+        connection_status: data.connection_status as ConnectionStatus,
+      } as ZoomConnection;
     } catch (error) {
       console.error('Unexpected error getting primary connection:', error);
       return null;
@@ -239,7 +248,11 @@ export class ZoomConnectionService {
         return null;
       }
 
-      return data;
+      // Return with proper type casting
+      return {
+        ...data,
+        connection_status: data.connection_status as ConnectionStatus,
+      } as ZoomConnection;
     } catch (error) {
       console.error('Unexpected error updating connection:', error);
       toast({
@@ -372,21 +385,21 @@ export class ZoomConnectionService {
     try {
       // Check if token is expired first
       if (this.isTokenExpired(connection)) {
-        await this.updateConnectionStatus(connection.id, 'expired');
-        return 'expired';
+        await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
+        return 'expired' as ConnectionStatus;
       }
 
       // In a real implementation, you would make a test API call to Zoom here
       // For now, we'll assume active connections are healthy
       if (connection.connection_status === 'active') {
-        return 'active';
+        return 'active' as ConnectionStatus;
       }
 
-      return connection.connection_status as ConnectionStatus;
+      return connection.connection_status;
     } catch (error) {
       console.error('Error checking connection status:', error);
-      await this.updateConnectionStatus(connection.id, 'error');
-      return 'error';
+      await this.updateConnectionStatus(connection.id, 'error' as ConnectionStatus);
+      return 'error' as ConnectionStatus;
     }
   }
 
