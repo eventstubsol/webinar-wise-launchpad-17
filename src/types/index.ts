@@ -9,6 +9,28 @@ export interface User {
   updated_at: string;
 }
 
+// Profile types
+export interface Profile {
+  id: string;
+  email: string;
+  full_name?: string;
+  avatar_url?: string;
+  company?: string;
+  job_title?: string;
+  phone?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// User Settings types
+export interface UserSettings {
+  id: string;
+  email_notifications: boolean;
+  marketing_emails: boolean;
+  theme_preference: 'light' | 'dark' | 'system';
+  timezone: string;
+}
+
 // Authentication types
 export interface AuthState {
   user: User | null;
@@ -25,6 +47,16 @@ export interface RegisterCredentials {
   email: string;
   password: string;
   full_name: string;
+}
+
+// Auth Form Data types
+export interface AuthFormData {
+  email: string;
+  password: string;
+  confirmPassword?: string;
+  full_name?: string;
+  company?: string;
+  job_title?: string;
 }
 
 // Webinar types
