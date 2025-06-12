@@ -1,13 +1,13 @@
 
 import React, { useState } from 'react';
-import { useProfile } from '@/contexts/ProfileContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/common/FormField';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 
 export const ProfileSettings = () => {
-  const { profile, loading, updateProfile } = useProfile();
+  const { profile, profileLoading, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     full_name: profile?.full_name || '',
@@ -15,6 +15,17 @@ export const ProfileSettings = () => {
     job_title: profile?.job_title || '',
     phone: profile?.phone || '',
   });
+
+  React.useEffect(() => {
+    if (profile) {
+      setFormData({
+        full_name: profile.full_name || '',
+        company: profile.company || '',
+        job_title: profile.job_title || '',
+        phone: profile.phone || '',
+      });
+    }
+  }, [profile]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -43,7 +54,7 @@ export const ProfileSettings = () => {
     setIsEditing(false);
   };
 
-  if (loading) {
+  if (profileLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <LoadingSpinner size="lg" />

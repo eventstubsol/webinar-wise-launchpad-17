@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -10,10 +10,10 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { Separator } from '@/components/ui/separator';
 
 export const UserSettings = () => {
-  const { settings, loading, updateSettings } = useUserSettings();
+  const { settings, profileLoading, updateSettings } = useAuth();
   const [isUpdating, setIsUpdating] = useState(false);
 
-  if (loading) {
+  if (profileLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <LoadingSpinner size="lg" />

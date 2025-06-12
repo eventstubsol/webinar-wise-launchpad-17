@@ -8,7 +8,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
-import { useProfile } from '@/contexts/ProfileContext';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { MetricsCards } from '@/components/dashboard/MetricsCards';
@@ -19,8 +18,7 @@ import { AccountSettings } from '@/components/dashboard/AccountSettings';
 import { AuthTestSuite } from '@/components/auth/AuthTestSuite';
 
 const Dashboard = () => {
-  const { user, loading, signOut } = useAuth();
-  const { profile, loading: profileLoading } = useProfile();
+  const { user, profile, loading, profileLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
 
