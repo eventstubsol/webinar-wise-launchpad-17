@@ -1,64 +1,115 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ZoomConnectButton } from '@/components/zoom/ZoomConnectButton';
-import { useZoomConnection } from '@/hooks/useZoomConnection';
-import { useToast } from '@/hooks/use-toast';
-import { Globe } from 'lucide-react';
-import { ConnectionStatusAlert } from './zoom/ConnectionStatusAlert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Info } from 'lucide-react';
+import { ZoomCredentialsSetupForm } from './zoom/ZoomCredentialsSetupForm';
+import { ZoomCredentialsDisplay } from './zoom/ZoomCredentialsDisplay';
 import { ConnectedAccountInfo } from './zoom/ConnectedAccountInfo';
+import { ConnectionStatusAlert } from './zoom/ConnectionStatusAlert';
 import { SyncControls } from './zoom/SyncControls';
 import { DisconnectSection } from './zoom/DisconnectSection';
+import { useZoomCredentials } from '@/hooks/useZoomCredentials';
+import { useZoomConnection } from '@/hooks/useZoomConnection';
+import { ZoomConnectButton } from '@/components/zoom/ZoomConnectButton';
 
-export const ZoomIntegrationSettings: React.FC = () => {
-  const { connection, isConnected, isExpired, isLoading } = useZoomConnection();
-  const { toast } = useToast();
+export const ZoomIntegrationSettings = () => {
+  const [showCredentialsForm, setShowCredentialsForm] = useState(false);
+  const { credentials, hasCredentials, isLoading: credentialsLoading } = useZoomCredentials();
+  const { connection, isConnected, isLoading: connectionLoading } = useZoomConnection();
+
+  const handleCredentialsSaved = () => {
+    setShowCredentialsForm(false);
+  };
+
+  const handleCredentialsDeleted = () => {
+    // Credentials deleted, connection will be invalidated
+  };
+
+  const handleEditCredentials = () => {
+    setShowCredentialsForm(true);
+  };
+
+  if (credentialsLoading) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <p className="text-muted-foreground">Loading Zoom settings...</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Globe className="h-5 w-5" />
-          Zoom Integration
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Connection Status */}
-        <ConnectionStatusAlert 
-          isLoading={isLoading}
-          isConnected={isConnected}
-          isExpired={isExpired}
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Zoom Integration</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              Connect your Zoom account to automatically sync webinar data and analyze your webinar performance.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+
+      {/* Step 1: OAuth Credentials Setup */}
+      {!hasCredentials || showCredentialsForm ? (
+        <ZoomCredentialsSetupForm
+          onCredentialsSaved={handleCredentialsSaved}
+          onCancel={hasCredentials ? () => setShowCredentialsForm(false) : undefined}
         />
+      ) : (
+        <ZoomCredentialsDisplay
+          credentials={credentials}
+          onEdit={handleEditCredentials}
+          onDeleted={handleCredentialsDeleted}
+        />
+      )}
 
-        {/* Connection Management */}
-        <div className="space-y-4">
-          {!isConnected ? (
-            <div>
-              <h3 className="text-sm font-medium mb-2">Connect Your Account</h3>
+      {/* Step 2: Zoom Account Connection (only if credentials are set) */}
+      {hasCredentials && !showCredentialsForm && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Connect Zoom Account</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isConnected ? (
+                <ConnectionStatusAlert 
+                  connection={connection} 
+                  isLoading={connectionLoading} 
+                />
+              ) : (
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Your OAuth credentials are configured. Now connect your Zoom account to start syncing data.
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               <ZoomConnectButton 
+                variant={isConnected ? "secondary" : "default"}
                 size="lg"
-                onConnectionSuccess={() => {
-                  toast({
-                    title: "Connected!",
-                    description: "Your Zoom account has been connected successfully.",
-                  });
-                }}
+                className="w-full"
               />
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Account Information */}
+            </CardContent>
+          </Card>
+
+          {/* Step 3: Connection Management (only if connected) */}
+          {isConnected && connection && (
+            <>
               <ConnectedAccountInfo connection={connection} />
-
-              {/* Sync Controls */}
               <SyncControls connection={connection} />
-
-              {/* Disconnect Option */}
               <DisconnectSection connection={connection} />
-            </div>
+            </>
           )}
-        </div>
-      </CardContent>
-    </Card>
+        </>
+      )}
+    </div>
   );
 };

@@ -138,6 +138,45 @@ export type Database = {
         }
         Relationships: []
       }
+      zoom_credentials: {
+        Row: {
+          account_id: string
+          app_name: string | null
+          client_id: string
+          client_secret: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          app_name?: string | null
+          client_id: string
+          client_secret: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          app_name?: string | null
+          client_id?: string
+          client_secret?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       zoom_participants: {
         Row: {
           answered_polling: boolean | null
