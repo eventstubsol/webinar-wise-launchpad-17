@@ -9,22 +9,23 @@ interface MetricCardProps {
   change: string;
   trend: 'up' | 'down';
   icon: React.ComponentType<{ className?: string }>;
+  bgColor: string;
 }
 
-const MetricCard: React.FC<MetricCardProps> = ({ title, value, change, trend, icon: Icon }) => {
+const MetricCard: React.FC<MetricCardProps> = ({ title, value, change, trend, icon: Icon, bgColor }) => {
   const TrendIcon = trend === 'up' ? TrendingUp : TrendingDown;
   const trendColor = trend === 'up' ? 'text-green-600' : 'text-red-600';
-  const bgColor = trend === 'up' ? 'bg-green-50' : 'bg-red-50';
+  const trendBgColor = trend === 'up' ? 'bg-green-50' : 'bg-red-50';
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className={`hover:shadow-md transition-shadow ${bgColor}`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-gray-600">{title}</CardTitle>
-        <Icon className="w-4 h-4 text-blue-600" />
+        <CardTitle className="text-sm font-medium text-gray-700">{title}</CardTitle>
+        <Icon className="w-4 h-4 text-gray-600" />
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold text-gray-900">{value}</div>
-        <div className={`flex items-center text-xs ${trendColor} ${bgColor} rounded-full px-2 py-1 mt-2 w-fit`}>
+        <div className={`flex items-center text-xs ${trendColor} ${trendBgColor} rounded-full px-2 py-1 mt-2 w-fit`}>
           <TrendIcon className="w-3 h-3 mr-1" />
           {change}
         </div>
@@ -41,6 +42,7 @@ export function MetricsCards() {
       change: "+12% from last month",
       trend: "up" as const,
       icon: Calendar,
+      bgColor: "bg-blue-50",
     },
     {
       title: "Total Registrants", 
@@ -48,6 +50,7 @@ export function MetricsCards() {
       change: "+8% from last month",
       trend: "up" as const,
       icon: Users,
+      bgColor: "bg-green-50",
     },
     {
       title: "Total Attendees",
@@ -55,6 +58,7 @@ export function MetricsCards() {
       change: "+15% from last month", 
       trend: "up" as const,
       icon: Activity,
+      bgColor: "bg-purple-50",
     },
     {
       title: "Attendance Rate",
@@ -62,6 +66,7 @@ export function MetricsCards() {
       change: "-2% from last month",
       trend: "down" as const,
       icon: TrendingUp,
+      bgColor: "bg-orange-50",
     },
     {
       title: "Total Engagement",
@@ -69,6 +74,7 @@ export function MetricsCards() {
       change: "+22% from last month",
       trend: "up" as const,
       icon: Clock,
+      bgColor: "bg-pink-50",
     },
     {
       title: "Average Duration",
@@ -76,6 +82,7 @@ export function MetricsCards() {
       change: "+5% from last month",
       trend: "up" as const,
       icon: Clock,
+      bgColor: "bg-yellow-50",
     },
   ];
 
@@ -89,6 +96,7 @@ export function MetricsCards() {
           change={metric.change}
           trend={metric.trend}
           icon={metric.icon}
+          bgColor={metric.bgColor}
         />
       ))}
     </div>
