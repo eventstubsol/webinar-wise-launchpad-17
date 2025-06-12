@@ -127,31 +127,6 @@ export function AppSidebar({ onProfileSetup, onSignOut }: AppSidebarProps) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {/* Quick Stats */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Quick Stats</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Member since:</span>
-                  <span className="font-medium">
-                    {profile?.created_at ? new Date(profile.created_at).getFullYear() : 'Recently'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Webinars:</span>
-                  <span className="font-medium">Coming soon</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Reports:</span>
-                  <span className="font-medium">Coming soon</span>
-                </div>
-              </div>
-            </div>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="p-6">
