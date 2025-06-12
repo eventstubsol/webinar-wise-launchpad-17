@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -112,40 +111,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Fetch profile and settings data (deferred from auth state change)
-  const fetchUserData = async (userId: string) => {
-    setProfileLoading(true);
-    try {
-      const [profileData, settingsData] = await Promise.all([
-        fetchProfile(userId),
-        fetchSettings(userId)
-      ]);
-      
-      setProfile(profileData);
-      setSettings(settingsData);
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-    } finally {
-      setProfileLoading(false);
-    }
-  };
-
-  // Handle auth state changes with proper deadlock prevention
+  // Handle auth state changes with profile loading
   const handleAuthStateChange = async (event: string, session: Session | null) => {
     console.log('AuthProvider: Auth state changed', { event, hasSession: !!session });
     
-    // Update auth state synchronously (no Supabase calls here)
     setSession(session);
     setUser(session?.user ?? null);
-    
-    // Clear profile data if signing out
-    if (!session?.user) {
+
+    if (session?.user) {
+      setProfileLoading(true);
+      try {
+        const [profileData, settingsData] = await Promise.all([
+          fetchProfile(session.user.id),
+          fetchSettings(session.user.id)
+        ]);
+        
+        setProfile(profileData);
+        setSettings(settingsData);
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      } finally {
+        setProfileLoading(false);
+      }
+    } else {
       setProfile(null);
       setSettings(null);
       setProfileLoading(false);
     }
 
-    // Set loading to false immediately after auth state is processed
     setLoading(false);
 
     // Handle auth events
@@ -160,23 +153,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         description: "You have been signed out successfully.",
       });
     }
-
-    // Defer profile/settings fetching to prevent deadlock
-    if (session?.user) {
-      setTimeout(() => {
-        fetchUserData(session.user.id);
-      }, 0);
-    }
   };
 
   // Initialize auth state
   useEffect(() => {
     console.log('AuthProvider: Setting up auth state listener');
     
-    // Set up auth state listener first
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthStateChange);
 
-    // Then check for existing session
+    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       handleAuthStateChange('INITIAL_SESSION', session);
     });
