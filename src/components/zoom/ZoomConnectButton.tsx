@@ -117,7 +117,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
         access_token: 'mock_access_token',
         refresh_token: 'mock_refresh_token',
         token_expires_at: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
-        connection_status: 'active' as const,
+        connection_status: 'connected',
         scopes: ['webinar:read:admin', 'webinar:write:admin', 'user:read:admin'],
         is_primary: true,
         auto_sync_enabled: true,
