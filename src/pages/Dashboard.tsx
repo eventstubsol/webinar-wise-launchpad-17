@@ -73,7 +73,7 @@ const Dashboard = () => {
           <DashboardHeader />
 
           {/* Main Content */}
-          <div className="flex-1 p-4 sm:p-6">
+          <div className="flex-1 sm:p-6">
             <div className="w-full space-y-6">
               {/* Welcome Header */}
               <div className="mb-8">
