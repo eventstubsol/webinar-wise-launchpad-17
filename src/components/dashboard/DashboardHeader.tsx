@@ -2,28 +2,20 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
-import { useProfile } from '@/contexts/ProfileContext';
-import { Search, Bell, LogOut, RefreshCw, Wifi } from 'lucide-react';
+import { Search, Bell, RefreshCw, Wifi } from 'lucide-react';
 
 export function DashboardHeader() {
-  const { user, signOut } = useAuth();
-  const { profile } = useProfile();
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
+  const { user, profile } = useAuth();
 
   const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
 
   return (
-    <header className="border-b border-gray-200 bg-white">
+    <header className="border-b border-gray-200 bg-white sticky top-0 z-10">
       <div className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center space-x-4">
+          <SidebarTrigger />
           <div className="flex items-center space-x-2">
             <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
             <div className="flex items-center text-sm text-green-600 bg-green-50 px-2 py-1 rounded-full">
@@ -52,23 +44,13 @@ export function DashboardHeader() {
             <Bell className="w-4 h-4" />
           </Button>
 
-          <div className="flex items-center space-x-3">
-            <div className="text-right">
-              <div className="text-sm font-medium text-gray-900">
-                {displayName}
-              </div>
-              <div className="text-xs text-gray-500">
-                {profile?.company || user?.email}
-              </div>
+          <div className="text-right">
+            <div className="text-sm font-medium text-gray-900">
+              {displayName}
             </div>
-            <Button
-              onClick={handleSignOut}
-              variant="ghost"
-              size="sm"
-              className="text-gray-600 hover:text-gray-800"
-            >
-              <LogOut className="w-4 h-4" />
-            </Button>
+            <div className="text-xs text-gray-500">
+              {profile?.company || user?.email}
+            </div>
           </div>
         </div>
       </div>
