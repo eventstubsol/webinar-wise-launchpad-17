@@ -23,7 +23,7 @@ export const UserSettings = () => {
 
   if (!settings) {
     return (
-      <Card className="max-w-2xl mx-auto">
+      <Card>
         <CardContent className="p-8 text-center">
           <p className="text-muted-foreground">No settings found. Please try refreshing the page.</p>
         </CardContent>
@@ -54,7 +54,7 @@ export const UserSettings = () => {
   };
 
   return (
-    <Card className="max-w-2xl mx-auto">
+    <Card>
       <CardHeader>
         <CardTitle>User Settings</CardTitle>
       </CardHeader>

@@ -63,7 +63,7 @@ export const ProfileSettings = () => {
   }
 
   return (
-    <Card className="max-w-2xl mx-auto">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           Profile Settings
