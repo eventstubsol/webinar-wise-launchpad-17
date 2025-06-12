@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { resetPasswordSchema, type ResetPasswordFormData } from "@/lib/validations/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { CheckCircle } from "lucide-react";
 
 const ResetPassword = () => {
   const [success, setSuccess] = useState(false);
+  const [sessionSet, setSessionSet] = useState(false);
   const { updatePassword } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -37,10 +39,38 @@ const ResetPassword = () => {
         variant: "destructive",
       });
       navigate("/forgot-password");
+      return;
     }
+
+    // Set the session with the tokens from the URL
+    supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    }).then(({ error }) => {
+      if (error) {
+        console.error('Error setting session:', error);
+        toast({
+          title: "Invalid reset link",
+          description: "This password reset link is invalid or has expired.",
+          variant: "destructive",
+        });
+        navigate("/forgot-password");
+      } else {
+        setSessionSet(true);
+      }
+    });
   }, [searchParams, navigate]);
 
   const onSubmit = async (data: ResetPasswordFormData) => {
+    if (!sessionSet) {
+      toast({
+        title: "Session not ready",
+        description: "Please wait for the session to be established.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const { error } = await updatePassword(data.password);
       
@@ -124,7 +154,7 @@ const ResetPassword = () => {
 
             <Button 
               type="submit" 
-              disabled={isSubmitting}
+              disabled={isSubmitting || !sessionSet}
               className="w-full h-12"
             >
               {isSubmitting ? "Updating..." : "Update Password"}

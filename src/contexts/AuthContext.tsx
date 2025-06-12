@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,6 +11,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<{ error: AuthError | null }>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
+  updatePassword: (password: string) => Promise<{ error: AuthError | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -218,6 +218,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const updatePassword = async (password: string) => {
+    try {
+      console.log('AuthProvider: Attempting password update');
+      
+      const { error } = await supabase.auth.updateUser({
+        password: password,
+      });
+
+      if (error) {
+        console.error('AuthProvider: Update password error', error);
+        toast({
+          variant: "destructive",
+          title: "Password update failed",
+          description: error.message,
+        });
+      } else {
+        toast({
+          title: "Password updated successfully",
+          description: "Your password has been updated.",
+        });
+      }
+
+      return { error };
+    } catch (error) {
+      console.error('AuthProvider: Unexpected update password error', error);
+      const authError = error as AuthError;
+      toast({
+        variant: "destructive",
+        title: "Password update failed",
+        description: authError.message || "An unexpected error occurred",
+      });
+      return { error: authError };
+    }
+  };
+
   const value = {
     user,
     session,
@@ -226,6 +261,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signIn,
     signOut,
     resetPassword,
+    updatePassword,
   };
 
   return (
