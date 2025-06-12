@@ -21,7 +21,7 @@ export function DashboardHeader() {
     <header className="border-b border-gray-200 bg-white">
       <div className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center space-x-4">
-          <SidebarTrigger />
+          <SidebarTrigger className="text-gray-600 hover:text-gray-900" />
           <div className="flex items-center space-x-2">
             <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
             <div className="flex items-center text-sm text-green-600 bg-green-50 px-2 py-1 rounded-full">
