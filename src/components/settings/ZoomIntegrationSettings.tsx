@@ -16,7 +16,7 @@ import { ZoomConnectButton } from '@/components/zoom/ZoomConnectButton';
 export const ZoomIntegrationSettings = () => {
   const [showCredentialsForm, setShowCredentialsForm] = useState(false);
   const { credentials, hasCredentials, isLoading: credentialsLoading } = useZoomCredentials();
-  const { connection, isConnected, isLoading: connectionLoading } = useZoomConnection();
+  const { connection, isConnected, isExpired, isLoading: connectionLoading } = useZoomConnection();
 
   const handleCredentialsSaved = () => {
     setShowCredentialsForm(false);
@@ -78,19 +78,11 @@ export const ZoomIntegrationSettings = () => {
               <CardTitle>Connect Zoom Account</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {isConnected ? (
-                <ConnectionStatusAlert 
-                  connection={connection} 
-                  isLoading={connectionLoading} 
-                />
-              ) : (
-                <Alert>
-                  <Info className="h-4 w-4" />
-                  <AlertDescription>
-                    Your OAuth credentials are configured. Now connect your Zoom account to start syncing data.
-                  </AlertDescription>
-                </Alert>
-              )}
+              <ConnectionStatusAlert 
+                isLoading={connectionLoading}
+                isConnected={isConnected}
+                isExpired={isExpired}
+              />
               
               <ZoomConnectButton 
                 variant={isConnected ? "secondary" : "default"}

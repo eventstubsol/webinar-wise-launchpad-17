@@ -8,6 +8,7 @@ import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
 import { ZoomConnection } from '@/types/zoom';
 import { Link, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { useZoomCredentials } from '@/hooks/useZoomCredentials';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ZoomConnectButtonProps {
   onConnectionSuccess?: (connection: ZoomConnection) => void;
@@ -114,12 +115,19 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
     setIsConnecting(true);
     
     try {
+      // Get the session token for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('No valid session found');
+      }
+
       // Call the edge function to exchange the code for tokens
       const response = await fetch('/api/zoom-oauth-exchange', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await user.getIdToken()}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           code,
