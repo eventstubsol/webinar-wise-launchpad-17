@@ -36,7 +36,10 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
       return await ZoomConnectionService.getPrimaryConnection(user.id);
     },
     enabled: !!user?.id,
-    refetchInterval: connection ? undefined : 5000, // Poll when disconnected
+    refetchInterval: (data) => {
+      // Poll more frequently when no connection exists
+      return data?.data ? undefined : 5000;
+    },
   });
 
   // Mutation to handle OAuth initiation
@@ -117,7 +120,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
         access_token: 'mock_access_token',
         refresh_token: 'mock_refresh_token',
         token_expires_at: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
-        connection_status: 'connected',
+        connection_status: 'active',
         scopes: ['webinar:read:admin', 'webinar:write:admin', 'user:read:admin'],
         is_primary: true,
         auto_sync_enabled: true,
