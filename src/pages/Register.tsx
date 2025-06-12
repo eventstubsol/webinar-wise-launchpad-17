@@ -1,18 +1,23 @@
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import { registerSchema, type RegisterFormData } from "@/lib/validations/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useState } from "react";
-import { EyeIcon, EyeOffIcon, ArrowLeft } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Link, useNavigate } from 'react-router-dom';
+import { Eye, EyeOff, Mail, Lock, User, Building, Briefcase, ArrowRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { useAuth } from '@/contexts/AuthContext';
+import { registerSchema, type RegisterFormData } from '@/lib/validations/auth';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 
 const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
-  const { signUp } = useAuth();
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const { signUp, user, loading } = useAuth();
   const navigate = useNavigate();
 
   const {
@@ -23,166 +28,255 @@ const Register = () => {
     resolver: zodResolver(registerSchema),
   });
 
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!loading && user) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, loading, navigate]);
+
   const onSubmit = async (data: RegisterFormData) => {
+    setIsLoading(true);
     try {
-      const { error } = await signUp(
-        data.email, 
-        data.password,
-        { 
-          full_name: data.full_name,
-          company: data.company,
-          job_title: data.job_title,
-        }
-      );
+      const { error } = await signUp(data.email, data.password, {
+        full_name: data.full_name,
+        company: data.company,
+        job_title: data.job_title,
+      });
       
       if (!error) {
-        navigate("/login");
+        // Show success message and redirect to login or verification page
+        navigate('/verify-email', { replace: true });
       }
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error('Registration error:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  // Show loading spinner while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-        <div className="p-8">
-          <div className="mb-6">
-            <button
-              onClick={() => navigate("/")}
-              className="flex items-center text-sm text-gray-600 hover:text-gray-800 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4 mr-1" />
-              Back to homepage
-            </button>
-          </div>
-
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Create account</h1>
-            <p className="text-gray-600">Get started with your free account</p>
-          </div>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="full_name" className="text-sm font-medium text-gray-700">
-                Full Name
-              </Label>
-              <Input
-                id="full_name"
-                type="text"
-                {...register("full_name")}
-                placeholder="Enter your full name"
-                className={`h-12 ${errors.full_name ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-              />
-              {errors.full_name && (
-                <p className="text-sm text-red-500">{errors.full_name.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                Email Address
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                {...register("email")}
-                placeholder="Enter your email"
-                className={`h-12 ${errors.email ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-              />
-              {errors.email && (
-                <p className="text-sm text-red-500">{errors.email.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="company" className="text-sm font-medium text-gray-700">
-                Company <span className="text-gray-400">(optional)</span>
-              </Label>
-              <Input
-                id="company"
-                type="text"
-                {...register("company")}
-                placeholder="Enter your company"
-                className="h-12"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="job_title" className="text-sm font-medium text-gray-700">
-                Job Title <span className="text-gray-400">(optional)</span>
-              </Label>
-              <Input
-                id="job_title"
-                type="text"
-                {...register("job_title")}
-                placeholder="Enter your job title"
-                className="h-12"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                Password
-              </Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  {...register("password")}
-                  placeholder="Create a password"
-                  className={`h-12 pr-12 ${errors.password ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
-                </button>
-              </div>
-              {errors.password && (
-                <p className="text-sm text-red-500">{errors.password.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
-                Confirm Password
-              </Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                {...register("confirmPassword")}
-                placeholder="Confirm your password"
-                className={`h-12 ${errors.confirmPassword ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-              />
-              {errors.confirmPassword && (
-                <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>
-              )}
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full h-12 bg-blue-600 hover:bg-blue-700"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Creating account..." : "Create Account"}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-500">
-              Already have an account?{" "}
-              <Link
-                to="/login"
-                className="text-blue-600 hover:underline font-medium"
-              >
-                Sign in here
-              </Link>
-            </p>
-          </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div className="text-center">
+          <h2 className="mt-6 text-3xl font-bold text-gray-900">
+            Create your account
+          </h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Already have an account?{' '}
+            <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500">
+              Sign in
+            </Link>
+          </p>
         </div>
+
+        <Card className="shadow-lg border-0">
+          <CardHeader className="text-center pb-6">
+            <CardTitle className="text-xl">Join Webinar Wise</CardTitle>
+            <CardDescription>
+              Start transforming your webinar data today
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="full_name" className="sr-only">
+                    Full name
+                  </Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <User className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <Input
+                      {...register('full_name')}
+                      id="full_name"
+                      type="text"
+                      autoComplete="name"
+                      className={`pl-10 ${errors.full_name ? 'border-red-500 focus:border-red-500' : ''}`}
+                      placeholder="Full name"
+                      disabled={isLoading || isSubmitting}
+                    />
+                  </div>
+                  {errors.full_name && (
+                    <p className="mt-1 text-sm text-red-600">{errors.full_name.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="email" className="sr-only">
+                    Email address
+                  </Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Mail className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <Input
+                      {...register('email')}
+                      id="email"
+                      type="email"
+                      autoComplete="email"
+                      className={`pl-10 ${errors.email ? 'border-red-500 focus:border-red-500' : ''}`}
+                      placeholder="Email address"
+                      disabled={isLoading || isSubmitting}
+                    />
+                  </div>
+                  {errors.email && (
+                    <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="company" className="sr-only">
+                      Company
+                    </Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Building className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <Input
+                        {...register('company')}
+                        id="company"
+                        type="text"
+                        autoComplete="organization"
+                        className="pl-10"
+                        placeholder="Company (optional)"
+                        disabled={isLoading || isSubmitting}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="job_title" className="sr-only">
+                      Job title
+                    </Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Briefcase className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <Input
+                        {...register('job_title')}
+                        id="job_title"
+                        type="text"
+                        autoComplete="organization-title"
+                        className="pl-10"
+                        placeholder="Job title (optional)"
+                        disabled={isLoading || isSubmitting}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="password" className="sr-only">
+                    Password
+                  </Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Lock className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <Input
+                      {...register('password')}
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      className={`pl-10 pr-10 ${errors.password ? 'border-red-500 focus:border-red-500' : ''}`}
+                      placeholder="Password"
+                      disabled={isLoading || isSubmitting}
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      onClick={() => setShowPassword(!showPassword)}
+                      disabled={isLoading || isSubmitting}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+                      ) : (
+                        <Eye className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+                      )}
+                    </button>
+                  </div>
+                  {errors.password && (
+                    <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="confirmPassword" className="sr-only">
+                    Confirm password
+                  </Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Lock className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <Input
+                      {...register('confirmPassword')}
+                      id="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      className={`pl-10 pr-10 ${errors.confirmPassword ? 'border-red-500 focus:border-red-500' : ''}`}
+                      placeholder="Confirm password"
+                      disabled={isLoading || isSubmitting}
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      disabled={isLoading || isSubmitting}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+                      ) : (
+                        <Eye className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+                      )}
+                    </button>
+                  </div>
+                  {errors.confirmPassword && (
+                    <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading || isSubmitting}
+              >
+                {isLoading || isSubmitting ? (
+                  <LoadingSpinner size="sm" className="mr-2" />
+                ) : (
+                  <ArrowRight className="w-4 h-4 mr-2" />
+                )}
+                Create account
+              </Button>
+            </form>
+
+            <div className="mt-6">
+              <Separator className="my-4" />
+              <p className="text-center text-sm text-gray-600">
+                By creating an account, you agree to our{' '}
+                <Link to="/terms" className="text-blue-600 hover:text-blue-500">
+                  Terms of Service
+                </Link>{' '}
+                and{' '}
+                <Link to="/privacy" className="text-blue-600 hover:text-blue-500">
+                  Privacy Policy
+                </Link>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
