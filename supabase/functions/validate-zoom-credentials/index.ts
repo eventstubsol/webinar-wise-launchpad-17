@@ -51,7 +51,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Validating credentials for user:', user.id);
+    console.log('Validating credentials for user:', user.id, 'account:', credentials.account_id);
 
     // Validate credentials using Zoom's Server-to-Server OAuth
     const tokenResponse = await fetch('https://zoom.us/oauth/token', {
@@ -68,11 +68,12 @@ serve(async (req) => {
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
-      console.error('Zoom token request failed:', errorText);
+      console.error('Zoom token request failed:', tokenResponse.status, errorText);
       return new Response(
         JSON.stringify({ 
           error: 'Invalid Zoom credentials',
-          details: 'Unable to authenticate with Zoom API. Please verify your Client ID, Client Secret, and Account ID.'
+          details: 'Unable to authenticate with Zoom API. Please verify your Client ID, Client Secret, and Account ID.',
+          statusCode: tokenResponse.status
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -81,23 +82,28 @@ serve(async (req) => {
     const tokenData = await tokenResponse.json();
     console.log('Token obtained successfully');
 
-    // Get account information using the access token
-    const accountResponse = await fetch('https://api.zoom.us/v2/accounts/me', {
+    // Get account information using the correct endpoint for Server-to-Server OAuth
+    const accountResponse = await fetch(`https://api.zoom.us/v2/accounts/${credentials.account_id}`, {
       headers: {
         'Authorization': `Bearer ${tokenData.access_token}`,
       },
     });
 
     if (!accountResponse.ok) {
-      console.error('Failed to get account info');
+      const errorText = await accountResponse.text();
+      console.error('Failed to get account info:', accountResponse.status, errorText);
       return new Response(
-        JSON.stringify({ error: 'Failed to retrieve account information' }),
+        JSON.stringify({ 
+          error: 'Failed to retrieve account information',
+          details: `Zoom API returned ${accountResponse.status}: ${errorText}`,
+          statusCode: accountResponse.status
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const accountData = await accountResponse.json();
-    console.log('Account data retrieved:', accountData.id);
+    console.log('Account data retrieved successfully for account:', accountData.id);
 
     // Create or update zoom connection record
     const connectionData = {
@@ -177,7 +183,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Unexpected error:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: 'Internal server error', details: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
