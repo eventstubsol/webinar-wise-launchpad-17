@@ -1,6 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
@@ -11,6 +13,7 @@ import { ProfileSettings } from '@/components/dashboard/ProfileSettings';
 import { AppSidebar } from '@/components/dashboard/AppSidebar';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { Zap } from 'lucide-react';
 
 const Dashboard = () => {
   const { user, profile, loading, signOut } = useAuth();
@@ -47,6 +50,16 @@ const Dashboard = () => {
     return null;
   }
 
+  // Calculate profile completion percentage
+  const getProfileCompletion = () => {
+    if (!profile) return 0;
+    const fields = [profile.full_name, profile.company, profile.job_title, profile.phone];
+    const completed = fields.filter(Boolean).length;
+    return Math.round((completed / fields.length) * 100);
+  };
+
+  const profileCompletion = getProfileCompletion();
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gray-50">
@@ -73,8 +86,40 @@ const Dashboard = () => {
                       Here's what's happening with your webinar analytics today.
                     </p>
                   </div>
+                  
+                  {profileCompletion === 100 && (
+                    <Badge variant="default" className="bg-green-100 text-green-700">
+                      <Zap className="h-3 w-3 mr-1" />
+                      Profile Complete
+                    </Badge>
+                  )}
                 </div>
               </div>
+
+              {/* Profile Completion Banner */}
+              {profileCompletion < 100 && (
+                <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-blue-900">
+                          Complete your profile to unlock all features
+                        </p>
+                        <p className="text-xs text-blue-700">
+                          {profileCompletion}% complete • Add your company and role information
+                        </p>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        onClick={handleProfileSetup}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        Complete Profile
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Metrics Cards */}
               <MetricsCards />
