@@ -48,17 +48,20 @@ export class DatabaseSyncOperations {
   static async upsertRegistrants(registrants: any[], webinarDbId: string): Promise<void> {
     if (!registrants || registrants.length === 0) return;
 
-    const transformedRegistrants = registrants.map(registrant => 
-      ZoomDataTransformers.transformRegistrant(registrant, webinarDbId)
-    );
+    const transformedRegistrants = registrants.map(registrant => {
+      const transformed = ZoomDataTransformers.transformRegistrant(registrant, webinarDbId);
+      return {
+        ...transformed,
+        // Convert CustomQuestion[] to Json format
+        custom_questions: transformed.custom_questions ? JSON.parse(JSON.stringify(transformed.custom_questions)) : null,
+        updated_at: new Date().toISOString()
+      };
+    });
 
     const { error } = await supabase
       .from('zoom_registrants')
       .upsert(
-        transformedRegistrants.map(reg => ({
-          ...reg,
-          updated_at: new Date().toISOString()
-        })),
+        transformedRegistrants,
         {
           onConflict: 'webinar_id,registrant_id',
           ignoreDuplicates: false
@@ -76,17 +79,18 @@ export class DatabaseSyncOperations {
   static async upsertParticipants(participants: any[], webinarDbId: string): Promise<void> {
     if (!participants || participants.length === 0) return;
 
-    const transformedParticipants = participants.map(participant => 
-      ZoomDataTransformers.transformParticipant(participant, webinarDbId)
-    );
+    const transformedParticipants = participants.map(participant => {
+      const transformed = ZoomDataTransformers.transformParticipant(participant, webinarDbId);
+      return {
+        ...transformed,
+        updated_at: new Date().toISOString()
+      };
+    });
 
     const { error } = await supabase
       .from('zoom_participants')
       .upsert(
-        transformedParticipants.map(part => ({
-          ...part,
-          updated_at: new Date().toISOString()
-        })),
+        transformedParticipants,
         {
           onConflict: 'webinar_id,participant_id',
           ignoreDuplicates: false
@@ -104,17 +108,20 @@ export class DatabaseSyncOperations {
   static async upsertPolls(polls: any[], webinarDbId: string): Promise<void> {
     if (!polls || polls.length === 0) return;
 
-    const transformedPolls = polls.map(poll => 
-      ZoomDataTransformers.transformPoll(poll, webinarDbId)
-    );
+    const transformedPolls = polls.map(poll => {
+      const transformed = ZoomDataTransformers.transformPoll(poll, webinarDbId);
+      return {
+        ...transformed,
+        // Convert PollQuestion[] to Json format
+        questions: transformed.questions ? JSON.parse(JSON.stringify(transformed.questions)) : [],
+        updated_at: new Date().toISOString()
+      };
+    });
 
     const { error } = await supabase
       .from('zoom_polls')
       .upsert(
-        transformedPolls.map(poll => ({
-          ...poll,
-          updated_at: new Date().toISOString()
-        })),
+        transformedPolls,
         {
           onConflict: 'webinar_id,poll_id',
           ignoreDuplicates: false
@@ -132,17 +139,18 @@ export class DatabaseSyncOperations {
   static async upsertQnA(qnaData: any[], webinarDbId: string): Promise<void> {
     if (!qnaData || qnaData.length === 0) return;
 
-    const transformedQnA = qnaData.map(qna => 
-      ZoomDataTransformers.transformQnA(qna, webinarDbId)
-    );
+    const transformedQnA = qnaData.map(qna => {
+      const transformed = ZoomDataTransformers.transformQnA(qna, webinarDbId);
+      return {
+        ...transformed,
+        updated_at: new Date().toISOString()
+      };
+    });
 
     const { error } = await supabase
       .from('zoom_qna')
       .upsert(
-        transformedQnA.map(qna => ({
-          ...qna,
-          updated_at: new Date().toISOString()
-        })),
+        transformedQnA,
         {
           onConflict: 'webinar_id,question_id',
           ignoreDuplicates: false

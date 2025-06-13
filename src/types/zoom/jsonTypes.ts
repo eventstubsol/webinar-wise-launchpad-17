@@ -12,6 +12,7 @@ export interface PollQuestion {
     prompt_question: string;
     prompt_right_answers?: string[];
   }>;
+  [key: string]: any; // Index signature for Json compatibility
 }
 
 /** Structure for poll responses stored in JSON */
@@ -20,6 +21,7 @@ export interface PollResponse {
   question: string;
   answer: string;
   date_time: string;
+  [key: string]: any; // Index signature for Json compatibility
 }
 
 /** Custom registration questions */
@@ -27,6 +29,7 @@ export interface CustomQuestion {
   title: string;
   value: string;
   required?: boolean;
+  [key: string]: any; // Index signature for Json compatibility
 }
 
 /** Sync error details stored in JSON - compatible with Supabase Json type */
