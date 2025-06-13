@@ -1,11 +1,10 @@
-
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomParticipant, ZoomWebinar, ZoomPoll, ZoomQna } from '@/types/zoom';
+import { ZoomParticipant, ZoomWebinar, ZoomPoll, ZoomQna, WebinarStatus } from '@/types/zoom';
 
 /**
  * Engagement score breakdown for a participant
  */
-interface EngagementBreakdown {
+export interface EngagementBreakdown {
   attendanceScore: number;     // 0-40 points
   cameraScore: number;         // 0-20 points
   interactionScore: number;    // 0-40 points
@@ -16,7 +15,7 @@ interface EngagementBreakdown {
 /**
  * Participant engagement data with calculated metrics
  */
-interface ParticipantEngagement {
+export interface ParticipantEngagement {
   participantId: string;
   participantName: string;
   participantEmail: string | null;
@@ -45,7 +44,7 @@ interface ParticipantEngagement {
 /**
  * Webinar engagement summary
  */
-interface WebinarEngagementSummary {
+export interface WebinarEngagementSummary {
   webinarId: string;
   totalParticipants: number;
   averageEngagementScore: number;
@@ -68,7 +67,7 @@ interface WebinarEngagementSummary {
 /**
  * Participant history across multiple webinars
  */
-interface ParticipantHistory {
+export interface ParticipantHistory {
   participantEmail: string;
   participantName: string;
   totalWebinarsAttended: number;
@@ -89,7 +88,7 @@ interface ParticipantHistory {
 /**
  * Engagement trends over time
  */
-interface EngagementTrends {
+export interface EngagementTrends {
   connectionId: string;
   dateRange: { from: Date; to: Date };
   totalWebinars: number;
@@ -465,7 +464,7 @@ export class ParticipantAnalyticsService {
   /**
    * Helper: Calculate peak attendance time (simplified)
    */
-  private static calculatePeakAttendanceTime(participants: ZoomParticipant[], webinar: ZoomWebinar): string | null {
+  private static calculatePeakAttendanceTime(participants: ZoomParticipant[], webinar: any): string | null {
     if (!webinar.start_time) return null;
     
     // For now, return the start time + 15 minutes as a simple heuristic
