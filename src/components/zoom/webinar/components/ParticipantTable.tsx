@@ -1,11 +1,10 @@
 
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
-import { EngagementCalculator } from '@/services/zoom/analytics/EngagementCalculator';
 
 interface ParticipantTableProps {
   participants: any[];
@@ -24,7 +23,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
 }) => {
   const formatTime = (timeString: string) => {
     if (!timeString) return 'N/A';
-    return format(new Date(timeString), 'h:mm a');
+    return format(new Date(timeString), 'MMM dd, h:mm a');
   };
 
   const formatDuration = (minutes: number) => {
@@ -35,99 +34,82 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
   };
 
   const getEngagementBadge = (participant: any) => {
-    const engagement = EngagementCalculator.calculateEngagementScore(
-      participant, 
-      webinar.duration || 0
-    );
-    
-    if (engagement.totalScore >= 70) {
-      return <Badge className="bg-green-100 text-green-800">High</Badge>;
-    } else if (engagement.totalScore >= 40) {
-      return <Badge className="bg-yellow-100 text-yellow-800">Medium</Badge>;
-    } else {
-      return <Badge className="bg-red-100 text-red-800">Low</Badge>;
-    }
+    const activities = [];
+    if (participant.answered_polling) activities.push('Polls');
+    if (participant.asked_question) activities.push('Q&A');
+    if (participant.posted_chat) activities.push('Chat');
+    if (participant.raised_hand) activities.push('Hand');
+
+    if (activities.length === 0) return <Badge variant="secondary">Low</Badge>;
+    if (activities.length >= 3) return <Badge variant="default">High</Badge>;
+    return <Badge variant="outline">Medium</Badge>;
   };
 
-  const SortButton: React.FC<{ field: string; children: React.ReactNode }> = ({ field, children }) => (
-    <Button
-      variant="ghost"
-      size="sm"
+  const SortHeader = ({ field, children }: { field: string; children: React.ReactNode }) => (
+    <TableHead 
+      className="cursor-pointer hover:bg-gray-50" 
       onClick={() => onSort(field)}
-      className="h-auto p-0 font-medium"
     >
-      {children}
-      <ArrowUpDown className="ml-2 h-4 w-4" />
-    </Button>
+      <div className="flex items-center gap-1">
+        {children}
+        {sortField === field && (
+          sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+        )}
+      </div>
+    </TableHead>
   );
 
   return (
-    <div className="overflow-x-auto">
+    <div className="border rounded-lg">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>
-              <SortButton field="participant_name">Name</SortButton>
-            </TableHead>
-            <TableHead>
-              <SortButton field="participant_email">Email</SortButton>
-            </TableHead>
-            <TableHead>
-              <SortButton field="join_time">Join Time</SortButton>
-            </TableHead>
-            <TableHead>
-              <SortButton field="duration">Duration</SortButton>
-            </TableHead>
+            <SortHeader field="participant_name">Name</SortHeader>
+            <SortHeader field="participant_email">Email</SortHeader>
+            <SortHeader field="join_time">Join Time</SortHeader>
+            <SortHeader field="leave_time">Leave Time</SortHeader>
+            <SortHeader field="duration">Duration</SortHeader>
             <TableHead>Engagement</TableHead>
             <TableHead>Activities</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {participants.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                No participants found
+          {participants.map((participant) => (
+            <TableRow key={participant.id}>
+              <TableCell className="font-medium">
+                {participant.participant_name || 'Unknown'}
+              </TableCell>
+              <TableCell>{participant.participant_email || 'N/A'}</TableCell>
+              <TableCell>{formatTime(participant.join_time)}</TableCell>
+              <TableCell>{formatTime(participant.leave_time)}</TableCell>
+              <TableCell>{formatDuration(participant.duration || 0)}</TableCell>
+              <TableCell>{getEngagementBadge(participant)}</TableCell>
+              <TableCell>
+                <div className="flex flex-wrap gap-1">
+                  {participant.answered_polling && (
+                    <Badge variant="outline" className="text-xs">Polls</Badge>
+                  )}
+                  {participant.asked_question && (
+                    <Badge variant="outline" className="text-xs">Q&A</Badge>
+                  )}
+                  {participant.posted_chat && (
+                    <Badge variant="outline" className="text-xs">Chat</Badge>
+                  )}
+                  {participant.raised_hand && (
+                    <Badge variant="outline" className="text-xs">Hand</Badge>
+                  )}
+                </div>
               </TableCell>
             </TableRow>
-          ) : (
-            participants.map((participant) => (
-              <TableRow key={participant.id}>
-                <TableCell className="font-medium">
-                  {participant.participant_name || 'Unknown'}
-                </TableCell>
-                <TableCell>
-                  {participant.participant_email || 'N/A'}
-                </TableCell>
-                <TableCell>
-                  {formatTime(participant.join_time)}
-                </TableCell>
-                <TableCell>
-                  {formatDuration(participant.duration || 0)}
-                </TableCell>
-                <TableCell>
-                  {getEngagementBadge(participant)}
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-1 flex-wrap">
-                    {participant.answered_polling && (
-                      <Badge variant="outline" className="text-xs">Polls</Badge>
-                    )}
-                    {participant.asked_question && (
-                      <Badge variant="outline" className="text-xs">Q&A</Badge>
-                    )}
-                    {participant.posted_chat && (
-                      <Badge variant="outline" className="text-xs">Chat</Badge>
-                    )}
-                    {participant.raised_hand && (
-                      <Badge variant="outline" className="text-xs">Hand</Badge>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
+          ))}
         </TableBody>
       </Table>
+      
+      {participants.length === 0 && (
+        <div className="text-center py-8 text-muted-foreground">
+          No participants found
+        </div>
+      )}
     </div>
   );
 };

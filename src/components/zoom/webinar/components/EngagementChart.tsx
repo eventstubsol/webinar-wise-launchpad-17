@@ -9,28 +9,53 @@ interface EngagementChartProps {
 }
 
 export const EngagementChart: React.FC<EngagementChartProps> = ({ analytics }) => {
-  const data = analytics ? [
-    { 
-      name: 'Highly Engaged', 
-      value: analytics.highlyEngagedCount || 0, 
-      color: '#22c55e' 
-    },
-    { 
-      name: 'Moderately Engaged', 
-      value: analytics.moderatelyEngagedCount || 0, 
-      color: '#eab308' 
-    },
-    { 
-      name: 'Low Engaged', 
-      value: analytics.lowEngagedCount || 0, 
-      color: '#ef4444' 
+  const generateEngagementData = () => {
+    if (!analytics) {
+      return [
+        { name: 'No Data', value: 100, color: '#e5e7eb' }
+      ];
     }
-  ].filter(item => item.value > 0) : [];
+
+    const data = [
+      {
+        name: 'High Engagement',
+        value: analytics.highlyEngagedCount || 0,
+        color: '#22c55e'
+      },
+      {
+        name: 'Medium Engagement',
+        value: analytics.moderatelyEngagedCount || 0,
+        color: '#f59e0b'
+      },
+      {
+        name: 'Low Engagement',
+        value: analytics.lowEngagedCount || 0,
+        color: '#ef4444'
+      }
+    ].filter(item => item.value > 0);
+
+    return data.length > 0 ? data : [{ name: 'No Data', value: 100, color: '#e5e7eb' }];
+  };
+
+  const engagementData = generateEngagementData();
 
   const chartConfig = {
     value: {
       label: "Participants",
     },
+  };
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-white p-3 border rounded shadow">
+          <p className="font-semibold">{data.name}</p>
+          <p>{data.value} participants</p>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -39,51 +64,39 @@ export const EngagementChart: React.FC<EngagementChartProps> = ({ analytics }) =
         <CardTitle>Engagement Distribution</CardTitle>
       </CardHeader>
       <CardContent>
-        {data.length > 0 ? (
-          <ChartContainer config={chartConfig} className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={data}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={120}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {data.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <ChartTooltip
-                  content={<ChartTooltipContent />}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartContainer>
-        ) : (
-          <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-            No engagement data available
-          </div>
-        )}
+        <ChartContainer config={chartConfig} className="h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={engagementData}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={120}
+                paddingAngle={2}
+                dataKey="value"
+              >
+                {engagementData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <ChartTooltip content={<CustomTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartContainer>
         
         {/* Legend */}
-        {data.length > 0 && (
-          <div className="flex justify-center gap-4 mt-4">
-            {data.map((item) => (
-              <div key={item.name} className="flex items-center gap-2">
-                <div 
-                  className="w-3 h-3 rounded-full" 
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="text-sm">
-                  {item.name} ({item.value})
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="flex justify-center mt-4 space-x-6">
+          {engagementData.map((entry, index) => (
+            <div key={index} className="flex items-center space-x-2">
+              <div 
+                className="w-3 h-3 rounded-full" 
+                style={{ backgroundColor: entry.color }}
+              />
+              <span className="text-sm">{entry.name}</span>
+            </div>
+          ))}
+        </div>
       </CardContent>
     </Card>
   );

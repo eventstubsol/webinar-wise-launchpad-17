@@ -3,7 +3,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { format, addMinutes } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 
 interface TimelineChartProps {
   participants: any[];
@@ -11,43 +11,44 @@ interface TimelineChartProps {
 }
 
 export const TimelineChart: React.FC<TimelineChartProps> = ({ participants, webinar }) => {
-  // Generate timeline data showing participant count over time
+  // Generate timeline data for join/leave patterns
   const generateTimelineData = () => {
-    if (!webinar.start_time || participants.length === 0) return [];
+    if (!participants.length || !webinar.start_time) return [];
 
-    const startTime = new Date(webinar.start_time);
-    const duration = webinar.duration || 60;
-    const intervals = 12; // 12 data points
-    const intervalMinutes = duration / intervals;
+    const webinarStart = parseISO(webinar.start_time);
+    const webinarDuration = webinar.duration || 60; // Default 60 minutes
+    const intervals = 12; // 5-minute intervals for 60 minutes
+    const intervalMinutes = webinarDuration / intervals;
 
-    const data = [];
-    
+    const timelineData = [];
+
     for (let i = 0; i <= intervals; i++) {
-      const currentTime = addMinutes(startTime, i * intervalMinutes);
+      const timePoint = new Date(webinarStart.getTime() + (i * intervalMinutes * 60 * 1000));
       
-      // Count participants present at this time
-      const participantsPresent = participants.filter(p => {
-        const joinTime = new Date(p.join_time);
-        const leaveTime = p.leave_time ? new Date(p.leave_time) : addMinutes(startTime, duration);
+      // Count participants active at this time point
+      const activeParticipants = participants.filter(p => {
+        if (!p.join_time) return false;
+        const joinTime = parseISO(p.join_time);
+        const leaveTime = p.leave_time ? parseISO(p.leave_time) : new Date(webinarStart.getTime() + (webinarDuration * 60 * 1000));
         
-        return joinTime <= currentTime && currentTime <= leaveTime;
+        return timePoint >= joinTime && timePoint <= leaveTime;
       }).length;
 
-      data.push({
-        time: format(currentTime, 'HH:mm'),
-        participants: participantsPresent,
-        fullTime: currentTime
+      timelineData.push({
+        time: format(timePoint, 'HH:mm'),
+        participants: activeParticipants,
+        timestamp: timePoint.getTime()
       });
     }
 
-    return data;
+    return timelineData;
   };
 
   const timelineData = generateTimelineData();
 
   const chartConfig = {
     participants: {
-      label: "Participants",
+      label: "Active Participants",
       color: "hsl(var(--chart-1))",
     },
   };
@@ -55,7 +56,7 @@ export const TimelineChart: React.FC<TimelineChartProps> = ({ participants, webi
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Attendance Over Time</CardTitle>
+        <CardTitle>Attendance Timeline</CardTitle>
       </CardHeader>
       <CardContent>
         {timelineData.length > 0 ? (
@@ -77,19 +78,21 @@ export const TimelineChart: React.FC<TimelineChartProps> = ({ participants, webi
                   content={<ChartTooltipContent />}
                 />
                 <Line 
-                  type="monotone" 
+                  type="monotone"
                   dataKey="participants" 
-                  stroke="var(--color-participants)" 
+                  stroke="var(--color-participants)"
                   strokeWidth={2}
-                  dot={{ r: 4 }}
-                  activeDot={{ r: 6 }}
+                  dot={{ fill: "var(--color-participants)", strokeWidth: 2, r: 4 }}
                 />
               </LineChart>
             </ResponsiveContainer>
           </ChartContainer>
         ) : (
           <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-            No timeline data available
+            <div className="text-center">
+              <p>No timeline data available</p>
+              <p className="text-sm">Participant join/leave times are needed to generate the timeline</p>
+            </div>
           </div>
         )}
       </CardContent>
