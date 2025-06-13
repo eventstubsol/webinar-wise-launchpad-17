@@ -36,10 +36,10 @@ export class ZoomWebinarTransformService {
       max_registrants: null, // Not provided in basic API response
       max_attendees: null, // Not provided in basic API response
       occurrence_id: apiWebinar.occurrences?.[0]?.occurrence_id || null,
-      total_registrants: null, // Needs to be calculated from registrants API
-      total_attendees: null, // Needs to be calculated from participants API
-      total_minutes: null, // Needs to be calculated from participants
-      avg_attendance_duration: null, // Needs to be calculated from participants
+      total_registrants: null, // Will be calculated after registrants sync
+      total_attendees: null, // Will be calculated after participants sync
+      total_minutes: null, // Will be calculated after participants sync
+      avg_attendance_duration: null, // Will be calculated after participants sync
       synced_at: new Date().toISOString(),
     };
   }

@@ -6,6 +6,44 @@ import { ZoomWebinar, ZoomRegistrant, ZoomParticipant, ZoomPoll, ZoomQna } from 
  */
 export class ZoomDataTransformers {
   /**
+   * Transform Zoom API webinar to database format
+   */
+  static transformWebinarForDatabase(
+    apiWebinar: any,
+    connectionId: string
+  ): Omit<ZoomWebinar, 'id' | 'created_at' | 'updated_at'> {
+    return {
+      connection_id: connectionId,
+      webinar_id: apiWebinar.id,
+      webinar_uuid: apiWebinar.uuid,
+      host_id: apiWebinar.host_id,
+      host_email: apiWebinar.host_email || null,
+      topic: apiWebinar.topic,
+      agenda: apiWebinar.agenda || null,
+      type: apiWebinar.type,
+      status: apiWebinar.status,
+      start_time: apiWebinar.start_time || null,
+      duration: apiWebinar.duration || null,
+      timezone: apiWebinar.timezone || null,
+      registration_required: !!apiWebinar.registration_url,
+      registration_type: apiWebinar.settings?.registration_type || null,
+      registration_url: apiWebinar.registration_url || null,
+      join_url: apiWebinar.join_url || null,
+      approval_type: apiWebinar.settings?.approval_type || null,
+      alternative_hosts: apiWebinar.settings?.alternative_hosts ? 
+        apiWebinar.settings.alternative_hosts.split(',').map(h => h.trim()) : null,
+      max_registrants: null,
+      max_attendees: null,
+      occurrence_id: apiWebinar.occurrences?.[0]?.occurrence_id || null,
+      total_registrants: null,
+      total_attendees: null,
+      total_minutes: null,
+      avg_attendance_duration: null,
+      synced_at: new Date().toISOString(),
+    };
+  }
+
+  /**
    * Transform Zoom API registrant to database format
    */
   static transformRegistrant(

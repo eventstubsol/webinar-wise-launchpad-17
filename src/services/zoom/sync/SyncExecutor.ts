@@ -1,14 +1,13 @@
 
 import { ZoomWebinarService } from '../api/ZoomWebinarService';
 import { ZoomConnectionService } from '../ZoomConnectionService';
-import { ParticipantAnalyticsService } from '../analytics/ParticipantAnalyticsService';
-import { DatabaseOperations } from '../analytics/DatabaseOperations';
+import { DatabaseSyncOperations } from '../operations/crud/DatabaseSyncOperations';
 import { SyncOperation, SyncProgress } from './types';
 import { SyncType } from '@/types/zoom';
 import { SyncProgressTracker } from './SyncProgressTracker';
 
 /**
- * Handles execution of different sync types
+ * Handles execution of different sync types with real database operations
  */
 export class SyncExecutor {
   private progressTracker: SyncProgressTracker;
@@ -52,7 +51,7 @@ export class SyncExecutor {
   }
 
   /**
-   * Execute initial sync
+   * Execute initial sync - sync all webinars
    */
   private async executeInitialSync(
     operation: SyncOperation,
@@ -61,7 +60,7 @@ export class SyncExecutor {
   ): Promise<void> {
     const batchSize = operation.options?.batchSize || this.defaultBatchSize;
     
-    // Get all webinars
+    // Get all webinars from Zoom API
     const webinars = await ZoomWebinarService.listWebinars(
       operation.connectionId,
       { pageSize: batchSize },
@@ -74,41 +73,55 @@ export class SyncExecutor {
       total_items: webinars.length
     });
 
-    // Process webinars in batches
+    // Process webinars in batches to manage memory and API rate limits
     let processedCount = 0;
-    const batches = this.createBatches(webinars, batchSize);
+    let failedCount = 0;
+    const batches = this.createBatches(webinars, Math.min(batchSize, 10)); // Smaller batches for detailed sync
 
     for (const batch of batches) {
       if (signal.aborted) throw new Error('Sync cancelled');
 
-      await Promise.allSettled(
-        batch.map(async (webinar) => {
-          try {
-            await this.syncWebinarData(webinar.id, operation.connectionId);
-            processedCount++;
-            
-            await this.progressTracker.updateProgress(syncLogId, {
-              total: webinars.length,
-              processed: processedCount,
-              failed: 0,
-              current: `Synced: ${webinar.topic}`
-            });
-          } catch (error) {
-            console.error(`Failed to sync webinar ${webinar.id}:`, error);
-          }
-        })
-      );
+      // Process batch with limited concurrency
+      const batchPromises = batch.map(async (webinar) => {
+        try {
+          await this.syncWebinarData(webinar.id, operation.connectionId);
+          processedCount++;
+          
+          await this.progressTracker.updateProgress(syncLogId, {
+            total: webinars.length,
+            processed: processedCount,
+            failed: failedCount,
+            current: `Synced: ${webinar.topic}`
+          });
+        } catch (error) {
+          failedCount++;
+          console.error(`Failed to sync webinar ${webinar.id}:`, error);
+          
+          await this.progressTracker.updateProgress(syncLogId, {
+            total: webinars.length,
+            processed: processedCount,
+            failed: failedCount,
+            current: `Failed: ${webinar.topic}`
+          });
+        }
+      });
 
-      await this.delay(1000);
+      await Promise.allSettled(batchPromises);
+      
+      // Add delay between batches to respect rate limits
+      if (batches.indexOf(batch) < batches.length - 1) {
+        await this.delay(2000); // 2 second delay between batches
+      }
     }
 
-    if (!operation.options?.skipAnalytics) {
-      await this.calculateAnalytics(operation.connectionId);
-    }
+    await this.progressTracker.updateSyncLog(syncLogId, {
+      processed_items: processedCount,
+      failed_items: failedCount
+    });
   }
 
   /**
-   * Execute incremental sync
+   * Execute incremental sync - sync recent webinars
    */
   private async executeIncrementalSync(
     operation: SyncOperation,
@@ -118,7 +131,7 @@ export class SyncExecutor {
     const connection = await ZoomConnectionService.getConnection(operation.connectionId);
     const lastSyncDate = connection?.last_sync_at ? 
       new Date(connection.last_sync_at) : 
-      new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Default to 7 days ago
 
     const webinars = await ZoomWebinarService.listWebinars(
       operation.connectionId,
@@ -136,6 +149,8 @@ export class SyncExecutor {
     });
 
     let processedCount = 0;
+    let failedCount = 0;
+
     for (const webinar of webinars) {
       if (signal.aborted) throw new Error('Sync cancelled');
 
@@ -146,16 +161,26 @@ export class SyncExecutor {
         await this.progressTracker.updateProgress(syncLogId, {
           total: webinars.length,
           processed: processedCount,
-          failed: 0,
+          failed: failedCount,
           current: `Updated: ${webinar.topic}`
         });
       } catch (error) {
+        failedCount++;
         console.error(`Failed to sync webinar ${webinar.id}:`, error);
       }
+
+      // Small delay between individual webinars
+      await this.delay(500);
     }
 
+    // Update connection last sync time
     await ZoomConnectionService.updateConnection(operation.connectionId, {
       last_sync_at: new Date().toISOString()
+    });
+
+    await this.progressTracker.updateSyncLog(syncLogId, {
+      processed_items: processedCount,
+      failed_items: failedCount
     });
   }
 
@@ -176,54 +201,71 @@ export class SyncExecutor {
 
     if (signal.aborted) throw new Error('Sync cancelled');
 
-    await this.syncWebinarData(webinarId, operation.connectionId);
-
-    await this.progressTracker.updateProgress(syncLogId, {
-      total: 1,
-      processed: 1,
-      failed: 0,
-      current: 'Webinar sync completed'
-    });
-
-    await this.calculateWebinarAnalytics(webinarId);
-  }
-
-  /**
-   * Sync all data for a specific webinar
-   */
-  private async syncWebinarData(webinarId: string, connectionId: string): Promise<void> {
-    const tasks = [
-      ZoomWebinarService.getWebinar(webinarId),
-      ZoomWebinarService.getWebinarRegistrants(webinarId),
-      ZoomWebinarService.getWebinarParticipants(webinarId),
-      ZoomWebinarService.getWebinarPolls(webinarId),
-      ZoomWebinarService.getWebinarQA(webinarId)
-    ];
-
-    const results = await Promise.allSettled(tasks);
-    // Process results and save to database
-  }
-
-  /**
-   * Calculate analytics for all webinars
-   */
-  private async calculateAnalytics(connectionId: string): Promise<void> {
     try {
-      // Implementation would go here
+      await this.syncWebinarData(webinarId, operation.connectionId);
+
+      await this.progressTracker.updateProgress(syncLogId, {
+        total: 1,
+        processed: 1,
+        failed: 0,
+        current: 'Webinar sync completed'
+      });
     } catch (error) {
-      console.error('Error calculating analytics:', error);
+      await this.progressTracker.updateProgress(syncLogId, {
+        total: 1,
+        processed: 0,
+        failed: 1,
+        current: `Failed to sync webinar: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+      throw error;
     }
   }
 
   /**
-   * Calculate analytics for a specific webinar
+   * Sync all data for a specific webinar - NOW WITH REAL DATABASE OPERATIONS
    */
-  private async calculateWebinarAnalytics(webinarId: string): Promise<void> {
+  private async syncWebinarData(webinarId: string, connectionId: string): Promise<void> {
     try {
-      const analytics = await ParticipantAnalyticsService.calculateWebinarEngagement(webinarId);
-      await DatabaseOperations.updateWebinarMetrics(webinarId, analytics);
+      // Fetch all data concurrently from Zoom API
+      const [
+        webinarResult,
+        registrantsResult,
+        participantsResult,
+        pollsResult,
+        qaResult
+      ] = await Promise.allSettled([
+        ZoomWebinarService.getWebinar(webinarId),
+        ZoomWebinarService.getWebinarRegistrants(webinarId),
+        ZoomWebinarService.getWebinarParticipants(webinarId),
+        ZoomWebinarService.getWebinarPolls(webinarId),
+        ZoomWebinarService.getWebinarQA(webinarId)
+      ]);
+
+      // Extract successful results
+      const webinarData = webinarResult.status === 'fulfilled' ? webinarResult.value : null;
+      const registrants = registrantsResult.status === 'fulfilled' ? registrantsResult.value : [];
+      const participants = participantsResult.status === 'fulfilled' ? participantsResult.value : [];
+      const polls = pollsResult.status === 'fulfilled' ? pollsResult.value : [];
+      const qa = qaResult.status === 'fulfilled' ? qaResult.value : [];
+
+      if (!webinarData) {
+        throw new Error('Failed to fetch webinar details');
+      }
+
+      // Save all data to database using the new DatabaseSyncOperations
+      await DatabaseSyncOperations.syncCompleteWebinarData(
+        webinarData,
+        registrants,
+        participants,
+        polls,
+        qa,
+        connectionId
+      );
+
+      console.log(`Successfully synced webinar ${webinarId} to database`);
     } catch (error) {
-      console.error(`Error calculating analytics for webinar ${webinarId}:`, error);
+      console.error(`Error syncing webinar ${webinarId}:`, error);
+      throw error;
     }
   }
 
