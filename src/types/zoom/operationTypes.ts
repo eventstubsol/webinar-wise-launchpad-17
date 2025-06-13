@@ -3,7 +3,7 @@
  * INSERT and UPDATE types for database operations
  */
 
-import {
+import type {
   ZoomConnection,
   ZoomWebinar,
   ZoomRegistrant,

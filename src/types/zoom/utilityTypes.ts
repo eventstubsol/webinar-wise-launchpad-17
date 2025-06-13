@@ -3,7 +3,7 @@
  * Utility types and constants
  */
 
-import {
+import type {
   ZoomConnection,
   ZoomWebinar,
   ZoomRegistrant,
