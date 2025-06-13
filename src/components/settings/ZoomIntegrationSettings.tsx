@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Info } from 'lucide-react';
 import { ZoomCredentialsSetupForm } from './zoom/ZoomCredentialsSetupForm';
 import { ZoomCredentialsDisplay } from './zoom/ZoomCredentialsDisplay';
@@ -9,6 +10,7 @@ import { ConnectedAccountInfo } from './zoom/ConnectedAccountInfo';
 import { ConnectionStatusAlert } from './zoom/ConnectionStatusAlert';
 import { SyncControls } from './zoom/SyncControls';
 import { DisconnectSection } from './zoom/DisconnectSection';
+import { WebhookConfiguration } from './zoom/WebhookConfiguration';
 import { useZoomCredentials } from '@/hooks/useZoomCredentials';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { ZoomConnectButton } from '@/components/zoom/ZoomConnectButton';
@@ -70,37 +72,48 @@ export const ZoomIntegrationSettings = () => {
         />
       )}
 
-      {/* Step 2: Zoom Account Connection (only if credentials are set) */}
+      {/* Step 2: Connection and Configuration Tabs */}
       {hasCredentials && !showCredentialsForm && (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Connect Zoom Account</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <ConnectionStatusAlert 
-                isLoading={connectionLoading}
-                isConnected={isConnected}
-                isExpired={isExpired}
-              />
-              
-              <ZoomConnectButton 
-                variant={isConnected ? "secondary" : "default"}
-                size="lg"
-                className="w-full"
-              />
-            </CardContent>
-          </Card>
+        <Tabs defaultValue="connection" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="connection">Connection & Sync</TabsTrigger>
+            <TabsTrigger value="webhooks">Real-time Updates</TabsTrigger>
+          </TabsList>
 
-          {/* Step 3: Connection Management (only if connected) */}
-          {isConnected && connection && (
-            <>
-              <ConnectedAccountInfo connection={connection} />
-              <SyncControls connection={connection} />
-              <DisconnectSection connection={connection} />
-            </>
-          )}
-        </>
+          <TabsContent value="connection" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Connect Zoom Account</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <ConnectionStatusAlert 
+                  isLoading={connectionLoading}
+                  isConnected={isConnected}
+                  isExpired={isExpired}
+                />
+                
+                <ZoomConnectButton 
+                  variant={isConnected ? "secondary" : "default"}
+                  size="lg"
+                  className="w-full"
+                />
+              </CardContent>
+            </Card>
+
+            {/* Connection Management (only if connected) */}
+            {isConnected && connection && (
+              <>
+                <ConnectedAccountInfo connection={connection} />
+                <SyncControls connection={connection} />
+                <DisconnectSection connection={connection} />
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="webhooks">
+            <WebhookConfiguration />
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );
