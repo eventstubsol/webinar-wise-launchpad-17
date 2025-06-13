@@ -1,7 +1,7 @@
 
 import { ZoomWebinarService } from '../api/ZoomWebinarService';
 import { ZoomConnectionService } from '../ZoomConnectionService';
-import { DatabaseSyncOperations } from '../operations/crud/DatabaseSyncOperations';
+import { BatchOperations } from '../operations/crud/BatchOperations';
 import { SyncOperation, SyncProgress } from './types';
 import { SyncType } from '@/types/zoom';
 import { SyncProgressTracker } from './SyncProgressTracker';
@@ -252,8 +252,8 @@ export class SyncExecutor {
         throw new Error('Failed to fetch webinar details');
       }
 
-      // Save all data to database using the new DatabaseSyncOperations
-      await DatabaseSyncOperations.syncCompleteWebinarData(
+      // Save all data to database using the new BatchOperations
+      await BatchOperations.syncCompleteWebinarData(
         webinarData,
         registrants,
         participants,
