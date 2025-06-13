@@ -1,3 +1,4 @@
+
 import { ZoomConnection } from '@/types/zoom';
 import { ZoomConnectionService } from '../ZoomConnectionService';
 import { ApiResponse, RequestOptions, QueuedRequest, RateLimitConfig } from './types';
@@ -249,3 +250,6 @@ export class ZoomApiClient {
 
 // Export singleton instance
 export const zoomApiClient = ZoomApiClient.getInstance();
+
+// Re-export types for convenience
+export type { ApiResponse, RequestOptions } from './types';

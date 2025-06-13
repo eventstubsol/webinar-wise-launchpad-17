@@ -1,5 +1,6 @@
 
-import { zoomApiClient, ApiResponse } from './ZoomApiClient';
+import { zoomApiClient } from './ZoomApiClient';
+import type { ApiResponse } from './types';
 import { ZoomWebinar, ZoomRegistrant, ZoomParticipant, ZoomPoll, ZoomQna, SyncType, SyncStatus } from '@/types/zoom';
 import { supabase } from '@/integrations/supabase/client';
 
