@@ -2,6 +2,7 @@
 import { ConnectionCrud } from './operations/connectionCrud';
 import { ConnectionStatusOperations } from './operations/connectionStatus';
 import { TokenUtils } from './utils/tokenUtils';
+import { zoomSyncOrchestrator } from './sync/ZoomSyncOrchestrator';
 import { ZoomConnection, ZoomConnectionInsert, ZoomConnectionUpdate, ConnectionStatus } from '@/types/zoom';
 
 /**
@@ -27,4 +28,29 @@ export class ZoomConnectionService {
   static isTokenExpired = TokenUtils.isTokenExpired;
   static encryptToken = TokenUtils.encryptToken;
   static decryptToken = TokenUtils.decryptToken;
+
+  // Sync Operations
+  static async startInitialSync(connectionId: string, options?: { batchSize?: number }) {
+    return await zoomSyncOrchestrator.startInitialSync(connectionId, options);
+  }
+
+  static async startIncrementalSync(connectionId: string) {
+    return await zoomSyncOrchestrator.startIncrementalSync(connectionId);
+  }
+
+  static async syncSingleWebinar(webinarId: string, connectionId: string) {
+    return await zoomSyncOrchestrator.syncSingleWebinar(webinarId, connectionId);
+  }
+
+  static async scheduleAutomaticSync(connectionId: string) {
+    return await zoomSyncOrchestrator.scheduleAutomaticSync(connectionId);
+  }
+
+  static async cancelSync(operationId: string) {
+    return await zoomSyncOrchestrator.cancelSync(operationId);
+  }
+
+  static async getSyncStatus() {
+    return await zoomSyncOrchestrator.getSyncStatus();
+  }
 }

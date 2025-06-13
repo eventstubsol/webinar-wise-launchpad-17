@@ -5,8 +5,9 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { ZoomConnection } from '@/types/zoom';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
+import { useZoomSyncOrchestrator } from '@/hooks/useZoomSyncOrchestrator';
 import { useToast } from '@/hooks/use-toast';
-import { RefreshCw, Calendar } from 'lucide-react';
+import { RefreshCw, Calendar, Zap } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface SyncControlsProps {
@@ -17,6 +18,12 @@ export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isSyncing, setIsSyncing] = useState(false);
+  
+  const {
+    startInitialSync,
+    startIncrementalSync,
+    isStarting
+  } = useZoomSyncOrchestrator();
 
   // Auto-sync toggle mutation
   const autoSyncMutation = useMutation({
@@ -48,39 +55,29 @@ export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
     },
   });
 
-  // Manual sync mutation
-  const manualSyncMutation = useMutation({
-    mutationFn: async () => {
-      // TODO: Implement actual sync logic - this is a placeholder
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      return true;
-    },
-    onSuccess: () => {
-      setIsSyncing(false);
-      queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
-      toast({
-        title: "Sync Complete",
-        description: "Your Zoom data has been synchronized successfully.",
-      });
-    },
-    onError: (error: Error) => {
-      setIsSyncing(false);
-      toast({
-        title: "Sync Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleManualSync = () => {
+  const handleIncrementalSync = async () => {
     setIsSyncing(true);
-    manualSyncMutation.mutate();
+    try {
+      await startIncrementalSync();
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleInitialSync = async () => {
+    setIsSyncing(true);
+    try {
+      await startInitialSync();
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleAutoSyncToggle = (enabled: boolean) => {
     autoSyncMutation.mutate(enabled);
   };
+
+  const syncInProgress = isSyncing || isStarting;
 
   return (
     <div className="space-y-4">
@@ -101,24 +98,54 @@ export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
         />
       </div>
 
-      {/* Manual Sync */}
-      <div className="flex items-center justify-between p-3 border rounded-lg">
-        <div className="space-y-0.5">
-          <div className="text-sm font-medium">Manual Sync</div>
-          <div className="text-xs text-gray-600">
-            Sync your latest webinar data now
+      {/* Manual Sync Options */}
+      <div className="space-y-3">
+        {/* Incremental Sync */}
+        <div className="flex items-center justify-between p-3 border rounded-lg">
+          <div className="space-y-0.5">
+            <div className="text-sm font-medium">Quick Sync</div>
+            <div className="text-xs text-gray-600">
+              Sync recent changes and new webinars
+            </div>
           </div>
+          <Button
+            onClick={handleIncrementalSync}
+            disabled={syncInProgress}
+            size="sm"
+            variant="outline"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${syncInProgress ? 'animate-spin' : ''}`} />
+            {syncInProgress ? 'Syncing...' : 'Quick Sync'}
+          </Button>
         </div>
-        <Button
-          onClick={handleManualSync}
-          disabled={isSyncing || manualSyncMutation.isPending}
-          size="sm"
-          variant="outline"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-          {isSyncing ? 'Syncing...' : 'Sync Now'}
-        </Button>
+
+        {/* Initial/Full Sync */}
+        <div className="flex items-center justify-between p-3 border rounded-lg">
+          <div className="space-y-0.5">
+            <div className="text-sm font-medium">Full Sync</div>
+            <div className="text-xs text-gray-600">
+              Complete synchronization of all webinar data
+            </div>
+          </div>
+          <Button
+            onClick={handleInitialSync}
+            disabled={syncInProgress}
+            size="sm"
+            variant="outline"
+          >
+            <Zap className={`h-4 w-4 mr-2 ${syncInProgress ? 'animate-spin' : ''}`} />
+            {syncInProgress ? 'Syncing...' : 'Full Sync'}
+          </Button>
+        </div>
       </div>
+
+      {/* Last Sync Info */}
+      {connection.last_sync_at && (
+        <div className="flex items-center gap-2 text-xs text-gray-600 p-2 bg-gray-50 rounded">
+          <Calendar className="h-3 w-3" />
+          Last sync: {formatDistanceToNow(new Date(connection.last_sync_at), { addSuffix: true })}
+        </div>
+      )}
 
       {/* Next Sync Info */}
       {connection.auto_sync_enabled && connection.next_sync_at && (
