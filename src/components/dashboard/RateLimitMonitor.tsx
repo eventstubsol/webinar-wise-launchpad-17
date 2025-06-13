@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -66,13 +65,13 @@ export const RateLimitMonitor: React.FC = () => {
 
   const getStatusColor = (info: RateLimitInfo) => {
     if (info.isRateLimited) return 'destructive';
-    if (info.currentTokens < info.maxTokens * 0.3) return 'warning';
+    if (info.currentTokens < info.maxTokens * 0.3) return 'secondary';
     return 'default';
   };
 
   const getQueueStatus = (queueLength: number) => {
-    if (queueLength === 0) return { color: 'success', text: 'Clear' };
-    if (queueLength < 5) return { color: 'warning', text: 'Light' };
+    if (queueLength === 0) return { color: 'default', text: 'Clear' };
+    if (queueLength < 5) return { color: 'secondary', text: 'Light' };
     return { color: 'destructive', text: 'Heavy' };
   };
 
@@ -156,7 +155,7 @@ export const RateLimitMonitor: React.FC = () => {
                   <span className="text-sm font-medium">Request Queue</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant={getQueueStatus(rateLimitInfo.queueLength).color as any}>
+                  <Badge variant={getQueueStatus(rateLimitInfo.queueLength).color as "default" | "destructive" | "outline" | "secondary"}>
                     {getQueueStatus(rateLimitInfo.queueLength).text}
                   </Badge>
                   <span className="text-sm text-muted-foreground">
