@@ -8,13 +8,26 @@ import { AppSidebar } from '@/components/dashboard/AppSidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useWebinars } from '@/hooks/useWebinars';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
   const { refetch: refetchWebinars } = useWebinars({
     filters: { search: '', status: '' },
     page: 1,
     limit: 10
   });
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/', { replace: true });
+  };
+
+  const handleProfileSetup = () => {
+    navigate('/settings');
+  };
 
   // Set up real-time updates
   useRealtimeUpdates({
@@ -35,7 +48,10 @@ const Dashboard: React.FC = () => {
   return (
     <SidebarProvider>
       <div className="min-h-screen bg-background">
-        <AppSidebar />
+        <AppSidebar 
+          onProfileSetup={handleProfileSetup}
+          onSignOut={handleSignOut}
+        />
         <div className="flex-1 space-y-6 p-8 pt-6 lg:ml-72">
           <DashboardHeader />
           <MetricsCards />
