@@ -42,6 +42,7 @@ export interface SyncProgress {
 
 /**
  * JSON-serializable sync error details for database storage
+ * Compatible with Supabase's Json type
  */
 export interface SyncErrorDetailsJson {
   error_code?: string;
