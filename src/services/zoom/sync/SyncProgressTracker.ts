@@ -86,7 +86,7 @@ export class SyncProgressTracker {
     await this.updateSyncLog(syncLogId, {
       sync_status: SyncStatus.FAILED,
       error_message: error instanceof Error ? error.message : 'Unknown error',
-      error_details: errorDetails as any, // Cast to avoid type issues
+      error_details: errorDetails,
       completed_at: new Date().toISOString()
     });
   }
