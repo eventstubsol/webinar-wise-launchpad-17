@@ -32,8 +32,8 @@ export class ConnectionStatusOperations {
       // Decrypt tokens and cast types
       return {
         ...data,
-        access_token: TokenUtils.decryptToken(data.access_token),
-        refresh_token: TokenUtils.decryptToken(data.refresh_token),
+        access_token: await TokenUtils.decryptToken(data.access_token, data.user_id),
+        refresh_token: await TokenUtils.decryptToken(data.refresh_token, data.user_id),
         connection_status: data.connection_status as ConnectionStatus,
       } as ZoomConnection;
     } catch (error) {

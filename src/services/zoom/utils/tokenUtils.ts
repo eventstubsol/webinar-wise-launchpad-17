@@ -1,4 +1,6 @@
 
+import { TokenEncryptionService } from '../security/TokenEncryptionService';
+
 /**
  * Utility functions for token management and encryption
  */
@@ -19,22 +21,76 @@ export class TokenUtils {
   }
 
   /**
-   * Encrypt token (placeholder implementation)
-   * In a real implementation, this would use proper encryption
+   * Encrypt token using secure encryption service
    */
-  static encryptToken(token: string): string {
-    // For Server-to-Server connections, we often don't store actual tokens
-    // This is a placeholder for when encryption is needed
-    return token;
+  static async encryptToken(token: string, userId: string): Promise<string> {
+    // Check if Web Crypto API is available
+    if (!TokenEncryptionService.isSupported()) {
+      console.warn('Web Crypto API not supported, falling back to base64');
+      return btoa(token); // Fallback for unsupported environments
+    }
+
+    try {
+      return await TokenEncryptionService.encryptToken(token, userId);
+    } catch (error) {
+      console.error('Secure encryption failed, falling back to base64:', error);
+      return btoa(token); // Fallback on encryption failure
+    }
   }
 
   /**
-   * Decrypt token (placeholder implementation)
-   * In a real implementation, this would use proper decryption
+   * Decrypt token using secure encryption service
    */
-  static decryptToken(encryptedToken: string): string {
-    // For Server-to-Server connections, we often don't store actual tokens
-    // This is a placeholder for when decryption is needed
-    return encryptedToken;
+  static async decryptToken(encryptedToken: string, userId: string): Promise<string> {
+    // Check if Web Crypto API is available
+    if (!TokenEncryptionService.isSupported()) {
+      try {
+        return atob(encryptedToken); // Fallback for unsupported environments
+      } catch (error) {
+        console.error('Base64 decoding failed:', error);
+        throw new Error('Failed to decrypt token');
+      }
+    }
+
+    try {
+      return await TokenEncryptionService.decryptToken(encryptedToken, userId);
+    } catch (error) {
+      // Try fallback base64 decoding for legacy tokens
+      try {
+        console.warn('Secure decryption failed, trying base64 fallback');
+        return atob(encryptedToken);
+      } catch (fallbackError) {
+        console.error('Both secure and fallback decryption failed');
+        throw new Error('Failed to decrypt token');
+      }
+    }
+  }
+
+  /**
+   * Rotate encryption key for user tokens
+   */
+  static async rotateEncryptionKey(userId: string): Promise<void> {
+    if (!TokenEncryptionService.isSupported()) {
+      console.warn('Web Crypto API not supported, cannot rotate encryption key');
+      return;
+    }
+
+    return await TokenEncryptionService.rotateEncryptionKey(userId);
+  }
+
+  /**
+   * Validate token decryption health
+   */
+  static async validateTokenDecryption(encryptedToken: string, userId: string): Promise<boolean> {
+    if (!TokenEncryptionService.isSupported()) {
+      try {
+        atob(encryptedToken);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    return await TokenEncryptionService.validateTokenDecryption(encryptedToken, userId);
   }
 }

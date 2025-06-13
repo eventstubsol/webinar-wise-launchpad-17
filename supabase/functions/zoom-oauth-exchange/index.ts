@@ -7,6 +7,50 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Simple encryption utilities for Deno environment
+class SimpleTokenEncryption {
+  private static readonly ALGORITHM = 'AES-GCM';
+  private static readonly KEY_LENGTH = 256;
+  private static readonly IV_LENGTH = 12;
+
+  static async encryptToken(token: string, userKey: string): Promise<string> {
+    try {
+      // Generate a simple key from user information
+      const keyMaterial = new TextEncoder().encode(userKey);
+      const key = await crypto.subtle.importKey(
+        'raw',
+        await crypto.subtle.digest('SHA-256', keyMaterial),
+        this.ALGORITHM,
+        false,
+        ['encrypt']
+      );
+
+      // Generate random IV
+      const iv = crypto.getRandomValues(new Uint8Array(this.IV_LENGTH));
+
+      // Encrypt the token
+      const tokenBytes = new TextEncoder().encode(token);
+      const encryptedBytes = await crypto.subtle.encrypt(
+        { name: this.ALGORITHM, iv: iv },
+        key,
+        tokenBytes
+      );
+
+      // Combine IV and encrypted data
+      const combined = new Uint8Array(this.IV_LENGTH + encryptedBytes.byteLength);
+      combined.set(iv, 0);
+      combined.set(new Uint8Array(encryptedBytes), this.IV_LENGTH);
+
+      // Return base64 encoded result
+      return btoa(String.fromCharCode(...combined));
+    } catch (error) {
+      console.error('Token encryption failed:', error);
+      // Fallback to base64 encoding
+      return btoa(token);
+    }
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -134,14 +178,19 @@ serve(async (req) => {
     // Calculate token expiration
     const tokenExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString()
 
+    // Encrypt tokens using simple encryption
+    const userKey = user.id + user.email
+    const encryptedAccessToken = await SimpleTokenEncryption.encryptToken(tokenData.access_token, userKey)
+    const encryptedRefreshToken = await SimpleTokenEncryption.encryptToken(tokenData.refresh_token, userKey)
+
     // Prepare connection data
     const connectionData = {
       user_id: user.id,
       zoom_user_id: zoomUser.id,
       zoom_account_id: zoomUser.account_id || zoomUser.id,
       zoom_email: zoomUser.email,
-      access_token: btoa(tokenData.access_token), // Simple base64 encoding for demo
-      refresh_token: btoa(tokenData.refresh_token), // Simple base64 encoding for demo
+      access_token: encryptedAccessToken,
+      refresh_token: encryptedRefreshToken,
       token_expires_at: tokenExpiresAt,
       connection_status: 'active',
       scopes: tokenData.scope ? tokenData.scope.split(' ') : ['webinar:read:admin', 'user:read:admin'],

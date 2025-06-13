@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { 
   ZoomConnection, 
@@ -19,10 +18,19 @@ export class ConnectionCrud {
   static async createConnection(connectionData: ZoomConnectionInsert): Promise<ZoomConnection | null> {
     try {
       // Encrypt tokens before storing
+      const encryptedAccessToken = await TokenUtils.encryptToken(
+        connectionData.access_token, 
+        connectionData.user_id
+      );
+      const encryptedRefreshToken = await TokenUtils.encryptToken(
+        connectionData.refresh_token, 
+        connectionData.user_id
+      );
+
       const encryptedData = {
         ...connectionData,
-        access_token: TokenUtils.encryptToken(connectionData.access_token),
-        refresh_token: TokenUtils.encryptToken(connectionData.refresh_token),
+        access_token: encryptedAccessToken,
+        refresh_token: encryptedRefreshToken,
       };
 
       const { data, error } = await supabase
@@ -49,8 +57,8 @@ export class ConnectionCrud {
       // Cast and decrypt tokens for return
       return {
         ...data,
-        access_token: TokenUtils.decryptToken(data.access_token),
-        refresh_token: TokenUtils.decryptToken(data.refresh_token),
+        access_token: await TokenUtils.decryptToken(data.access_token, data.user_id),
+        refresh_token: await TokenUtils.decryptToken(data.refresh_token, data.user_id),
         connection_status: data.connection_status as ConnectionStatus,
       } as ZoomConnection;
     } catch (error) {
@@ -91,8 +99,8 @@ export class ConnectionCrud {
       // Decrypt tokens and cast types for use
       return {
         ...data,
-        access_token: TokenUtils.decryptToken(data.access_token),
-        refresh_token: TokenUtils.decryptToken(data.refresh_token),
+        access_token: await TokenUtils.decryptToken(data.access_token, data.user_id),
+        refresh_token: await TokenUtils.decryptToken(data.refresh_token, data.user_id),
         connection_status: data.connection_status as ConnectionStatus,
       } as ZoomConnection;
     } catch (error) {
@@ -128,12 +136,16 @@ export class ConnectionCrud {
       }
 
       // Decrypt tokens and cast types for all connections
-      return data.map(connection => ({
-        ...connection,
-        access_token: TokenUtils.decryptToken(connection.access_token),
-        refresh_token: TokenUtils.decryptToken(connection.refresh_token),
-        connection_status: connection.connection_status as ConnectionStatus,
-      })) as ZoomConnection[];
+      const decryptedConnections = await Promise.all(
+        data.map(async (connection) => ({
+          ...connection,
+          access_token: await TokenUtils.decryptToken(connection.access_token, connection.user_id),
+          refresh_token: await TokenUtils.decryptToken(connection.refresh_token, connection.user_id),
+          connection_status: connection.connection_status as ConnectionStatus,
+        }))
+      );
+
+      return decryptedConnections as ZoomConnection[];
     } catch (error) {
       console.error('Unexpected error getting user connections:', error);
       toast({
@@ -150,13 +162,35 @@ export class ConnectionCrud {
    */
   static async updateConnection(id: string, updates: ZoomConnectionUpdate): Promise<ZoomConnection | null> {
     try {
+      // Get the existing connection to get user_id for encryption
+      const { data: existingConnection } = await supabase
+        .from('zoom_connections')
+        .select('user_id')
+        .eq('id', id)
+        .single();
+
+      if (!existingConnection) {
+        toast({
+          title: "Error",
+          description: "Connection not found.",
+          variant: "destructive",
+        });
+        return null;
+      }
+
       // Encrypt tokens if they're being updated
       const encryptedUpdates = { ...updates };
       if (updates.access_token) {
-        encryptedUpdates.access_token = TokenUtils.encryptToken(updates.access_token);
+        encryptedUpdates.access_token = await TokenUtils.encryptToken(
+          updates.access_token, 
+          existingConnection.user_id
+        );
       }
       if (updates.refresh_token) {
-        encryptedUpdates.refresh_token = TokenUtils.encryptToken(updates.refresh_token);
+        encryptedUpdates.refresh_token = await TokenUtils.encryptToken(
+          updates.refresh_token, 
+          existingConnection.user_id
+        );
       }
 
       const { data, error } = await supabase
