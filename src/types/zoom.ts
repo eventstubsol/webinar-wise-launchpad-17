@@ -1,4 +1,3 @@
-
 /**
  * Comprehensive TypeScript types for Webinar Wise Zoom integration
  * Matches Supabase database schema and includes API response types
@@ -118,7 +117,7 @@ export interface CustomQuestion {
   required?: boolean;
 }
 
-/** Sync error details stored in JSON */
+/** Sync error details stored in JSON - compatible with Supabase Json type */
 export interface SyncErrorDetails {
   error_code?: string;
   error_message: string;
@@ -129,6 +128,7 @@ export interface SyncErrorDetails {
   }>;
   retry_count?: number;
   last_retry_at?: string;
+  [key: string]: any; // Index signature for Json compatibility
 }
 
 // ============================================================================

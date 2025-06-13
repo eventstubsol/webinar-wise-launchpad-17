@@ -39,20 +39,3 @@ export interface SyncProgress {
   currentOperation: string;
   estimatedTimeRemaining?: number;
 }
-
-/**
- * JSON-serializable sync error details for database storage
- * Compatible with Supabase's Json type
- */
-export interface SyncErrorDetailsJson {
-  error_code?: string;
-  error_message: string;
-  failed_items?: Array<{
-    id: string;
-    type: string;
-    error: string;
-  }>;
-  retry_count?: number;
-  last_retry_at?: string;
-  [key: string]: any; // Index signature for Json compatibility
-}

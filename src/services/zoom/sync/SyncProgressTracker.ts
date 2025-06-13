@@ -1,7 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { SyncStatus, ZoomSyncLog } from '@/types/zoom';
-import { SyncErrorDetailsJson } from './types';
+import { SyncStatus, ZoomSyncLog, SyncErrorDetails } from '@/types/zoom';
 
 /**
  * Handles sync progress tracking and database operations
@@ -76,7 +75,7 @@ export class SyncProgressTracker {
    * Mark sync log as failed
    */
   async failSyncLog(syncLogId: string, error: any): Promise<void> {
-    const errorDetails: SyncErrorDetailsJson = {
+    const errorDetails: SyncErrorDetails = {
       error_message: error instanceof Error ? error.message : 'Unknown error',
       error_code: error.code || 'UNKNOWN_ERROR',
       retry_count: 0,
