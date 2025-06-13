@@ -1,51 +1,9 @@
-
 import { ZoomConnection } from '@/types/zoom';
 import { ZoomConnectionService } from '../ZoomConnectionService';
-import { toast } from '@/hooks/use-toast';
-
-/**
- * Rate limiting configuration for Zoom API
- */
-interface RateLimitConfig {
-  maxRequestsPerSecond: number;
-  retryAttempts: number;
-  baseDelay: number;
-}
-
-/**
- * Request options for API calls
- */
-interface RequestOptions {
-  timeout?: number;
-  retries?: number;
-  skipRateLimit?: boolean;
-  skipAuth?: boolean;
-}
-
-/**
- * Standardized API response format
- */
-export interface ApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  statusCode?: number;
-  retryable?: boolean;
-}
-
-/**
- * Request queue item for rate limiting
- */
-interface QueuedRequest {
-  resolve: (value: any) => void;
-  reject: (error: any) => void;
-  method: string;
-  url: string;
-  data?: any;
-  options?: RequestOptions;
-  connectionId: string;
-  timestamp: number;
-}
+import { ApiResponse, RequestOptions, QueuedRequest, RateLimitConfig } from './types';
+import { HttpClient } from './httpClient';
+import { ErrorHandler } from './errorHandler';
+import { TokenManager } from './tokenManager';
 
 /**
  * Zoom API Client for making authenticated requests with rate limiting and token management
@@ -135,7 +93,7 @@ export class ZoomApiClient {
       const minDelay = 1000 / this.rateLimitConfig.maxRequestsPerSecond;
       
       if (timeSinceLastRequest < minDelay) {
-        await this.delay(minDelay - timeSinceLastRequest);
+        await HttpClient.delay(minDelay - timeSinceLastRequest);
       }
 
       try {
@@ -173,9 +131,9 @@ export class ZoomApiClient {
         }
 
         // Check if token needs refresh
-        if (ZoomConnectionService.isTokenExpired(connection.token_expires_at)) {
+        if (TokenManager.isTokenExpired(connection.token_expires_at)) {
           console.log(`Token expired for connection ${connectionId}, attempting refresh`);
-          const refreshedConnection = await this.refreshAccessToken(connectionId);
+          const refreshedConnection = await TokenManager.refreshAccessToken(connectionId);
           if (!refreshedConnection) {
             return {
               success: false,
@@ -187,9 +145,9 @@ export class ZoomApiClient {
         }
 
         // Make the actual HTTP request
-        const response = await this.httpRequest(method, url, data, connection, options);
+        const response = await HttpClient.makeRequest(method, url, data, connection, options);
         
-        this.logRequest(method, url, response.statusCode, attempt + 1);
+        ErrorHandler.logRequest(method, url, response.statusCode, attempt + 1);
         
         if (response.statusCode >= 200 && response.statusCode < 300) {
           return {
@@ -202,9 +160,9 @@ export class ZoomApiClient {
         // Handle specific error cases
         if (response.statusCode === 429) {
           // Rate limited - wait and retry
-          const retryAfter = this.extractRetryAfter(response.headers) || (2 ** attempt * 1000);
+          const retryAfter = HttpClient.extractRetryAfter(response.headers) || (2 ** attempt * 1000);
           console.log(`Rate limited, waiting ${retryAfter}ms before retry`);
-          await this.delay(retryAfter);
+          await HttpClient.delay(retryAfter);
           attempt++;
           continue;
         }
@@ -213,14 +171,14 @@ export class ZoomApiClient {
           // Unauthorized - try token refresh once
           if (attempt === 0) {
             console.log(`Unauthorized, attempting token refresh for connection ${connectionId}`);
-            await this.refreshAccessToken(connectionId);
+            await TokenManager.refreshAccessToken(connectionId);
             attempt++;
             continue;
           }
         }
 
         // Other errors
-        return this.handleApiError(response);
+        return ErrorHandler.handleApiError(response);
 
       } catch (error) {
         console.error(`API request attempt ${attempt + 1} failed:`, error);
@@ -236,7 +194,7 @@ export class ZoomApiClient {
 
         // Exponential backoff for retries
         const delay = this.rateLimitConfig.baseDelay * (2 ** attempt);
-        await this.delay(delay);
+        await HttpClient.delay(delay);
         attempt++;
       }
     }
@@ -246,140 +204,6 @@ export class ZoomApiClient {
       error: 'Max retry attempts exceeded',
       statusCode: 500,
       retryable: false,
-    };
-  }
-
-  /**
-   * Make HTTP request with proper headers and authentication
-   */
-  private async httpRequest(
-    method: string,
-    endpoint: string,
-    data: any,
-    connection: ZoomConnection,
-    options: RequestOptions
-  ): Promise<any> {
-    const baseUrl = 'https://api.zoom.us/v2';
-    const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
-    
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${connection.access_token}`,
-    };
-
-    const fetchOptions: RequestInit = {
-      method,
-      headers,
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
-    };
-
-    if (data && (method === 'POST' || method === 'PUT')) {
-      fetchOptions.body = JSON.stringify(data);
-    }
-
-    const response = await fetch(url, fetchOptions);
-    
-    let responseData;
-    try {
-      responseData = await response.json();
-    } catch (error) {
-      responseData = null;
-    }
-
-    return {
-      statusCode: response.status,
-      headers: response.headers,
-      data: responseData,
-    };
-  }
-
-  /**
-   * Refresh access token for a connection
-   */
-  async refreshAccessToken(connectionId: string): Promise<ZoomConnection | null> {
-    try {
-      const connection = await ZoomConnectionService.getConnection(connectionId);
-      if (!connection) {
-        console.error(`Connection ${connectionId} not found for token refresh`);
-        return null;
-      }
-
-      // Use existing refresh token logic from ZoomConnectionService
-      const refreshedConnection = await ZoomConnectionService.refreshToken(connection);
-      
-      if (refreshedConnection) {
-        console.log(`Token refreshed successfully for connection ${connectionId}`);
-        return refreshedConnection;
-      } else {
-        console.error(`Failed to refresh token for connection ${connectionId}`);
-        toast({
-          title: "Token Refresh Failed",
-          description: "Please reconnect your Zoom account.",
-          variant: "destructive",
-        });
-        return null;
-      }
-    } catch (error) {
-      console.error(`Error refreshing token for connection ${connectionId}:`, error);
-      return null;
-    }
-  }
-
-  /**
-   * Handle rate limiting response
-   */
-  private async handleRateLimit(retryAfter: number): Promise<void> {
-    console.log(`Rate limit hit, waiting ${retryAfter}ms`);
-    await this.delay(retryAfter);
-  }
-
-  /**
-   * Handle API error responses
-   */
-  private handleApiError(response: any): ApiResponse {
-    const { statusCode, data } = response;
-    
-    let errorMessage = 'Unknown API error';
-    let retryable = false;
-
-    switch (statusCode) {
-      case 400:
-        errorMessage = data?.message || 'Bad request';
-        retryable = false;
-        break;
-      case 401:
-        errorMessage = 'Unauthorized - invalid or expired token';
-        retryable = true;
-        break;
-      case 403:
-        errorMessage = 'Forbidden - insufficient permissions';
-        retryable = false;
-        break;
-      case 404:
-        errorMessage = 'Resource not found';
-        retryable = false;
-        break;
-      case 429:
-        errorMessage = 'Rate limit exceeded';
-        retryable = true;
-        break;
-      case 500:
-      case 502:
-      case 503:
-      case 504:
-        errorMessage = 'Server error';
-        retryable = true;
-        break;
-      default:
-        errorMessage = data?.message || `HTTP ${statusCode} error`;
-        retryable = statusCode >= 500;
-    }
-
-    return {
-      success: false,
-      error: errorMessage,
-      statusCode,
-      retryable,
     };
   }
 
@@ -409,45 +233,6 @@ export class ZoomApiClient {
    */
   async delete<T = any>(endpoint: string, options?: RequestOptions, connectionId?: string): Promise<ApiResponse<T>> {
     return this.makeRequest<T>('DELETE', endpoint, undefined, options, connectionId);
-  }
-
-  /**
-   * Extract retry-after header value
-   */
-  private extractRetryAfter(headers: Headers): number | null {
-    const retryAfter = headers.get('retry-after');
-    if (retryAfter) {
-      const seconds = parseInt(retryAfter, 10);
-      return isNaN(seconds) ? null : seconds * 1000;
-    }
-    return null;
-  }
-
-  /**
-   * Log API request for debugging
-   */
-  private logRequest(method: string, endpoint: string, statusCode?: number, attempt?: number): void {
-    const logData = {
-      method,
-      endpoint,
-      statusCode,
-      attempt,
-      timestamp: new Date().toISOString(),
-    };
-    
-    console.log(`[ZoomAPI] ${method} ${endpoint}`, logData);
-    
-    // In production, you might want to send this to a logging service
-    if (statusCode && statusCode >= 400) {
-      console.warn(`[ZoomAPI] Request failed:`, logData);
-    }
-  }
-
-  /**
-   * Utility method for delays
-   */
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
