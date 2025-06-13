@@ -5,20 +5,15 @@ import { ApiResponse, RequestOptions, QueuedRequest, RateLimitConfig } from './t
 import { HttpClient } from './httpClient';
 import { ErrorHandler } from './errorHandler';
 import { TokenManager } from './tokenManager';
+import { rateLimitManager } from '../utils/RateLimitManager';
+import { RequestPriority } from '../utils/types/rateLimitTypes';
 
 /**
- * Zoom API Client for making authenticated requests with rate limiting and token management
+ * Zoom API Client for making authenticated requests with sophisticated rate limiting
  */
 export class ZoomApiClient {
   private static instance: ZoomApiClient;
-  private requestQueue: QueuedRequest[] = [];
-  private isProcessingQueue = false;
-  private lastRequestTime = 0;
-  private readonly rateLimitConfig: RateLimitConfig = {
-    maxRequestsPerSecond: 10,
-    retryAttempts: 3,
-    baseDelay: 1000,
-  };
+  private initialized = false;
 
   private constructor() {
     // Private constructor for singleton pattern
@@ -35,7 +30,17 @@ export class ZoomApiClient {
   }
 
   /**
-   * Make an authenticated API request to Zoom
+   * Initialize the API client
+   */
+  async initialize(): Promise<void> {
+    if (!this.initialized) {
+      await rateLimitManager.initialize();
+      this.initialized = true;
+    }
+  }
+
+  /**
+   * Make an authenticated API request to Zoom with sophisticated rate limiting
    */
   async makeRequest<T = any>(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
@@ -44,6 +49,8 @@ export class ZoomApiClient {
     options: RequestOptions = {},
     connectionId?: string
   ): Promise<ApiResponse<T>> {
+    await this.initialize();
+
     // Get connection if not provided
     if (!connectionId) {
       const connections = await ZoomConnectionService.getUserConnections('current');
@@ -59,153 +66,53 @@ export class ZoomApiClient {
       connectionId = primaryConnection.id;
     }
 
-    return new Promise((resolve, reject) => {
-      const queueItem: QueuedRequest = {
-        resolve,
-        reject,
+    // Determine priority based on endpoint and method
+    const priority = this.determinePriority(endpoint, method);
+
+    try {
+      // Use rate limit manager to queue/execute the request
+      const result = await rateLimitManager.queueRequest(
         method,
-        url: endpoint,
+        endpoint,
         data,
-        options,
-        connectionId: connectionId!,
-        timestamp: Date.now(),
+        connectionId,
+        priority,
+        options.timeout || 30000
+      );
+
+      return {
+        success: true,
+        data: result.data,
+        statusCode: 200,
       };
-
-      this.requestQueue.push(queueItem);
-      this.processQueue();
-    });
-  }
-
-  /**
-   * Process the request queue with rate limiting
-   */
-  private async processQueue(): Promise<void> {
-    if (this.isProcessingQueue || this.requestQueue.length === 0) {
-      return;
-    }
-
-    this.isProcessingQueue = true;
-
-    while (this.requestQueue.length > 0) {
-      const request = this.requestQueue.shift()!;
-      
-      // Rate limiting - ensure minimum delay between requests
-      const timeSinceLastRequest = Date.now() - this.lastRequestTime;
-      const minDelay = 1000 / this.rateLimitConfig.maxRequestsPerSecond;
-      
-      if (timeSinceLastRequest < minDelay) {
-        await HttpClient.delay(minDelay - timeSinceLastRequest);
-      }
-
-      try {
-        const result = await this.executeRequest(request);
-        request.resolve(result);
-      } catch (error) {
-        request.reject(error);
-      }
-
-      this.lastRequestTime = Date.now();
-    }
-
-    this.isProcessingQueue = false;
-  }
-
-  /**
-   * Execute a single API request
-   */
-  private async executeRequest(request: QueuedRequest): Promise<ApiResponse> {
-    const { method, url, data, options, connectionId } = request;
-    let attempt = 0;
-    const maxAttempts = options.retries || this.rateLimitConfig.retryAttempts;
-
-    while (attempt < maxAttempts) {
-      try {
-        // Get fresh connection and validate token
-        const connection = await ZoomConnectionService.getConnection(connectionId);
-        if (!connection) {
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes('timeout')) {
           return {
             success: false,
-            error: 'Connection not found',
-            statusCode: 404,
-            retryable: false,
-          };
-        }
-
-        // Check if token needs refresh
-        if (TokenManager.isTokenExpired(connection.token_expires_at)) {
-          console.log(`Token expired for connection ${connectionId}, attempting refresh`);
-          const refreshedConnection = await TokenManager.refreshAccessToken(connectionId);
-          if (!refreshedConnection) {
-            return {
-              success: false,
-              error: 'Failed to refresh access token',
-              statusCode: 401,
-              retryable: false,
-            };
-          }
-        }
-
-        // Make the actual HTTP request
-        const response = await HttpClient.makeRequest(method, url, data, connection, options);
-        
-        ErrorHandler.logRequest(method, url, response.statusCode, attempt + 1);
-        
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          return {
-            success: true,
-            data: response.data,
-            statusCode: response.statusCode,
-          };
-        }
-
-        // Handle specific error cases
-        if (response.statusCode === 429) {
-          // Rate limited - wait and retry
-          const retryAfter = HttpClient.extractRetryAfter(response.headers) || (2 ** attempt * 1000);
-          console.log(`Rate limited, waiting ${retryAfter}ms before retry`);
-          await HttpClient.delay(retryAfter);
-          attempt++;
-          continue;
-        }
-
-        if (response.statusCode === 401) {
-          // Unauthorized - try token refresh once
-          if (attempt === 0) {
-            console.log(`Unauthorized, attempting token refresh for connection ${connectionId}`);
-            await TokenManager.refreshAccessToken(connectionId);
-            attempt++;
-            continue;
-          }
-        }
-
-        // Other errors
-        return ErrorHandler.handleApiError(response);
-
-      } catch (error) {
-        console.error(`API request attempt ${attempt + 1} failed:`, error);
-        
-        if (attempt >= maxAttempts - 1) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error occurred',
-            statusCode: 500,
+            error: 'Request timeout',
+            statusCode: 408,
             retryable: true,
           };
         }
-
-        // Exponential backoff for retries
-        const delay = this.rateLimitConfig.baseDelay * (2 ** attempt);
-        await HttpClient.delay(delay);
-        attempt++;
+        
+        if (error.message.includes('cancelled')) {
+          return {
+            success: false,
+            error: 'Request cancelled',
+            statusCode: 499,
+            retryable: false,
+          };
+        }
       }
-    }
 
-    return {
-      success: false,
-      error: 'Max retry attempts exceeded',
-      statusCode: 500,
-      retryable: false,
-    };
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        statusCode: 500,
+        retryable: true,
+      };
+    }
   }
 
   /**
@@ -237,14 +144,53 @@ export class ZoomApiClient {
   }
 
   /**
-   * Get current queue status (for debugging)
+   * Get current rate limit status
+   */
+  async getRateLimitStatus(connectionId?: string) {
+    if (!connectionId) {
+      const connections = await ZoomConnectionService.getUserConnections('current');
+      const primaryConnection = connections.find(c => c.is_primary);
+      if (!primaryConnection) return null;
+      connectionId = primaryConnection.id;
+    }
+
+    return await rateLimitManager.getRateLimitStatus(connectionId);
+  }
+
+  /**
+   * Get queue status (for debugging and monitoring)
    */
   getQueueStatus() {
     return {
-      queueLength: this.requestQueue.length,
-      isProcessing: this.isProcessingQueue,
-      lastRequestTime: this.lastRequestTime,
+      rateLimitManagerInitialized: this.initialized,
+      // Additional queue status can be added here
     };
+  }
+
+  /**
+   * Determine request priority based on endpoint and method
+   */
+  private determinePriority(endpoint: string, method: string): RequestPriority {
+    // Critical: Authentication and health checks
+    if (endpoint.includes('/oauth/') || endpoint === '/users/me') {
+      return RequestPriority.CRITICAL;
+    }
+
+    // High: Real-time operations and incremental sync
+    if (method === 'GET' && (
+      endpoint.includes('/webinars/') && !endpoint.includes('/participants') ||
+      endpoint.includes('/users/me/webinars')
+    )) {
+      return RequestPriority.HIGH;
+    }
+
+    // Low: Bulk operations and reports
+    if (endpoint.includes('/report/') || endpoint.includes('/participants')) {
+      return RequestPriority.LOW;
+    }
+
+    // Normal: Everything else
+    return RequestPriority.NORMAL;
   }
 }
 
