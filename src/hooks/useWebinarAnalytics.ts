@@ -61,6 +61,17 @@ interface WebinarTableData {
   status: string;
 }
 
+interface WebinarData {
+  id: string;
+  topic: string;
+  start_time: string | null;
+  duration: number | null;
+  total_attendees: number | null;
+  total_registrants: number | null;
+  status: string | null;
+  zoom_participants: any[];
+}
+
 export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
   const { connection } = useZoomConnection();
 
@@ -94,11 +105,14 @@ export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
       if (webinarsError) throw webinarsError;
       if (!webinars) return null;
 
+      // Type the webinars data properly
+      const typedWebinars = webinars as WebinarData[];
+
       // Calculate metrics
       const metrics: WebinarMetrics = {
-        totalWebinars: webinars.length,
-        totalAttendees: webinars.reduce((sum, w) => sum + (w.total_attendees || 0), 0),
-        totalRegistrants: webinars.reduce((sum, w) => sum + (w.total_registrants || 0), 0),
+        totalWebinars: typedWebinars.length,
+        totalAttendees: typedWebinars.reduce((sum, w) => sum + (w.total_attendees || 0), 0),
+        totalRegistrants: typedWebinars.reduce((sum, w) => sum + (w.total_registrants || 0), 0),
         averageAttendanceRate: 0,
         averageEngagementScore: 0,
         periodChange: {
@@ -115,7 +129,7 @@ export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
 
       // Calculate engagement scores for each webinar
       const webinarEngagements = await Promise.all(
-        webinars.map(async (webinar) => {
+        typedWebinars.map(async (webinar) => {
           const engagement = await ParticipantAnalyticsService.calculateWebinarEngagement(webinar.id);
           return { webinar, engagement };
         })
@@ -130,10 +144,10 @@ export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
 
       // Prepare chart data
       const chartData: ChartData = {
-        attendanceTrends: prepareAttendanceTrends(webinars),
+        attendanceTrends: prepareAttendanceTrends(typedWebinars),
         engagementDistribution: prepareEngagementDistribution(validEngagements),
-        geographicData: await prepareGeographicData(webinars),
-        deviceData: await prepareDeviceData(webinars),
+        geographicData: await prepareGeographicData(typedWebinars),
+        deviceData: await prepareDeviceData(typedWebinars),
       };
 
       // Prepare table data
@@ -169,7 +183,7 @@ export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
         metrics,
         chartData,
         tableData: filteredTableData,
-        rawWebinars: webinars,
+        rawWebinars: typedWebinars,
       };
     },
     enabled: !!connection?.id,
@@ -185,7 +199,7 @@ export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
 };
 
 // Helper functions
-function prepareAttendanceTrends(webinars: any[]): ChartData['attendanceTrends'] {
+function prepareAttendanceTrends(webinars: WebinarData[]): ChartData['attendanceTrends'] {
   const grouped = webinars.reduce((acc, webinar) => {
     if (!webinar.start_time) return acc;
     
@@ -229,7 +243,7 @@ function prepareEngagementDistribution(engagements: any[]): ChartData['engagemen
   ];
 }
 
-async function prepareGeographicData(webinars: any[]): Promise<ChartData['geographicData']> {
+async function prepareGeographicData(webinars: WebinarData[]): Promise<ChartData['geographicData']> {
   const webinarIds = webinars.map(w => w.id);
   if (webinarIds.length === 0) return [];
 
@@ -256,7 +270,7 @@ async function prepareGeographicData(webinars: any[]): Promise<ChartData['geogra
     .slice(0, 10); // Top 10 countries
 }
 
-async function prepareDeviceData(webinars: any[]): Promise<ChartData['deviceData']> {
+async function prepareDeviceData(webinars: WebinarData[]): Promise<ChartData['deviceData']> {
   const webinarIds = webinars.map(w => w.id);
   if (webinarIds.length === 0) return [];
 
