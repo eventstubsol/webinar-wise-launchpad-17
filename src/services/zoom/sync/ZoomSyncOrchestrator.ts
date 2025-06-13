@@ -19,7 +19,7 @@ export enum SyncPriority {
 /**
  * Sync operation configuration
  */
-interface SyncOperation {
+export interface SyncOperation {
   id: string;
   connectionId: string;
   type: SyncType;
@@ -36,13 +36,29 @@ interface SyncOperation {
 /**
  * Sync progress data for real-time updates
  */
-interface SyncProgress {
+export interface SyncProgress {
   syncLogId: string;
   totalItems: number;
   processedItems: number;
   failedItems: number;
   currentOperation: string;
   estimatedTimeRemaining?: number;
+}
+
+/**
+ * JSON-serializable sync error details for database storage
+ */
+interface SyncErrorDetailsJson {
+  error_code?: string;
+  error_message: string;
+  failed_items?: Array<{
+    id: string;
+    type: string;
+    error: string;
+  }>;
+  retry_count?: number;
+  last_retry_at?: string;
+  [key: string]: any; // Index signature for Json compatibility
 }
 
 /**
@@ -469,7 +485,7 @@ export class ZoomSyncOrchestrator {
    */
   private async updateSyncLog(
     syncLogId: string,
-    updates: Partial<ZoomSyncLog>
+    updates: Partial<Omit<ZoomSyncLog, 'id' | 'created_at'>>
   ): Promise<void> {
     await supabase
       .from('zoom_sync_logs')
@@ -512,9 +528,17 @@ export class ZoomSyncOrchestrator {
    * Mark sync log as failed
    */
   private async failSyncLog(syncLogId: string, error: any): Promise<void> {
+    const errorDetails: SyncErrorDetailsJson = {
+      error_message: error instanceof Error ? error.message : 'Unknown error',
+      error_code: error.code || 'UNKNOWN_ERROR',
+      retry_count: 0,
+      last_retry_at: new Date().toISOString()
+    };
+
     await this.updateSyncLog(syncLogId, {
       sync_status: SyncStatus.FAILED,
       error_message: error instanceof Error ? error.message : 'Unknown error',
+      error_details: errorDetails,
       completed_at: new Date().toISOString()
     });
   }
