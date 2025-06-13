@@ -4,4 +4,4 @@
  * This file maintains the existing import structure
  */
 
-export * from './zoom';
+export * from './zoom/index';
