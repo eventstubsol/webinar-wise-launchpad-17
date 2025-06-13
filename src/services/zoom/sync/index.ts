@@ -5,5 +5,6 @@ export { SyncPriority } from './types';
 // Re-export types for convenience
 export type {
   SyncOperation,
-  SyncProgress
+  SyncProgress,
+  SyncErrorDetailsJson
 } from './types';

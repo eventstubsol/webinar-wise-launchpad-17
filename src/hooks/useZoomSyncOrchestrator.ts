@@ -1,6 +1,7 @@
 
 import { useState, useCallback } from 'react';
-import { zoomSyncOrchestrator, SyncPriority } from '@/services/zoom/sync/ZoomSyncOrchestrator';
+import { zoomSyncOrchestrator } from '@/services/zoom/sync/ZoomSyncOrchestrator';
+import { SyncPriority } from '@/services/zoom/sync';
 import { useToast } from '@/hooks/use-toast';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 
