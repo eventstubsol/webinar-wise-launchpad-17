@@ -1,112 +1,102 @@
 
 import React from 'react';
-import { format } from 'date-fns';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { useNavigate } from 'react-router-dom';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Users, Clock } from 'lucide-react';
 import { WebinarStatusBadge } from './WebinarStatusBadge';
-
-interface Webinar {
-  id: string;
-  topic: string;
-  start_time: string | null;
-  duration: number | null;
-  total_attendees: number | null;
-  total_registrants: number | null;
-  status: string | null;
-}
+import { Eye, Calendar, Users } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface WebinarTableProps {
-  webinars: Webinar[];
+  webinars: any[];
   onViewDetails: (webinarId: string) => void;
 }
 
-const formatDuration = (minutes: number | null) => {
-  if (!minutes) return 'N/A';
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
-};
-
-const formatAttendanceRate = (attendees: number | null, registrants: number | null) => {
-  if (!attendees || !registrants || registrants === 0) return 'N/A';
-  const rate = ((attendees / registrants) * 100).toFixed(1);
-  return `${rate}%`;
-};
-
 export const WebinarTable: React.FC<WebinarTableProps> = ({ webinars, onViewDetails }) => {
+  const navigate = useNavigate();
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    return format(new Date(dateString), 'MMM dd, yyyy');
+  };
+
+  const formatTime = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    return format(new Date(dateString), 'h:mm a');
+  };
+
+  const handleViewDetails = (webinarId: string) => {
+    navigate(`/dashboard/webinars/${webinarId}`);
+  };
+
   return (
-    <div className="rounded-md border">
+    <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Topic</TableHead>
+            <TableHead>Webinar</TableHead>
             <TableHead>Date & Time</TableHead>
             <TableHead>Duration</TableHead>
-            <TableHead>Attendance</TableHead>
+            <TableHead>Attendees</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {webinars.map((webinar) => (
-            <TableRow key={webinar.id}>
-              <TableCell className="font-medium">
-                <div className="max-w-xs truncate" title={webinar.topic}>
-                  {webinar.topic}
-                </div>
-              </TableCell>
-              <TableCell>
-                {webinar.start_time ? (
-                  <div className="text-sm">
-                    <div>{format(new Date(webinar.start_time), 'MMM dd, yyyy')}</div>
-                    <div className="text-muted-foreground">
-                      {format(new Date(webinar.start_time), 'h:mm a')}
-                    </div>
-                  </div>
-                ) : (
-                  'N/A'
-                )}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {formatDuration(webinar.duration)}
-                </div>
-              </TableCell>
-              <TableCell>
-                <div className="text-sm">
-                  <div className="flex items-center gap-1">
-                    <Users className="h-3 w-3" />
-                    {webinar.total_attendees || 0}/{webinar.total_registrants || 0}
-                  </div>
-                  <div className="text-muted-foreground text-xs">
-                    {formatAttendanceRate(webinar.total_attendees, webinar.total_registrants)} rate
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell>
-                <WebinarStatusBadge status={webinar.status} />
-              </TableCell>
-              <TableCell className="text-right">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onViewDetails(webinar.id)}
-                >
-                  View Details
-                </Button>
+          {webinars.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                No webinars found
               </TableCell>
             </TableRow>
-          ))}
+          ) : (
+            webinars.map((webinar) => (
+              <TableRow key={webinar.id}>
+                <TableCell className="font-medium">
+                  <div>
+                    <div className="font-medium">{webinar.topic}</div>
+                    {webinar.agenda && (
+                      <div className="text-sm text-muted-foreground truncate max-w-xs">
+                        {webinar.agenda}
+                      </div>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <div>{formatDate(webinar.start_time)}</div>
+                      <div className="text-muted-foreground">{formatTime(webinar.start_time)}</div>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {webinar.duration ? `${webinar.duration} min` : 'N/A'}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <span>{webinar.total_attendees || 0}</span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <WebinarStatusBadge status={webinar.status} />
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleViewDetails(webinar.id)}
+                    className="flex items-center gap-2"
+                  >
+                    <Eye className="h-4 w-4" />
+                    View Details
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
         </TableBody>
       </Table>
     </div>
