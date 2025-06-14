@@ -107,6 +107,39 @@ export type Database = {
           },
         ]
       }
+      analytics_cache: {
+        Row: {
+          cache_data: Json
+          cache_key: string
+          cache_version: number | null
+          created_at: string | null
+          dependencies: string[] | null
+          expires_at: string
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          cache_data: Json
+          cache_key: string
+          cache_version?: number | null
+          created_at?: string | null
+          dependencies?: string[] | null
+          expires_at: string
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          cache_data?: Json
+          cache_key?: string
+          cache_version?: number | null
+          created_at?: string | null
+          dependencies?: string[] | null
+          expires_at?: string
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       content_analysis: {
         Row: {
           analysis_model: string
@@ -477,6 +510,75 @@ export type Database = {
           },
         ]
       }
+      processing_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          max_retries: number | null
+          priority: number | null
+          retry_count: number | null
+          scheduled_at: string | null
+          started_at: string | null
+          status: string | null
+          task_data: Json
+          task_type: string
+          updated_at: string | null
+          user_id: string | null
+          webinar_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          max_retries?: number | null
+          priority?: number | null
+          retry_count?: number | null
+          scheduled_at?: string | null
+          started_at?: string | null
+          status?: string | null
+          task_data: Json
+          task_type: string
+          updated_at?: string | null
+          user_id?: string | null
+          webinar_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          max_retries?: number | null
+          priority?: number | null
+          retry_count?: number | null
+          scheduled_at?: string | null
+          started_at?: string | null
+          status?: string | null
+          task_data?: Json
+          task_type?: string
+          updated_at?: string | null
+          user_id?: string | null
+          webinar_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processing_queue_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "webinar_analytics_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processing_queue_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -510,6 +612,36 @@ export type Database = {
           job_title?: string | null
           phone?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      realtime_events: {
+        Row: {
+          channel_name: string | null
+          created_at: string | null
+          event_data: Json
+          event_type: string
+          id: string
+          processed: boolean | null
+          target_users: string[] | null
+        }
+        Insert: {
+          channel_name?: string | null
+          created_at?: string | null
+          event_data: Json
+          event_type: string
+          id?: string
+          processed?: boolean | null
+          target_users?: string[] | null
+        }
+        Update: {
+          channel_name?: string | null
+          created_at?: string | null
+          event_data?: Json
+          event_type?: string
+          id?: string
+          processed?: boolean | null
+          target_users?: string[] | null
         }
         Relationships: []
       }
@@ -1340,6 +1472,15 @@ export type Database = {
       }
     }
     Functions: {
+      broadcast_event: {
+        Args: {
+          p_event_type: string
+          p_event_data: Json
+          p_target_users?: string[]
+          p_channel_name?: string
+        }
+        Returns: string
+      }
       decrypt_token: {
         Args: { encrypted_token: string }
         Returns: string
@@ -1347,6 +1488,20 @@ export type Database = {
       encrypt_token: {
         Args: { token: string }
         Returns: string
+      }
+      enqueue_task: {
+        Args: {
+          p_task_type: string
+          p_task_data: Json
+          p_priority?: number
+          p_webinar_id?: string
+          p_user_id?: string
+        }
+        Returns: string
+      }
+      invalidate_cache_dependencies: {
+        Args: { dep_pattern: string }
+        Returns: number
       }
     }
     Enums: {
