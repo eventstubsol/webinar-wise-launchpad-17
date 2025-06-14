@@ -28,7 +28,7 @@ export class SyncOrchestrator {
       // For bidirectional, we'll do outgoing first
       actualDirection = 'outgoing';
     } else {
-      actualDirection = syncDirection;
+      actualDirection = syncDirection as 'incoming' | 'outgoing';
     }
 
     // Create sync log entry
@@ -241,7 +241,7 @@ export class SyncOrchestrator {
       .eq('email', contact.email)
       .single();
 
-    const participantData: any = {};
+    const participantData: Record<string, any> = {};
 
     for (const mapping of fieldMappings) {
       if (mapping.sync_direction === 'outgoing') continue;
@@ -365,10 +365,10 @@ export class SyncOrchestrator {
       .from('crm_sync_logs')
       .insert({
         ...log,
-        sync_type: log.sync_type as string,
-        operation_type: log.operation_type as string,
-        direction: log.direction as string,
-        status: log.status as string
+        sync_type: log.sync_type,
+        operation_type: log.operation_type,
+        direction: log.direction,
+        status: log.status
       })
       .select()
       .single();
