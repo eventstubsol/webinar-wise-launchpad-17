@@ -941,6 +941,540 @@ export type Database = {
         }
         Relationships: []
       }
+      workflow_action_executions: {
+        Row: {
+          action_id: string
+          completed_at: string | null
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          execution_id: string
+          execution_state: Database["public"]["Enums"]["workflow_execution_state"]
+          id: string
+          input_data: Json | null
+          output_data: Json | null
+          retry_count: number | null
+          started_at: string
+        }
+        Insert: {
+          action_id: string
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          execution_id: string
+          execution_state?: Database["public"]["Enums"]["workflow_execution_state"]
+          id?: string
+          input_data?: Json | null
+          output_data?: Json | null
+          retry_count?: number | null
+          started_at?: string
+        }
+        Update: {
+          action_id?: string
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          execution_id?: string
+          execution_state?: Database["public"]["Enums"]["workflow_execution_state"]
+          id?: string
+          input_data?: Json | null
+          output_data?: Json | null
+          retry_count?: number | null
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_action_executions_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_action_executions_execution_id_fkey"
+            columns: ["execution_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_executions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_actions: {
+        Row: {
+          action_config: Json
+          action_type: Database["public"]["Enums"]["workflow_action_type"]
+          created_at: string
+          depends_on_action_id: string | null
+          execution_order: number
+          id: string
+          is_active: boolean
+          retry_config: Json | null
+          timeout_seconds: number | null
+          updated_at: string
+          workflow_id: string
+        }
+        Insert: {
+          action_config: Json
+          action_type: Database["public"]["Enums"]["workflow_action_type"]
+          created_at?: string
+          depends_on_action_id?: string | null
+          execution_order?: number
+          id?: string
+          is_active?: boolean
+          retry_config?: Json | null
+          timeout_seconds?: number | null
+          updated_at?: string
+          workflow_id: string
+        }
+        Update: {
+          action_config?: Json
+          action_type?: Database["public"]["Enums"]["workflow_action_type"]
+          created_at?: string
+          depends_on_action_id?: string | null
+          execution_order?: number
+          id?: string
+          is_active?: boolean
+          retry_config?: Json | null
+          timeout_seconds?: number | null
+          updated_at?: string
+          workflow_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_actions_depends_on_action_id_fkey"
+            columns: ["depends_on_action_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_actions_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_audit_log: {
+        Row: {
+          action_type: Database["public"]["Enums"]["workflow_audit_action_type"]
+          created_at: string
+          entity_id: string | null
+          entity_type: Database["public"]["Enums"]["workflow_audit_entity_type"]
+          execution_id: string | null
+          id: string
+          ip_address: unknown | null
+          new_values: Json | null
+          old_values: Json | null
+          user_agent: string | null
+          user_id: string | null
+          workflow_id: string | null
+        }
+        Insert: {
+          action_type: Database["public"]["Enums"]["workflow_audit_action_type"]
+          created_at?: string
+          entity_id?: string | null
+          entity_type: Database["public"]["Enums"]["workflow_audit_entity_type"]
+          execution_id?: string | null
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          user_agent?: string | null
+          user_id?: string | null
+          workflow_id?: string | null
+        }
+        Update: {
+          action_type?: Database["public"]["Enums"]["workflow_audit_action_type"]
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: Database["public"]["Enums"]["workflow_audit_entity_type"]
+          execution_id?: string | null
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          user_agent?: string | null
+          user_id?: string | null
+          workflow_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_audit_log_execution_id_fkey"
+            columns: ["execution_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_audit_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_audit_log_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_executions: {
+        Row: {
+          completed_at: string | null
+          context_data: Json | null
+          created_at: string
+          current_action_id: string | null
+          duration_ms: number | null
+          error_details: Json | null
+          error_message: string | null
+          execution_state: Database["public"]["Enums"]["workflow_execution_state"]
+          id: string
+          progress_percentage: number | null
+          retry_count: number | null
+          started_at: string
+          trigger_id: string | null
+          updated_at: string
+          workflow_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          context_data?: Json | null
+          created_at?: string
+          current_action_id?: string | null
+          duration_ms?: number | null
+          error_details?: Json | null
+          error_message?: string | null
+          execution_state?: Database["public"]["Enums"]["workflow_execution_state"]
+          id?: string
+          progress_percentage?: number | null
+          retry_count?: number | null
+          started_at?: string
+          trigger_id?: string | null
+          updated_at?: string
+          workflow_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          context_data?: Json | null
+          created_at?: string
+          current_action_id?: string | null
+          duration_ms?: number | null
+          error_details?: Json | null
+          error_message?: string | null
+          execution_state?: Database["public"]["Enums"]["workflow_execution_state"]
+          id?: string
+          progress_percentage?: number | null
+          retry_count?: number | null
+          started_at?: string
+          trigger_id?: string | null
+          updated_at?: string
+          workflow_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_executions_current_action_id_fkey"
+            columns: ["current_action_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_executions_trigger_id_fkey"
+            columns: ["trigger_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_triggers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_executions_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_permissions: {
+        Row: {
+          expires_at: string | null
+          granted_at: string
+          granted_by: string | null
+          id: string
+          permission_level: Database["public"]["Enums"]["workflow_permission_level"]
+          team_id: string | null
+          user_id: string | null
+          workflow_id: string
+        }
+        Insert: {
+          expires_at?: string | null
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          permission_level: Database["public"]["Enums"]["workflow_permission_level"]
+          team_id?: string | null
+          user_id?: string | null
+          workflow_id: string
+        }
+        Update: {
+          expires_at?: string | null
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          permission_level?: Database["public"]["Enums"]["workflow_permission_level"]
+          team_id?: string | null
+          user_id?: string | null
+          workflow_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_permissions_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_permissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_permissions_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_templates: {
+        Row: {
+          category: Database["public"]["Enums"]["workflow_template_category"]
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          is_featured: boolean
+          is_public: boolean
+          name: string
+          rating: number | null
+          supported_actions: Json | null
+          supported_triggers: Json | null
+          tags: string[] | null
+          template_config: Json
+          updated_at: string
+          usage_count: number | null
+        }
+        Insert: {
+          category: Database["public"]["Enums"]["workflow_template_category"]
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          is_featured?: boolean
+          is_public?: boolean
+          name: string
+          rating?: number | null
+          supported_actions?: Json | null
+          supported_triggers?: Json | null
+          tags?: string[] | null
+          template_config: Json
+          updated_at?: string
+          usage_count?: number | null
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["workflow_template_category"]
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          is_featured?: boolean
+          is_public?: boolean
+          name?: string
+          rating?: number | null
+          supported_actions?: Json | null
+          supported_triggers?: Json | null
+          tags?: string[] | null
+          template_config?: Json
+          updated_at?: string
+          usage_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_triggers: {
+        Row: {
+          conditions: Json | null
+          cooldown_minutes: number | null
+          created_at: string
+          id: string
+          is_active: boolean
+          priority: number | null
+          trigger_config: Json
+          trigger_type: Database["public"]["Enums"]["workflow_trigger_type"]
+          updated_at: string
+          workflow_id: string
+        }
+        Insert: {
+          conditions?: Json | null
+          cooldown_minutes?: number | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          priority?: number | null
+          trigger_config: Json
+          trigger_type: Database["public"]["Enums"]["workflow_trigger_type"]
+          updated_at?: string
+          workflow_id: string
+        }
+        Update: {
+          conditions?: Json | null
+          cooldown_minutes?: number | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          priority?: number | null
+          trigger_config?: Json
+          trigger_type?: Database["public"]["Enums"]["workflow_trigger_type"]
+          updated_at?: string
+          workflow_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_triggers_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_variables: {
+        Row: {
+          created_at: string
+          execution_id: string | null
+          id: string
+          scope: string
+          updated_at: string
+          variable_name: string
+          variable_type: Database["public"]["Enums"]["workflow_variable_type"]
+          variable_value: Json | null
+          workflow_id: string
+        }
+        Insert: {
+          created_at?: string
+          execution_id?: string | null
+          id?: string
+          scope?: string
+          updated_at?: string
+          variable_name: string
+          variable_type: Database["public"]["Enums"]["workflow_variable_type"]
+          variable_value?: Json | null
+          workflow_id: string
+        }
+        Update: {
+          created_at?: string
+          execution_id?: string | null
+          id?: string
+          scope?: string
+          updated_at?: string
+          variable_name?: string
+          variable_type?: Database["public"]["Enums"]["workflow_variable_type"]
+          variable_value?: Json | null
+          workflow_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_variables_execution_id_fkey"
+            columns: ["execution_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_variables_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflows: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_template: boolean
+          last_triggered_at: string | null
+          name: string
+          schema_version: string
+          status: Database["public"]["Enums"]["workflow_status"]
+          success_rate: number | null
+          team_id: string | null
+          trigger_count: number
+          updated_at: string
+          user_id: string
+          workflow_definition: Json
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_template?: boolean
+          last_triggered_at?: string | null
+          name: string
+          schema_version?: string
+          status?: Database["public"]["Enums"]["workflow_status"]
+          success_rate?: number | null
+          team_id?: string | null
+          trigger_count?: number
+          updated_at?: string
+          user_id: string
+          workflow_definition: Json
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_template?: boolean
+          last_triggered_at?: string | null
+          name?: string
+          schema_version?: string
+          status?: Database["public"]["Enums"]["workflow_status"]
+          success_rate?: number | null
+          team_id?: string | null
+          trigger_count?: number
+          updated_at?: string
+          user_id?: string
+          workflow_definition?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflows_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       zoom_connections: {
         Row: {
           access_token: string
@@ -1798,6 +2332,51 @@ export type Database = {
         | "content"
         | "custom"
         | "predictive"
+      workflow_action_type:
+        | "email"
+        | "sms"
+        | "webhook"
+        | "crm_update"
+        | "delay"
+        | "condition"
+        | "ai_analysis"
+      workflow_audit_action_type:
+        | "created"
+        | "updated"
+        | "deleted"
+        | "triggered"
+        | "paused"
+        | "resumed"
+      workflow_audit_entity_type:
+        | "workflow"
+        | "trigger"
+        | "action"
+        | "execution"
+        | "permission"
+      workflow_execution_state:
+        | "pending"
+        | "running"
+        | "completed"
+        | "failed"
+        | "cancelled"
+        | "paused"
+        | "retrying"
+        | "skipped"
+      workflow_permission_level: "owner" | "editor" | "viewer" | "executor"
+      workflow_status: "draft" | "active" | "paused" | "archived"
+      workflow_template_category:
+        | "registration"
+        | "engagement"
+        | "follow_up"
+        | "analytics"
+        | "custom"
+      workflow_trigger_type: "time_based" | "event_based" | "webhook" | "manual"
+      workflow_variable_type:
+        | "string"
+        | "number"
+        | "boolean"
+        | "object"
+        | "array"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1943,6 +2522,57 @@ export const Constants = {
         "content",
         "custom",
         "predictive",
+      ],
+      workflow_action_type: [
+        "email",
+        "sms",
+        "webhook",
+        "crm_update",
+        "delay",
+        "condition",
+        "ai_analysis",
+      ],
+      workflow_audit_action_type: [
+        "created",
+        "updated",
+        "deleted",
+        "triggered",
+        "paused",
+        "resumed",
+      ],
+      workflow_audit_entity_type: [
+        "workflow",
+        "trigger",
+        "action",
+        "execution",
+        "permission",
+      ],
+      workflow_execution_state: [
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "paused",
+        "retrying",
+        "skipped",
+      ],
+      workflow_permission_level: ["owner", "editor", "viewer", "executor"],
+      workflow_status: ["draft", "active", "paused", "archived"],
+      workflow_template_category: [
+        "registration",
+        "engagement",
+        "follow_up",
+        "analytics",
+        "custom",
+      ],
+      workflow_trigger_type: ["time_based", "event_based", "webhook", "manual"],
+      workflow_variable_type: [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "array",
       ],
     },
   },
