@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ import {
 } from 'lucide-react';
 import { useLocation, Link } from 'react-router-dom';
 
+// Navigation items configuration - updated to use FileText instead of Template
 const navigationItems = [
   { title: "Dashboard", icon: LayoutDashboard, url: "/dashboard" },
   { title: "Webinars", icon: Video, url: "/webinars" },
