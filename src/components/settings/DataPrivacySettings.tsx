@@ -11,7 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export const DataPrivacySettings = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const { logout } = useAuth();
+  const { signOut } = useAuth();
 
   const handleExportData = async () => {
     setIsExporting(true);
@@ -48,7 +48,7 @@ export const DataPrivacySettings = () => {
 
       toast.success('Your account and all data have been scheduled for deletion. You will be logged out.');
       setTimeout(() => {
-        if(logout) logout();
+        if(signOut) signOut();
       }, 3000);
     } catch (e: any) {
       toast.error(e.message || 'Failed to delete your account.');
