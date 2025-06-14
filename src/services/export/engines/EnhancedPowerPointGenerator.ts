@@ -1,4 +1,3 @@
-
 import pptxgen from 'pptxgenjs';
 import { ExportConfig, BrandingConfig } from '../types';
 
@@ -228,11 +227,11 @@ export class EnhancedPowerPointGenerator {
     ];
 
     const tableRows = (data.webinars || []).slice(0, 5).map((webinar: any) => [
-      (webinar.topic || webinar.title || 'Untitled').substring(0, 30) + '...',
-      (webinar.total_attendees || 0).toString(),
-      `${Math.round(webinar.engagement_score || 0)}%`,
-      `${webinar.duration || 0}m`,
-      '⭐'.repeat(Math.floor(Math.random() * 2) + 3)
+      { text: (webinar.topic || webinar.title || 'Untitled').substring(0, 30) + '...' },
+      { text: (webinar.total_attendees || 0).toString() },
+      { text: `${Math.round(webinar.engagement_score || 0)}%` },
+      { text: `${webinar.duration || 0}m` },
+      { text: '⭐'.repeat(Math.floor(Math.random() * 2) + 3) }
     ]);
 
     const tableData = [tableHeader, ...tableRows];
@@ -466,10 +465,10 @@ export class EnhancedPowerPointGenerator {
     ];
 
     const appendixRows = [
-      ['Zoom Webinar Platform', `${new Date().toLocaleDateString()}`, `${data.totalWebinars || 0} webinars`],
-      ['Participant Analytics', 'Last 90 days', `${data.totalParticipants || 0} participants`],
-      ['Engagement Tracking', 'Real-time', 'Continuous monitoring'],
-      ['Poll & Q&A Data', 'Session-based', 'Complete interaction logs']
+      [{ text: 'Zoom Webinar Platform' }, { text: `${new Date().toLocaleDateString()}` }, { text: `${data.totalWebinars || 0} webinars` }],
+      [{ text: 'Participant Analytics' }, { text: 'Last 90 days' }, { text: `${data.totalParticipants || 0} participants` }],
+      [{ text: 'Engagement Tracking' }, { text: 'Real-time' }, { text: 'Continuous monitoring' }],
+      [{ text: 'Poll & Q&A Data' }, { text: 'Session-based' }, { text: 'Complete interaction logs' }]
     ];
 
     const appendixData = [appendixHeader, ...appendixRows];
