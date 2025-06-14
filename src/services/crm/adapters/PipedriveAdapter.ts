@@ -1,10 +1,38 @@
-
 import { CRMAdapter, CRMConfig, OAuthResult } from '../CRMAdapter';
 import { CRMContact, CRMSyncResult } from '@/types/crm';
 
 export class PipedriveAdapter extends CRMAdapter {
   private readonly baseUrl = 'https://api.pipedrive.com/v1';
   private readonly authUrl = 'https://oauth.pipedrive.com/oauth/authorize';
+
+  async createWebhook(url: string, events: string[]): Promise<{ id: string; secret?: string }> {
+    try {
+      const webhook = {
+        subscription_url: url,
+        event_action: 'added', // Pipedrive webhook for new persons
+        event_object: 'person'
+      };
+
+      const response = await this.makeApiRequest(`/webhooks`, {
+        method: 'POST',
+        body: JSON.stringify(webhook)
+      });
+
+      return { id: response.data.id.toString() };
+    } catch (error) {
+      this.handleError(error, 'Pipedrive create webhook');
+    }
+  }
+
+  async deleteWebhook(webhookId: string): Promise<void> {
+    try {
+      await this.makeApiRequest(`/webhooks/${webhookId}`, {
+        method: 'DELETE'
+      });
+    } catch (error) {
+      this.handleError(error, 'Pipedrive delete webhook');
+    }
+  }
 
   getOAuthUrl(redirectUri: string, state: string): string {
     const params = new URLSearchParams({

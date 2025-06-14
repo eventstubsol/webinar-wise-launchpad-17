@@ -1,10 +1,28 @@
-
 import { CRMAdapter, CRMConfig, OAuthResult } from '../CRMAdapter';
 import { CRMContact, CRMSyncResult } from '@/types/crm';
 
 export class SalesforceAdapter extends CRMAdapter {
   private readonly baseUrl = 'https://login.salesforce.com';
   private readonly apiVersion = 'v59.0';
+
+  async createWebhook(url: string, events: string[]): Promise<{ id: string; secret?: string }> {
+    try {
+      // Salesforce uses Platform Events or Change Data Capture for real-time notifications
+      // This is a simplified implementation - in practice, you'd set up Platform Events
+      console.warn('Salesforce webhook creation requires Platform Events setup');
+      return { id: 'platform_events_required' };
+    } catch (error) {
+      this.handleError(error, 'Salesforce create webhook');
+    }
+  }
+
+  async deleteWebhook(webhookId: string): Promise<void> {
+    try {
+      console.warn('Salesforce webhook deletion requires Platform Events management');
+    } catch (error) {
+      this.handleError(error, 'Salesforce delete webhook');
+    }
+  }
 
   getOAuthUrl(redirectUri: string, state: string): string {
     const params = new URLSearchParams({

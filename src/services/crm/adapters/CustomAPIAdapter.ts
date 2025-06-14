@@ -1,4 +1,3 @@
-
 import { CRMAdapter, CRMConfig, OAuthResult } from '../CRMAdapter';
 import { CRMContact, CRMSyncResult } from '@/types/crm';
 
@@ -26,6 +25,17 @@ export class CustomAPIAdapter extends CRMAdapter {
       refreshToken: '',
       expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year from now
     };
+  }
+
+  async createWebhook(url: string, events: string[]): Promise<{ id: string; secret?: string }> {
+    // Custom APIs may not support webhooks, so we provide a default implementation
+    console.warn('Custom API adapter does not support webhook creation');
+    return { id: 'not_supported' };
+  }
+
+  async deleteWebhook(webhookId: string): Promise<void> {
+    // Custom APIs may not support webhooks, so we provide a default implementation
+    console.warn('Custom API adapter does not support webhook deletion');
   }
 
   async getContacts(limit = 100, offset?: string): Promise<{ contacts: CRMContact[]; nextOffset?: string }> {

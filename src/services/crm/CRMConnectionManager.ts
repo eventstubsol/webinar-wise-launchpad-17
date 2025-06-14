@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { CRMConnection, CRMFieldMapping, CRMSyncLog } from '@/types/crm';
 import { CRMAdapter, CRMConfig } from './CRMAdapter';
@@ -19,7 +18,12 @@ export class CRMConnectionManager {
       throw new Error(`Failed to fetch CRM connections: ${error.message}`);
     }
 
-    return data || [];
+    return (data || []).map(item => ({
+      ...item,
+      crm_type: item.crm_type as 'salesforce' | 'hubspot' | 'pipedrive' | 'custom',
+      sync_direction: item.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
+      status: item.status as 'active' | 'error' | 'expired' | 'disconnected'
+    }));
   }
 
   static async getConnection(connectionId: string): Promise<CRMConnection | null> {
@@ -33,7 +37,12 @@ export class CRMConnectionManager {
       return null;
     }
 
-    return data;
+    return {
+      ...data,
+      crm_type: data.crm_type as 'salesforce' | 'hubspot' | 'pipedrive' | 'custom',
+      sync_direction: data.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
+      status: data.status as 'active' | 'error' | 'expired' | 'disconnected'
+    };
   }
 
   static async createConnection(connection: Omit<CRMConnection, 'id' | 'created_at' | 'updated_at'>): Promise<CRMConnection> {
@@ -47,7 +56,12 @@ export class CRMConnectionManager {
       throw new Error(`Failed to create CRM connection: ${error.message}`);
     }
 
-    return data;
+    return {
+      ...data,
+      crm_type: data.crm_type as 'salesforce' | 'hubspot' | 'pipedrive' | 'custom',
+      sync_direction: data.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
+      status: data.status as 'active' | 'error' | 'expired' | 'disconnected'
+    };
   }
 
   static async updateConnection(connectionId: string, updates: Partial<CRMConnection>): Promise<CRMConnection> {
@@ -62,7 +76,12 @@ export class CRMConnectionManager {
       throw new Error(`Failed to update CRM connection: ${error.message}`);
     }
 
-    return data;
+    return {
+      ...data,
+      crm_type: data.crm_type as 'salesforce' | 'hubspot' | 'pipedrive' | 'custom',
+      sync_direction: data.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
+      status: data.status as 'active' | 'error' | 'expired' | 'disconnected'
+    };
   }
 
   static async deleteConnection(connectionId: string): Promise<void> {
@@ -86,7 +105,11 @@ export class CRMConnectionManager {
       throw new Error(`Failed to fetch field mappings: ${error.message}`);
     }
 
-    return data || [];
+    return (data || []).map(item => ({
+      ...item,
+      sync_direction: item.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
+      conflict_resolution: item.conflict_resolution as 'last_write_wins' | 'manual_review' | 'crm_wins' | 'webinar_wins'
+    }));
   }
 
   static async createFieldMapping(mapping: Omit<CRMFieldMapping, 'id' | 'created_at' | 'updated_at'>): Promise<CRMFieldMapping> {
@@ -100,7 +123,11 @@ export class CRMConnectionManager {
       throw new Error(`Failed to create field mapping: ${error.message}`);
     }
 
-    return data;
+    return {
+      ...data,
+      sync_direction: data.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
+      conflict_resolution: data.conflict_resolution as 'last_write_wins' | 'manual_review' | 'crm_wins' | 'webinar_wins'
+    };
   }
 
   static async updateFieldMapping(mappingId: string, updates: Partial<CRMFieldMapping>): Promise<CRMFieldMapping> {
@@ -115,7 +142,11 @@ export class CRMConnectionManager {
       throw new Error(`Failed to update field mapping: ${error.message}`);
     }
 
-    return data;
+    return {
+      ...data,
+      sync_direction: data.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
+      conflict_resolution: data.conflict_resolution as 'last_write_wins' | 'manual_review' | 'crm_wins' | 'webinar_wins'
+    };
   }
 
   static async deleteFieldMapping(mappingId: string): Promise<void> {
@@ -141,7 +172,13 @@ export class CRMConnectionManager {
       throw new Error(`Failed to fetch sync logs: ${error.message}`);
     }
 
-    return data || [];
+    return (data || []).map(item => ({
+      ...item,
+      sync_type: item.sync_type as 'full_sync' | 'incremental_sync' | 'real_time_update',
+      operation_type: item.operation_type as 'create' | 'update' | 'delete',
+      direction: item.direction as 'incoming' | 'outgoing',
+      status: item.status as 'pending' | 'success' | 'failed' | 'conflict'
+    }));
   }
 
   static createAdapter(connection: CRMConnection): CRMAdapter {
