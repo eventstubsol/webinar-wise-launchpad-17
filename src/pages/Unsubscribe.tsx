@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -39,10 +38,9 @@ const Unsubscribe = () => {
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase.functions.invoke('manage-email-preferences', {
+      const { data, error } = await supabase.functions.invoke(`manage-email-preferences?token=${token}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        noCache: true,
       });
 
       if (error) throw new Error(error.message);
