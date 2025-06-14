@@ -9,6 +9,474 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      ai_insights: {
+        Row: {
+          ai_model_name: string
+          ai_model_version: string | null
+          confidence_score: number | null
+          created_at: string
+          error_message: string | null
+          id: string
+          insight_data: Json
+          insight_summary: string | null
+          insight_title: string
+          insight_type: Database["public"]["Enums"]["ai_insight_type"]
+          parent_insight_id: string | null
+          processing_completed_at: string | null
+          processing_duration_ms: number | null
+          processing_started_at: string | null
+          status: Database["public"]["Enums"]["ai_insight_status"]
+          supporting_data: Json | null
+          updated_at: string
+          user_id: string
+          version: number
+          webinar_id: string
+        }
+        Insert: {
+          ai_model_name: string
+          ai_model_version?: string | null
+          confidence_score?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          insight_data?: Json
+          insight_summary?: string | null
+          insight_title: string
+          insight_type: Database["public"]["Enums"]["ai_insight_type"]
+          parent_insight_id?: string | null
+          processing_completed_at?: string | null
+          processing_duration_ms?: number | null
+          processing_started_at?: string | null
+          status?: Database["public"]["Enums"]["ai_insight_status"]
+          supporting_data?: Json | null
+          updated_at?: string
+          user_id: string
+          version?: number
+          webinar_id: string
+        }
+        Update: {
+          ai_model_name?: string
+          ai_model_version?: string | null
+          confidence_score?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          insight_data?: Json
+          insight_summary?: string | null
+          insight_title?: string
+          insight_type?: Database["public"]["Enums"]["ai_insight_type"]
+          parent_insight_id?: string | null
+          processing_completed_at?: string | null
+          processing_duration_ms?: number | null
+          processing_started_at?: string | null
+          status?: Database["public"]["Enums"]["ai_insight_status"]
+          supporting_data?: Json | null
+          updated_at?: string
+          user_id?: string
+          version?: number
+          webinar_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_insights_parent_insight_id_fkey"
+            columns: ["parent_insight_id"]
+            isOneToOne: false
+            referencedRelation: "ai_insights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_insights_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_insights_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "webinar_analytics_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_insights_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_analysis: {
+        Row: {
+          analysis_model: string
+          analysis_parameters: Json | null
+          analysis_quality_score: number | null
+          analysis_results: Json
+          analysis_version: string | null
+          content_hash: string | null
+          content_source: string | null
+          content_type: Database["public"]["Enums"]["content_type"]
+          created_at: string
+          error_message: string | null
+          extracted_text: string | null
+          id: string
+          key_topics: Json | null
+          keywords: Json | null
+          processing_completed_at: string | null
+          processing_confidence: number | null
+          processing_duration_ms: number | null
+          processing_started_at: string | null
+          recording_id: string | null
+          retry_count: number | null
+          sentiment_scores: Json | null
+          status: Database["public"]["Enums"]["analysis_status"]
+          summary: string | null
+          updated_at: string
+          webinar_id: string
+        }
+        Insert: {
+          analysis_model: string
+          analysis_parameters?: Json | null
+          analysis_quality_score?: number | null
+          analysis_results?: Json
+          analysis_version?: string | null
+          content_hash?: string | null
+          content_source?: string | null
+          content_type: Database["public"]["Enums"]["content_type"]
+          created_at?: string
+          error_message?: string | null
+          extracted_text?: string | null
+          id?: string
+          key_topics?: Json | null
+          keywords?: Json | null
+          processing_completed_at?: string | null
+          processing_confidence?: number | null
+          processing_duration_ms?: number | null
+          processing_started_at?: string | null
+          recording_id?: string | null
+          retry_count?: number | null
+          sentiment_scores?: Json | null
+          status?: Database["public"]["Enums"]["analysis_status"]
+          summary?: string | null
+          updated_at?: string
+          webinar_id: string
+        }
+        Update: {
+          analysis_model?: string
+          analysis_parameters?: Json | null
+          analysis_quality_score?: number | null
+          analysis_results?: Json
+          analysis_version?: string | null
+          content_hash?: string | null
+          content_source?: string | null
+          content_type?: Database["public"]["Enums"]["content_type"]
+          created_at?: string
+          error_message?: string | null
+          extracted_text?: string | null
+          id?: string
+          key_topics?: Json | null
+          keywords?: Json | null
+          processing_completed_at?: string | null
+          processing_confidence?: number | null
+          processing_duration_ms?: number | null
+          processing_started_at?: string | null
+          recording_id?: string | null
+          retry_count?: number | null
+          sentiment_scores?: Json | null
+          status?: Database["public"]["Enums"]["analysis_status"]
+          summary?: string | null
+          updated_at?: string
+          webinar_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_analysis_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_recordings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_analysis_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "webinar_analytics_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_analysis_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_metrics: {
+        Row: {
+          aggregation_method: string | null
+          calculation_formula: string
+          calculation_parameters: Json | null
+          chart_type: string | null
+          color_scheme: string | null
+          connection_id: string | null
+          created_at: string
+          critical_threshold: number | null
+          dashboard_order: number | null
+          data_type: Database["public"]["Enums"]["metric_data_type"]
+          display_format: string | null
+          id: string
+          is_active: boolean
+          is_public: boolean
+          metric_category: string | null
+          metric_description: string | null
+          metric_name: string
+          target_value: number | null
+          time_period_days: number | null
+          updated_at: string
+          user_id: string
+          warning_threshold: number | null
+        }
+        Insert: {
+          aggregation_method?: string | null
+          calculation_formula: string
+          calculation_parameters?: Json | null
+          chart_type?: string | null
+          color_scheme?: string | null
+          connection_id?: string | null
+          created_at?: string
+          critical_threshold?: number | null
+          dashboard_order?: number | null
+          data_type: Database["public"]["Enums"]["metric_data_type"]
+          display_format?: string | null
+          id?: string
+          is_active?: boolean
+          is_public?: boolean
+          metric_category?: string | null
+          metric_description?: string | null
+          metric_name: string
+          target_value?: number | null
+          time_period_days?: number | null
+          updated_at?: string
+          user_id: string
+          warning_threshold?: number | null
+        }
+        Update: {
+          aggregation_method?: string | null
+          calculation_formula?: string
+          calculation_parameters?: Json | null
+          chart_type?: string | null
+          color_scheme?: string | null
+          connection_id?: string | null
+          created_at?: string
+          critical_threshold?: number | null
+          dashboard_order?: number | null
+          data_type?: Database["public"]["Enums"]["metric_data_type"]
+          display_format?: string | null
+          id?: string
+          is_active?: boolean
+          is_public?: boolean
+          metric_category?: string | null
+          metric_description?: string | null
+          metric_name?: string
+          target_value?: number | null
+          time_period_days?: number | null
+          updated_at?: string
+          user_id?: string
+          warning_threshold?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_metrics_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_metrics_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      engagement_predictions: {
+        Row: {
+          actual_value: number | null
+          confidence_score: number
+          contributing_factors: Json | null
+          created_at: string
+          feature_vector: Json | null
+          id: string
+          model_name: string
+          model_version: string | null
+          participant_id: string | null
+          participant_session_duration: number | null
+          predicted_value: number
+          prediction_accuracy: number | null
+          prediction_explanation: string | null
+          prediction_timestamp: string
+          prediction_type: Database["public"]["Enums"]["prediction_type"]
+          updated_at: string
+          validated_at: string | null
+          webinar_elapsed_minutes: number | null
+          webinar_id: string
+        }
+        Insert: {
+          actual_value?: number | null
+          confidence_score: number
+          contributing_factors?: Json | null
+          created_at?: string
+          feature_vector?: Json | null
+          id?: string
+          model_name: string
+          model_version?: string | null
+          participant_id?: string | null
+          participant_session_duration?: number | null
+          predicted_value: number
+          prediction_accuracy?: number | null
+          prediction_explanation?: string | null
+          prediction_timestamp?: string
+          prediction_type: Database["public"]["Enums"]["prediction_type"]
+          updated_at?: string
+          validated_at?: string | null
+          webinar_elapsed_minutes?: number | null
+          webinar_id: string
+        }
+        Update: {
+          actual_value?: number | null
+          confidence_score?: number
+          contributing_factors?: Json | null
+          created_at?: string
+          feature_vector?: Json | null
+          id?: string
+          model_name?: string
+          model_version?: string | null
+          participant_id?: string | null
+          participant_session_duration?: number | null
+          predicted_value?: number
+          prediction_accuracy?: number | null
+          prediction_explanation?: string | null
+          prediction_timestamp?: string
+          prediction_type?: Database["public"]["Enums"]["prediction_type"]
+          updated_at?: string
+          validated_at?: string | null
+          webinar_elapsed_minutes?: number | null
+          webinar_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "engagement_predictions_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "engagement_predictions_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "webinar_analytics_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "engagement_predictions_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      insight_templates: {
+        Row: {
+          ai_model_requirements: Json | null
+          allowed_teams: Json | null
+          allowed_users: Json | null
+          avg_processing_time_ms: number | null
+          category: Database["public"]["Enums"]["template_category"]
+          created_at: string
+          created_by: string
+          id: string
+          input_parameters: Json
+          is_active: boolean
+          is_featured: boolean
+          output_schema: Json
+          processing_config: Json | null
+          prompt_template: string
+          retry_policy: Json | null
+          sharing_permission: Database["public"]["Enums"]["sharing_permission"]
+          success_rate: number | null
+          template_description: string | null
+          template_name: string
+          updated_at: string
+          usage_count: number | null
+          validation_rules: Json | null
+          version: number
+        }
+        Insert: {
+          ai_model_requirements?: Json | null
+          allowed_teams?: Json | null
+          allowed_users?: Json | null
+          avg_processing_time_ms?: number | null
+          category: Database["public"]["Enums"]["template_category"]
+          created_at?: string
+          created_by: string
+          id?: string
+          input_parameters?: Json
+          is_active?: boolean
+          is_featured?: boolean
+          output_schema?: Json
+          processing_config?: Json | null
+          prompt_template: string
+          retry_policy?: Json | null
+          sharing_permission?: Database["public"]["Enums"]["sharing_permission"]
+          success_rate?: number | null
+          template_description?: string | null
+          template_name: string
+          updated_at?: string
+          usage_count?: number | null
+          validation_rules?: Json | null
+          version?: number
+        }
+        Update: {
+          ai_model_requirements?: Json | null
+          allowed_teams?: Json | null
+          allowed_users?: Json | null
+          avg_processing_time_ms?: number | null
+          category?: Database["public"]["Enums"]["template_category"]
+          created_at?: string
+          created_by?: string
+          id?: string
+          input_parameters?: Json
+          is_active?: boolean
+          is_featured?: boolean
+          output_schema?: Json
+          processing_config?: Json | null
+          prompt_template?: string
+          retry_policy?: Json | null
+          sharing_permission?: Database["public"]["Enums"]["sharing_permission"]
+          success_rate?: number | null
+          template_description?: string | null
+          template_name?: string
+          updated_at?: string
+          usage_count?: number | null
+          validation_rules?: Json | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insight_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -882,7 +1350,33 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      ai_insight_status: "pending" | "processing" | "completed" | "failed"
+      ai_insight_type:
+        | "engagement"
+        | "content"
+        | "predictive"
+        | "custom"
+        | "performance"
+      analysis_status:
+        | "pending"
+        | "processing"
+        | "completed"
+        | "failed"
+        | "retrying"
+      content_type: "transcript" | "slides" | "chat" | "audio" | "video"
+      metric_data_type: "number" | "percentage" | "duration" | "count" | "ratio"
+      prediction_type:
+        | "dropout_risk"
+        | "engagement_score"
+        | "interaction_likelihood"
+        | "attention_score"
+      sharing_permission: "private" | "team" | "public"
+      template_category:
+        | "performance"
+        | "engagement"
+        | "content"
+        | "custom"
+        | "predictive"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -997,6 +1491,38 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      ai_insight_status: ["pending", "processing", "completed", "failed"],
+      ai_insight_type: [
+        "engagement",
+        "content",
+        "predictive",
+        "custom",
+        "performance",
+      ],
+      analysis_status: [
+        "pending",
+        "processing",
+        "completed",
+        "failed",
+        "retrying",
+      ],
+      content_type: ["transcript", "slides", "chat", "audio", "video"],
+      metric_data_type: ["number", "percentage", "duration", "count", "ratio"],
+      prediction_type: [
+        "dropout_risk",
+        "engagement_score",
+        "interaction_likelihood",
+        "attention_score",
+      ],
+      sharing_permission: ["private", "team", "public"],
+      template_category: [
+        "performance",
+        "engagement",
+        "content",
+        "custom",
+        "predictive",
+      ],
+    },
   },
 } as const
