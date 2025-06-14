@@ -72,8 +72,8 @@ export class CampaignAutomationService {
         user_id: userId,
         workflow_name: workflow.workflow_name,
         workflow_type: workflow.workflow_type,
-        trigger_conditions: workflow.trigger_conditions,
-        workflow_steps: workflow.workflow_steps,
+        trigger_conditions: workflow.trigger_conditions as any,
+        workflow_steps: workflow.workflow_steps as any,
         is_active: workflow.is_active,
       })
       .select()
@@ -111,17 +111,20 @@ export class CampaignAutomationService {
         current_step: 0,
         status: 'active',
         next_action_at: new Date().toISOString(),
-        metadata,
+        metadata: metadata as any,
       })
       .select()
       .single();
 
     if (error) throw error;
 
-    // Update workflow subscriber count
-    await supabase.rpc('increment_workflow_subscribers', {
-      workflow_id: workflowId
-    });
+    // Update workflow subscriber count manually
+    await supabase
+      .from('campaign_automation_workflows')
+      .update({
+        total_subscribers: supabase.raw('total_subscribers + 1')
+      })
+      .eq('id', workflowId);
 
     return {
       id: data.id,
@@ -225,7 +228,7 @@ export class CampaignAutomationService {
         campaign_id: campaignId,
         execution_type: executionType,
         scheduled_for: scheduledFor || new Date().toISOString(),
-        execution_config: config,
+        execution_config: config as any,
         status: 'pending'
       });
 
@@ -244,7 +247,7 @@ export class CampaignAutomationService {
         workflow_id: workflowId,
         execution_type: executionType,
         scheduled_for: scheduledFor || new Date().toISOString(),
-        execution_config: config,
+        execution_config: config as any,
         status: 'pending'
       });
 

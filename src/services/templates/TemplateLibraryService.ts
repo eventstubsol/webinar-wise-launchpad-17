@@ -76,10 +76,10 @@ export class TemplateLibraryService {
   }
 
   static async getCategories(): Promise<TemplateCategory[]> {
-    const { data: categories, error } = await supabase
+    // Get unique categories with counts
+    const { data: templateData, error } = await supabase
       .from('template_library')
-      .select('category')
-      .group('category');
+      .select('category');
 
     if (error) throw error;
 
@@ -116,12 +116,16 @@ export class TemplateLibraryService {
       }
     };
 
-    // Get counts for each category
-    const { data: counts } = await supabase
-      .from('template_library')
-      .select('category')
-      .select('category, count(*)')
-      .group('category');
+    // Count templates per category
+    const categoryCounts = (templateData || []).reduce((acc, template) => {
+      acc[template.category] = (acc[template.category] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Update counts
+    Object.keys(categoryInfo).forEach(category => {
+      categoryInfo[category].template_count = categoryCounts[category] || 0;
+    });
 
     return Object.values(categoryInfo);
   }
@@ -136,7 +140,7 @@ export class TemplateLibraryService {
         template_name: template.template_name,
         category: template.category,
         description: template.description,
-        template_content: template.template_content,
+        template_content: template.template_content as any,
         is_system_template: template.is_system_template,
         is_featured: template.is_featured,
         tags: template.tags,
@@ -296,9 +300,21 @@ export class TemplateLibraryService {
   }
 
   static async incrementUsageCount(templateId: string): Promise<void> {
-    await supabase.rpc('increment_template_usage', {
-      template_id: templateId
-    });
+    // Manually increment usage count
+    const { data: template } = await supabase
+      .from('template_library')
+      .select('usage_count')
+      .eq('id', templateId)
+      .single();
+
+    if (template) {
+      await supabase
+        .from('template_library')
+        .update({
+          usage_count: (template.usage_count || 0) + 1
+        })
+        .eq('id', templateId);
+    }
   }
 
   static async rateTemplate(
