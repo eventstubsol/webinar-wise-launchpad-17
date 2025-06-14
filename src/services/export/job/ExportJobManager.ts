@@ -5,6 +5,7 @@ import { ExcelGenerator } from '../ExcelGenerator';
 import { PowerPointGenerator } from '../PowerPointGenerator';
 import { ExportConfig } from '../types';
 import { ExportDataProvider } from '../data/ExportDataProvider';
+import { ExportJobRetryManager } from './ExportJobRetryManager';
 
 export class ExportJobManager {
   static async createExportJob(
@@ -14,30 +15,53 @@ export class ExportJobManager {
     const { data: user } = await supabase.auth.getUser();
     if (!user.user) throw new Error('User not authenticated');
 
+    // Start performance tracking
+    const startTime = Date.now();
+
     const { data, error } = await supabase
       .from('export_queue')
       .insert({
         user_id: user.user.id,
         export_type: exportType,
-        export_config: config as any, // Cast to any for Supabase Json type
-        status: 'pending'
+        export_config: config as any,
+        status: 'pending',
+        retry_count: 0,
+        max_retries: 3,
+        performance_metrics: {
+          created_at: new Date().toISOString(),
+          estimated_size: config.webinarIds?.length || 1
+        }
       })
       .select()
       .single();
 
     if (error) throw error;
     
-    // Trigger background processing
-    // Consider moving this to a Supabase Edge Function or a dedicated worker
-    // if processExportJob is long-running.
-    // For now, calling it directly for simplicity in this context.
-    // Using ExportJobManager.processExportJob as it's a static method of this class.
-    await ExportJobManager.processExportJob(data.id);
+    // Process the job immediately
+    this.processExportJobWithRetry(data.id);
     
     return data.id;
   }
 
+  static async processExportJobWithRetry(jobId: string): Promise<void> {
+    try {
+      await this.processExportJob(jobId);
+    } catch (error) {
+      console.error(`Export job ${jobId} failed:`, error);
+      
+      // Attempt retry with enhanced retry manager
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const retryScheduled = await ExportJobRetryManager.scheduleRetry(jobId, errorMessage);
+      
+      if (!retryScheduled) {
+        console.log(`Job ${jobId} exceeded max retries or moved to dead letter queue`);
+      }
+    }
+  }
+
   static async processExportJob(jobId: string): Promise<void> {
+    const processingStartTime = Date.now();
+    
     try {
       // Update status to processing
       await supabase
@@ -58,11 +82,18 @@ export class ExportJobManager {
 
       if (jobError) throw jobError;
 
-      // Cast the config back to our type
       const config = job.export_config as unknown as ExportConfig;
 
-      // Fetch webinar data based on config using ExportDataProvider
+      // Update progress
+      await supabase
+        .from('export_queue')
+        .update({ progress_percentage: 25 })
+        .eq('id', jobId);
+
+      // Fetch webinar data
+      const dataFetchStart = Date.now();
       const webinarData = await ExportDataProvider.fetchWebinarData(config);
+      const dataFetchTime = Date.now() - dataFetchStart;
       
       // Update progress
       await supabase
@@ -72,6 +103,7 @@ export class ExportJobManager {
 
       let fileBlob: Blob;
       let fileName: string;
+      const generationStart = Date.now();
 
       // Generate export based on type
       switch (job.export_type) {
@@ -87,7 +119,7 @@ export class ExportJobManager {
           fileBlob = await PowerPointGenerator.generateAnalyticsPresentation({
             totalWebinars: webinarData.length,
             totalParticipants: webinarData.reduce((sum, w) => sum + (w.total_attendees || 0), 0),
-            avgEngagement: webinarData.reduce((sum, w) => sum + (w.engagement_score || 0), 0) / (webinarData.length || 1), // Avoid division by zero
+            avgEngagement: webinarData.reduce((sum, w) => sum + (w.engagement_score || 0), 0) / (webinarData.length || 1),
             webinars: webinarData
           }, config);
           fileName = `${config.title.replace(/\s+/g, '_')}_presentation.pptx`;
@@ -96,10 +128,22 @@ export class ExportJobManager {
           throw new Error(`Unsupported export type: ${job.export_type}`);
       }
 
-      // Upload the file using ExportDataProvider
-      const fileUrl = await ExportDataProvider.uploadFile(fileBlob, fileName);
+      const generationTime = Date.now() - generationStart;
 
-      // Update job with completion
+      // Update progress
+      await supabase
+        .from('export_queue')
+        .update({ progress_percentage: 75 })
+        .eq('id', jobId);
+
+      // Upload the file
+      const uploadStart = Date.now();
+      const fileUrl = await ExportDataProvider.uploadFile(fileBlob, fileName);
+      const uploadTime = Date.now() - uploadStart;
+
+      const totalProcessingTime = Date.now() - processingStartTime;
+
+      // Update job with completion and performance metrics
       await supabase
         .from('export_queue')
         .update({
@@ -107,7 +151,17 @@ export class ExportJobManager {
           progress_percentage: 100,
           file_url: fileUrl,
           file_size: fileBlob.size,
-          completed_at: new Date().toISOString()
+          completed_at: new Date().toISOString(),
+          performance_metrics: {
+            ...job.performance_metrics,
+            processing_time_ms: totalProcessingTime,
+            data_fetch_time_ms: dataFetchTime,
+            generation_time_ms: generationTime,
+            upload_time_ms: uploadTime,
+            file_size_bytes: fileBlob.size,
+            records_processed: webinarData.length,
+            completed_at: new Date().toISOString()
+          }
         })
         .eq('id', jobId);
 
@@ -117,11 +171,12 @@ export class ExportJobManager {
         .insert({
           user_id: job.user_id,
           export_queue_id: jobId,
-          report_type: job.export_type as string, // DB expects text
+          report_type: job.export_type as string,
           report_title: config.title,
           file_url: fileUrl,
           file_size: fileBlob.size,
-          delivery_status: 'sent'
+          delivery_status: 'sent',
+          generation_time_ms: totalProcessingTime
         });
 
     } catch (error) {
@@ -129,10 +184,17 @@ export class ExportJobManager {
         .from('export_queue')
         .update({
           status: 'failed',
-          error_message: error instanceof Error ? error.message : String(error), // Ensure error_message is a string
-          completed_at: new Date().toISOString()
+          error_message: error instanceof Error ? error.message : String(error),
+          completed_at: new Date().toISOString(),
+          performance_metrics: {
+            processing_time_ms: Date.now() - processingStartTime,
+            failed_at: new Date().toISOString(),
+            error_type: error instanceof Error ? error.constructor.name : 'Unknown'
+          }
         })
         .eq('id', jobId);
+      
+      throw error;
     }
   }
 }

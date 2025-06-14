@@ -1,12 +1,12 @@
-
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ReportBuilder } from './ReportBuilder';
-import { ExportQueueMonitor } from './ExportQueueMonitor';
 import { AdvancedScheduleManager } from './AdvancedScheduleManager';
 import { BulkExportSelector } from './bulk/BulkExportSelector';
-import { FileText, Calendar, Activity, TrendingUp, Package, Users } from 'lucide-react';
+import { EnhancedExportQueueMonitor } from './enhanced-queue/EnhancedExportQueueMonitor';
+import { ConnectionHealthIndicator } from '../realtime/ConnectionHealthIndicator';
+import { FileText, Calendar, Activity, TrendingUp, Package, Users, Wifi } from 'lucide-react';
 import { ExportJobManager } from '@/services/export/job/ExportJobManager';
 import { useToast } from '@/hooks/use-toast';
 
@@ -130,11 +130,12 @@ export function ExportDashboard() {
       </div>
 
       <Tabs defaultValue="builder" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="builder">Report Builder</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Export</TabsTrigger>
-          <TabsTrigger value="queue">Export Queue</TabsTrigger>
+          <TabsTrigger value="queue">Enhanced Queue</TabsTrigger>
           <TabsTrigger value="schedule">Advanced Scheduling</TabsTrigger>
+          <TabsTrigger value="health">Connection Health</TabsTrigger>
         </TabsList>
 
         <TabsContent value="builder">
@@ -159,11 +160,15 @@ export function ExportDashboard() {
         </TabsContent>
 
         <TabsContent value="queue">
-          <ExportQueueMonitor />
+          <EnhancedExportQueueMonitor />
         </TabsContent>
 
         <TabsContent value="schedule">
           <AdvancedScheduleManager />
+        </TabsContent>
+
+        <TabsContent value="health">
+          <ConnectionHealthIndicator />
         </TabsContent>
       </Tabs>
     </div>

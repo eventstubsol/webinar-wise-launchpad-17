@@ -613,6 +613,39 @@ export type Database = {
           },
         ]
       }
+      connection_health_log: {
+        Row: {
+          connection_type: string
+          error_message: string | null
+          id: string
+          metrics: Json | null
+          ping_time_ms: number | null
+          recorded_at: string | null
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          connection_type: string
+          error_message?: string | null
+          id?: string
+          metrics?: Json | null
+          ping_time_ms?: number | null
+          recorded_at?: string | null
+          status: string
+          user_id?: string | null
+        }
+        Update: {
+          connection_type?: string
+          error_message?: string | null
+          id?: string
+          metrics?: Json | null
+          ping_time_ms?: number | null
+          recorded_at?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       content_analysis: {
         Row: {
           analysis_model: string
@@ -1679,6 +1712,42 @@ export type Database = {
           },
         ]
       }
+      export_dead_letter_queue: {
+        Row: {
+          created_at: string | null
+          export_config: Json
+          export_type: string
+          failure_reason: string | null
+          id: string
+          moved_to_dlq_at: string | null
+          original_job_id: string
+          retry_history: Json | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          export_config: Json
+          export_type: string
+          failure_reason?: string | null
+          id?: string
+          moved_to_dlq_at?: string | null
+          original_job_id: string
+          retry_history?: Json | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          export_config?: Json
+          export_type?: string
+          failure_reason?: string | null
+          id?: string
+          moved_to_dlq_at?: string | null
+          original_job_id?: string
+          retry_history?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       export_queue: {
         Row: {
           completed_at: string | null
@@ -1691,7 +1760,12 @@ export type Database = {
           file_size: number | null
           file_url: string | null
           id: string
+          max_retries: number | null
+          next_retry_at: string | null
+          performance_metrics: Json | null
           progress_percentage: number | null
+          retry_count: number | null
+          retry_policy: Json | null
           started_at: string | null
           status: string
           updated_at: string | null
@@ -1708,7 +1782,12 @@ export type Database = {
           file_size?: number | null
           file_url?: string | null
           id?: string
+          max_retries?: number | null
+          next_retry_at?: string | null
+          performance_metrics?: Json | null
           progress_percentage?: number | null
+          retry_count?: number | null
+          retry_policy?: Json | null
           started_at?: string | null
           status?: string
           updated_at?: string | null
@@ -1725,7 +1804,12 @@ export type Database = {
           file_size?: number | null
           file_url?: string | null
           id?: string
+          max_retries?: number | null
+          next_retry_at?: string | null
+          performance_metrics?: Json | null
           progress_percentage?: number | null
+          retry_count?: number | null
+          retry_policy?: Json | null
           started_at?: string | null
           status?: string
           updated_at?: string | null
