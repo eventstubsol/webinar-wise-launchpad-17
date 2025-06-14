@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -66,7 +65,7 @@ export function AdvancedScheduleManager() {
   const [activeTab, setActiveTab] = useState('schedule');
   const [editForm, setEditForm] = useState({
     reportName: '',
-    reportType: 'pdf' as const,
+    reportType: 'pdf' as 'pdf' | 'excel' | 'powerpoint' | 'multi',
     cronExpression: '0 9 * * *',
     timezone: 'UTC',
     recipients: '',
@@ -252,7 +251,7 @@ export function AdvancedScheduleManager() {
                         <Label>Report Type</Label>
                         <select
                           value={editForm.reportType}
-                          onChange={(e) => setEditForm(prev => ({ ...prev, reportType: e.target.value as any }))}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, reportType: e.target.value as 'pdf' | 'excel' | 'powerpoint' | 'multi' }))}
                           className="w-full px-3 py-2 border rounded-md"
                         >
                           <option value="pdf">PDF Report</option>

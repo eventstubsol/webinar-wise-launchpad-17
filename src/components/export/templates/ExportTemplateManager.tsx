@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -54,7 +53,7 @@ export function ExportTemplateManager() {
   const [editForm, setEditForm] = useState({
     name: '',
     description: '',
-    type: 'pdf' as const,
+    type: 'pdf' as 'pdf' | 'excel' | 'powerpoint',
     sections: [] as string[],
     isDefault: false,
     isPublic: false
@@ -231,7 +230,7 @@ export function ExportTemplateManager() {
                   </div>
                   <div className="space-y-2">
                     <Label>Export Type</Label>
-                    <Select value={editForm.type} onValueChange={(value: any) => setEditForm(prev => ({ ...prev, type: value }))}>
+                    <Select value={editForm.type} onValueChange={(value: 'pdf' | 'excel' | 'powerpoint') => setEditForm(prev => ({ ...prev, type: value }))}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
