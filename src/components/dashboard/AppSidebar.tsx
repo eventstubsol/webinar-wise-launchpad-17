@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -27,7 +26,8 @@ import {
   Share2, 
   Settings, 
   LogOut,
-  Zap
+  Zap,
+  Mail
 } from 'lucide-react';
 import { useLocation, Link } from 'react-router-dom';
 
@@ -40,6 +40,7 @@ const navigationItems = [
   { title: "AI", icon: Brain, url: "/ai" },
   { title: "Sharing", icon: Share2, url: "/sharing" },
   { title: "Settings", icon: Settings, url: "/settings" },
+  { title: "Email Campaigns", icon: Mail, url: "/dashboard/email-campaigns" },
 ];
 
 interface AppSidebarProps {
