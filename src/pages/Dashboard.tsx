@@ -5,7 +5,7 @@ import { MetricsCards } from '@/components/dashboard/MetricsCards';
 import { ChartsSection } from '@/components/dashboard/ChartsSection';
 import { DataTables } from '@/components/dashboard/DataTables';
 import { AppSidebar } from '@/components/dashboard/AppSidebar';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useWebinars } from '@/hooks/useWebinars';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,17 +47,19 @@ const Dashboard: React.FC = () => {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen flex w-full">
         <AppSidebar 
           onProfileSetup={handleProfileSetup}
           onSignOut={handleSignOut}
         />
-        <div className="flex-1 space-y-6 p-8 pt-6 lg:ml-72">
+        <SidebarInset>
           <DashboardHeader />
-          <MetricsCards />
-          <ChartsSection />
-          <DataTables />
-        </div>
+          <main className="flex-1 space-y-6 p-8 pt-6">
+            <MetricsCards />
+            <ChartsSection />
+            <DataTables />
+          </main>
+        </SidebarInset>
       </div>
     </SidebarProvider>
   );

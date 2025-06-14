@@ -29,7 +29,7 @@ import {
   LogOut,
   Zap
 } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 
 const navigationItems = [
   { title: "Dashboard", icon: LayoutDashboard, url: "/dashboard" },
@@ -116,7 +116,7 @@ export function AppSidebar({ onProfileSetup, onSignOut }: AppSidebarProps) {
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive}>
-                      <a href={item.url}>
+                      <Link to={item.url}>
                         <item.icon />
                         <span>{item.title}</span>
                         {isActive && (
@@ -124,7 +124,7 @@ export function AppSidebar({ onProfileSetup, onSignOut }: AppSidebarProps) {
                             Current
                           </Badge>
                         )}
-                      </a>
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );

@@ -12,45 +12,43 @@ export function DashboardHeader() {
   const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
 
   return (
-    <header className="border-b border-gray-200 bg-white sticky top-0 z-10">
-      <div className="flex items-center justify-between px-6 py-4">
-        <div className="flex items-center space-x-4">
-          <SidebarTrigger />
-          <div className="flex items-center space-x-2">
-            <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
-            <div className="flex items-center text-sm text-green-600 bg-green-50 px-2 py-1 rounded-full">
-              <Wifi className="w-3 h-3 mr-1" />
-              Connected
-            </div>
+    <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+      <div className="flex items-center gap-2 px-4">
+        <SidebarTrigger className="-ml-1" />
+        <div className="flex items-center space-x-2">
+          <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
+          <div className="flex items-center text-sm text-green-600 bg-green-50 px-2 py-1 rounded-full">
+            <Wifi className="w-3 h-3 mr-1" />
+            Connected
           </div>
         </div>
+      </div>
 
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              type="search"
-              placeholder="Search webinars..."
-              className="pl-10 w-64"
-            />
+      <div className="ml-auto flex items-center space-x-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Input
+            type="search"
+            placeholder="Search webinars..."
+            className="pl-10 w-64"
+          />
+        </div>
+        
+        <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700">
+          <RefreshCw className="w-4 h-4 mr-1" />
+          Sync
+        </Button>
+
+        <Button variant="ghost" size="sm">
+          <Bell className="w-4 h-4" />
+        </Button>
+
+        <div className="text-right">
+          <div className="text-sm font-medium text-gray-900">
+            {displayName}
           </div>
-          
-          <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700">
-            <RefreshCw className="w-4 h-4 mr-1" />
-            Sync
-          </Button>
-
-          <Button variant="ghost" size="sm">
-            <Bell className="w-4 h-4" />
-          </Button>
-
-          <div className="text-right">
-            <div className="text-sm font-medium text-gray-900">
-              {displayName}
-            </div>
-            <div className="text-xs text-gray-500">
-              {profile?.company || user?.email}
-            </div>
+          <div className="text-xs text-gray-500">
+            {profile?.company || user?.email}
           </div>
         </div>
       </div>
