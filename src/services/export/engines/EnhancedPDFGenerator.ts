@@ -79,9 +79,10 @@ const createDynamicStyles = (branding: BrandingConfig) => {
       padding: 12,
       backgroundColor: '#F9FAFB',
       borderRadius: 4,
+      // Border hack: react-pdf doesn't always support border{Side}Style, just do borderLeft
       borderLeftWidth: 4,
       borderLeftColor: primaryColor,
-      borderLeftStyle: 'solid',
+      // borderLeftStyle: 'solid', // Not needed for react-pdf, causes errors in some configs
     },
     metricLabel: {
       fontSize: 12,
@@ -144,7 +145,7 @@ const createDynamicStyles = (branding: BrandingConfig) => {
       fontSize: 10,
       borderTopWidth: 1,
       borderTopColor: '#E5E7EB',
-      borderTopStyle: 'solid',
+      // borderTopStyle: 'solid', // Not required
       paddingTop: 10,
     },
     chart: {
@@ -156,7 +157,7 @@ const createDynamicStyles = (branding: BrandingConfig) => {
       backgroundColor: '#F0F9FF',
       borderWidth: 1,
       borderColor: primaryColor,
-      borderStyle: 'solid',
+      // borderStyle: 'solid',
       borderRadius: 4,
       padding: 12,
       marginBottom: 12,
