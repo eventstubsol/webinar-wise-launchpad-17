@@ -1066,6 +1066,8 @@ export type Database = {
       email_preferences: {
         Row: {
           id: string
+          preference_management_token: string | null
+          preference_token_expires_at: string | null
           preferences: Json | null
           unsubscribed: boolean | null
           unsubscribed_at: string | null
@@ -1074,6 +1076,8 @@ export type Database = {
         }
         Insert: {
           id?: string
+          preference_management_token?: string | null
+          preference_token_expires_at?: string | null
           preferences?: Json | null
           unsubscribed?: boolean | null
           unsubscribed_at?: string | null
@@ -1082,6 +1086,8 @@ export type Database = {
         }
         Update: {
           id?: string
+          preference_management_token?: string | null
+          preference_token_expires_at?: string | null
           preferences?: Json | null
           unsubscribed?: boolean | null
           unsubscribed_at?: string | null
@@ -3786,6 +3792,10 @@ export type Database = {
           p_webinar_id?: string
           p_user_id?: string
         }
+        Returns: string
+      }
+      ensure_email_preferences_for_profile: {
+        Args: { p_profile_id: string }
         Returns: string
       }
       invalidate_cache_dependencies: {

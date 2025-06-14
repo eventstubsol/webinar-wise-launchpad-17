@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
@@ -13,6 +12,44 @@ const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 interface ProcessEmailRequest {
   campaign_id?: string;
   batch_size?: number;
+}
+
+async function getOrCreatePreferenceToken(supabase: any, recipientId: string): Promise<string> {
+  await supabase.rpc('ensure_email_preferences_for_profile', { p_profile_id: recipientId });
+
+  const { data: existingPref, error: existingError } = await supabase
+    .from('email_preferences')
+    .select('preference_management_token, preference_token_expires_at')
+    .eq('user_id', recipientId)
+    .single();
+
+  if (existingError) {
+      console.error("Error fetching existing preferences:", existingError.message);
+      throw new Error(`Failed to fetch preferences for user ${recipientId}`);
+  }
+
+  if (existingPref.preference_management_token && new Date(existingPref.preference_token_expires_at) > new Date()) {
+    return existingPref.preference_management_token;
+  }
+
+  const newToken = crypto.randomUUID();
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7); // Token valid for 7 days
+
+  const { error: updateError } = await supabase
+    .from('email_preferences')
+    .update({
+      preference_management_token: newToken,
+      preference_token_expires_at: expiresAt.toISOString(),
+    })
+    .eq('user_id', recipientId);
+
+  if (updateError) {
+    console.error("Error updating preference token:", updateError.message);
+    throw new Error(`Failed to update preference token for user ${recipientId}`);
+  }
+
+  return newToken;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -72,46 +109,43 @@ const handler = async (req: Request): Promise<Response> => {
 
     for (const queueItem of queuedEmails) {
       try {
-        // Update status to processing
         await supabase
           .from('email_send_queue')
           .update({ status: 'processing' })
           .eq('id', queueItem.id);
 
-        // Get subject line - variant takes precedence
         const subjectLine = queueItem.campaign_variants?.subject_line || 
                            queueItem.email_campaigns?.subject_template || 
                            'Your Email';
 
-        // Apply personalization
         const personalizedSubject = applyPersonalization(
           subjectLine, 
           queueItem.personalization_data
         );
 
-        // Get email template content
         const templateContent = queueItem.campaign_variants?.template_id 
           ? await getTemplateContent(supabase, queueItem.campaign_variants.template_id)
           : queueItem.email_campaigns?.email_templates?.html_template || 
             '<p>Hello {{first_name}}, thank you for your interest!</p>';
 
+        const preferenceToken = await getOrCreatePreferenceToken(supabase, queueItem.recipient_id);
+        const unsubscribeUrl = generateUnsubscribeUrl(preferenceToken);
+
         const personalizedContent = applyPersonalization(
           templateContent,
-          queueItem.personalization_data
+          {
+            ...queueItem.personalization_data,
+            unsubscribe_url: unsubscribeUrl,
+          }
         );
 
-        // Generate tracking URLs
         const trackingPixelUrl = generateTrackingPixel(queueItem.id);
-        const unsubscribeUrl = generateUnsubscribeUrl(queueItem.recipient_id);
 
-        // Add tracking pixel to content
         const trackedContent = personalizedContent + 
-          `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" />` +
-          `<br><small><a href="${unsubscribeUrl}">Unsubscribe</a></small>`;
+          `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" />`;
 
-        // Send email via Resend
         const emailResponse = await resend.emails.send({
-          from: "Webinar Wise <noreply@resend.dev>", // Update with your domain
+          from: "Webinar Wise <noreply@resend.dev>",
           to: [queueItem.recipient_email],
           subject: personalizedSubject,
           html: trackedContent,
@@ -121,7 +155,6 @@ const handler = async (req: Request): Promise<Response> => {
           throw new Error(emailResponse.error.message);
         }
 
-        // Record successful send
         await supabase.from('email_sends').insert({
           campaign_id: queueItem.campaign_id,
           recipient_email: queueItem.recipient_email,
@@ -131,7 +164,6 @@ const handler = async (req: Request): Promise<Response> => {
           status: 'sent',
           send_time: new Date().toISOString(),
           ab_variant: queueItem.variant_id,
-          tracking_pixel_url: trackingPixelUrl,
           unsubscribe_url: unsubscribeUrl,
           metadata: {
             resend_id: emailResponse.data?.id,
@@ -139,7 +171,6 @@ const handler = async (req: Request): Promise<Response> => {
           }
         });
 
-        // Update queue item status
         await supabase
           .from('email_send_queue')
           .update({ 
@@ -148,7 +179,6 @@ const handler = async (req: Request): Promise<Response> => {
           })
           .eq('id', queueItem.id);
 
-        // Record analytics event
         await recordAnalyticsEvent(supabase, queueItem, 'sent');
 
         processedEmails.push(queueItem.id);
@@ -157,7 +187,6 @@ const handler = async (req: Request): Promise<Response> => {
       } catch (error: any) {
         console.error(`Failed to send email to ${queueItem.recipient_email}:`, error);
 
-        // Update queue item with error
         await supabase
           .from('email_send_queue')
           .update({ 
@@ -225,9 +254,9 @@ function generateTrackingPixel(queueId: string): string {
   return `${baseUrl}/functions/v1/email-tracking?type=open&id=${queueId}`;
 }
 
-function generateUnsubscribeUrl(recipientId: string): string {
-  const baseUrl = Deno.env.get('SUPABASE_URL');
-  return `${baseUrl}/functions/v1/email-tracking?type=unsubscribe&recipient=${recipientId}`;
+function generateUnsubscribeUrl(token: string): string {
+  const baseUrl = Deno.env.get('APP_BASE_URL') || 'http://localhost:5173';
+  return `${baseUrl}/unsubscribe?token=${token}`;
 }
 
 async function recordAnalyticsEvent(supabase: any, queueItem: any, eventType: string) {

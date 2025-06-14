@@ -24,6 +24,7 @@ import Campaigns from "./pages/Campaigns";
 import NotFound from "./pages/NotFound";
 import CSVUpload from "./pages/CSVUpload";
 import ZoomCallback from "./pages/auth/zoom/callback";
+import Unsubscribe from "./pages/Unsubscribe";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +44,7 @@ const App = () => (
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/unsubscribe" element={<Unsubscribe />} />
                 <Route path="/auth/zoom/callback" element={<ZoomCallback />} />
                 <Route
                   path="/dashboard"
