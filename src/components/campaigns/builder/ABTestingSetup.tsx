@@ -113,7 +113,7 @@ export const ABTestingSetup: React.FC<ABTestingSetupProps> = ({
     if (!campaignData.id) return;
     
     try {
-      await ABTestingService.selectWinningVariant(campaignData.id, variantId);
+      await ABTestingService.selectWinningVariant(variantId);
       await loadTestResults();
     } catch (error) {
       console.error('Error selecting winner:', error);

@@ -61,8 +61,8 @@ export const ProfileSettings = () => {
   const onSubmit = async (data: ProfileFormData) => {
     setIsLoading(true);
     try {
-      const { error } = await updateProfile(data);
-      if (!error) {
+      const updatedProfile = await updateProfile(data);
+      if (updatedProfile) {
         setLastSaved(new Date());
         reset(data); // Reset form dirty state
       }

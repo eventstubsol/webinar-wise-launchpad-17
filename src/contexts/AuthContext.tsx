@@ -1,4 +1,3 @@
-
 import React, {
   createContext,
   useContext,
@@ -119,8 +118,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       console.log('[AuthProvider] Settings fetched successfully:', data);
-      setSettings(data);
-      return data;
+      
+      // Ensure theme_preference is valid
+      const validThemes: ('light' | 'dark' | 'system')[] = ['light', 'dark', 'system'];
+      const theme = validThemes.includes(data.theme_preference as any) ? 
+        data.theme_preference as 'light' | 'dark' | 'system' : 'system';
+      
+      const normalizedSettings: UserSettings = {
+        ...data,
+        theme_preference: theme
+      };
+      
+      setSettings(normalizedSettings);
+      return normalizedSettings;
     } catch (error) {
       console.error('[AuthProvider] Settings fetch error:', error);
       setSettings(null);
@@ -325,8 +335,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (error) throw error;
         
-        setSettings(data);
-        return data;
+        // Normalize the returned data
+        const validThemes: ('light' | 'dark' | 'system')[] = ['light', 'dark', 'system'];
+        const theme = validThemes.includes(data.theme_preference as any) ? 
+          data.theme_preference as 'light' | 'dark' | 'system' : 'system';
+        
+        const normalizedSettings: UserSettings = {
+          ...data,
+          theme_preference: theme
+        };
+        
+        setSettings(normalizedSettings);
+        return normalizedSettings;
       } catch (error) {
         console.error('Error updating settings:', error);
         return null;
