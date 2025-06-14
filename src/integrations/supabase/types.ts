@@ -140,6 +140,368 @@ export type Database = {
         }
         Relationships: []
       }
+      audience_segments: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          estimated_size: number | null
+          filter_criteria: Json
+          id: string
+          is_active: boolean | null
+          is_dynamic: boolean | null
+          last_calculated_at: string | null
+          segment_name: string
+          tags: string[] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          estimated_size?: number | null
+          filter_criteria?: Json
+          id?: string
+          is_active?: boolean | null
+          is_dynamic?: boolean | null
+          last_calculated_at?: string | null
+          segment_name: string
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          estimated_size?: number | null
+          filter_criteria?: Json
+          id?: string
+          is_active?: boolean | null
+          is_dynamic?: boolean | null
+          last_calculated_at?: string | null
+          segment_name?: string
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audience_segments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_analytics: {
+        Row: {
+          campaign_id: string
+          created_at: string | null
+          event_data: Json | null
+          event_timestamp: string | null
+          id: string
+          metric_type: string
+          metric_value: number | null
+          recipient_email: string | null
+          variant_id: string | null
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string | null
+          event_data?: Json | null
+          event_timestamp?: string | null
+          id?: string
+          metric_type: string
+          metric_value?: number | null
+          recipient_email?: string | null
+          variant_id?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string | null
+          event_data?: Json | null
+          event_timestamp?: string | null
+          id?: string
+          metric_type?: string
+          metric_value?: number | null
+          recipient_email?: string | null
+          variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_analytics_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_analytics_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_performance_summaries: {
+        Row: {
+          bounce_rate: number | null
+          calculated_at: string | null
+          campaign_id: string
+          click_rate: number | null
+          conversion_rate: number | null
+          created_at: string | null
+          id: string
+          open_rate: number | null
+          revenue_generated: number | null
+          total_bounced: number | null
+          total_clicked: number | null
+          total_complained: number | null
+          total_converted: number | null
+          total_delivered: number | null
+          total_opened: number | null
+          total_sent: number | null
+          total_unsubscribed: number | null
+          unsubscribe_rate: number | null
+        }
+        Insert: {
+          bounce_rate?: number | null
+          calculated_at?: string | null
+          campaign_id: string
+          click_rate?: number | null
+          conversion_rate?: number | null
+          created_at?: string | null
+          id?: string
+          open_rate?: number | null
+          revenue_generated?: number | null
+          total_bounced?: number | null
+          total_clicked?: number | null
+          total_complained?: number | null
+          total_converted?: number | null
+          total_delivered?: number | null
+          total_opened?: number | null
+          total_sent?: number | null
+          total_unsubscribed?: number | null
+          unsubscribe_rate?: number | null
+        }
+        Update: {
+          bounce_rate?: number | null
+          calculated_at?: string | null
+          campaign_id?: string
+          click_rate?: number | null
+          conversion_rate?: number | null
+          created_at?: string | null
+          id?: string
+          open_rate?: number | null
+          revenue_generated?: number | null
+          total_bounced?: number | null
+          total_clicked?: number | null
+          total_complained?: number | null
+          total_converted?: number | null
+          total_delivered?: number | null
+          total_opened?: number | null
+          total_sent?: number | null
+          total_unsubscribed?: number | null
+          unsubscribe_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_performance_summaries_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_schedules: {
+        Row: {
+          campaign_id: string
+          created_at: string | null
+          execution_count: number | null
+          frequency_cap: Json | null
+          id: string
+          is_active: boolean | null
+          last_executed_at: string | null
+          next_execution_at: string | null
+          recurrence_pattern: Json | null
+          schedule_type: string
+          send_at: string | null
+          timezone: string | null
+          trigger_conditions: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string | null
+          execution_count?: number | null
+          frequency_cap?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_executed_at?: string | null
+          next_execution_at?: string | null
+          recurrence_pattern?: Json | null
+          schedule_type: string
+          send_at?: string | null
+          timezone?: string | null
+          trigger_conditions?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string | null
+          execution_count?: number | null
+          frequency_cap?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_executed_at?: string | null
+          next_execution_at?: string | null
+          recurrence_pattern?: Json | null
+          schedule_type?: string
+          send_at?: string | null
+          timezone?: string | null
+          trigger_conditions?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_schedules_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_templates: {
+        Row: {
+          category: string
+          created_at: string | null
+          default_settings: Json | null
+          description: string | null
+          id: string
+          is_featured: boolean | null
+          is_public: boolean | null
+          rating: number | null
+          rating_count: number | null
+          tags: string[] | null
+          template_name: string
+          updated_at: string | null
+          usage_count: number | null
+          user_id: string
+          workflow_config: Json
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          default_settings?: Json | null
+          description?: string | null
+          id?: string
+          is_featured?: boolean | null
+          is_public?: boolean | null
+          rating?: number | null
+          rating_count?: number | null
+          tags?: string[] | null
+          template_name: string
+          updated_at?: string | null
+          usage_count?: number | null
+          user_id: string
+          workflow_config?: Json
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          default_settings?: Json | null
+          description?: string | null
+          id?: string
+          is_featured?: boolean | null
+          is_public?: boolean | null
+          rating?: number | null
+          rating_count?: number | null
+          tags?: string[] | null
+          template_name?: string
+          updated_at?: string | null
+          usage_count?: number | null
+          user_id?: string
+          workflow_config?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_templates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_variants: {
+        Row: {
+          campaign_id: string
+          content_changes: Json | null
+          created_at: string | null
+          id: string
+          is_control: boolean | null
+          is_winner: boolean | null
+          performance_metrics: Json | null
+          recipient_count: number | null
+          send_time_offset: number | null
+          split_percentage: number | null
+          subject_line: string | null
+          template_id: string | null
+          variant_name: string
+          variant_type: string
+        }
+        Insert: {
+          campaign_id: string
+          content_changes?: Json | null
+          created_at?: string | null
+          id?: string
+          is_control?: boolean | null
+          is_winner?: boolean | null
+          performance_metrics?: Json | null
+          recipient_count?: number | null
+          send_time_offset?: number | null
+          split_percentage?: number | null
+          subject_line?: string | null
+          template_id?: string | null
+          variant_name: string
+          variant_type: string
+        }
+        Update: {
+          campaign_id?: string
+          content_changes?: Json | null
+          created_at?: string | null
+          id?: string
+          is_control?: boolean | null
+          is_winner?: boolean | null
+          performance_metrics?: Json | null
+          recipient_count?: number | null
+          send_time_offset?: number | null
+          split_percentage?: number | null
+          subject_line?: string | null
+          template_id?: string | null
+          variant_name?: string
+          variant_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_variants_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_variants_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_analysis: {
         Row: {
           analysis_model: string
@@ -469,6 +831,82 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_send_queue: {
+        Row: {
+          attempts: number | null
+          campaign_id: string
+          created_at: string | null
+          error_message: string | null
+          id: string
+          max_attempts: number | null
+          personalization_data: Json | null
+          priority: number | null
+          recipient_email: string
+          recipient_id: string | null
+          scheduled_send_time: string
+          sent_at: string | null
+          status: string | null
+          updated_at: string | null
+          variant_id: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          campaign_id: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          max_attempts?: number | null
+          personalization_data?: Json | null
+          priority?: number | null
+          recipient_email: string
+          recipient_id?: string | null
+          scheduled_send_time: string
+          sent_at?: string | null
+          status?: string | null
+          updated_at?: string | null
+          variant_id?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          campaign_id?: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          max_attempts?: number | null
+          personalization_data?: Json | null
+          priority?: number | null
+          recipient_email?: string
+          recipient_id?: string | null
+          scheduled_send_time?: string
+          sent_at?: string | null
+          status?: string | null
+          updated_at?: string | null
+          variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_send_queue_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_send_queue_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_send_queue_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_variants"
             referencedColumns: ["id"]
           },
         ]
@@ -1399,6 +1837,53 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "report_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      send_time_optimization: {
+        Row: {
+          confidence_level: number | null
+          engagement_score: number | null
+          id: string
+          last_updated: string | null
+          optimal_day_of_week: number | null
+          optimal_hour: number | null
+          recipient_email: string
+          sample_size: number | null
+          timezone: string | null
+          user_id: string
+        }
+        Insert: {
+          confidence_level?: number | null
+          engagement_score?: number | null
+          id?: string
+          last_updated?: string | null
+          optimal_day_of_week?: number | null
+          optimal_hour?: number | null
+          recipient_email: string
+          sample_size?: number | null
+          timezone?: string | null
+          user_id: string
+        }
+        Update: {
+          confidence_level?: number | null
+          engagement_score?: number | null
+          id?: string
+          last_updated?: string | null
+          optimal_day_of_week?: number | null
+          optimal_hour?: number | null
+          recipient_email?: string
+          sample_size?: number | null
+          timezone?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "send_time_optimization_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2773,6 +3258,10 @@ export type Database = {
         }
         Returns: string
       }
+      calculate_campaign_performance: {
+        Args: { p_campaign_id: string }
+        Returns: undefined
+      }
       decrypt_token: {
         Args: { encrypted_token: string }
         Returns: string
@@ -2794,6 +3283,10 @@ export type Database = {
       invalidate_cache_dependencies: {
         Args: { dep_pattern: string }
         Returns: number
+      }
+      update_segment_size: {
+        Args: { p_segment_id: string }
+        Returns: undefined
       }
     }
     Enums: {
