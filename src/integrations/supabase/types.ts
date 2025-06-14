@@ -972,6 +972,360 @@ export type Database = {
           },
         ]
       }
+      crm_connections: {
+        Row: {
+          access_token: string | null
+          api_key: string | null
+          config: Json | null
+          connection_name: string
+          created_at: string | null
+          crm_type: string
+          error_count: number | null
+          error_message: string | null
+          id: string
+          instance_url: string | null
+          is_active: boolean | null
+          is_primary: boolean | null
+          last_sync_at: string | null
+          next_sync_at: string | null
+          refresh_token: string | null
+          status: string | null
+          sync_direction: string | null
+          sync_enabled: boolean | null
+          sync_frequency_hours: number | null
+          token_expires_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          api_key?: string | null
+          config?: Json | null
+          connection_name: string
+          created_at?: string | null
+          crm_type: string
+          error_count?: number | null
+          error_message?: string | null
+          id?: string
+          instance_url?: string | null
+          is_active?: boolean | null
+          is_primary?: boolean | null
+          last_sync_at?: string | null
+          next_sync_at?: string | null
+          refresh_token?: string | null
+          status?: string | null
+          sync_direction?: string | null
+          sync_enabled?: boolean | null
+          sync_frequency_hours?: number | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          api_key?: string | null
+          config?: Json | null
+          connection_name?: string
+          created_at?: string | null
+          crm_type?: string
+          error_count?: number | null
+          error_message?: string | null
+          id?: string
+          instance_url?: string | null
+          is_active?: boolean | null
+          is_primary?: boolean | null
+          last_sync_at?: string | null
+          next_sync_at?: string | null
+          refresh_token?: string | null
+          status?: string | null
+          sync_direction?: string | null
+          sync_enabled?: boolean | null
+          sync_frequency_hours?: number | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      crm_field_mappings: {
+        Row: {
+          conflict_resolution: string | null
+          connection_id: string
+          created_at: string | null
+          crm_field: string
+          crm_object_type: string
+          default_value: string | null
+          id: string
+          is_required: boolean | null
+          sync_direction: string | null
+          transformation_rules: Json | null
+          updated_at: string | null
+          webinar_field: string
+        }
+        Insert: {
+          conflict_resolution?: string | null
+          connection_id: string
+          created_at?: string | null
+          crm_field: string
+          crm_object_type: string
+          default_value?: string | null
+          id?: string
+          is_required?: boolean | null
+          sync_direction?: string | null
+          transformation_rules?: Json | null
+          updated_at?: string | null
+          webinar_field: string
+        }
+        Update: {
+          conflict_resolution?: string | null
+          connection_id?: string
+          created_at?: string | null
+          crm_field?: string
+          crm_object_type?: string
+          default_value?: string | null
+          id?: string
+          is_required?: boolean | null
+          sync_direction?: string | null
+          transformation_rules?: Json | null
+          updated_at?: string | null
+          webinar_field?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_field_mappings_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "crm_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_sync_conflicts: {
+        Row: {
+          conflict_type: string
+          connection_id: string
+          created_at: string | null
+          crm_value: Json | null
+          field_name: string | null
+          id: string
+          resolution_method: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_value: Json | null
+          status: string | null
+          sync_log_id: string
+          webinar_value: Json | null
+        }
+        Insert: {
+          conflict_type: string
+          connection_id: string
+          created_at?: string | null
+          crm_value?: Json | null
+          field_name?: string | null
+          id?: string
+          resolution_method?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_value?: Json | null
+          status?: string | null
+          sync_log_id: string
+          webinar_value?: Json | null
+        }
+        Update: {
+          conflict_type?: string
+          connection_id?: string
+          created_at?: string | null
+          crm_value?: Json | null
+          field_name?: string | null
+          id?: string
+          resolution_method?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_value?: Json | null
+          status?: string | null
+          sync_log_id?: string
+          webinar_value?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_sync_conflicts_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "crm_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_sync_conflicts_sync_log_id_fkey"
+            columns: ["sync_log_id"]
+            isOneToOne: false
+            referencedRelation: "crm_sync_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_sync_logs: {
+        Row: {
+          completed_at: string | null
+          conflict_details: Json | null
+          connection_id: string
+          created_at: string | null
+          crm_object_id: string | null
+          crm_object_type: string | null
+          data_after: Json | null
+          data_before: Json | null
+          direction: string
+          duration_ms: number | null
+          error_message: string | null
+          field_changes: Json | null
+          id: string
+          operation_type: string
+          participant_id: string | null
+          records_conflicts: number | null
+          records_failed: number | null
+          records_processed: number | null
+          records_success: number | null
+          resolution_action: string | null
+          started_at: string | null
+          status: string
+          sync_type: string
+          webinar_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          conflict_details?: Json | null
+          connection_id: string
+          created_at?: string | null
+          crm_object_id?: string | null
+          crm_object_type?: string | null
+          data_after?: Json | null
+          data_before?: Json | null
+          direction: string
+          duration_ms?: number | null
+          error_message?: string | null
+          field_changes?: Json | null
+          id?: string
+          operation_type: string
+          participant_id?: string | null
+          records_conflicts?: number | null
+          records_failed?: number | null
+          records_processed?: number | null
+          records_success?: number | null
+          resolution_action?: string | null
+          started_at?: string | null
+          status: string
+          sync_type: string
+          webinar_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          conflict_details?: Json | null
+          connection_id?: string
+          created_at?: string | null
+          crm_object_id?: string | null
+          crm_object_type?: string | null
+          data_after?: Json | null
+          data_before?: Json | null
+          direction?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          field_changes?: Json | null
+          id?: string
+          operation_type?: string
+          participant_id?: string | null
+          records_conflicts?: number | null
+          records_failed?: number | null
+          records_processed?: number | null
+          records_success?: number | null
+          resolution_action?: string | null
+          started_at?: string | null
+          status?: string
+          sync_type?: string
+          webinar_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_sync_logs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "crm_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_sync_logs_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_sync_logs_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "webinar_analytics_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_sync_logs_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_webhooks: {
+        Row: {
+          connection_id: string
+          created_at: string | null
+          event_types: string[] | null
+          id: string
+          is_active: boolean | null
+          last_ping_at: string | null
+          signature_header: string | null
+          status: string | null
+          updated_at: string | null
+          verification_method: string | null
+          webhook_secret: string | null
+          webhook_url: string
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string | null
+          event_types?: string[] | null
+          id?: string
+          is_active?: boolean | null
+          last_ping_at?: string | null
+          signature_header?: string | null
+          status?: string | null
+          updated_at?: string | null
+          verification_method?: string | null
+          webhook_secret?: string | null
+          webhook_url: string
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string | null
+          event_types?: string[] | null
+          id?: string
+          is_active?: boolean | null
+          last_ping_at?: string | null
+          signature_header?: string | null
+          status?: string | null
+          updated_at?: string | null
+          verification_method?: string | null
+          webhook_secret?: string | null
+          webhook_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_webhooks_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "crm_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       csv_import_rows: {
         Row: {
           created_at: string | null
