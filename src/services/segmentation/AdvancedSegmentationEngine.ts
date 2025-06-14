@@ -300,7 +300,17 @@ export class AdvancedSegmentationEngine {
       .order('membership_score', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    
+    return (data || []).map(member => ({
+      id: member.id,
+      segment_id: member.segment_id,
+      user_id: member.user_id,
+      email_address: member.email_address,
+      membership_score: member.membership_score,
+      membership_reason: castToRecord(member.membership_reason),
+      added_at: member.added_at,
+      last_updated_at: member.last_updated_at,
+    }));
   }
 
   private static calculateMembershipScore(
