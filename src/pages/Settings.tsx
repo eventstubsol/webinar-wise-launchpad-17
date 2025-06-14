@@ -2,7 +2,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Settings as SettingsIcon, Globe, Bell, FileText } from 'lucide-react';
+import { User, Settings as SettingsIcon, Globe, Bell, FileText, ShieldCheck } from 'lucide-react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/dashboard/AppSidebar';
 import { ProfileSettings } from '@/components/profile/ProfileSettings';
@@ -10,6 +10,7 @@ import { UserSettings } from '@/components/settings/UserSettings';
 import { ZoomIntegrationSettings } from '@/components/settings/ZoomIntegrationSettings';
 import { ExportDashboard } from '@/components/export/ExportDashboard';
 import { SettingsHeader } from '@/components/settings/SettingsHeader';
+import { DataPrivacySettings } from '@/components/settings/DataPrivacySettings';
 
 const Settings = () => {
   return (
@@ -28,7 +29,7 @@ const Settings = () => {
             </div>
 
             <Tabs defaultValue="profile" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-6">
                 <TabsTrigger value="profile" className="flex items-center gap-2">
                   <User className="h-4 w-4" />
                   Profile
@@ -49,6 +50,10 @@ const Settings = () => {
                   <Bell className="h-4 w-4" />
                   Notifications
                 </TabsTrigger>
+                <TabsTrigger value="privacy" className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4" />
+                  Data & Privacy
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="profile">
@@ -63,7 +68,6 @@ const Settings = () => {
                 <div className="space-y-6">
                   <ZoomIntegrationSettings />
                   
-                  {/* Placeholder for future integrations */}
                   <Card>
                     <CardHeader>
                       <CardTitle>More Integrations Coming Soon</CardTitle>
@@ -92,6 +96,9 @@ const Settings = () => {
                     </p>
                   </CardContent>
                 </Card>
+              </TabsContent>
+              <TabsContent value="privacy">
+                <DataPrivacySettings />
               </TabsContent>
             </Tabs>
           </div>

@@ -1,13 +1,13 @@
 
 import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useProfile } from '@/contexts/ProfileContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/common/FormField';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 
 export const ProfileSettings = () => {
-  const { profile, profileLoading, updateProfile } = useAuth();
+  const { profile, loading: profileLoading, updateProfile } = useProfile();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     full_name: profile?.full_name || '',
