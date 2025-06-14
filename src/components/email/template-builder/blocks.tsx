@@ -1,7 +1,15 @@
-
 import React from "react";
 
-export type TemplateBlockType = "text" | "image" | "button" | "divider";
+export type TemplateBlockType = 
+  | "text" 
+  | "image" 
+  | "button" 
+  | "divider"
+  | "social_media"
+  | "video" 
+  | "product_showcase"
+  | "countdown_timer"
+  | "survey";
 
 export interface TemplateBlock {
   id: string;
@@ -14,6 +22,46 @@ export const blockDefaults: Record<TemplateBlockType, any> = {
   image: { url: "", alt: "Image description" },
   button: { label: "Click me", url: "#" },
   divider: {},
+  social_media: {
+    platforms: [
+      { name: 'facebook', url: 'https://facebook.com/yourpage' },
+      { name: 'twitter', url: 'https://twitter.com/yourhandle' }
+    ],
+    layout: 'horizontal',
+    size: 'medium'
+  },
+  video: {
+    video_url: 'https://youtube.com/watch?v=example',
+    thumbnail_url: 'https://via.placeholder.com/600x300',
+    title: 'Watch Our Latest Video',
+    description: 'Check out this amazing content',
+    play_button_style: 'overlay'
+  },
+  product_showcase: {
+    products: [{
+      name: 'Sample Product',
+      image_url: 'https://via.placeholder.com/200x200',
+      price: '$29.99',
+      description: 'Amazing product description',
+      product_url: 'https://yourstore.com/product'
+    }],
+    layout: 'grid',
+    columns: 2
+  },
+  countdown_timer: {
+    end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    title: 'Limited Time Offer',
+    description: 'Don\'t miss out!',
+    timezone: 'UTC',
+    style: 'digital'
+  },
+  survey: {
+    question: 'How satisfied are you with our service?',
+    options: ['Very Satisfied', 'Satisfied', 'Neutral', 'Dissatisfied', 'Very Dissatisfied'],
+    survey_url: 'https://yoursurvey.com',
+    button_text: 'Take Survey',
+    allow_multiple: false
+  }
 };
 
 export function BlockRenderer({
@@ -73,7 +121,7 @@ export function BlockRenderer({
     case "divider":
       return <div className="border-b border-gray-200 my-2" />;
     default:
-      return null;
+      return <div className="text-sm text-gray-500">Advanced block - use designer mode to edit</div>;
   }
 }
 
@@ -99,6 +147,6 @@ export function BlockPreview({ block }: { block: TemplateBlock }) {
     case "divider":
       return <div className="border-b border-gray-200 my-2" />;
     default:
-      return null;
+      return <div className="my-1 p-2 bg-gray-100 rounded text-sm">Advanced Block: {block.type}</div>;
   }
 }
