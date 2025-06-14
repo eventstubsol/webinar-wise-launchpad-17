@@ -16,8 +16,8 @@ interface CSVImport {
   progress_percentage: number;
   created_at: string;
   completed_at: string | null;
-  validation_errors: any[];
-  processing_errors: any[];
+  validation_errors: any;
+  processing_errors: any;
 }
 
 export const useCSVImports = () => {
@@ -42,7 +42,14 @@ export const useCSVImports = () => {
 
         if (fetchError) throw fetchError;
 
-        setImports(data || []);
+        // Transform the data to match our interface
+        const transformedData = (data || []).map(item => ({
+          ...item,
+          validation_errors: Array.isArray(item.validation_errors) ? item.validation_errors : [],
+          processing_errors: Array.isArray(item.processing_errors) ? item.processing_errors : []
+        }));
+
+        setImports(transformedData);
       } catch (err) {
         console.error('Error fetching CSV imports:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch imports');

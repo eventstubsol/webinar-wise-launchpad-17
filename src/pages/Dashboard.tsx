@@ -10,8 +10,8 @@ import { CSVUploadSection } from "@/components/dashboard/CSVUploadSection";
 import { useZoomConnection } from "@/hooks/useZoomConnection";
 
 export default function Dashboard() {
-  const { connection, loading } = useZoomConnection();
-  const hasZoomConnection = !loading && connection?.status === 'connected';
+  const { connection, isLoading, isConnected } = useZoomConnection();
+  const hasZoomConnection = !isLoading && isConnected;
 
   return (
     <SidebarProvider>
