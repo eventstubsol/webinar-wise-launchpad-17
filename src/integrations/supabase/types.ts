@@ -589,6 +589,212 @@ export type Database = {
           },
         ]
       }
+      email_template_collection_items: {
+        Row: {
+          added_at: string | null
+          collection_id: string
+          id: string
+          template_id: string
+        }
+        Insert: {
+          added_at?: string | null
+          collection_id: string
+          id?: string
+          template_id: string
+        }
+        Update: {
+          added_at?: string | null
+          collection_id?: string
+          id?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_template_collection_items_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "email_template_collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_template_collection_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_template_collections: {
+        Row: {
+          collection_name: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_public: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          collection_name: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          collection_name?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_template_collections_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_template_tags: {
+        Row: {
+          created_at: string | null
+          id: string
+          tag_name: string
+          template_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          tag_name: string
+          template_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          tag_name?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_template_tags_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_template_usage: {
+        Row: {
+          id: string
+          template_id: string
+          used_at: string | null
+          used_by: string | null
+          used_in_campaign: string | null
+        }
+        Insert: {
+          id?: string
+          template_id: string
+          used_at?: string | null
+          used_by?: string | null
+          used_in_campaign?: string | null
+        }
+        Update: {
+          id?: string
+          template_id?: string
+          used_at?: string | null
+          used_by?: string | null
+          used_in_campaign?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_template_usage_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_template_usage_used_by_fkey"
+            columns: ["used_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_template_usage_used_in_campaign_fkey"
+            columns: ["used_in_campaign"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_template_versions: {
+        Row: {
+          change_summary: string | null
+          created_at: string | null
+          created_by: string | null
+          design_json: Json
+          html_template: string
+          id: string
+          is_published: boolean | null
+          template_id: string
+          template_name: string
+          variables: Json | null
+          version_number: number
+        }
+        Insert: {
+          change_summary?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          design_json?: Json
+          html_template: string
+          id?: string
+          is_published?: boolean | null
+          template_id: string
+          template_name: string
+          variables?: Json | null
+          version_number: number
+        }
+        Update: {
+          change_summary?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          design_json?: Json
+          html_template?: string
+          id?: string
+          is_published?: boolean | null
+          template_id?: string
+          template_name?: string
+          variables?: Json | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_template_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_template_versions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_templates: {
         Row: {
           category: string
@@ -599,13 +805,21 @@ export type Database = {
           is_active: boolean | null
           is_default: boolean | null
           is_public: boolean | null
+          is_system_template: boolean | null
+          last_used_at: string | null
+          preview_image_url: string | null
+          rating: number | null
+          rating_count: number | null
           subject_template: string
+          tags: string[] | null
           template_name: string
           template_type: string
           text_template: string | null
           updated_at: string | null
+          usage_count: number | null
           user_id: string
           variables: Json | null
+          version_number: number | null
         }
         Insert: {
           category?: string
@@ -616,13 +830,21 @@ export type Database = {
           is_active?: boolean | null
           is_default?: boolean | null
           is_public?: boolean | null
+          is_system_template?: boolean | null
+          last_used_at?: string | null
+          preview_image_url?: string | null
+          rating?: number | null
+          rating_count?: number | null
           subject_template: string
+          tags?: string[] | null
           template_name: string
           template_type: string
           text_template?: string | null
           updated_at?: string | null
+          usage_count?: number | null
           user_id: string
           variables?: Json | null
+          version_number?: number | null
         }
         Update: {
           category?: string
@@ -633,13 +855,21 @@ export type Database = {
           is_active?: boolean | null
           is_default?: boolean | null
           is_public?: boolean | null
+          is_system_template?: boolean | null
+          last_used_at?: string | null
+          preview_image_url?: string | null
+          rating?: number | null
+          rating_count?: number | null
           subject_template?: string
+          tags?: string[] | null
           template_name?: string
           template_type?: string
           text_template?: string | null
           updated_at?: string | null
+          usage_count?: number | null
           user_id?: string
           variables?: Json | null
+          version_number?: number | null
         }
         Relationships: []
       }

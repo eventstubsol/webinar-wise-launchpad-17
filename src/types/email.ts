@@ -19,6 +19,39 @@ export interface EmailTemplate {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  // New fields from Phase 2
+  tags?: string[];
+  preview_image_url?: string;
+  version_number?: number;
+  is_system_template?: boolean;
+  usage_count?: number;
+  last_used_at?: string;
+  rating?: number;
+  rating_count?: number;
+}
+
+export interface EmailTemplateVersion {
+  id: string;
+  template_id: string;
+  version_number: number;
+  template_name: string;
+  design_json: any;
+  html_template: string;
+  variables: string[];
+  created_by: string;
+  created_at: string;
+  change_summary?: string;
+  is_published: boolean;
+}
+
+export interface EmailTemplateCollection {
+  id: string;
+  user_id: string;
+  collection_name: string;
+  description?: string;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface EmailCampaign {
