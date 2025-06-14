@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -40,7 +39,7 @@ export function EmailCampaignsDashboard() {
           <MailMinus className="w-5 h-5" />
           Email Campaigns
         </h2>
-        <Button onClick={() => setShowNew(s => !s)} variant="primary" size="sm">
+        <Button onClick={() => setShowNew(s => !s)} variant="default" size="sm">
           <MailPlus className="w-4 h-4 mr-1" />
           New Campaign
         </Button>
@@ -102,4 +101,3 @@ export function EmailCampaignsDashboard() {
     </section>
   );
 }
-
