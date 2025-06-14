@@ -2,10 +2,11 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Settings as SettingsIcon, Globe, Bell } from 'lucide-react';
+import { User, Settings as SettingsIcon, Globe, Bell, FileText } from 'lucide-react';
 import { ProfileSettings } from '@/components/profile/ProfileSettings';
 import { UserSettings } from '@/components/settings/UserSettings';
 import { ZoomIntegrationSettings } from '@/components/settings/ZoomIntegrationSettings';
+import { ExportDashboard } from '@/components/export/ExportDashboard';
 import { AppSidebar } from '@/components/dashboard/AppSidebar';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { SettingsHeader } from '@/components/settings/SettingsHeader';
@@ -46,7 +47,7 @@ const Settings = () => {
               </div>
 
               <Tabs defaultValue="profile" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-5">
                   <TabsTrigger value="profile" className="flex items-center gap-2">
                     <User className="h-4 w-4" />
                     Profile
@@ -58,6 +59,10 @@ const Settings = () => {
                   <TabsTrigger value="integrations" className="flex items-center gap-2">
                     <Globe className="h-4 w-4" />
                     Integrations
+                  </TabsTrigger>
+                  <TabsTrigger value="exports" className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Reports & Exports
                   </TabsTrigger>
                   <TabsTrigger value="notifications" className="flex items-center gap-2">
                     <Bell className="h-4 w-4" />
@@ -89,6 +94,10 @@ const Settings = () => {
                       </CardContent>
                     </Card>
                   </div>
+                </TabsContent>
+
+                <TabsContent value="exports">
+                  <ExportDashboard />
                 </TabsContent>
 
                 <TabsContent value="notifications">

@@ -336,6 +336,51 @@ export type Database = {
           },
         ]
       }
+      email_templates: {
+        Row: {
+          created_at: string | null
+          html_template: string
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          subject_template: string
+          template_name: string
+          template_type: string
+          text_template: string | null
+          updated_at: string | null
+          user_id: string
+          variables: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          html_template: string
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          subject_template: string
+          template_name: string
+          template_type: string
+          text_template?: string | null
+          updated_at?: string | null
+          user_id: string
+          variables?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          html_template?: string
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          subject_template?: string
+          template_name?: string
+          template_type?: string
+          text_template?: string | null
+          updated_at?: string | null
+          user_id?: string
+          variables?: Json | null
+        }
+        Relationships: []
+      }
       engagement_predictions: {
         Row: {
           actual_value: number | null
@@ -423,6 +468,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      export_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          expires_at: string | null
+          export_config: Json | null
+          export_format: string | null
+          export_type: string
+          file_size: number | null
+          file_url: string | null
+          id: string
+          progress_percentage: number | null
+          started_at: string | null
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          export_config?: Json | null
+          export_format?: string | null
+          export_type: string
+          file_size?: number | null
+          file_url?: string | null
+          id?: string
+          progress_percentage?: number | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          export_config?: Json | null
+          export_format?: string | null
+          export_type?: string
+          file_size?: number | null
+          file_url?: string | null
+          id?: string
+          progress_percentage?: number | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       insight_templates: {
         Row: {
@@ -644,6 +743,173 @@ export type Database = {
           target_users?: string[] | null
         }
         Relationships: []
+      }
+      report_history: {
+        Row: {
+          created_at: string | null
+          delivery_details: Json | null
+          delivery_status: string | null
+          export_queue_id: string | null
+          file_size: number | null
+          file_url: string | null
+          generation_time_ms: number | null
+          id: string
+          recipient_count: number | null
+          report_title: string
+          report_type: string
+          scheduled_report_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          delivery_details?: Json | null
+          delivery_status?: string | null
+          export_queue_id?: string | null
+          file_size?: number | null
+          file_url?: string | null
+          generation_time_ms?: number | null
+          id?: string
+          recipient_count?: number | null
+          report_title: string
+          report_type: string
+          scheduled_report_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          delivery_details?: Json | null
+          delivery_status?: string | null
+          export_queue_id?: string | null
+          file_size?: number | null
+          file_url?: string | null
+          generation_time_ms?: number | null
+          id?: string
+          recipient_count?: number | null
+          report_title?: string
+          report_type?: string
+          scheduled_report_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_history_export_queue_id_fkey"
+            columns: ["export_queue_id"]
+            isOneToOne: false
+            referencedRelation: "export_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_history_scheduled_report_id_fkey"
+            columns: ["scheduled_report_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      report_templates: {
+        Row: {
+          branding_config: Json | null
+          content_sections: Json | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          layout_config: Json | null
+          template_description: string | null
+          template_name: string
+          template_type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          branding_config?: Json | null
+          content_sections?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          layout_config?: Json | null
+          template_description?: string | null
+          template_name: string
+          template_type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          branding_config?: Json | null
+          content_sections?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          layout_config?: Json | null
+          template_description?: string | null
+          template_name?: string
+          template_type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      scheduled_reports: {
+        Row: {
+          created_at: string | null
+          filter_config: Json | null
+          id: string
+          is_active: boolean | null
+          last_sent_at: string | null
+          next_send_at: string | null
+          recipient_list: Json | null
+          report_name: string
+          report_type: string
+          schedule_config: Json | null
+          schedule_frequency: string
+          template_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          filter_config?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_sent_at?: string | null
+          next_send_at?: string | null
+          recipient_list?: Json | null
+          report_name: string
+          report_type: string
+          schedule_config?: Json | null
+          schedule_frequency: string
+          template_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          filter_config?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_sent_at?: string | null
+          next_send_at?: string | null
+          recipient_list?: Json | null
+          report_name?: string
+          report_type?: string
+          schedule_config?: Json | null
+          schedule_frequency?: string
+          template_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_reports_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "report_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_settings: {
         Row: {
