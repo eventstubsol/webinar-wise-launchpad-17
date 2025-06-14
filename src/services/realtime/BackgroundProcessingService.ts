@@ -175,7 +175,7 @@ export class BackgroundProcessingService {
       updated_at: new Date().toISOString(),
     });
 
-    return { participant_id, engagement_score };
+    return { participant_id, engagement_score: engagementScore };
   }
 
   private async processPollAnalysis(task: ProcessingTask): Promise<any> {

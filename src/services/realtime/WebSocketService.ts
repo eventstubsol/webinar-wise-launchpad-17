@@ -35,20 +35,9 @@ class WebSocketService {
   }
 
   private setupGlobalErrorHandling() {
-    // Handle connection status changes
-    supabase.realtime.onConnectionStateChange((state) => {
-      this.isConnected = state === 'connected';
-      
-      if (state === 'disconnected' || state === 'error') {
-        this.handleReconnection();
-      } else if (state === 'connected') {
-        this.reconnectAttempts = 0;
-        if (this.reconnectTimeout) {
-          clearTimeout(this.reconnectTimeout);
-          this.reconnectTimeout = null;
-        }
-      }
-    });
+    // Monitor connection status through subscription callbacks
+    // Since Supabase doesn't expose onConnectionStateChange directly,
+    // we'll track connection status through subscription success/failure
   }
 
   private handleReconnection() {
@@ -123,8 +112,15 @@ class WebSocketService {
     channel.subscribe((status: string) => {
       if (status === 'SUBSCRIBED') {
         console.log(`Successfully subscribed to ${channelName}`);
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        if (this.reconnectTimeout) {
+          clearTimeout(this.reconnectTimeout);
+          this.reconnectTimeout = null;
+        }
       } else if (status === 'CHANNEL_ERROR') {
         console.error(`Failed to subscribe to ${channelName}`);
+        this.isConnected = false;
         this.handleReconnection();
       }
     });

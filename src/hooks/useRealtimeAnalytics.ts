@@ -64,36 +64,42 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
               filter: `user_id=eq.${user.id}`,
             },
             (payload) => {
-              const task = payload.new as ProcessingTask;
-              
+              // Handle DELETE events safely
               if (payload.eventType === 'DELETE') {
-                setProcessingTasks(prev => prev.filter(t => t.id !== payload.old.id));
+                if (payload.old && typeof payload.old === 'object' && 'id' in payload.old) {
+                  setProcessingTasks(prev => prev.filter(t => t.id !== payload.old.id));
+                }
                 return;
               }
 
-              setProcessingTasks(prev => {
-                const existing = prev.findIndex(t => t.id === task.id);
-                if (existing >= 0) {
-                  const updated = [...prev];
-                  updated[existing] = task;
-                  return updated;
-                } else {
-                  return [...prev, task];
-                }
-              });
+              // Handle INSERT and UPDATE events
+              if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
+                const task = payload.new as ProcessingTask;
+                
+                setProcessingTasks(prev => {
+                  const existing = prev.findIndex(t => t.id === task.id);
+                  if (existing >= 0) {
+                    const updated = [...prev];
+                    updated[existing] = task;
+                    return updated;
+                  } else {
+                    return [...prev, task];
+                  }
+                });
 
-              // Show toast for important status changes
-              if (task.status === 'completed') {
-                toast({
-                  title: "Analysis Complete",
-                  description: `${task.task_type} finished successfully`,
-                });
-              } else if (task.status === 'failed') {
-                toast({
-                  title: "Analysis Failed",
-                  description: task.error_message || `${task.task_type} failed`,
-                  variant: "destructive",
-                });
+                // Show toast for important status changes
+                if (task.status === 'completed') {
+                  toast({
+                    title: "Analysis Complete",
+                    description: `${task.task_type} finished successfully`,
+                  });
+                } else if (task.status === 'failed') {
+                  toast({
+                    title: "Analysis Failed",
+                    description: task.error_message || `${task.task_type} failed`,
+                    variant: "destructive",
+                  });
+                }
               }
             }
           )
@@ -120,18 +126,22 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
             },
             (payload) => {
               if (payload.eventType === 'DELETE') {
-                setCacheEntries(prev => {
-                  const updated = new Map(prev);
-                  updated.delete(payload.old.cache_key);
-                  return updated;
-                });
+                if (payload.old && typeof payload.old === 'object' && 'cache_key' in payload.old) {
+                  setCacheEntries(prev => {
+                    const updated = new Map(prev);
+                    updated.delete(payload.old.cache_key);
+                    return updated;
+                  });
+                }
               } else {
-                const cacheEntry = payload.new as CacheEntry;
-                setCacheEntries(prev => {
-                  const updated = new Map(prev);
-                  updated.set(cacheEntry.cache_key, cacheEntry);
-                  return updated;
-                });
+                if (payload.new && typeof payload.new === 'object' && 'cache_key' in payload.new) {
+                  const cacheEntry = payload.new as CacheEntry;
+                  setCacheEntries(prev => {
+                    const updated = new Map(prev);
+                    updated.set(cacheEntry.cache_key, cacheEntry);
+                    return updated;
+                  });
+                }
               }
             }
           )
@@ -152,8 +162,10 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
             filter: `target_users=cs.{${user.id}}`,
           },
           (payload) => {
-            const event = payload.new as AnalyticsEvent;
-            setAnalyticsEvents(prev => [event, ...prev.slice(0, 49)]); // Keep last 50 events
+            if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
+              const event = payload.new as AnalyticsEvent;
+              setAnalyticsEvents(prev => [event, ...prev.slice(0, 49)]); // Keep last 50 events
+            }
           }
         )
         .subscribe();
@@ -174,10 +186,12 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
             },
             (payload) => {
               // Trigger background processing for new participant data
-              enqueueAnalysisTask('participant_analysis', {
-                webinar_id: options.webinarId,
-                participant_id: payload.new?.id,
-              }, 3); // Medium priority
+              if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
+                enqueueAnalysisTask('participant_analysis', {
+                  webinar_id: options.webinarId,
+                  participant_id: payload.new.id,
+                }, 3); // Medium priority
+              }
             }
           )
           .on(
