@@ -961,6 +961,142 @@ export type Database = {
           },
         ]
       }
+      deliverability_alerts: {
+        Row: {
+          alert_level: string
+          alert_type: string
+          campaign_id: string | null
+          created_at: string | null
+          details: Json | null
+          id: string
+          resolved_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          alert_level?: string
+          alert_type: string
+          campaign_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          resolved_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          alert_level?: string
+          alert_type?: string
+          campaign_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          resolved_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deliverability_alerts_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deliverability_alerts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deliverability_metrics: {
+        Row: {
+          created_at: string | null
+          id: string
+          metric_type: string
+          metric_value: number
+          provider: string | null
+          recorded_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          metric_type: string
+          metric_value: number
+          provider?: string | null
+          recorded_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          metric_type?: string
+          metric_value?: number
+          provider?: string | null
+          recorded_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deliverability_metrics_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deliverability_reports: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          file_url: string | null
+          id: string
+          period_end: string
+          period_start: string
+          report_type: string
+          status: string
+          summary_data: Json | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          file_url?: string | null
+          id?: string
+          period_end: string
+          period_start: string
+          report_type: string
+          status?: string
+          summary_data?: Json | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          file_url?: string | null
+          id?: string
+          period_end?: string
+          period_start?: string
+          report_type?: string
+          status?: string
+          summary_data?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deliverability_reports_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_bounces: {
         Row: {
           email_send_id: string | null
@@ -1097,6 +1233,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "email_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_reputation_history: {
+        Row: {
+          created_at: string | null
+          domain_reputation: number | null
+          id: string
+          ip_reputation: number | null
+          provider: string | null
+          recorded_date: string
+          sender_score: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          domain_reputation?: number | null
+          id?: string
+          ip_reputation?: number | null
+          provider?: string | null
+          recorded_date: string
+          sender_score?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          domain_reputation?: number | null
+          id?: string
+          ip_reputation?: number | null
+          provider?: string | null
+          recorded_date?: string
+          sender_score?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_reputation_history_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
