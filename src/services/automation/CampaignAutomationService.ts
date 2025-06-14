@@ -118,13 +118,21 @@ export class CampaignAutomationService {
 
     if (error) throw error;
 
-    // Update workflow subscriber count manually
-    await supabase
+    // Update workflow subscriber count by fetching current count and incrementing
+    const { data: currentWorkflow, error: fetchError } = await supabase
       .from('campaign_automation_workflows')
-      .update({
-        total_subscribers: supabase.raw('total_subscribers + 1')
-      })
-      .eq('id', workflowId);
+      .select('total_subscribers')
+      .eq('id', workflowId)
+      .single();
+
+    if (!fetchError && currentWorkflow) {
+      await supabase
+        .from('campaign_automation_workflows')
+        .update({
+          total_subscribers: (currentWorkflow.total_subscribers || 0) + 1
+        })
+        .eq('id', workflowId);
+    }
 
     return {
       id: data.id,
