@@ -27,7 +27,8 @@ import {
   Settings, 
   LogOut,
   Zap,
-  Mail
+  Mail,
+  Template
 } from 'lucide-react';
 import { useLocation, Link } from 'react-router-dom';
 
@@ -39,8 +40,9 @@ const navigationItems = [
   { title: "Data Filters", icon: Filter, url: "/filters" },
   { title: "AI", icon: Brain, url: "/ai" },
   { title: "Sharing", icon: Share2, url: "/sharing" },
-  { title: "Settings", icon: Settings, url: "/settings" },
+  { title: "Email Templates", icon: Template, url: "/email-templates" },
   { title: "Email Campaigns", icon: Mail, url: "/dashboard/email-campaigns" },
+  { title: "Settings", icon: Settings, url: "/settings" },
 ];
 
 interface AppSidebarProps {

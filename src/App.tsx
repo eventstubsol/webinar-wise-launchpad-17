@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,6 +17,7 @@ import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
+import EmailTemplates from "./pages/EmailTemplates";
 import ZoomOAuthCallback from "./pages/auth/zoom/callback";
 import NotFound from "./pages/NotFound";
 import WebinarDetailView from "./components/zoom/webinar/WebinarDetailView";
@@ -57,6 +59,14 @@ const App = () => (
                     element={
                       <ProtectedRoute>
                         <WebinarDetailView />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/email-templates" 
+                    element={
+                      <ProtectedRoute>
+                        <EmailTemplates />
                       </ProtectedRoute>
                     } 
                   />
