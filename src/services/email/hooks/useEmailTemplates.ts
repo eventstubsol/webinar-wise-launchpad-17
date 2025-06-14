@@ -70,6 +70,9 @@ export function useEmailTemplates(userId: string) {
         usage_count: 0,
         rating: 0,
         rating_count: 0,
+        // Add required fields with defaults
+        subject_template: newTemplate.subject_template || "{{template_name}}",
+        template_type: newTemplate.template_type || "email"
       };
       
       const { data, error } = await supabase

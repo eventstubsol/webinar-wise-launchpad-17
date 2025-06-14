@@ -3,14 +3,23 @@ import React, { useState } from "react";
 import { TemplateLibrary } from "@/components/email/template-library/TemplateLibrary";
 import { EmailTemplateBuilder } from "@/components/email/EmailTemplateBuilder";
 import { EmailTemplate } from "@/types/email";
-import { useAuth } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
 export default function EmailTemplates() {
   const [currentView, setCurrentView] = useState<"library" | "editor">("library");
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
-  const { getCurrentUser } = useAuth();
+  const [user, setUser] = useState<any>(null);
+
+  // Get current user on component mount
+  React.useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    getCurrentUser();
+  }, []);
 
   const handleSelectTemplate = (template: EmailTemplate) => {
     setSelectedTemplate(template);
@@ -27,8 +36,7 @@ export default function EmailTemplates() {
     setSelectedTemplate(null);
   };
 
-  const user = getCurrentUser();
-  const userId = user?.data?.user?.id;
+  const userId = user?.id;
 
   if (!userId) {
     return (

@@ -59,7 +59,10 @@ export class TemplateLibraryService {
       variables: template.variables,
       tags: template.tags,
       is_public: false,
-      is_system_template: false
+      is_system_template: false,
+      // Add required fields
+      subject_template: template.subject_template || "{{template_name}}",
+      template_type: template.template_type || "email"
     };
 
     const { data, error } = await supabase
@@ -164,8 +167,22 @@ export class TemplateLibraryService {
         used_in_campaign: campaignId
       });
 
-    // Update usage count
-    await supabase.rpc('increment_template_usage', { template_id: templateId });
+    // Update usage count manually since we don't have the RPC function
+    const { data: template } = await supabase
+      .from("email_templates")
+      .select("usage_count")
+      .eq("id", templateId)
+      .single();
+
+    if (template) {
+      await supabase
+        .from("email_templates")
+        .update({
+          usage_count: (template.usage_count || 0) + 1,
+          last_used_at: new Date().toISOString()
+        })
+        .eq("id", templateId);
+    }
   }
 
   static async rateTemplate(templateId: string, rating: number) {
