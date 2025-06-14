@@ -368,6 +368,122 @@ export type Database = {
           },
         ]
       }
+      campaign_automation_workflows: {
+        Row: {
+          completed_subscribers: number | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          total_subscribers: number | null
+          trigger_conditions: Json | null
+          updated_at: string | null
+          user_id: string | null
+          workflow_name: string
+          workflow_steps: Json
+          workflow_type: string
+        }
+        Insert: {
+          completed_subscribers?: number | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          total_subscribers?: number | null
+          trigger_conditions?: Json | null
+          updated_at?: string | null
+          user_id?: string | null
+          workflow_name: string
+          workflow_steps?: Json
+          workflow_type: string
+        }
+        Update: {
+          completed_subscribers?: number | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          total_subscribers?: number | null
+          trigger_conditions?: Json | null
+          updated_at?: string | null
+          user_id?: string | null
+          workflow_name?: string
+          workflow_steps?: Json
+          workflow_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_automation_workflows_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_execution_queue: {
+        Row: {
+          campaign_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          execution_config: Json | null
+          execution_type: string
+          id: string
+          priority: number | null
+          progress_data: Json | null
+          scheduled_for: string | null
+          started_at: string | null
+          status: string | null
+          updated_at: string | null
+          workflow_id: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          execution_config?: Json | null
+          execution_type: string
+          id?: string
+          priority?: number | null
+          progress_data?: Json | null
+          scheduled_for?: string | null
+          started_at?: string | null
+          status?: string | null
+          updated_at?: string | null
+          workflow_id?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          execution_config?: Json | null
+          execution_type?: string
+          id?: string
+          priority?: number | null
+          progress_data?: Json | null
+          scheduled_for?: string | null
+          started_at?: string | null
+          status?: string | null
+          updated_at?: string | null
+          workflow_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_execution_queue_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_execution_queue_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_automation_workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_performance_summaries: {
         Row: {
           bounce_rate: number | null
@@ -1347,6 +1463,51 @@ export type Database = {
             columns: ["workflow_id"]
             isOneToOne: false
             referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_performance_analytics: {
+        Row: {
+          calculated_at: string | null
+          campaign_id: string | null
+          date_period: string
+          id: string
+          metrics: Json
+          period_type: string
+          user_id: string | null
+        }
+        Insert: {
+          calculated_at?: string | null
+          campaign_id?: string | null
+          date_period: string
+          id?: string
+          metrics?: Json
+          period_type: string
+          user_id?: string | null
+        }
+        Update: {
+          calculated_at?: string | null
+          campaign_id?: string | null
+          date_period?: string
+          id?: string
+          metrics?: Json
+          period_type?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_performance_analytics_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_performance_analytics_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2873,6 +3034,68 @@ export type Database = {
           },
         ]
       }
+      template_library: {
+        Row: {
+          category: string
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          is_featured: boolean | null
+          is_system_template: boolean | null
+          preview_image_url: string | null
+          rating: number | null
+          rating_count: number | null
+          tags: string[] | null
+          template_content: Json
+          template_name: string
+          updated_at: string | null
+          usage_count: number | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_featured?: boolean | null
+          is_system_template?: boolean | null
+          preview_image_url?: string | null
+          rating?: number | null
+          rating_count?: number | null
+          tags?: string[] | null
+          template_content: Json
+          template_name: string
+          updated_at?: string | null
+          usage_count?: number | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_featured?: boolean | null
+          is_system_template?: boolean | null
+          preview_image_url?: string | null
+          rating?: number | null
+          rating_count?: number | null
+          tags?: string[] | null
+          template_content?: Json
+          template_name?: string
+          updated_at?: string | null
+          usage_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_library_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_behavior_profiles: {
         Row: {
           churn_risk_score: number | null
@@ -2959,6 +3182,39 @@ export type Database = {
           theme_preference?: string | null
           timezone?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      webhook_events: {
+        Row: {
+          event_data: Json
+          event_type: string
+          id: string
+          processed: boolean | null
+          processed_at: string | null
+          processing_error: string | null
+          received_at: string | null
+          webhook_source: string
+        }
+        Insert: {
+          event_data: Json
+          event_type: string
+          id?: string
+          processed?: boolean | null
+          processed_at?: string | null
+          processing_error?: string | null
+          received_at?: string | null
+          webhook_source: string
+        }
+        Update: {
+          event_data?: Json
+          event_type?: string
+          id?: string
+          processed?: boolean | null
+          processed_at?: string | null
+          processing_error?: string | null
+          received_at?: string | null
+          webhook_source?: string
         }
         Relationships: []
       }
@@ -3317,6 +3573,66 @@ export type Database = {
             columns: ["workflow_id"]
             isOneToOne: false
             referencedRelation: "campaign_workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_subscriptions: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          current_step: number | null
+          id: string
+          metadata: Json | null
+          next_action_at: string | null
+          started_at: string | null
+          status: string | null
+          subscriber_email: string
+          subscriber_id: string | null
+          updated_at: string | null
+          workflow_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          current_step?: number | null
+          id?: string
+          metadata?: Json | null
+          next_action_at?: string | null
+          started_at?: string | null
+          status?: string | null
+          subscriber_email: string
+          subscriber_id?: string | null
+          updated_at?: string | null
+          workflow_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          current_step?: number | null
+          id?: string
+          metadata?: Json | null
+          next_action_at?: string | null
+          started_at?: string | null
+          status?: string | null
+          subscriber_email?: string
+          subscriber_id?: string | null
+          updated_at?: string | null
+          workflow_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_subscriptions_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_subscriptions_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_automation_workflows"
             referencedColumns: ["id"]
           },
         ]
@@ -4092,6 +4408,50 @@ export type Database = {
             columns: ["webinar_id"]
             isOneToOne: false
             referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zoom_segmentation_rules: {
+        Row: {
+          auto_apply: boolean | null
+          created_at: string | null
+          id: string
+          last_applied_at: string | null
+          rule_name: string
+          segment_criteria: Json
+          updated_at: string | null
+          user_id: string | null
+          webinar_criteria: Json
+        }
+        Insert: {
+          auto_apply?: boolean | null
+          created_at?: string | null
+          id?: string
+          last_applied_at?: string | null
+          rule_name: string
+          segment_criteria?: Json
+          updated_at?: string | null
+          user_id?: string | null
+          webinar_criteria?: Json
+        }
+        Update: {
+          auto_apply?: boolean | null
+          created_at?: string | null
+          id?: string
+          last_applied_at?: string | null
+          rule_name?: string
+          segment_criteria?: Json
+          updated_at?: string | null
+          user_id?: string | null
+          webinar_criteria?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_segmentation_rules_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

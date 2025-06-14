@@ -1,172 +1,171 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// 1x1 transparent pixel
-const TRACKING_PIXEL = new Uint8Array([
-  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
-  0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x21, 0xF9, 0x04, 0x01, 0x00, 0x00, 0x00,
-  0x00, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02,
-  0x04, 0x01, 0x00, 0x3B
-]);
-
 const handler = async (req: Request): Promise<Response> => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const url = new URL(req.url);
+  const path = url.pathname;
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    // Handle tracking pixel (email opens)
+    if (path.includes('/pixel')) {
+      const sendId = url.searchParams.get('send_id');
+      if (!sendId) {
+        return new Response('Missing send_id', { status: 400 });
+      }
 
-    const url = new URL(req.url);
-    const trackingType = url.searchParams.get('type');
-    const emailId = url.searchParams.get('id');
-    const recipientId = url.searchParams.get('recipient');
-    const clickUrl = url.searchParams.get('url');
+      // Log open event
+      await supabase
+        .from('email_tracking_events')
+        .insert({
+          email_send_id: sendId,
+          event_type: 'opened',
+          event_data: {
+            user_agent: req.headers.get('user-agent'),
+            referer: req.headers.get('referer')
+          },
+          user_agent: req.headers.get('user-agent'),
+          ip_address: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip'),
+          timestamp: new Date().toISOString()
+        });
 
-    const userAgent = req.headers.get('user-agent') || '';
-    const ipAddress = req.headers.get('x-forwarded-for') || 
-                     req.headers.get('x-real-ip') || 
-                     'unknown';
+      // Update email send record
+      await supabase
+        .from('email_sends')
+        .update({ 
+          open_time: new Date().toISOString(),
+          status: 'opened'
+        })
+        .eq('id', sendId)
+        .is('open_time', null); // Only update if not already opened
 
-    console.log(`Tracking event: ${trackingType}, Email ID: ${emailId}, Recipient: ${recipientId}`);
+      // Return 1x1 transparent pixel
+      const pixel = new Uint8Array([
+        0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0xff, 0xff, 0xff, 0x21, 0xf9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x04, 0x01, 0x00, 0x3b
+      ]);
 
-    if (trackingType === 'open' && emailId) {
-      // Track email open
-      await recordTrackingEvent(supabase, emailId, 'opened', {
-        user_agent: userAgent,
-        ip_address: ipAddress,
-        timestamp: new Date().toISOString()
-      });
-
-      // Return tracking pixel
-      return new Response(TRACKING_PIXEL, {
+      return new Response(pixel, {
         headers: {
           'Content-Type': 'image/gif',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
-          'Expires': '0',
-          ...corsHeaders
+          'Expires': '0'
         }
       });
+    }
 
-    } else if (trackingType === 'click' && emailId && clickUrl) {
-      // Track email click
-      await recordTrackingEvent(supabase, emailId, 'clicked', {
-        clicked_url: clickUrl,
-        user_agent: userAgent,
-        ip_address: ipAddress,
-        timestamp: new Date().toISOString()
-      });
+    // Handle click tracking
+    if (path.includes('/click')) {
+      const sendId = url.searchParams.get('send_id');
+      const targetUrl = url.searchParams.get('url');
+      
+      if (!sendId || !targetUrl) {
+        return new Response('Missing parameters', { status: 400 });
+      }
 
-      // Redirect to original URL
-      return Response.redirect(decodeURIComponent(clickUrl), 302);
-
-    } else if (trackingType === 'unsubscribe' && recipientId) {
-      // Handle unsubscribe
+      // Log click event
       await supabase
-        .from('email_preferences')
-        .upsert({
-          user_id: recipientId,
-          unsubscribed: true,
-          unsubscribed_at: new Date().toISOString()
+        .from('email_tracking_events')
+        .insert({
+          email_send_id: sendId,
+          event_type: 'clicked',
+          event_data: {
+            target_url: targetUrl,
+            user_agent: req.headers.get('user-agent'),
+            referer: req.headers.get('referer')
+          },
+          user_agent: req.headers.get('user-agent'),
+          ip_address: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip'),
+          timestamp: new Date().toISOString()
         });
 
-      // Return unsubscribe confirmation page
-      const unsubscribeHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Unsubscribed</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
-            .container { max-width: 400px; margin: 0 auto; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h2>You've been unsubscribed</h2>
-            <p>You will no longer receive emails from us.</p>
-            <p>If this was a mistake, please contact our support team.</p>
-          </div>
-        </body>
-        </html>
-      `;
+      // Update email send record (first click only)
+      await supabase
+        .from('email_sends')
+        .update({ 
+          click_time: new Date().toISOString(),
+          status: 'clicked'
+        })
+        .eq('id', sendId)
+        .is('click_time', null);
 
-      return new Response(unsubscribeHtml, {
-        headers: {
-          'Content-Type': 'text/html',
-          ...corsHeaders
-        }
-      });
+      // Redirect to target URL
+      return Response.redirect(decodeURIComponent(targetUrl), 302);
+    }
 
-    } else {
-      return new Response('Invalid tracking request', {
-        status: 400,
-        headers: corsHeaders
+    // Handle unsubscribe tracking
+    if (path.includes('/unsubscribe')) {
+      const sendId = url.searchParams.get('send_id');
+      
+      if (!sendId) {
+        return new Response('Missing send_id', { status: 400 });
+      }
+
+      // Log unsubscribe event
+      await supabase
+        .from('email_tracking_events')
+        .insert({
+          email_send_id: sendId,
+          event_type: 'unsubscribed',
+          event_data: {
+            user_agent: req.headers.get('user-agent'),
+            referer: req.headers.get('referer')
+          },
+          timestamp: new Date().toISOString()
+        });
+
+      // Update email send record
+      await supabase
+        .from('email_sends')
+        .update({ 
+          unsubscribe_time: new Date().toISOString(),
+          status: 'unsubscribed'
+        })
+        .eq('id', sendId);
+
+      // Get recipient email and update preferences
+      const { data: emailSend } = await supabase
+        .from('email_sends')
+        .select('recipient_email')
+        .eq('id', sendId)
+        .single();
+
+      if (emailSend) {
+        await supabase
+          .from('email_preferences')
+          .upsert({
+            user_id: emailSend.recipient_email, // Using email as identifier
+            unsubscribed: true,
+            unsubscribed_at: new Date().toISOString()
+          });
+      }
+
+      return new Response('You have been unsubscribed successfully.', {
+        headers: { 'Content-Type': 'text/plain', ...corsHeaders }
       });
     }
+
+    return new Response('Not found', { status: 404 });
 
   } catch (error: any) {
-    console.error('Error in email tracking:', error);
-    
-    // For pixel requests, return pixel even on error to avoid broken images
-    if (new URL(req.url).searchParams.get('type') === 'open') {
-      return new Response(TRACKING_PIXEL, {
-        headers: {
-          'Content-Type': 'image/gif',
-          ...corsHeaders
-        }
-      });
-    }
-    
-    return new Response('Tracking error', {
-      status: 500,
-      headers: corsHeaders
-    });
+    console.error("Error in email-tracking:", error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
   }
 };
-
-async function recordTrackingEvent(supabase: any, emailId: string, eventType: string, eventData: any) {
-  // Get email send record to find campaign info
-  const { data: emailSend } = await supabase
-    .from('email_send_queue')
-    .select('campaign_id, variant_id, recipient_email')
-    .eq('id', emailId)
-    .single();
-
-  if (emailSend) {
-    // Record in email_tracking_events
-    await supabase.from('email_tracking_events').insert({
-      email_send_id: emailId,
-      event_type: eventType,
-      event_data: eventData,
-      user_agent: eventData.user_agent,
-      ip_address: eventData.ip_address,
-      timestamp: eventData.timestamp
-    });
-
-    // Record in campaign_analytics
-    await supabase.from('campaign_analytics').insert({
-      campaign_id: emailSend.campaign_id,
-      variant_id: emailSend.variant_id,
-      recipient_email: emailSend.recipient_email,
-      metric_type: eventType,
-      metric_value: 1,
-      event_timestamp: eventData.timestamp,
-      event_data: eventData
-    });
-
-    console.log(`Recorded ${eventType} event for email ${emailId}`);
-  }
-}
 
 serve(handler);
