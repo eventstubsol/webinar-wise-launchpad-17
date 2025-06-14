@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Download, Eye, RefreshCw } from 'lucide-react';
 import { ExportQueueItem } from '@/services/export/types';
-import { ExportService } from '@/services/export/ExportService';
+import { ExportHistoryProvider } from '@/services/export/history/ExportHistoryProvider';
 import { useToast } from '@/components/ui/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -16,8 +15,9 @@ export function ExportQueueMonitor() {
   const { toast } = useToast();
 
   const loadExportHistory = async () => {
+    setIsLoading(true); // Ensure loading state is set at the beginning
     try {
-      const history = await ExportService.getExportHistory();
+      const history = await ExportHistoryProvider.getExportHistory();
       setExportHistory(history);
     } catch (error) {
       toast({

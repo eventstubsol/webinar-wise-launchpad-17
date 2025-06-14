@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,8 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Table, Presentation, Download, Calendar, Users, TrendingUp } from 'lucide-react';
-import { ExportConfig, BrandingConfig } from '@/services/export/types';
-import { ExportService } from '@/services/export/ExportService';
+import { ExportConfig } from '@/services/export/types';
+import { ExportJobManager } from '@/services/export/job/ExportJobManager';
 import { useToast } from '@/components/ui/use-toast';
 
 export function ReportBuilder() {
@@ -64,7 +63,7 @@ export function ReportBuilder() {
     try {
       const jobs = await Promise.all(
         selectedFormats.map(format => 
-          ExportService.createExportJob(format as any, config)
+          ExportJobManager.createExportJob(format as 'pdf' | 'excel' | 'powerpoint' | 'csv', config)
         )
       );
 
@@ -177,7 +176,7 @@ export function ReportBuilder() {
                     value={config.dateRange?.start || ''}
                     onChange={(e) => setConfig(prev => ({
                       ...prev,
-                      dateRange: { ...prev.dateRange, start: e.target.value, end: prev.dateRange?.end || '' }
+                      dateRange: { ...(prev.dateRange || { start: '', end: '' }), start: e.target.value }
                     }))}
                   />
                   <Input
@@ -185,14 +184,21 @@ export function ReportBuilder() {
                     value={config.dateRange?.end || ''}
                     onChange={(e) => setConfig(prev => ({
                       ...prev,
-                      dateRange: { ...prev.dateRange, start: prev.dateRange?.start || '', end: e.target.value }
+                      dateRange: { ...(prev.dateRange || { start: '', end: '' }), end: e.target.value }
                     }))}
                   />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Data Filters</Label>
-                <Select>
+                <Select
+                  onValueChange={(value) => setConfig(prev => ({
+                    ...prev,
+                    // Assuming you might add a filter property to ExportConfig in the future
+                    // For now, this doesn't directly map to a config property
+                    // Example: filterType: value 
+                  }))}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="All webinars" />
                   </SelectTrigger>
