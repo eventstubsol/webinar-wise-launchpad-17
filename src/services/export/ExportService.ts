@@ -18,7 +18,7 @@ export class ExportService {
       .insert({
         user_id: user.user.id,
         export_type: exportType,
-        export_config: config,
+        export_config: config as any, // Cast to Json for database
         status: 'pending'
       })
       .select()
@@ -53,8 +53,11 @@ export class ExportService {
 
       if (jobError) throw jobError;
 
+      // Cast the config back to our type
+      const config = job.export_config as ExportConfig;
+
       // Fetch webinar data based on config
-      const webinarData = await this.fetchWebinarData(job.export_config);
+      const webinarData = await this.fetchWebinarData(config);
       
       // Update progress
       await supabase
@@ -68,12 +71,12 @@ export class ExportService {
       // Generate export based on type
       switch (job.export_type) {
         case 'pdf':
-          fileBlob = await PDFGenerator.generateAnalyticsReport(webinarData, job.export_config);
-          fileName = `${job.export_config.title.replace(/\s+/g, '_')}_report.pdf`;
+          fileBlob = await PDFGenerator.generateAnalyticsReport(webinarData, config);
+          fileName = `${config.title.replace(/\s+/g, '_')}_report.pdf`;
           break;
         case 'excel':
-          fileBlob = ExcelGenerator.generateWebinarReport(webinarData, job.export_config);
-          fileName = `${job.export_config.title.replace(/\s+/g, '_')}_data.xlsx`;
+          fileBlob = ExcelGenerator.generateWebinarReport(webinarData, config);
+          fileName = `${config.title.replace(/\s+/g, '_')}_data.xlsx`;
           break;
         case 'powerpoint':
           fileBlob = await PowerPointGenerator.generateAnalyticsPresentation({
@@ -81,8 +84,8 @@ export class ExportService {
             totalParticipants: webinarData.reduce((sum, w) => sum + (w.total_attendees || 0), 0),
             avgEngagement: webinarData.reduce((sum, w) => sum + (w.engagement_score || 0), 0) / webinarData.length,
             webinars: webinarData
-          }, job.export_config);
-          fileName = `${job.export_config.title.replace(/\s+/g, '_')}_presentation.pptx`;
+          }, config);
+          fileName = `${config.title.replace(/\s+/g, '_')}_presentation.pptx`;
           break;
         default:
           throw new Error(`Unsupported export type: ${job.export_type}`);
@@ -111,7 +114,7 @@ export class ExportService {
           user_id: job.user_id,
           export_queue_id: jobId,
           report_type: job.export_type,
-          report_title: job.export_config.title,
+          report_title: config.title,
           file_url: fileUrl,
           file_size: fileBlob.size,
           delivery_status: 'sent'
@@ -165,7 +168,13 @@ export class ExportService {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    
+    // Cast the data to our type with proper type assertions
+    return (data || []).map(item => ({
+      ...item,
+      export_config: item.export_config as ExportConfig,
+      export_type: item.export_type as 'pdf' | 'excel' | 'powerpoint' | 'csv'
+    }));
   }
 
   static async getReportTemplates(): Promise<ReportTemplate[]> {
@@ -180,7 +189,15 @@ export class ExportService {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    
+    // Cast the data to our type with proper type assertions
+    return (data || []).map(item => ({
+      ...item,
+      template_type: item.template_type as 'pdf' | 'excel' | 'powerpoint',
+      branding_config: item.branding_config as any,
+      layout_config: item.layout_config as any,
+      content_sections: item.content_sections as string[]
+    }));
   }
 
   static async createReportTemplate(template: Partial<ReportTemplate>): Promise<ReportTemplate> {
@@ -191,12 +208,23 @@ export class ExportService {
       .from('report_templates')
       .insert({
         ...template,
-        user_id: user.user.id
+        user_id: user.user.id,
+        branding_config: template.branding_config as any,
+        layout_config: template.layout_config as any,
+        content_sections: template.content_sections as any
       })
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+    
+    // Cast the data back to our type
+    return {
+      ...data,
+      template_type: data.template_type as 'pdf' | 'excel' | 'powerpoint',
+      branding_config: data.branding_config as any,
+      layout_config: data.layout_config as any,
+      content_sections: data.content_sections as string[]
+    };
   }
 }

@@ -191,7 +191,15 @@ export class ExportAPI {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data;
+    
+    // Cast the data to our type with proper type assertions
+    return (data || []).map(item => ({
+      ...item,
+      template_type: item.template_type as 'pdf' | 'excel' | 'powerpoint',
+      branding_config: item.branding_config as any,
+      layout_config: item.layout_config as any,
+      content_sections: item.content_sections as string[]
+    }));
   }
 
   static async saveReportTemplate(template: Partial<ReportTemplate>) {
@@ -201,14 +209,29 @@ export class ExportAPI {
     const { data, error } = await supabase
       .from('report_templates')
       .insert({
-        ...template,
-        user_id: user.user.id
+        user_id: user.user.id,
+        template_name: template.template_name || '',
+        template_type: template.template_type || 'pdf',
+        template_description: template.template_description,
+        branding_config: template.branding_config as any,
+        layout_config: template.layout_config as any,
+        content_sections: template.content_sections as any,
+        is_default: template.is_default || false,
+        is_active: template.is_active !== false
       })
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+    
+    // Cast the data back to our type
+    return {
+      ...data,
+      template_type: data.template_type as 'pdf' | 'excel' | 'powerpoint',
+      branding_config: data.branding_config as any,
+      layout_config: data.layout_config as any,
+      content_sections: data.content_sections as string[]
+    };
   }
 
   // Scheduled report management
@@ -223,7 +246,16 @@ export class ExportAPI {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data;
+    
+    // Cast the data to our type with proper type assertions
+    return (data || []).map(item => ({
+      ...item,
+      report_type: item.report_type as 'pdf' | 'excel' | 'powerpoint' | 'multi',
+      schedule_frequency: item.schedule_frequency as 'daily' | 'weekly' | 'monthly' | 'custom',
+      schedule_config: item.schedule_config as any,
+      filter_config: item.filter_config as any,
+      recipient_list: item.recipient_list as string[]
+    }));
   }
 
   static async createScheduledReport(report: Partial<ScheduledReport>) {
@@ -233,13 +265,29 @@ export class ExportAPI {
     const { data, error } = await supabase
       .from('scheduled_reports')
       .insert({
-        ...report,
-        user_id: user.user.id
+        user_id: user.user.id,
+        report_name: report.report_name || '',
+        report_type: report.report_type || 'pdf',
+        template_id: report.template_id,
+        schedule_frequency: report.schedule_frequency || 'weekly',
+        schedule_config: report.schedule_config as any,
+        recipient_list: report.recipient_list as any,
+        filter_config: report.filter_config as any,
+        is_active: report.is_active !== false
       })
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+    
+    // Cast the data back to our type
+    return {
+      ...data,
+      report_type: data.report_type as 'pdf' | 'excel' | 'powerpoint' | 'multi',
+      schedule_frequency: data.schedule_frequency as 'daily' | 'weekly' | 'monthly' | 'custom',
+      schedule_config: data.schedule_config as any,
+      filter_config: data.filter_config as any,
+      recipient_list: data.recipient_list as string[]
+    };
   }
 }
