@@ -55,6 +55,8 @@ export function PrebuiltTemplates({ onSelectTemplate, filters }: PrebuiltTemplat
           }
         })
         .join(""),
+      subject_template: `${template.name} - {{company_name}}`,
+      template_type: "email",
       variables: template.variables,
       is_public: true,
       is_active: true,
