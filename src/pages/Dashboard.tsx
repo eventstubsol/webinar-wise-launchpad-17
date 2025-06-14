@@ -1,78 +1,35 @@
 
-import React, { useEffect, useState } from 'react';
-import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { MetricsCards } from '@/components/dashboard/MetricsCards';
-import { ChartsSection } from '@/components/dashboard/ChartsSection';
-import { DataTables } from '@/components/dashboard/DataTables';
-import { AIAnalyticsSection } from '@/components/dashboard/AIAnalyticsSection';
-import { RealtimeAnalyticsIndicator } from '@/components/dashboard/RealtimeAnalyticsIndicator';
-import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
-import { useWebinars } from '@/hooks/useWebinars';
-import { EmailCampaignsDashboard } from "@/components/email/campaigns/EmailCampaignsDashboard";
+import React from "react";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/dashboard/AppSidebar";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { MetricsCards } from "@/components/dashboard/MetricsCards";
+import { ChartsSection } from "@/components/dashboard/ChartsSection";
+import { DataTables } from "@/components/dashboard/DataTables";
+import { CSVUploadSection } from "@/components/dashboard/CSVUploadSection";
+import { useZoomConnection } from "@/hooks/useZoomConnection";
 
-const Dashboard: React.FC = () => {
-  const { refetch: refetchWebinars } = useWebinars({
-    filters: { search: '', status: '' },
-    page: 1,
-    limit: 10
-  });
-
-  const [activeSection, setActiveSection] = useState("overview");
-
-  // Set up real-time updates
-  useRealtimeUpdates({
-    onWebinarUpdate: (webinar) => {
-      // Refresh webinar data when updates come in
-      refetchWebinars();
-      console.log('Webinar updated via webhook:', webinar.topic);
-    },
-    onSyncUpdate: (syncLog) => {
-      // Refresh data when sync operations complete
-      if (syncLog.sync_status === 'completed') {
-        refetchWebinars();
-      }
-      console.log('Sync update:', syncLog.sync_type, syncLog.sync_status);
-    }
-  });
+export default function Dashboard() {
+  const { connection, loading } = useZoomConnection();
+  const hasZoomConnection = !loading && connection?.status === 'connected';
 
   return (
-    <>
-      <DashboardHeader />
-      <main className="flex-1 space-y-6 p-8 pt-6">
-        {/* Section Tabs */}
-        <div className="mb-6">
-          <nav className="flex space-x-2">
-            <button
-              onClick={() => setActiveSection("overview")}
-              className={`px-4 py-2 rounded ${activeSection === "overview" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
-            >
-              Overview
-            </button>
-            <button
-              onClick={() => setActiveSection("email-campaigns")}
-              className={`px-4 py-2 rounded ${activeSection === "email-campaigns" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
-            >
-              Email Campaigns
-            </button>
-            {/* Add more tabs here as needed */}
-          </nav>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <DashboardHeader />
+        <div className="p-6 space-y-6">
+          {hasZoomConnection ? (
+            <>
+              <MetricsCards />
+              <ChartsSection />
+              <DataTables />
+            </>
+          ) : (
+            <CSVUploadSection />
+          )}
         </div>
-        {/* Section Content */}
-        {activeSection === "overview" && (
-          <>
-            <RealtimeAnalyticsIndicator />
-            <MetricsCards />
-            <AIAnalyticsSection />
-            <ChartsSection />
-            <DataTables />
-          </>
-        )}
-        {activeSection === "email-campaigns" && (
-          <EmailCampaignsDashboard />
-        )}
-      </main>
-    </>
+      </SidebarInset>
+    </SidebarProvider>
   );
-};
-
-export default Dashboard;
+}

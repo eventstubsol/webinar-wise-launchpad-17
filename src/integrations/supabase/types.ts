@@ -719,6 +719,125 @@ export type Database = {
           },
         ]
       }
+      csv_import_rows: {
+        Row: {
+          created_at: string | null
+          created_entity_id: string | null
+          error_message: string | null
+          id: string
+          import_id: string
+          mapped_data: Json | null
+          raw_data: Json
+          row_number: number
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_entity_id?: string | null
+          error_message?: string | null
+          id?: string
+          import_id: string
+          mapped_data?: Json | null
+          raw_data: Json
+          row_number: number
+          status: string
+        }
+        Update: {
+          created_at?: string | null
+          created_entity_id?: string | null
+          error_message?: string | null
+          id?: string
+          import_id?: string
+          mapped_data?: Json | null
+          raw_data?: Json
+          row_number?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "csv_import_rows_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "csv_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      csv_imports: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          current_operation: string | null
+          duplicate_rows: number | null
+          failed_rows: number | null
+          field_mapping: Json | null
+          file_name: string
+          file_size: number
+          id: string
+          import_options: Json | null
+          import_type: string
+          original_filename: string
+          processed_rows: number | null
+          processing_errors: Json | null
+          progress_percentage: number | null
+          started_at: string | null
+          status: string | null
+          successful_rows: number | null
+          total_rows: number | null
+          updated_at: string | null
+          user_id: string
+          validation_errors: Json | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          current_operation?: string | null
+          duplicate_rows?: number | null
+          failed_rows?: number | null
+          field_mapping?: Json | null
+          file_name: string
+          file_size: number
+          id?: string
+          import_options?: Json | null
+          import_type: string
+          original_filename: string
+          processed_rows?: number | null
+          processing_errors?: Json | null
+          progress_percentage?: number | null
+          started_at?: string | null
+          status?: string | null
+          successful_rows?: number | null
+          total_rows?: number | null
+          updated_at?: string | null
+          user_id: string
+          validation_errors?: Json | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          current_operation?: string | null
+          duplicate_rows?: number | null
+          failed_rows?: number | null
+          field_mapping?: Json | null
+          file_name?: string
+          file_size?: number
+          id?: string
+          import_options?: Json | null
+          import_type?: string
+          original_filename?: string
+          processed_rows?: number | null
+          processing_errors?: Json | null
+          progress_percentage?: number | null
+          started_at?: string | null
+          status?: string | null
+          successful_rows?: number | null
+          total_rows?: number | null
+          updated_at?: string | null
+          user_id?: string
+          validation_errors?: Json | null
+        }
+        Relationships: []
+      }
       custom_metrics: {
         Row: {
           aggregation_method: string | null
