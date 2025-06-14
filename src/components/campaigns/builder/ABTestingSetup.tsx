@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Campaign } from '@/types/campaign';
+import { Campaign, TestVariant } from '@/types/campaign';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -21,7 +21,7 @@ export const ABTestingSetup: React.FC<ABTestingSetupProps> = ({
   onNext
 }) => {
   const [abTestEnabled, setAbTestEnabled] = useState(false);
-  const [variants, setVariants] = useState([
+  const [variants, setVariants] = useState<TestVariant[]>([
     { id: 'control', name: 'Control', subject: campaignData.subject_template || '', percentage: 50 },
     { id: 'variant_1', name: 'Variant A', subject: '', percentage: 50 }
   ]);
@@ -34,9 +34,11 @@ export const ABTestingSetup: React.FC<ABTestingSetupProps> = ({
         ...campaignData,
         ab_test_config: {
           enabled: true,
-          variants: variants,
+          variants: [], // Will be populated when variants are converted
           test_duration_hours: 24,
-          success_metric: 'open_rate'
+          success_metric: 'open_rate',
+          confidence_level: 95,
+          sample_size_percentage: 100
         }
       });
     } else {
@@ -48,7 +50,7 @@ export const ABTestingSetup: React.FC<ABTestingSetupProps> = ({
   };
 
   const addVariant = () => {
-    const newVariant = {
+    const newVariant: TestVariant = {
       id: `variant_${variants.length}`,
       name: `Variant ${String.fromCharCode(65 + variants.length - 1)}`,
       subject: '',

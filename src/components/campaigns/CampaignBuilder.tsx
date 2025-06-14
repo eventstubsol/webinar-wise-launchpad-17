@@ -3,14 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { CampaignService } from '@/services/campaigns/CampaignService';
 import { AudienceSegmentService } from '@/services/campaigns/AudienceSegmentService';
-import { Campaign, CampaignBuilderStep, AudienceSegment } from '@/types/campaign';
+import { Campaign, CampaignBuilderStep, AudienceSegment, CampaignCreateData, transformDatabaseAudienceSegment } from '@/types/campaign';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { ArrowLeft, ArrowRight, Check, Save, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -101,7 +99,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
   const loadSegments = async () => {
     try {
       const data = await AudienceSegmentService.getSegments(user!.id);
-      setSegments(data || []);
+      setSegments(data.map(transformDatabaseAudienceSegment));
     } catch (error) {
       console.error('Error loading segments:', error);
     }
@@ -123,10 +121,31 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
     try {
       setSaving(true);
       
+      // Ensure required fields are present
+      if (!campaignData.campaign_type || !campaignData.subject_template || !user?.id) {
+        toast({
+          title: "Error",
+          description: "Please fill in required fields: Campaign Name and Subject Line",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const createData: CampaignCreateData = {
+        campaign_type: campaignData.campaign_type,
+        subject_template: campaignData.subject_template,
+        status: 'draft',
+        user_id: user.id,
+        audience_segment: campaignData.audience_segment,
+        template_id: campaignData.template_id,
+        workflow_id: campaignData.workflow_id,
+        send_schedule: campaignData.send_schedule
+      };
+      
       if (editingCampaign) {
-        await CampaignService.updateCampaign(editingCampaign.id, campaignData);
+        await CampaignService.updateCampaign(editingCampaign.id, createData);
       } else {
-        await CampaignService.createCampaign(campaignData);
+        await CampaignService.createCampaign(createData);
       }
       
       toast({
@@ -151,13 +170,31 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
     try {
       setLoading(true);
       
+      // Ensure required fields are present
+      if (!campaignData.campaign_type || !campaignData.subject_template || !user?.id) {
+        toast({
+          title: "Error",
+          description: "Please fill in required fields before launching",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       let campaignId = editingCampaign?.id;
       
       if (!campaignId) {
-        const newCampaign = await CampaignService.createCampaign({
-          ...campaignData,
-          status: 'active'
-        });
+        const createData: CampaignCreateData = {
+          campaign_type: campaignData.campaign_type,
+          subject_template: campaignData.subject_template,
+          status: 'active',
+          user_id: user.id,
+          audience_segment: campaignData.audience_segment,
+          template_id: campaignData.template_id,
+          workflow_id: campaignData.workflow_id,
+          send_schedule: campaignData.send_schedule
+        };
+
+        const newCampaign = await CampaignService.createCampaign(createData);
         campaignId = newCampaign.id;
       }
       

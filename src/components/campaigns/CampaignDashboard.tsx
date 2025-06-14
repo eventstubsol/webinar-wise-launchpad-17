@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { CampaignService } from '@/services/campaigns/CampaignService';
-import { Campaign } from '@/types/campaign';
+import { Campaign, transformDatabaseCampaign } from '@/types/campaign';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +32,7 @@ export const CampaignDashboard = () => {
     try {
       setLoading(true);
       const data = await CampaignService.getCampaigns(user!.id);
-      setCampaigns(data || []);
+      setCampaigns((data || []).map(transformDatabaseCampaign));
     } catch (error) {
       console.error('Error loading campaigns:', error);
       toast({

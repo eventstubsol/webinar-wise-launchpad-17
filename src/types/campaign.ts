@@ -1,4 +1,36 @@
 
+// Database types that match Supabase exactly
+export interface DatabaseAudienceSegment {
+  id: string;
+  user_id: string;
+  segment_name: string;
+  description?: string;
+  filter_criteria: any; // Json from database
+  tags: string[];
+  is_dynamic: boolean;
+  estimated_size: number;
+  last_calculated_at?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DatabaseCampaign {
+  id: string;
+  user_id: string;
+  campaign_type: string;
+  status: string;
+  subject_template: string;
+  audience_segment: any; // Json from database
+  template_id?: string;
+  workflow_id?: string;
+  send_schedule?: any; // Json from database
+  last_run_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Application types
 export interface AudienceSegment {
   id: string;
   user_id: string;
@@ -174,4 +206,46 @@ export interface SegmentFilter {
 export interface SegmentFilterGroup {
   logic: 'AND' | 'OR';
   filters: (SegmentFilter | SegmentFilterGroup)[];
+}
+
+// Helper types for the A/B testing UI
+export interface TestVariant {
+  id: string;
+  name: string;
+  subject: string;
+  percentage: number;
+}
+
+// Type conversion utilities
+export function transformDatabaseAudienceSegment(dbSegment: DatabaseAudienceSegment): AudienceSegment {
+  return {
+    ...dbSegment,
+    filter_criteria: typeof dbSegment.filter_criteria === 'string' 
+      ? JSON.parse(dbSegment.filter_criteria) 
+      : dbSegment.filter_criteria || {}
+  };
+}
+
+export function transformDatabaseCampaign(dbCampaign: DatabaseCampaign): Campaign {
+  return {
+    ...dbCampaign,
+    audience_segment: typeof dbCampaign.audience_segment === 'string'
+      ? JSON.parse(dbCampaign.audience_segment)
+      : dbCampaign.audience_segment || {},
+    send_schedule: typeof dbCampaign.send_schedule === 'string'
+      ? JSON.parse(dbCampaign.send_schedule)
+      : dbCampaign.send_schedule || undefined
+  };
+}
+
+// Campaign creation types
+export interface CampaignCreateData {
+  campaign_type: string;
+  subject_template: string;
+  status: string;
+  user_id: string;
+  audience_segment?: Record<string, any>;
+  template_id?: string;
+  workflow_id?: string;
+  send_schedule?: Record<string, any>;
 }
