@@ -20,12 +20,23 @@ export class SyncOrchestrator {
     const adapter = CRMConnectionManager.createAdapter(connection);
     const fieldMappings = await CRMConnectionManager.getFieldMappings(connectionId);
 
+    // Determine the actual sync direction - handle bidirectional by choosing one direction for this sync
+    const syncDirection = options.direction || connection.sync_direction;
+    let actualDirection: 'incoming' | 'outgoing';
+    
+    if (syncDirection === 'bidirectional') {
+      // For bidirectional, we'll do outgoing first
+      actualDirection = 'outgoing';
+    } else {
+      actualDirection = syncDirection;
+    }
+
     // Create sync log entry
     const syncLog = await this.createSyncLog({
       connection_id: connectionId,
       sync_type: 'full_sync',
       operation_type: 'update',
-      direction: options.direction || connection.sync_direction,
+      direction: actualDirection,
       status: 'pending',
       records_processed: 0,
       records_success: 0,
@@ -38,7 +49,7 @@ export class SyncOrchestrator {
     try {
       let result: CRMSyncResult;
 
-      switch (options.direction || connection.sync_direction) {
+      switch (syncDirection) {
         case 'outgoing':
           result = await this.syncTowardsCRM(connection, adapter, fieldMappings, options);
           break;
@@ -51,7 +62,7 @@ export class SyncOrchestrator {
           result = this.mergeResults([outgoingResult, incomingResult]);
           break;
         default:
-          throw new Error(`Invalid sync direction: ${options.direction}`);
+          throw new Error(`Invalid sync direction: ${syncDirection}`);
       }
 
       // Update sync log with results
@@ -174,13 +185,48 @@ export class SyncOrchestrator {
 
       const webinarValue = this.getNestedValue(participant, mapping.webinar_field);
       if (webinarValue !== undefined) {
-        contact[mapping.crm_field as keyof CRMContact] = this.transformValue(webinarValue, mapping.transformation_rules);
+        const transformedValue = this.transformValue(webinarValue, mapping.transformation_rules);
+        this.setContactField(contact, mapping.crm_field, transformedValue);
       } else if (mapping.default_value) {
-        contact[mapping.crm_field as keyof CRMContact] = mapping.default_value;
+        this.setContactField(contact, mapping.crm_field, mapping.default_value);
       }
     }
 
     return contact;
+  }
+
+  private static setContactField(contact: Partial<CRMContact>, fieldName: string, value: any): void {
+    // Map common CRM field names to our CRMContact interface
+    switch (fieldName) {
+      case 'email':
+        contact.email = value;
+        break;
+      case 'firstName':
+      case 'first_name':
+        contact.firstName = value;
+        break;
+      case 'lastName':
+      case 'last_name':
+        contact.lastName = value;
+        break;
+      case 'company':
+      case 'organization':
+        contact.company = value;
+        break;
+      case 'jobTitle':
+      case 'job_title':
+        contact.jobTitle = value;
+        break;
+      case 'phone':
+        contact.phone = value;
+        break;
+      default:
+        if (!contact.customFields) {
+          contact.customFields = {};
+        }
+        contact.customFields[fieldName] = value;
+        break;
+    }
   }
 
   private static async importContactToWebinar(
@@ -200,7 +246,7 @@ export class SyncOrchestrator {
     for (const mapping of fieldMappings) {
       if (mapping.sync_direction === 'outgoing') continue;
 
-      const crmValue = contact[mapping.crm_field as keyof CRMContact];
+      const crmValue = this.getContactFieldValue(contact, mapping.crm_field);
       if (crmValue !== undefined) {
         this.setNestedValue(participantData, mapping.webinar_field, this.transformValue(crmValue, mapping.transformation_rules));
       }
@@ -229,6 +275,29 @@ export class SyncOrchestrator {
       if (error) {
         throw new Error(`Failed to create participant: ${error.message}`);
       }
+    }
+  }
+
+  private static getContactFieldValue(contact: CRMContact, fieldName: string): any {
+    switch (fieldName) {
+      case 'email':
+        return contact.email;
+      case 'firstName':
+      case 'first_name':
+        return contact.firstName;
+      case 'lastName':
+      case 'last_name':
+        return contact.lastName;
+      case 'company':
+      case 'organization':
+        return contact.company;
+      case 'jobTitle':
+      case 'job_title':
+        return contact.jobTitle;
+      case 'phone':
+        return contact.phone;
+      default:
+        return contact.customFields?.[fieldName];
     }
   }
 
@@ -294,7 +363,13 @@ export class SyncOrchestrator {
   private static async createSyncLog(log: Omit<CRMSyncLog, 'id'>): Promise<CRMSyncLog> {
     const { data, error } = await supabase
       .from('crm_sync_logs')
-      .insert(log)
+      .insert({
+        ...log,
+        sync_type: log.sync_type as string,
+        operation_type: log.operation_type as string,
+        direction: log.direction as string,
+        status: log.status as string
+      })
       .select()
       .single();
 
@@ -302,7 +377,17 @@ export class SyncOrchestrator {
       throw new Error(`Failed to create sync log: ${error.message}`);
     }
 
-    return data;
+    return {
+      ...data,
+      sync_type: data.sync_type as 'full_sync' | 'incremental_sync' | 'real_time_update',
+      operation_type: data.operation_type as 'create' | 'update' | 'delete',
+      direction: data.direction as 'incoming' | 'outgoing',
+      status: data.status as 'pending' | 'success' | 'failed' | 'conflict',
+      conflict_details: (data.conflict_details as Record<string, any>) || undefined,
+      data_before: (data.data_before as Record<string, any>) || undefined,
+      data_after: (data.data_after as Record<string, any>) || undefined,
+      field_changes: (data.field_changes as Record<string, any>) || undefined
+    };
   }
 
   private static async updateSyncLog(logId: string, updates: Partial<CRMSyncLog>): Promise<void> {

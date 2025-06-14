@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { CRMConnection, CRMFieldMapping, CRMSyncLog } from '@/types/crm';
 import { CRMAdapter, CRMConfig } from './CRMAdapter';
@@ -22,7 +23,8 @@ export class CRMConnectionManager {
       ...item,
       crm_type: item.crm_type as 'salesforce' | 'hubspot' | 'pipedrive' | 'custom',
       sync_direction: item.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
-      status: item.status as 'active' | 'error' | 'expired' | 'disconnected'
+      status: item.status as 'active' | 'error' | 'expired' | 'disconnected',
+      config: (item.config as Record<string, any>) || {}
     }));
   }
 
@@ -41,7 +43,8 @@ export class CRMConnectionManager {
       ...data,
       crm_type: data.crm_type as 'salesforce' | 'hubspot' | 'pipedrive' | 'custom',
       sync_direction: data.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
-      status: data.status as 'active' | 'error' | 'expired' | 'disconnected'
+      status: data.status as 'active' | 'error' | 'expired' | 'disconnected',
+      config: (data.config as Record<string, any>) || {}
     };
   }
 
@@ -60,7 +63,8 @@ export class CRMConnectionManager {
       ...data,
       crm_type: data.crm_type as 'salesforce' | 'hubspot' | 'pipedrive' | 'custom',
       sync_direction: data.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
-      status: data.status as 'active' | 'error' | 'expired' | 'disconnected'
+      status: data.status as 'active' | 'error' | 'expired' | 'disconnected',
+      config: (data.config as Record<string, any>) || {}
     };
   }
 
@@ -80,7 +84,8 @@ export class CRMConnectionManager {
       ...data,
       crm_type: data.crm_type as 'salesforce' | 'hubspot' | 'pipedrive' | 'custom',
       sync_direction: data.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
-      status: data.status as 'active' | 'error' | 'expired' | 'disconnected'
+      status: data.status as 'active' | 'error' | 'expired' | 'disconnected',
+      config: (data.config as Record<string, any>) || {}
     };
   }
 
@@ -108,7 +113,8 @@ export class CRMConnectionManager {
     return (data || []).map(item => ({
       ...item,
       sync_direction: item.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
-      conflict_resolution: item.conflict_resolution as 'last_write_wins' | 'manual_review' | 'crm_wins' | 'webinar_wins'
+      conflict_resolution: item.conflict_resolution as 'last_write_wins' | 'manual_review' | 'crm_wins' | 'webinar_wins',
+      transformation_rules: (item.transformation_rules as Record<string, any>) || {}
     }));
   }
 
@@ -126,7 +132,8 @@ export class CRMConnectionManager {
     return {
       ...data,
       sync_direction: data.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
-      conflict_resolution: data.conflict_resolution as 'last_write_wins' | 'manual_review' | 'crm_wins' | 'webinar_wins'
+      conflict_resolution: data.conflict_resolution as 'last_write_wins' | 'manual_review' | 'crm_wins' | 'webinar_wins',
+      transformation_rules: (data.transformation_rules as Record<string, any>) || {}
     };
   }
 
@@ -145,7 +152,8 @@ export class CRMConnectionManager {
     return {
       ...data,
       sync_direction: data.sync_direction as 'incoming' | 'outgoing' | 'bidirectional',
-      conflict_resolution: data.conflict_resolution as 'last_write_wins' | 'manual_review' | 'crm_wins' | 'webinar_wins'
+      conflict_resolution: data.conflict_resolution as 'last_write_wins' | 'manual_review' | 'crm_wins' | 'webinar_wins',
+      transformation_rules: (data.transformation_rules as Record<string, any>) || {}
     };
   }
 
@@ -177,7 +185,11 @@ export class CRMConnectionManager {
       sync_type: item.sync_type as 'full_sync' | 'incremental_sync' | 'real_time_update',
       operation_type: item.operation_type as 'create' | 'update' | 'delete',
       direction: item.direction as 'incoming' | 'outgoing',
-      status: item.status as 'pending' | 'success' | 'failed' | 'conflict'
+      status: item.status as 'pending' | 'success' | 'failed' | 'conflict',
+      conflict_details: (item.conflict_details as Record<string, any>) || undefined,
+      data_before: (item.data_before as Record<string, any>) || undefined,
+      data_after: (item.data_after as Record<string, any>) || undefined,
+      field_changes: (item.field_changes as Record<string, any>) || undefined
     }));
   }
 
