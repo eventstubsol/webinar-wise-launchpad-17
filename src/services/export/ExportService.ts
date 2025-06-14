@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { PDFGenerator } from './PDFGenerator';
 import { ExcelGenerator } from './ExcelGenerator';
@@ -18,7 +17,7 @@ export class ExportService {
       .insert({
         user_id: user.user.id,
         export_type: exportType,
-        export_config: config as any, // Cast to Json for database
+        export_config: config as any, // Cast to any for Supabase Json type
         status: 'pending'
       })
       .select()
@@ -27,6 +26,9 @@ export class ExportService {
     if (error) throw error;
     
     // Trigger background processing
+    // Consider moving this to a Supabase Edge Function or a dedicated worker
+    // if processExportJob is long-running.
+    // For now, calling it directly for simplicity in this context.
     await this.processExportJob(data.id);
     
     return data.id;
@@ -54,7 +56,7 @@ export class ExportService {
       if (jobError) throw jobError;
 
       // Cast the config back to our type
-      const config = job.export_config as ExportConfig;
+      const config = job.export_config as unknown as ExportConfig; // Safer cast
 
       // Fetch webinar data based on config
       const webinarData = await this.fetchWebinarData(config);
@@ -113,7 +115,7 @@ export class ExportService {
         .insert({
           user_id: job.user_id,
           export_queue_id: jobId,
-          report_type: job.export_type,
+          report_type: job.export_type as string, // DB expects text
           report_title: config.title,
           file_url: fileUrl,
           file_size: fileBlob.size,
@@ -169,11 +171,24 @@ export class ExportService {
 
     if (error) throw error;
     
-    // Cast the data to our type with proper type assertions
     return (data || []).map(item => ({
       ...item,
-      export_config: item.export_config as ExportConfig,
-      export_type: item.export_type as 'pdf' | 'excel' | 'powerpoint' | 'csv'
+      export_config: item.export_config as unknown as ExportConfig,
+      export_type: item.export_type as ExportQueueItem['export_type'],
+      status: item.status as ExportQueueItem['status'],
+      // Ensure all properties from ExportQueueItem are correctly mapped or cast
+      progress_percentage: item.progress_percentage || 0,
+      // Make sure nullable fields are handled if item can have them as null
+      completed_at: item.completed_at || null, 
+      created_at: item.created_at || new Date().toISOString(), 
+      error_message: item.error_message || null,
+      expires_at: item.expires_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      export_format: item.export_format || undefined,
+      file_size: item.file_size || undefined,
+      file_url: item.file_url || undefined,
+      started_at: item.started_at || undefined,
+      updated_at: item.updated_at || new Date().toISOString(),
+
     }));
   }
 
@@ -190,11 +205,10 @@ export class ExportService {
 
     if (error) throw error;
     
-    // Cast the data to our type with proper type assertions
     return (data || []).map(item => ({
       ...item,
-      template_type: item.template_type as 'pdf' | 'excel' | 'powerpoint',
-      branding_config: item.branding_config as any,
+      template_type: item.template_type as ReportTemplate['template_type'],
+      branding_config: item.branding_config as unknown as BrandingConfig, // Cast to BrandingConfig
       layout_config: item.layout_config as any,
       content_sections: item.content_sections as string[]
     }));
@@ -209,20 +223,21 @@ export class ExportService {
       .insert({
         ...template,
         user_id: user.user.id,
-        branding_config: template.branding_config as any,
-        layout_config: template.layout_config as any,
-        content_sections: template.content_sections as any
+        template_name: template.template_name || 'Untitled Template', // Ensure required field
+        template_type: template.template_type || 'pdf', // Ensure required field
+        branding_config: template.branding_config as any, // Cast to any for Supabase
+        layout_config: template.layout_config as any, // Cast to any for Supabase
+        content_sections: template.content_sections as any // Cast to any for Supabase
       })
       .select()
       .single();
 
     if (error) throw error;
     
-    // Cast the data back to our type
     return {
       ...data,
-      template_type: data.template_type as 'pdf' | 'excel' | 'powerpoint',
-      branding_config: data.branding_config as any,
+      template_type: data.template_type as ReportTemplate['template_type'],
+      branding_config: data.branding_config as unknown as BrandingConfig, // Cast back
       layout_config: data.layout_config as any,
       content_sections: data.content_sections as string[]
     };

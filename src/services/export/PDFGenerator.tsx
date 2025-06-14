@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, pdf, DocumentProps } from '@react-pdf/renderer';
 import { ExportConfig, BrandingConfig } from './types';
 
 const styles = StyleSheet.create({
@@ -131,8 +130,9 @@ export class PDFGenerator {
   static async generateReport(config: ExportConfig, data: any): Promise<Blob> {
     const branding = config.brandingConfig || {};
     
-    const doc = React.createElement(PDFReport, { config, data, branding });
-    const pdfBlob = await pdf(doc).toBlob();
+    const docElement = <PDFReport config={config} data={data} branding={branding} />;
+    // Explicitly cast to React.ReactElement to satisfy the pdf() function's type expectation
+    const pdfBlob = await pdf(docElement as React.ReactElement<DocumentProps>).toBlob();
     
     return pdfBlob;
   }
@@ -142,16 +142,16 @@ export class PDFGenerator {
       summary: {
         totalWebinars: webinarData.length,
         totalParticipants: webinarData.reduce((sum, w) => sum + (w.total_attendees || 0), 0),
-        avgEngagement: webinarData.reduce((sum, w) => sum + (w.engagement_score || 0), 0) / webinarData.length,
+        avgEngagement: webinarData.length > 0 ? webinarData.reduce((sum, w) => sum + (w.engagement_score || 0), 0) / webinarData.length : 0,
       },
       insights: [
         { text: `Analyzed ${webinarData.length} webinar sessions` },
-        { text: `Peak attendance was ${Math.max(...webinarData.map(w => w.total_attendees || 0))} participants` },
-        { text: `Average session duration was ${Math.round(webinarData.reduce((sum, w) => sum + (w.duration || 0), 0) / webinarData.length)} minutes` },
+        { text: `Peak attendance was ${Math.max(0, ...webinarData.map(w => w.total_attendees || 0))} participants` },
+        { text: `Average session duration was ${webinarData.length > 0 ? Math.round(webinarData.reduce((sum, w) => sum + (w.duration || 0), 0) / webinarData.length) : 0} minutes` },
       ],
       webinars: webinarData.map(w => ({
         topic: w.topic,
-        attendance_rate: Math.round((w.total_attendees / w.total_registrants) * 100) || 0,
+        attendance_rate: w.total_registrants > 0 ? Math.round((w.total_attendees / w.total_registrants) * 100) : 0,
       })),
     };
 
