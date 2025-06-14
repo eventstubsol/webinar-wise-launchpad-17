@@ -53,8 +53,16 @@ export class ExportJobRetryManager {
     const delay = this.calculateDelay(currentRetries, policy);
     const nextRetryAt = new Date(Date.now() + delay);
 
-    // Update retry history
-    const existingPolicy = job.retry_policy as RetryPolicy | null;
+    // Update retry history - safely handle the Json type
+    let existingPolicy: RetryPolicy | null = null;
+    try {
+      if (job.retry_policy && typeof job.retry_policy === 'object' && !Array.isArray(job.retry_policy)) {
+        existingPolicy = job.retry_policy as unknown as RetryPolicy;
+      }
+    } catch (e) {
+      console.warn('Failed to parse existing retry policy:', e);
+    }
+
     const retryHistory = existingPolicy?.retryHistory || [];
     const newAttempt: RetryAttempt = {
       attempt: currentRetries + 1,
@@ -68,6 +76,9 @@ export class ExportJobRetryManager {
       retryHistory: [...retryHistory, newAttempt]
     };
 
+    // Convert to Json-compatible format
+    const policyForDb = JSON.parse(JSON.stringify(updatedPolicy));
+
     // Update job with retry information
     const { error: updateError } = await supabase
       .from('export_queue')
@@ -75,7 +86,7 @@ export class ExportJobRetryManager {
         status: 'pending',
         retry_count: currentRetries + 1,
         next_retry_at: nextRetryAt.toISOString(),
-        retry_policy: updatedPolicy,
+        retry_policy: policyForDb,
         error_message: error
       })
       .eq('id', jobId);
@@ -118,6 +129,9 @@ export class ExportJobRetryManager {
 
   private static async moveToDeadLetterQueue(job: any, finalError: string, policy: RetryPolicy): Promise<void> {
     try {
+      // Convert retry history to Json-compatible format
+      const retryHistoryForDb = policy.retryHistory ? JSON.parse(JSON.stringify(policy.retryHistory)) : [];
+
       // Insert into dead letter queue
       await supabase
         .from('export_dead_letter_queue')
@@ -127,7 +141,7 @@ export class ExportJobRetryManager {
           export_type: job.export_type,
           export_config: job.export_config,
           failure_reason: finalError,
-          retry_history: policy.retryHistory || []
+          retry_history: retryHistoryForDb
         });
 
       // Mark original job as permanently failed
