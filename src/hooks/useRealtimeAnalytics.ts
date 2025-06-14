@@ -1,32 +1,8 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-
-interface AnalyticsEvent {
-  id: string;
-  event_type: string;
-  event_data: any;
-  timestamp: string;
-}
-
-interface ProcessingTask {
-  id: string;
-  task_type: string;
-  status: string;
-  priority: number;
-  progress?: number;
-  error_message?: string;
-  webinar_id?: string;
-}
-
-interface CacheEntry {
-  cache_key: string;
-  cache_data: any;
-  cache_version: number;
-  expires_at: string;
-}
+import { AnalyticsEvent, ProcessingTask, CacheEntry } from '@/services/realtime/types';
 
 interface UseRealtimeAnalyticsOptions {
   webinarId?: string;

@@ -1,27 +1,9 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useRealtimeAnalytics } from './useRealtimeAnalytics';
 import { webSocketService } from '@/services/realtime/WebSocketService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-
-interface RealtimeDashboardData {
-  participants: any[];
-  polls: any[];
-  qna: any[];
-  engagement: any;
-  insights: any[];
-  lastUpdated: string;
-}
-
-interface LiveAlert {
-  id: string;
-  type: 'warning' | 'info' | 'success' | 'error';
-  message: string;
-  timestamp: string;
-  webinarId?: string;
-  dismissed?: boolean;
-}
+import { RealtimeDashboardData, LiveAlert, ConnectionHealth } from '@/services/realtime/types';
 
 export const useRealtimeDashboard = (webinarId?: string) => {
   const { user } = useAuth();
@@ -35,9 +17,9 @@ export const useRealtimeDashboard = (webinarId?: string) => {
     lastUpdated: new Date().toISOString(),
   });
   const [liveAlerts, setLiveAlerts] = useState<LiveAlert[]>([]);
-  const [connectionHealth, setConnectionHealth] = useState({
+  const [connectionHealth, setConnectionHealth] = useState<ConnectionHealth>({
     isConnected: false,
-    lastHeartbeat: null as string | null,
+    lastHeartbeat: null,
     reconnectAttempts: 0,
   });
 
@@ -193,9 +175,8 @@ export const useRealtimeDashboard = (webinarId?: string) => {
       timestamp: new Date().toISOString(),
     };
 
-    setLiveAlerts(prev => [newAlert, ...prev.slice(0, 19)]); // Keep last 20 alerts
+    setLiveAlerts(prev => [newAlert, ...prev.slice(0, 19)]);
 
-    // Auto-dismiss info alerts after 10 seconds
     if (alert.type === 'info') {
       setTimeout(() => {
         dismissAlert(newAlert.id);
@@ -213,7 +194,6 @@ export const useRealtimeDashboard = (webinarId?: string) => {
     if (!webinarId) return;
 
     try {
-      // Check cache first
       const cachedEngagement = getCachedData(`engagement_analysis:${webinarId}`);
       const cachedPolls = getCachedData(`poll_analysis:${webinarId}`);
       const cachedQna = getCachedData(`qna_analysis:${webinarId}`);
@@ -228,7 +208,6 @@ export const useRealtimeDashboard = (webinarId?: string) => {
         }));
       }
 
-      // Queue fresh analysis if cache is old or missing
       if (!cachedEngagement) {
         await enqueueAnalysisTask('engagement_analysis', { webinar_id: webinarId }, 2);
       }
@@ -255,13 +234,11 @@ export const useRealtimeDashboard = (webinarId?: string) => {
     await invalidateCache(`poll_analysis:${webinarId}`);
     await invalidateCache(`qna_analysis:${webinarId}`);
     
-    // Refresh after invalidation
     await refreshDashboard();
   }, [webinarId, invalidateCache, refreshDashboard]);
 
-  // Auto-refresh dashboard periodically
   useEffect(() => {
-    const refreshInterval = setInterval(refreshDashboard, 30000); // Every 30 seconds
+    const refreshInterval = setInterval(refreshDashboard, 30000);
     return () => clearInterval(refreshInterval);
   }, [refreshDashboard]);
 
