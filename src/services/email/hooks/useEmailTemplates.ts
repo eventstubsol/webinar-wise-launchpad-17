@@ -28,6 +28,8 @@ export function useEmailTemplates(userId: string) {
       category: row.category,
       design_json: row.design_json,
       html_template: row.html_template,
+      subject_template: row.subject_template,
+      template_type: row.template_type,
       variables: Array.isArray(row.variables) ? row.variables : [],
       is_public: row.is_public ?? false,
       is_active: row.is_active ?? true,

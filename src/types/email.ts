@@ -1,4 +1,3 @@
-
 export type EmailTemplateCategory =
   | "registration"
   | "reminder"
@@ -14,6 +13,8 @@ export interface EmailTemplate {
   category: EmailTemplateCategory;
   design_json: any;
   html_template: string;
+  subject_template: string; // Added required field
+  template_type: string; // Added required field
   variables: string[];
   is_public: boolean;
   is_active: boolean;
