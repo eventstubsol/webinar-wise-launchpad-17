@@ -41,6 +41,7 @@ export function TemplateGallery({
       setLoading(true);
       const options = {
         ...filters,
+        category: filters.category === "all" ? "" : filters.category,
         userId: publicOnly ? undefined : userId,
         includeSystem
       };

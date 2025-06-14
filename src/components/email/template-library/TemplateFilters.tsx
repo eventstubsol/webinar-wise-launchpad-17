@@ -16,7 +16,7 @@ interface TemplateFiltersProps {
 }
 
 const categories = [
-  { value: "", label: "All Categories" },
+  { value: "all", label: "All Categories" },
   { value: "registration", label: "Registration" },
   { value: "reminder", label: "Reminder" },
   { value: "follow-up", label: "Follow-up" },
@@ -47,10 +47,10 @@ export function TemplateFilters({ filters, onFiltersChange }: TemplateFiltersPro
   };
 
   const clearFilters = () => {
-    onFiltersChange({ category: "", search: "", tags: [] });
+    onFiltersChange({ category: "all", search: "", tags: [] });
   };
 
-  const hasActiveFilters = filters.category || filters.search || filters.tags.length > 0;
+  const hasActiveFilters = (filters.category && filters.category !== "all") || filters.search || filters.tags.length > 0;
 
   return (
     <div className="space-y-4">
@@ -65,7 +65,7 @@ export function TemplateFilters({ filters, onFiltersChange }: TemplateFiltersPro
           />
         </div>
         
-        <Select value={filters.category} onValueChange={(category) => updateFilters({ category })}>
+        <Select value={filters.category || "all"} onValueChange={(category) => updateFilters({ category })}>
           <SelectTrigger className="w-48">
             <SelectValue placeholder="Select category" />
           </SelectTrigger>
