@@ -7,6 +7,7 @@ export interface RetryPolicy {
   maxDelay: number;
   backoffMultiplier: number;
   jitterMax: number;
+  retryHistory?: RetryAttempt[];
 }
 
 export interface RetryAttempt {
@@ -53,7 +54,8 @@ export class ExportJobRetryManager {
     const nextRetryAt = new Date(Date.now() + delay);
 
     // Update retry history
-    const retryHistory = job.retry_policy?.retryHistory || [];
+    const existingPolicy = job.retry_policy as RetryPolicy | null;
+    const retryHistory = existingPolicy?.retryHistory || [];
     const newAttempt: RetryAttempt = {
       attempt: currentRetries + 1,
       error,
@@ -61,7 +63,7 @@ export class ExportJobRetryManager {
       nextRetryAt: nextRetryAt.toISOString()
     };
 
-    const updatedPolicy = {
+    const updatedPolicy: RetryPolicy = {
       ...policy,
       retryHistory: [...retryHistory, newAttempt]
     };

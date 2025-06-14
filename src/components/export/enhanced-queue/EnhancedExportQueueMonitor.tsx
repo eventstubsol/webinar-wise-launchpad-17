@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -111,7 +110,18 @@ export function EnhancedExportQueueMonitor() {
       const { data, error } = await ExportJobRetryManager.getDeadLetterJobs(user.user.id);
       if (error) throw error;
       
-      setDeadLetterJobs(data);
+      // Transform the data to match our interface
+      const transformedData: DeadLetterJob[] = data.map(job => ({
+        id: job.id,
+        original_job_id: job.original_job_id,
+        export_type: job.export_type,
+        failure_reason: job.failure_reason || 'Unknown error',
+        moved_to_dlq_at: job.moved_to_dlq_at,
+        retry_history: Array.isArray(job.retry_history) ? job.retry_history : [],
+        export_config: job.export_config
+      }));
+      
+      setDeadLetterJobs(transformedData);
     } catch (error) {
       console.error('Failed to load dead letter jobs:', error);
     }

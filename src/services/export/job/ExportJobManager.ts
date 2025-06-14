@@ -143,6 +143,10 @@ export class ExportJobManager {
 
       const totalProcessingTime = Date.now() - processingStartTime;
 
+      // Safely handle performance metrics
+      const existingMetrics = job.performance_metrics as Record<string, any> | null;
+      const baseMetrics = existingMetrics || {};
+
       // Update job with completion and performance metrics
       await supabase
         .from('export_queue')
@@ -153,7 +157,7 @@ export class ExportJobManager {
           file_size: fileBlob.size,
           completed_at: new Date().toISOString(),
           performance_metrics: {
-            ...job.performance_metrics,
+            ...baseMetrics,
             processing_time_ms: totalProcessingTime,
             data_fetch_time_ms: dataFetchTime,
             generation_time_ms: generationTime,
