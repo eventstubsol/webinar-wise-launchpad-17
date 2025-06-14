@@ -1,6 +1,6 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
+import { EmailDeliveryService } from './EmailDeliveryService';
 
 type CampaignInsert = Database['public']['Tables']['email_campaigns']['Insert'];
 type CampaignRow = Database['public']['Tables']['email_campaigns']['Row'];
@@ -70,14 +70,21 @@ export class CampaignService {
     if (error) throw error;
   }
 
-  // Launch campaign
+  // Launch campaign with new delivery system
   static async launchCampaign(campaignId: string) {
-    const { data, error } = await supabase.functions.invoke('launch-campaign', {
-      body: { campaign_id: campaignId }
-    });
+    try {
+      // Update campaign status to launching
+      await this.updateCampaign(campaignId, { status: 'launching' });
 
-    if (error) throw error;
-    return data;
+      // Use new email delivery service
+      const result = await EmailDeliveryService.launchCampaign(campaignId);
+
+      return result;
+    } catch (error: any) {
+      // Revert status on error
+      await this.updateCampaign(campaignId, { status: 'draft' });
+      throw error;
+    }
   }
 
   // Pause/Resume campaign
@@ -100,5 +107,37 @@ export class CampaignService {
       campaign_type: newName,
       status: 'draft'
     });
+  }
+
+  static async getCampaignDeliveryStats(campaignId: string) {
+    return EmailDeliveryService.getCampaignDeliveryStats(campaignId);
+  }
+
+  static async getCampaignAnalytics(campaignId: string) {
+    const { data, error } = await supabase
+      .from('campaign_analytics')
+      .select('*')
+      .eq('campaign_id', campaignId);
+
+    if (error) throw error;
+
+    // Aggregate metrics
+    const metrics = data.reduce((acc: any, event: any) => {
+      acc[event.metric_type] = (acc[event.metric_type] || 0) + event.metric_value;
+      return acc;
+    }, {});
+
+    // Calculate rates
+    const sent = metrics.sent || 0;
+    const delivered = metrics.delivered || sent; // Assume delivered = sent for now
+    const opened = metrics.opened || 0;
+    const clicked = metrics.clicked || 0;
+
+    return {
+      ...metrics,
+      open_rate: delivered > 0 ? (opened / delivered) * 100 : 0,
+      click_rate: delivered > 0 ? (clicked / delivered) * 100 : 0,
+      click_through_rate: opened > 0 ? (clicked / opened) * 100 : 0
+    };
   }
 }

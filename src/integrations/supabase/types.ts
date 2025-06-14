@@ -9,6 +9,73 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      ab_test_results: {
+        Row: {
+          campaign_id: string
+          confidence_level: number | null
+          created_at: string | null
+          id: string
+          sample_size: number | null
+          statistical_significance: number | null
+          test_end_date: string | null
+          test_start_date: string
+          test_status: string | null
+          variant_a_id: string
+          variant_b_id: string
+          winner_variant_id: string | null
+        }
+        Insert: {
+          campaign_id: string
+          confidence_level?: number | null
+          created_at?: string | null
+          id?: string
+          sample_size?: number | null
+          statistical_significance?: number | null
+          test_end_date?: string | null
+          test_start_date: string
+          test_status?: string | null
+          variant_a_id: string
+          variant_b_id: string
+          winner_variant_id?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          confidence_level?: number | null
+          created_at?: string | null
+          id?: string
+          sample_size?: number | null
+          statistical_significance?: number | null
+          test_end_date?: string | null
+          test_start_date?: string
+          test_status?: string | null
+          variant_a_id?: string
+          variant_b_id?: string
+          winner_variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ab_test_results_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ab_test_results_variant_a_id_fkey"
+            columns: ["variant_a_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_variants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ab_test_results_variant_b_id_fkey"
+            columns: ["variant_b_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_insights: {
         Row: {
           ai_model_name: string
@@ -502,6 +569,50 @@ export type Database = {
           },
         ]
       }
+      campaign_workflows: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          trigger_conditions: Json | null
+          updated_at: string | null
+          user_id: string
+          workflow_config: Json
+          workflow_name: string
+          workflow_type: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          trigger_conditions?: Json | null
+          updated_at?: string | null
+          user_id: string
+          workflow_config?: Json
+          workflow_name: string
+          workflow_type: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          trigger_conditions?: Json | null
+          updated_at?: string | null
+          user_id?: string
+          workflow_config?: Json
+          workflow_name?: string
+          workflow_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_workflows_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_analysis: {
         Row: {
           analysis_model: string
@@ -918,6 +1029,7 @@ export type Database = {
           bounce_time: string | null
           campaign_id: string | null
           click_time: string | null
+          click_tracking_enabled: boolean | null
           complaint_time: string | null
           created_at: string | null
           error_message: string | null
@@ -930,7 +1042,9 @@ export type Database = {
           send_time: string | null
           status: string
           subject: string | null
+          tracking_pixel_url: string | null
           unsubscribe_time: string | null
+          unsubscribe_url: string | null
         }
         Insert: {
           ab_variant?: string | null
@@ -938,6 +1052,7 @@ export type Database = {
           bounce_time?: string | null
           campaign_id?: string | null
           click_time?: string | null
+          click_tracking_enabled?: boolean | null
           complaint_time?: string | null
           created_at?: string | null
           error_message?: string | null
@@ -950,7 +1065,9 @@ export type Database = {
           send_time?: string | null
           status?: string
           subject?: string | null
+          tracking_pixel_url?: string | null
           unsubscribe_time?: string | null
+          unsubscribe_url?: string | null
         }
         Update: {
           ab_variant?: string | null
@@ -958,6 +1075,7 @@ export type Database = {
           bounce_time?: string | null
           campaign_id?: string | null
           click_time?: string | null
+          click_tracking_enabled?: boolean | null
           complaint_time?: string | null
           created_at?: string | null
           error_message?: string | null
@@ -970,7 +1088,9 @@ export type Database = {
           send_time?: string | null
           status?: string
           subject?: string | null
+          tracking_pixel_url?: string | null
           unsubscribe_time?: string | null
+          unsubscribe_url?: string | null
         }
         Relationships: [
           {
@@ -1311,6 +1431,47 @@ export type Database = {
         }
         Relationships: []
       }
+      email_tracking_events: {
+        Row: {
+          created_at: string | null
+          email_send_id: string
+          event_data: Json | null
+          event_type: string
+          id: string
+          ip_address: unknown | null
+          timestamp: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email_send_id: string
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          ip_address?: unknown | null
+          timestamp?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email_send_id?: string
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          ip_address?: unknown | null
+          timestamp?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_tracking_events_email_send_id_fkey"
+            columns: ["email_send_id"]
+            isOneToOne: false
+            referencedRelation: "email_sends"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       engagement_predictions: {
         Row: {
           actual_value: number | null
@@ -1533,6 +1694,53 @@ export type Database = {
           {
             foreignKeyName: "insight_templates_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      personalization_rules: {
+        Row: {
+          conditions: Json
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          priority: number | null
+          replacements: Json
+          rule_name: string
+          rule_type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          conditions?: Json
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          priority?: number | null
+          replacements?: Json
+          rule_name: string
+          rule_type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          conditions?: Json
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          priority?: number | null
+          replacements?: Json
+          rule_name?: string
+          rule_type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personalization_rules_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1837,6 +2045,59 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "report_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      send_time_analytics: {
+        Row: {
+          click_rate: number | null
+          created_at: string | null
+          engagement_score: number | null
+          id: string
+          last_calculated: string | null
+          open_rate: number | null
+          recipient_email: string
+          sample_size: number | null
+          send_day_of_week: number
+          send_hour: number
+          timezone: string | null
+          user_id: string
+        }
+        Insert: {
+          click_rate?: number | null
+          created_at?: string | null
+          engagement_score?: number | null
+          id?: string
+          last_calculated?: string | null
+          open_rate?: number | null
+          recipient_email: string
+          sample_size?: number | null
+          send_day_of_week: number
+          send_hour: number
+          timezone?: string | null
+          user_id: string
+        }
+        Update: {
+          click_rate?: number | null
+          created_at?: string | null
+          engagement_score?: number | null
+          id?: string
+          last_calculated?: string | null
+          open_rate?: number | null
+          recipient_email?: string
+          sample_size?: number | null
+          send_day_of_week?: number
+          send_hour?: number
+          timezone?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "send_time_analytics_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2229,6 +2490,50 @@ export type Database = {
             columns: ["workflow_id"]
             isOneToOne: false
             referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_steps: {
+        Row: {
+          conditions: Json | null
+          created_at: string | null
+          delay_hours: number | null
+          id: string
+          is_active: boolean | null
+          step_config: Json
+          step_order: number
+          step_type: string
+          workflow_id: string
+        }
+        Insert: {
+          conditions?: Json | null
+          created_at?: string | null
+          delay_hours?: number | null
+          id?: string
+          is_active?: boolean | null
+          step_config?: Json
+          step_order: number
+          step_type: string
+          workflow_id: string
+        }
+        Update: {
+          conditions?: Json | null
+          created_at?: string | null
+          delay_hours?: number | null
+          id?: string
+          is_active?: boolean | null
+          step_config?: Json
+          step_order?: number
+          step_type?: string
+          workflow_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_steps_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_workflows"
             referencedColumns: ["id"]
           },
         ]

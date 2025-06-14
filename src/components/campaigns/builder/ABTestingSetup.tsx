@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Campaign, TestVariant } from '@/types/campaign';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,9 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TestTube, Plus, Trash2 } from 'lucide-react';
+import { TestTube, Plus, Trash2, BarChart3, TrendingUp } from 'lucide-react';
+import { ABTestingAnalyticsService } from '@/services/campaigns/ABTestingAnalyticsService';
+import { ABTestingService } from '@/services/campaigns/ABTestingService';
 
 interface ABTestingSetupProps {
   campaignData: Partial<Campaign>;
@@ -25,6 +27,28 @@ export const ABTestingSetup: React.FC<ABTestingSetupProps> = ({
     { id: 'control', name: 'Control', subject: campaignData.subject_template || '', percentage: 50 },
     { id: 'variant_1', name: 'Variant A', subject: '', percentage: 50 }
   ]);
+  const [testResults, setTestResults] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (campaignData.id && abTestEnabled) {
+      loadTestResults();
+    }
+  }, [campaignData.id, abTestEnabled]);
+
+  const loadTestResults = async () => {
+    if (!campaignData.id) return;
+    
+    try {
+      setLoading(true);
+      const results = await ABTestingAnalyticsService.analyzeABTestResults(campaignData.id);
+      setTestResults(results);
+    } catch (error) {
+      console.error('Error loading A/B test results:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleToggleABTest = (enabled: boolean) => {
     setAbTestEnabled(enabled);
@@ -46,6 +70,7 @@ export const ABTestingSetup: React.FC<ABTestingSetupProps> = ({
         ...campaignData,
         ab_test_config: undefined
       });
+      setTestResults(null);
     }
   };
 
@@ -84,6 +109,17 @@ export const ABTestingSetup: React.FC<ABTestingSetupProps> = ({
     setVariants(updatedVariants);
   };
 
+  const selectWinner = async (variantId: string) => {
+    if (!campaignData.id) return;
+    
+    try {
+      await ABTestingService.selectWinningVariant(campaignData.id, variantId);
+      await loadTestResults();
+    } catch (error) {
+      console.error('Error selecting winner:', error);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -111,6 +147,69 @@ export const ABTestingSetup: React.FC<ABTestingSetupProps> = ({
 
         {abTestEnabled && (
           <CardContent className="space-y-6">
+            {/* Test Results */}
+            {testResults && (
+              <Card className="bg-blue-50 border-blue-200">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    A/B Test Results
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {testResults.comparisons.map((comparison: any, index: number) => (
+                    <div key={index} className="bg-white rounded-lg p-4">
+                      <h4 className="font-medium mb-2">
+                        {comparison.variantA} vs {comparison.variantB}
+                      </h4>
+                      
+                      <div className="grid grid-cols-2 gap-4 mb-3">
+                        <div>
+                          <div className="text-sm text-gray-600">Open Rate Test</div>
+                          <div className={`text-lg font-medium ${
+                            comparison.openRateTest.isSignificant ? 'text-green-600' : 'text-gray-600'
+                          }`}>
+                            {comparison.openRateTest.isSignificant ? '✓ Significant' : '○ Not Significant'}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            p-value: {comparison.openRateTest.pValue.toFixed(4)}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <div className="text-sm text-gray-600">Click Rate Test</div>
+                          <div className={`text-lg font-medium ${
+                            comparison.clickRateTest.isSignificant ? 'text-green-600' : 'text-gray-600'
+                          }`}>
+                            {comparison.clickRateTest.isSignificant ? '✓ Significant' : '○ Not Significant'}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            p-value: {comparison.clickRateTest.pValue.toFixed(4)}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gray-50 rounded p-3">
+                        <div className="text-sm font-medium text-gray-700 mb-1">Recommendation:</div>
+                        <div className="text-sm text-gray-600">{comparison.recommendation}</div>
+                      </div>
+                      
+                      {testResults.overall_winner && comparison.openRateTest.isSignificant && (
+                        <Button 
+                          onClick={() => selectWinner(testResults.overall_winner.id)}
+                          className="mt-3 w-full"
+                          size="sm"
+                        >
+                          <TrendingUp className="h-4 w-4 mr-2" />
+                          Select Winner
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">Test Variants</Label>
@@ -196,6 +295,13 @@ export const ABTestingSetup: React.FC<ABTestingSetupProps> = ({
                 </Select>
               </div>
             </div>
+
+            {loading && (
+              <div className="text-center py-4">
+                <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <p className="text-sm text-gray-500 mt-2">Analyzing test results...</p>
+              </div>
+            )}
           </CardContent>
         )}
       </Card>
