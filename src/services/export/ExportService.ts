@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { PDFGenerator } from './PDFGenerator';
 import { ExcelGenerator } from './ExcelGenerator';
 import { PowerPointGenerator } from './PowerPointGenerator';
-import { ExportConfig, ExportQueueItem, ReportTemplate } from './types';
+import { ExportConfig, ExportQueueItem, ReportTemplate, BrandingConfig } from './types';
 
 export class ExportService {
   static async createExportJob(
