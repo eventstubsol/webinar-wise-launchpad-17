@@ -27,7 +27,7 @@ export class EngagementPredictionsService {
     }
 
     if (options?.predictionType) {
-      query = query.eq('prediction_type', options.predictionType);
+      query = query.eq('prediction_type', options.predictionType as any);
     }
 
     if (options?.limit) {

@@ -23,11 +23,11 @@ export class AIInsightsService {
     }
 
     if (options?.insightType) {
-      query = query.eq('insight_type', options.insightType);
+      query = query.eq('insight_type', options.insightType as any);
     }
 
     if (options?.status) {
-      query = query.eq('status', options.status);
+      query = query.eq('status', options.status as any);
     }
 
     if (options?.limit) {
