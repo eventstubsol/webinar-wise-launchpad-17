@@ -1,4 +1,3 @@
-
 import { StyleSheet } from '@react-pdf/renderer';
 import { BrandingConfig } from '../../types';
 
@@ -84,7 +83,6 @@ export const createDynamicStyles = (branding: BrandingConfig) => {
       color: primaryColor,
     },
     table: {
-      display: 'table',
       width: 'auto',
       borderStyle: 'solid',
       borderWidth: 1,
@@ -163,4 +161,3 @@ export const createDynamicStyles = (branding: BrandingConfig) => {
     },
   });
 };
-

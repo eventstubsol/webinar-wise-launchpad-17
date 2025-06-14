@@ -1,6 +1,6 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { ReportTemplate, BrandingConfig } from '../types';
+import { Json } from '@/integrations/supabase/types';
 
 export interface TemplateSection {
   id: string;
@@ -28,9 +28,9 @@ export class DatabaseTemplateManager {
       template_name: template.template_name || 'Untitled Template',
       template_type: template.template_type || 'pdf',
       template_description: template.template_description,
-      branding_config: template.branding_config || {},
-      layout_config: template.layout_config || this.getDefaultLayoutConfig(),
-      content_sections: template.content_sections || this.getDefaultSections(),
+      branding_config: template.branding_config as Json,
+      layout_config: (template.layout_config || this.getDefaultLayoutConfig()) as Json,
+      content_sections: (template.content_sections || this.getDefaultSections()) as Json,
       is_default: template.is_default || false,
       is_active: true
     };
@@ -88,7 +88,7 @@ export class DatabaseTemplateManager {
       throw new Error('Template not found or access denied');
     }
 
-    const updateData = {
+    const updateData: { [key: string]: any } = {
       template_name: updates.template_name,
       template_type: updates.template_type,
       template_description: updates.template_description,

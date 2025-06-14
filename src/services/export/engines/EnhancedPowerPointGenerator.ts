@@ -219,21 +219,23 @@ export class EnhancedPowerPointGenerator {
     });
 
     // Top performing webinars table
-    const tableData = [
-      ['Webinar Title', 'Attendees', 'Engagement', 'Duration', 'Rating']
+    const tableHeader = [
+      { text: 'Webinar Title', options: { bold: true } },
+      { text: 'Attendees', options: { bold: true } },
+      { text: 'Engagement', options: { bold: true } },
+      { text: 'Duration', options: { bold: true } },
+      { text: 'Rating', options: { bold: true } }
     ];
 
-    // Add top 5 webinars (mock data enhanced)
-    const topWebinars = (data.webinars || []).slice(0, 5);
-    topWebinars.forEach((webinar: any) => {
-      tableData.push([
-        (webinar.topic || webinar.title || 'Untitled').substring(0, 30) + '...',
-        (webinar.total_attendees || 0).toString(),
-        `${Math.round(webinar.engagement_score || 0)}%`,
-        `${webinar.duration || 0}m`,
-        '⭐'.repeat(Math.floor(Math.random() * 2) + 3)
-      ]);
-    });
+    const tableRows = (data.webinars || []).slice(0, 5).map((webinar: any) => [
+      (webinar.topic || webinar.title || 'Untitled').substring(0, 30) + '...',
+      (webinar.total_attendees || 0).toString(),
+      `${Math.round(webinar.engagement_score || 0)}%`,
+      `${webinar.duration || 0}m`,
+      '⭐'.repeat(Math.floor(Math.random() * 2) + 3)
+    ]);
+
+    const tableData = [tableHeader, ...tableRows];
 
     slide.addTable(tableData, {
       x: 0.5,
@@ -457,13 +459,20 @@ export class EnhancedPowerPointGenerator {
       color: branding.primaryColor || '1F2937'
     });
 
-    const appendixData = [
-      ['Data Source', 'Period Covered', 'Records'],
+    const appendixHeader = [
+      { text: 'Data Source', options: { bold: true } },
+      { text: 'Period Covered', options: { bold: true } },
+      { text: 'Records', options: { bold: true } }
+    ];
+
+    const appendixRows = [
       ['Zoom Webinar Platform', `${new Date().toLocaleDateString()}`, `${data.totalWebinars || 0} webinars`],
       ['Participant Analytics', 'Last 90 days', `${data.totalParticipants || 0} participants`],
       ['Engagement Tracking', 'Real-time', 'Continuous monitoring'],
       ['Poll & Q&A Data', 'Session-based', 'Complete interaction logs']
     ];
+
+    const appendixData = [appendixHeader, ...appendixRows];
 
     slide.addTable(appendixData, {
       x: 0.5,

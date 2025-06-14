@@ -1,4 +1,3 @@
-
 import * as XLSX from 'xlsx';
 import { ExportConfig } from '../types';
 
@@ -140,8 +139,10 @@ export class EnhancedExcelGenerator {
     const allData = [headers, ...dataRows];
     const worksheet = XLSX.utils.aoa_to_sheet(allData);
 
+    const range = 'H2:H' + (dataRows.length + 1);
     // Add conditional formatting for attendance rates
-    this.addConditionalFormatting(worksheet, 'H2:H' + (dataRows.length + 1), {
+    this.addConditionalFormatting(worksheet, range, {
+      range: range,
       condition: '>=65',
       style: { fill: { fgColor: { rgb: "90EE90" } } }
     });
