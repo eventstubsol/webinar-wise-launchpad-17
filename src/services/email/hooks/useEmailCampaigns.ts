@@ -7,13 +7,22 @@ export function useEmailCampaigns(userId: string) {
   const queryClient = useQueryClient();
 
   const getCampaigns = async (): Promise<EmailCampaign[]> => {
+    if (!userId) {
+      throw new Error("User ID is required");
+    }
+
     const { data, error } = await supabase
       .from("email_campaigns")
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
-    if (error) throw error;
-    return (data as any[]).map((row: any) => ({
+      
+    if (error) {
+      console.error("Error fetching email campaigns:", error);
+      throw error;
+    }
+    
+    return (data || []).map((row: any) => ({
       id: row.id,
       user_id: row.user_id,
       workflow_id: row.workflow_id,
@@ -29,9 +38,10 @@ export function useEmailCampaigns(userId: string) {
     }));
   };
 
-  const { data: campaigns, refetch } = useQuery({
+  const { data: campaigns, refetch, isLoading, error } = useQuery({
     queryKey: ["email_campaigns", userId],
     queryFn: getCampaigns,
+    enabled: !!userId,
   });
 
   const mutation = useMutation({
@@ -41,18 +51,36 @@ export function useEmailCampaigns(userId: string) {
       if (!newCampaign.subject_template) throw new Error("subject_template required");
       if (!newCampaign.audience_segment) throw new Error("audience_segment required");
       if (!newCampaign.status) newCampaign.status = "draft";
+      
       const insertObj = {
-        ...newCampaign,
+        user_id: newCampaign.user_id,
+        workflow_id: newCampaign.workflow_id,
+        template_id: newCampaign.template_id,
+        campaign_type: newCampaign.campaign_type,
+        subject_template: newCampaign.subject_template,
+        audience_segment: newCampaign.audience_segment || {},
+        send_schedule: newCampaign.send_schedule,
+        status: newCampaign.status || "draft",
       };
+      
       const { data, error } = await supabase
         .from("email_campaigns")
         .insert(insertObj)
+        .select()
         .single();
-      if (error) throw error;
+        
+      if (error) {
+        console.error("Error creating email campaign:", error);
+        throw error;
+      }
+      
       return data as EmailCampaign;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["email_campaigns", userId] });
+    },
+    onError: (error) => {
+      console.error("Campaign creation failed:", error);
     },
   });
 
@@ -61,5 +89,7 @@ export function useEmailCampaigns(userId: string) {
     refetch,
     createCampaign: mutation.mutateAsync,
     isCampaignCreating: mutation.isPending,
+    isLoading,
+    error,
   };
 }

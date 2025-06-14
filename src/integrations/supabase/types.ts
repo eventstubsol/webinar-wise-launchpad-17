@@ -336,13 +336,269 @@ export type Database = {
           },
         ]
       }
+      email_bounces: {
+        Row: {
+          email_send_id: string | null
+          event_data: Json | null
+          event_type: string
+          id: string
+          received_at: string | null
+          recipient_email: string
+        }
+        Insert: {
+          email_send_id?: string | null
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          received_at?: string | null
+          recipient_email: string
+        }
+        Update: {
+          email_send_id?: string | null
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          received_at?: string | null
+          recipient_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_bounces_email_send_id_fkey"
+            columns: ["email_send_id"]
+            isOneToOne: false
+            referencedRelation: "email_sends"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_campaigns: {
+        Row: {
+          audience_segment: Json
+          campaign_type: string
+          created_at: string | null
+          id: string
+          last_run_at: string | null
+          send_schedule: Json | null
+          status: string
+          subject_template: string
+          template_id: string | null
+          updated_at: string | null
+          user_id: string
+          workflow_id: string | null
+        }
+        Insert: {
+          audience_segment?: Json
+          campaign_type: string
+          created_at?: string | null
+          id?: string
+          last_run_at?: string | null
+          send_schedule?: Json | null
+          status?: string
+          subject_template: string
+          template_id?: string | null
+          updated_at?: string | null
+          user_id: string
+          workflow_id?: string | null
+        }
+        Update: {
+          audience_segment?: Json
+          campaign_type?: string
+          created_at?: string | null
+          id?: string
+          last_run_at?: string | null
+          send_schedule?: Json | null
+          status?: string
+          subject_template?: string
+          template_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+          workflow_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaigns_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaigns_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_preferences: {
+        Row: {
+          id: string
+          preferences: Json | null
+          unsubscribed: boolean | null
+          unsubscribed_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          preferences?: Json | null
+          unsubscribed?: boolean | null
+          unsubscribed_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          preferences?: Json | null
+          unsubscribed?: boolean | null
+          unsubscribed_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_sends: {
+        Row: {
+          ab_variant: string | null
+          body_html: string | null
+          bounce_time: string | null
+          campaign_id: string | null
+          click_time: string | null
+          complaint_time: string | null
+          created_at: string | null
+          error_message: string | null
+          error_type: string | null
+          id: string
+          metadata: Json | null
+          open_time: string | null
+          recipient_email: string
+          recipient_id: string | null
+          send_time: string | null
+          status: string
+          subject: string | null
+          unsubscribe_time: string | null
+        }
+        Insert: {
+          ab_variant?: string | null
+          body_html?: string | null
+          bounce_time?: string | null
+          campaign_id?: string | null
+          click_time?: string | null
+          complaint_time?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          error_type?: string | null
+          id?: string
+          metadata?: Json | null
+          open_time?: string | null
+          recipient_email: string
+          recipient_id?: string | null
+          send_time?: string | null
+          status?: string
+          subject?: string | null
+          unsubscribe_time?: string | null
+        }
+        Update: {
+          ab_variant?: string | null
+          body_html?: string | null
+          bounce_time?: string | null
+          campaign_id?: string | null
+          click_time?: string | null
+          complaint_time?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          error_type?: string | null
+          id?: string
+          metadata?: Json | null
+          open_time?: string | null
+          recipient_email?: string
+          recipient_id?: string | null
+          send_time?: string | null
+          status?: string
+          subject?: string | null
+          unsubscribe_time?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_sends_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sends_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_template_blocks: {
+        Row: {
+          block_content: Json
+          block_html: string | null
+          block_type: string
+          created_at: string | null
+          id: string
+          is_system: boolean
+          user_id: string | null
+        }
+        Insert: {
+          block_content: Json
+          block_html?: string | null
+          block_type: string
+          created_at?: string | null
+          id?: string
+          is_system?: boolean
+          user_id?: string | null
+        }
+        Update: {
+          block_content?: Json
+          block_html?: string | null
+          block_type?: string
+          created_at?: string | null
+          id?: string
+          is_system?: boolean
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_template_blocks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_templates: {
         Row: {
+          category: string
           created_at: string | null
+          design_json: Json
           html_template: string
           id: string
           is_active: boolean | null
           is_default: boolean | null
+          is_public: boolean | null
           subject_template: string
           template_name: string
           template_type: string
@@ -352,11 +608,14 @@ export type Database = {
           variables: Json | null
         }
         Insert: {
+          category?: string
           created_at?: string | null
+          design_json?: Json
           html_template: string
           id?: string
           is_active?: boolean | null
           is_default?: boolean | null
+          is_public?: boolean | null
           subject_template: string
           template_name: string
           template_type: string
@@ -366,11 +625,14 @@ export type Database = {
           variables?: Json | null
         }
         Update: {
+          category?: string
           created_at?: string | null
+          design_json?: Json
           html_template?: string
           id?: string
           is_active?: boolean | null
           is_default?: boolean | null
+          is_public?: boolean | null
           subject_template?: string
           template_name?: string
           template_type?: string
