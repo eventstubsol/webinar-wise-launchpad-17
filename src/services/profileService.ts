@@ -58,5 +58,21 @@ export const profileService = {
     }
 
     return data;
+  },
+
+  async ensureProfile(userId: string, email: string, fullName?: string): Promise<Profile> {
+    // Try to get existing profile
+    const existingProfile = await this.getProfile(userId);
+    
+    if (existingProfile) {
+      return existingProfile;
+    }
+
+    // Create new profile if it doesn't exist
+    return this.createProfile({
+      id: userId,
+      email: email,
+      full_name: fullName || email.split('@')[0]
+    });
   }
 };

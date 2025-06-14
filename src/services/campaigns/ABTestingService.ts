@@ -49,6 +49,27 @@ export class ABTestingService {
     if (error) throw error;
   }
 
+  static async selectWinningVariant(variantId: string) {
+    // Mark variant as winner
+    const { data, error } = await supabase
+      .from('campaign_variants')
+      .update({ is_winner: true })
+      .eq('id', variantId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Mark others as non-winners
+    await supabase
+      .from('campaign_variants')
+      .update({ is_winner: false })
+      .eq('campaign_id', data.campaign_id)
+      .neq('id', variantId);
+
+    return data;
+  }
+
   static async setupABTest(campaignId: string, config: any) {
     // Create variants based on config
     const variants = await Promise.all(
@@ -76,27 +97,6 @@ export class ABTestingService {
 
     // Calculate statistical significance
     return this.calculateTestResults(data);
-  }
-
-  static async selectWinningVariant(variantId: string) {
-    // Mark variant as winner
-    const { data, error } = await supabase
-      .from('campaign_variants')
-      .update({ is_winner: true })
-      .eq('id', variantId)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Mark others as non-winners
-    await supabase
-      .from('campaign_variants')
-      .update({ is_winner: false })
-      .eq('campaign_id', data.campaign_id)
-      .neq('id', variantId);
-
-    return data;
   }
 
   private static calculateTestResults(variants: any[]) {

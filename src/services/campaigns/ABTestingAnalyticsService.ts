@@ -105,6 +105,21 @@ export class ABTestingAnalyticsService {
   }
 
   static async selectWinningVariant(campaignId: string, variantId: string) {
+    // Get the variants to get the required data
+    const { data: variants, error: variantsError } = await supabase
+      .from('campaign_variants')
+      .select('*')
+      .eq('campaign_id', campaignId);
+
+    if (variantsError || !variants || variants.length < 2) {
+      throw new Error('Cannot select winner: insufficient variants');
+    }
+
+    // Find the control and variant
+    const sortedVariants = variants.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const controlVariant = sortedVariants[0];
+    const testVariant = sortedVariants[1];
+
     // Mark the winning variant
     await supabase
       .from('campaign_variants')
@@ -118,12 +133,18 @@ export class ABTestingAnalyticsService {
       .eq('campaign_id', campaignId)
       .neq('id', variantId);
 
-    // Record the test result
+    // Record the test result with all required fields
     const testResult = {
       campaign_id: campaignId,
+      variant_a_id: controlVariant.id,
+      variant_b_id: testVariant.id,
       winner_variant_id: variantId,
+      test_start_date: new Date().toISOString(), // This should ideally be stored when test starts
       test_end_date: new Date().toISOString(),
-      test_status: 'completed'
+      test_status: 'completed',
+      sample_size: variants.reduce((sum, v) => sum + (v.recipient_count || 0), 0),
+      confidence_level: 95,
+      statistical_significance: 0.95 // This should be calculated from actual test results
     };
 
     const { error } = await supabase

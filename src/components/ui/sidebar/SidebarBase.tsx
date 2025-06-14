@@ -1,6 +1,8 @@
 
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import { useSidebar } from "../sidebar"
+import { Sheet, SheetContent } from "../sheet"
 
 const SidebarBase = React.forwardRef<
   HTMLDivElement,
@@ -21,8 +23,6 @@ const SidebarBase = React.forwardRef<
     },
     ref
   ) => {
-    // We'll import the useSidebar hook from the main sidebar file
-    const { useSidebar } = require("../sidebar")
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
     if (collapsible === "none") {
@@ -41,7 +41,6 @@ const SidebarBase = React.forwardRef<
     }
 
     if (isMobile) {
-      const { Sheet, SheetContent } = require("../sheet")
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
           <SheetContent
