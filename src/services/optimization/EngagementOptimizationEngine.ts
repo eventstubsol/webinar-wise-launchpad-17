@@ -1,5 +1,5 @@
-
 import { supabase } from '@/integrations/supabase/client';
+import { castToRecord, castToArray, castExperimentType, castScoringModelType } from '@/services/types/TypeCasters';
 
 export interface OptimizationExperiment {
   id: string;
@@ -37,7 +37,22 @@ export class EngagementOptimizationEngine {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    
+    return (data || []).map(experiment => ({
+      id: experiment.id,
+      experiment_name: experiment.experiment_name,
+      experiment_type: castExperimentType(experiment.experiment_type),
+      hypothesis: experiment.hypothesis,
+      status: experiment.status as 'draft' | 'running' | 'completed' | 'paused',
+      start_date: experiment.start_date,
+      end_date: experiment.end_date,
+      control_group_size: experiment.control_group_size,
+      test_configurations: castToArray(experiment.test_configurations),
+      success_metrics: castToArray(experiment.success_metrics),
+      results: castToRecord(experiment.results),
+      statistical_significance: experiment.statistical_significance,
+      winner_variant: experiment.winner_variant,
+    }));
   }
 
   static async createOptimizationExperiment(
@@ -48,13 +63,39 @@ export class EngagementOptimizationEngine {
       .from('optimization_experiments')
       .insert({
         user_id: userId,
-        ...experiment,
+        experiment_name: experiment.experiment_name,
+        experiment_type: experiment.experiment_type,
+        hypothesis: experiment.hypothesis,
+        status: experiment.status,
+        start_date: experiment.start_date,
+        end_date: experiment.end_date,
+        control_group_size: experiment.control_group_size,
+        test_configurations: experiment.test_configurations,
+        success_metrics: experiment.success_metrics,
+        results: experiment.results,
+        statistical_significance: experiment.statistical_significance,
+        winner_variant: experiment.winner_variant,
       })
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+    
+    return {
+      id: data.id,
+      experiment_name: data.experiment_name,
+      experiment_type: castExperimentType(data.experiment_type),
+      hypothesis: data.hypothesis,
+      status: data.status as 'draft' | 'running' | 'completed' | 'paused',
+      start_date: data.start_date,
+      end_date: data.end_date,
+      control_group_size: data.control_group_size,
+      test_configurations: castToArray(data.test_configurations),
+      success_metrics: castToArray(data.success_metrics),
+      results: castToRecord(data.results),
+      statistical_significance: data.statistical_significance,
+      winner_variant: data.winner_variant,
+    };
   }
 
   static async startExperiment(experimentId: string): Promise<OptimizationExperiment> {
@@ -69,7 +110,22 @@ export class EngagementOptimizationEngine {
       .single();
 
     if (error) throw error;
-    return data;
+    
+    return {
+      id: data.id,
+      experiment_name: data.experiment_name,
+      experiment_type: castExperimentType(data.experiment_type),
+      hypothesis: data.hypothesis,
+      status: data.status as 'draft' | 'running' | 'completed' | 'paused',
+      start_date: data.start_date,
+      end_date: data.end_date,
+      control_group_size: data.control_group_size,
+      test_configurations: castToArray(data.test_configurations),
+      success_metrics: castToArray(data.success_metrics),
+      results: castToRecord(data.results),
+      statistical_significance: data.statistical_significance,
+      winner_variant: data.winner_variant,
+    };
   }
 
   static async completeExperiment(
@@ -90,7 +146,22 @@ export class EngagementOptimizationEngine {
       .single();
 
     if (error) throw error;
-    return data;
+    
+    return {
+      id: data.id,
+      experiment_name: data.experiment_name,
+      experiment_type: castExperimentType(data.experiment_type),
+      hypothesis: data.hypothesis,
+      status: data.status as 'draft' | 'running' | 'completed' | 'paused',
+      start_date: data.start_date,
+      end_date: data.end_date,
+      control_group_size: data.control_group_size,
+      test_configurations: castToArray(data.test_configurations),
+      success_metrics: castToArray(data.success_metrics),
+      results: castToRecord(data.results),
+      statistical_significance: data.statistical_significance,
+      winner_variant: data.winner_variant,
+    };
   }
 
   static async getScoringModels(userId: string): Promise<EngagementScoringModel[]> {
@@ -102,7 +173,17 @@ export class EngagementOptimizationEngine {
       .order('last_trained_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    
+    return (data || []).map(model => ({
+      id: model.id,
+      model_name: model.model_name,
+      model_type: castScoringModelType(model.model_type),
+      model_config: castToRecord(model.model_config),
+      feature_weights: castToRecord(model.feature_weights),
+      performance_metrics: castToRecord(model.performance_metrics),
+      is_active: model.is_active,
+      last_trained_at: model.last_trained_at,
+    }));
   }
 
   static async createScoringModel(
@@ -113,13 +194,29 @@ export class EngagementOptimizationEngine {
       .from('engagement_scoring_models')
       .insert({
         user_id: userId,
-        ...model,
+        model_name: model.model_name,
+        model_type: model.model_type,
+        model_config: model.model_config,
+        feature_weights: model.feature_weights,
+        performance_metrics: model.performance_metrics,
+        is_active: model.is_active,
+        last_trained_at: model.last_trained_at,
       })
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+    
+    return {
+      id: data.id,
+      model_name: data.model_name,
+      model_type: castScoringModelType(data.model_type),
+      model_config: castToRecord(data.model_config),
+      feature_weights: castToRecord(data.feature_weights),
+      performance_metrics: castToRecord(data.performance_metrics),
+      is_active: data.is_active,
+      last_trained_at: data.last_trained_at,
+    };
   }
 
   static async optimizeSendTime(userId: string, recipientEmail: string): Promise<{

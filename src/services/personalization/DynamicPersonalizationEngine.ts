@@ -1,5 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
+import { castToRecord, castToArray, castRuleType } from '@/services/types/TypeCasters';
 
 export interface PersonalizationRule {
   id: string;
@@ -35,7 +36,16 @@ export class DynamicPersonalizationEngine {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    
+    return (data || []).map(rule => ({
+      id: rule.id,
+      rule_name: rule.rule_name,
+      rule_type: castRuleType(rule.rule_type),
+      conditions: castToRecord(rule.conditions),
+      content_variations: castToArray(rule.content_variations),
+      performance_metrics: castToRecord(rule.performance_metrics),
+      is_active: rule.is_active,
+    }));
   }
 
   static async createPersonalizationRule(
@@ -46,13 +56,27 @@ export class DynamicPersonalizationEngine {
       .from('content_personalization_rules')
       .insert({
         user_id: userId,
-        ...rule,
+        rule_name: rule.rule_name,
+        rule_type: rule.rule_type,
+        conditions: rule.conditions,
+        content_variations: rule.content_variations,
+        performance_metrics: rule.performance_metrics,
+        is_active: rule.is_active,
       })
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+    
+    return {
+      id: data.id,
+      rule_name: data.rule_name,
+      rule_type: castRuleType(data.rule_type),
+      conditions: castToRecord(data.conditions),
+      content_variations: castToArray(data.content_variations),
+      performance_metrics: castToRecord(data.performance_metrics),
+      is_active: data.is_active,
+    };
   }
 
   static async updatePersonalizationRule(
@@ -67,7 +91,16 @@ export class DynamicPersonalizationEngine {
       .single();
 
     if (error) throw error;
-    return data;
+    
+    return {
+      id: data.id,
+      rule_name: data.rule_name,
+      rule_type: castRuleType(data.rule_type),
+      conditions: castToRecord(data.conditions),
+      content_variations: castToArray(data.content_variations),
+      performance_metrics: castToRecord(data.performance_metrics),
+      is_active: data.is_active,
+    };
   }
 
   static async personalizeContent(
@@ -113,7 +146,22 @@ export class DynamicPersonalizationEngine {
       .maybeSingle();
 
     if (error) throw error;
-    return data;
+    
+    if (!data) return null;
+    
+    return {
+      id: data.id,
+      email_address: data.email_address,
+      engagement_score: data.engagement_score,
+      last_engagement_at: data.last_engagement_at,
+      preferred_send_hour: data.preferred_send_hour,
+      preferred_day_of_week: data.preferred_day_of_week,
+      content_preferences: castToRecord(data.content_preferences),
+      interaction_history: castToArray(data.interaction_history),
+      lifecycle_stage: data.lifecycle_stage,
+      churn_risk_score: data.churn_risk_score,
+      predicted_ltv: data.predicted_ltv,
+    };
   }
 
   static async trackBehavioralEvent(

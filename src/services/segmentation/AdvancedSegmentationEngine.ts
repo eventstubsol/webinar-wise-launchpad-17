@@ -1,5 +1,5 @@
-
 import { supabase } from '@/integrations/supabase/client';
+import { castToRecord } from '@/services/types/TypeCasters';
 
 export interface AdvancedSegment {
   id: string;
@@ -33,7 +33,18 @@ export class AdvancedSegmentationEngine {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    
+    return (data || []).map(segment => ({
+      id: segment.id,
+      segment_name: segment.segment_name,
+      description: segment.description,
+      filter_criteria: castToRecord(segment.filter_criteria),
+      estimated_size: segment.estimated_size,
+      is_dynamic: segment.is_dynamic,
+      tags: segment.tags,
+      is_active: segment.is_active,
+      last_calculated_at: segment.last_calculated_at,
+    }));
   }
 
   static async createAdvancedSegment(
@@ -44,7 +55,12 @@ export class AdvancedSegmentationEngine {
       .from('audience_segments')
       .insert({
         user_id: userId,
-        ...segment,
+        segment_name: segment.segment_name,
+        description: segment.description,
+        filter_criteria: segment.filter_criteria,
+        is_dynamic: segment.is_dynamic,
+        tags: segment.tags,
+        is_active: segment.is_active,
       })
       .select()
       .single();
@@ -54,7 +70,17 @@ export class AdvancedSegmentationEngine {
     // Calculate initial segment size
     await this.calculateSegmentSize(data.id);
     
-    return data;
+    return {
+      id: data.id,
+      segment_name: data.segment_name,
+      description: data.description,
+      filter_criteria: castToRecord(data.filter_criteria),
+      estimated_size: data.estimated_size,
+      is_dynamic: data.is_dynamic,
+      tags: data.tags,
+      is_active: data.is_active,
+      last_calculated_at: data.last_calculated_at,
+    };
   }
 
   static async calculateSegmentSize(segmentId: string): Promise<number> {
@@ -66,7 +92,7 @@ export class AdvancedSegmentationEngine {
 
     if (segmentError) throw segmentError;
 
-    const criteria = segment.filter_criteria;
+    const criteria = castToRecord(segment.filter_criteria);
     let query = supabase
       .from('user_behavior_profiles')
       .select('id', { count: 'exact' })
@@ -115,7 +141,7 @@ export class AdvancedSegmentationEngine {
 
     if (segmentError) throw segmentError;
 
-    const criteria = segment.filter_criteria;
+    const criteria = castToRecord(segment.filter_criteria);
     let query = supabase
       .from('user_behavior_profiles')
       .select('*')

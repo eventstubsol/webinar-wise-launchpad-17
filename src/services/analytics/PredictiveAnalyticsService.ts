@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { castToRecord, castToArray, castModelType } from '@/services/types/TypeCasters';
 
 export interface PredictiveModel {
   id: string;
@@ -53,7 +54,23 @@ export class PredictiveAnalyticsService {
       .order('last_trained_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    
+    return (data || []).map(model => ({
+      id: model.id,
+      model_name: model.model_name,
+      model_type: castModelType(model.model_type),
+      algorithm: model.algorithm,
+      model_parameters: castToRecord(model.model_parameters),
+      feature_columns: castToArray(model.feature_columns),
+      target_column: model.target_column,
+      accuracy_score: model.accuracy_score,
+      precision_score: model.precision_score,
+      recall_score: model.recall_score,
+      f1_score: model.f1_score,
+      training_data_size: model.training_data_size,
+      last_trained_at: model.last_trained_at,
+      is_active: model.is_active,
+    }));
   }
 
   static async createPredictiveModel(
@@ -64,13 +81,41 @@ export class PredictiveAnalyticsService {
       .from('predictive_models')
       .insert({
         user_id: userId,
-        ...model,
+        model_name: model.model_name,
+        model_type: model.model_type,
+        algorithm: model.algorithm,
+        model_parameters: model.model_parameters,
+        feature_columns: model.feature_columns,
+        target_column: model.target_column,
+        accuracy_score: model.accuracy_score,
+        precision_score: model.precision_score,
+        recall_score: model.recall_score,
+        f1_score: model.f1_score,
+        training_data_size: model.training_data_size,
+        last_trained_at: model.last_trained_at,
+        is_active: model.is_active,
       })
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+    
+    return {
+      id: data.id,
+      model_name: data.model_name,
+      model_type: castModelType(data.model_type),
+      algorithm: data.algorithm,
+      model_parameters: castToRecord(data.model_parameters),
+      feature_columns: castToArray(data.feature_columns),
+      target_column: data.target_column,
+      accuracy_score: data.accuracy_score,
+      precision_score: data.precision_score,
+      recall_score: data.recall_score,
+      f1_score: data.f1_score,
+      training_data_size: data.training_data_size,
+      last_trained_at: data.last_trained_at,
+      is_active: data.is_active,
+    };
   }
 
   static async predictChurn(
