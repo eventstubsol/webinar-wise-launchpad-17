@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Campaign, CampaignPerformanceSummary } from '@/types/campaign';
 import { CampaignAnalyticsService } from '@/services/campaigns/CampaignAnalyticsService';
@@ -8,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Download, TrendingUp, Users, Mail, Eye, MousePointer, AlertTriangle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
+import { ABTestingAnalytics } from './ABTestingAnalytics';
+import { GeographicDeviceAnalytics } from './GeographicDeviceAnalytics';
 
 interface CampaignAnalyticsDashboardProps {
   campaign: Campaign;
@@ -174,8 +175,8 @@ export const CampaignAnalyticsDashboard: React.FC<CampaignAnalyticsDashboardProp
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="engagement">Engagement</TabsTrigger>
-          <TabsTrigger value="geography">Geography</TabsTrigger>
-          <TabsTrigger value="devices">Devices</TabsTrigger>
+          <TabsTrigger value="abtesting">A/B Testing</TabsTrigger>
+          <TabsTrigger value="geography">Geography & Devices</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -273,28 +274,12 @@ export const CampaignAnalyticsDashboard: React.FC<CampaignAnalyticsDashboardProp
           </Card>
         </TabsContent>
 
-        <TabsContent value="geography">
-          <Card>
-            <CardHeader>
-              <CardTitle>Geographic Breakdown</CardTitle>
-              <CardDescription>Campaign performance by location</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Geographic analysis will be displayed here</p>
-            </CardContent>
-          </Card>
+        <TabsContent value="abtesting">
+          <ABTestingAnalytics campaignId={campaign.id} />
         </TabsContent>
 
-        <TabsContent value="devices">
-          <Card>
-            <CardHeader>
-              <CardTitle>Device & Client Analysis</CardTitle>
-              <CardDescription>Performance breakdown by device type and email client</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Device analysis will be displayed here</p>
-            </CardContent>
-          </Card>
+        <TabsContent value="geography">
+          <GeographicDeviceAnalytics campaignId={campaign.id} />
         </TabsContent>
       </Tabs>
     </div>

@@ -1,10 +1,16 @@
-
 import React, { useState } from "react";
 import { DraggableTemplateBlock } from "./DraggableTemplateBlock";
 import { blockDefaults, TemplateBlock, TemplateBlockType } from "./blocks";
 import { Button } from "@/components/ui/button";
 import { nanoid } from "nanoid";
 import { MergeTagSelector } from "../MergeTagSelector";
+import { 
+  advancedBlockDefaults, 
+  SocialMediaBlockEditor, 
+  VideoBlockEditor, 
+  ProductShowcaseEditor,
+  renderAdvancedBlock
+} from './AdvancedBlocks';
 
 interface EnhancedEmailTemplateBuilderProps {
   templateBlocks?: TemplateBlock[];
@@ -20,6 +26,11 @@ const blockOptions: { type: TemplateBlockType; label: string }[] = [
   { type: "image", label: "Image" },
   { type: "button", label: "Button" },
   { type: "divider", label: "Divider" },
+  { type: "social_media", label: "Social Media" },
+  { type: "video", label: "Video" },
+  { type: "product_showcase", label: "Product Showcase" },
+  { type: "countdown_timer", label: "Countdown Timer" },
+  { type: "survey", label: "Survey/Poll" },
 ];
 
 export function EnhancedEmailTemplateBuilder({
@@ -35,14 +46,17 @@ export function EnhancedEmailTemplateBuilder({
     const newBlock: TemplateBlock = {
       id: nanoid(),
       type,
-      content: { ...blockDefaults[type] },
+      content: { 
+        ...blockDefaults[type],
+        ...(advancedBlockDefaults[type as keyof typeof advancedBlockDefaults] || {})
+      },
     };
     setBlocks(bs => {
       const updated = [...bs, newBlock];
       onChange?.(updated);
       return updated;
     });
-    setEditingIdx(blocks.length); // Focus new block
+    setEditingIdx(blocks.length);
   }
 
   function updateBlock(idx: number, block: TemplateBlock) {
@@ -94,6 +108,12 @@ export function EnhancedEmailTemplateBuilder({
   function buildHTMLPreview(blocks: TemplateBlock[]) {
     return blocks
       .map(b => {
+        // Handle advanced blocks
+        if (['social_media', 'video', 'product_showcase', 'countdown_timer', 'survey'].includes(b.type)) {
+          return renderAdvancedBlock(b);
+        }
+        
+        // Handle basic blocks
         switch (b.type) {
           case "text":
             return `<div style="margin:8px 0;">${b.content.text?.replace(/\n/g, "<br/>") || ""}</div>`;
