@@ -2,26 +2,82 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useWebinarMetrics } from '@/hooks/useWebinarMetrics';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const monthlyData = [
-  { month: 'Jan', webinars: 4, registrants: 450, attendees: 298 },
-  { month: 'Feb', webinars: 3, registrants: 380, attendees: 245 },
-  { month: 'Mar', webinars: 5, registrants: 620, attendees: 412 },
-  { month: 'Apr', webinars: 2, registrants: 280, attendees: 189 },
-  { month: 'May', webinars: 6, registrants: 720, attendees: 478 },
-  { month: 'Jun', webinars: 4, registrants: 510, attendees: 334 },
-];
-
-const registrationData = [
-  { month: 'Jan', registrants: 450, attendees: 298 },
-  { month: 'Feb', registrants: 380, attendees: 245 },
-  { month: 'Mar', registrants: 620, attendees: 412 },
-  { month: 'Apr', registrants: 280, attendees: 189 },
-  { month: 'May', registrants: 720, attendees: 478 },
-  { month: 'Jun', registrants: 510, attendees: 334 },
-];
+const ChartSkeleton = () => (
+  <Card>
+    <CardHeader>
+      <Skeleton className="h-6 w-48" />
+    </CardHeader>
+    <CardContent>
+      <Skeleton className="w-full h-[300px]" />
+    </CardContent>
+  </Card>
+);
 
 export function ChartsSection() {
+  const { metrics, loading, error } = useWebinarMetrics();
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <ChartSkeleton />
+        <ChartSkeleton />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center text-red-600">
+              Error loading chart data: {error}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const monthlyData = metrics?.monthlyTrends || [];
+  const registrationData = metrics?.monthlyTrends || [];
+
+  // If no data, show empty state
+  if (monthlyData.length === 0) {
+    return (
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-gray-900">
+              Monthly Webinar Distribution
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center h-[300px] text-gray-500">
+              No webinar data available yet. Connect your Zoom account to see analytics.
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-gray-900">
+              Registration vs Attendance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center h-[300px] text-gray-500">
+              No registration data available yet. Connect your Zoom account to see analytics.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       <Card>
@@ -94,6 +150,7 @@ export function ChartsSection() {
                 stroke="#14b8a6" 
                 strokeWidth={3}
                 dot={{ fill: '#14b8a6', strokeWidth: 2, r: 4 }}
+                name="Registrants"
               />
               <Line 
                 type="monotone" 
@@ -101,6 +158,7 @@ export function ChartsSection() {
                 stroke="#1e40af" 
                 strokeWidth={3}
                 dot={{ fill: '#1e40af', strokeWidth: 2, r: 4 }}
+                name="Attendees"
               />
             </LineChart>
           </ResponsiveContainer>
