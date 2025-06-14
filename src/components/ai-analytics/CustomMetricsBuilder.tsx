@@ -500,7 +500,6 @@ export const CustomMetricsBuilder: React.FC = () => {
                           <Switch
                             checked={metric.isActive}
                             onCheckedChange={() => handleToggleMetric(metric.id)}
-                            size="sm"
                           />
                           <Button
                             variant="ghost"
