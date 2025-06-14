@@ -8,7 +8,6 @@ import {
   SidebarFooter,
   SidebarMenu,
   SidebarMenuItem,
-  SidebarMenuButton,
 } from '@/components/ui/sidebar';
 import { LayoutDashboard, Video, Users, Settings, Send, BarChart, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,44 +26,44 @@ export const AppSidebar = () => {
       <SidebarContent>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild variant={location.pathname === '/dashboard' ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Button asChild variant={location.pathname === '/dashboard' ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Link to="/dashboard">
                 <LayoutDashboard className="h-4 w-4 mr-2" />
                 <span>Dashboard</span>
               </Link>
-            </SidebarMenuButton>
+            </Button>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild variant={location.pathname.startsWith('/webinars') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Button asChild variant={location.pathname.startsWith('/webinars') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Link to="/webinars">
                 <Video className="h-4 w-4 mr-2" />
                 <span>Webinars</span>
               </Link>
-            </SidebarMenuButton>
+            </Button>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild variant={location.pathname.startsWith('/templates') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Button asChild variant={location.pathname.startsWith('/templates') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Link to="/templates">
                 <Users className="h-4 w-4 mr-2" />
                 <span>Templates</span>
               </Link>
-            </SidebarMenuButton>
+            </Button>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild variant={location.pathname.startsWith('/campaigns') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Button asChild variant={location.pathname.startsWith('/campaigns') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Link to="/campaigns">
                 <Send className="h-4 w-4 mr-2" />
                 <span>Campaigns</span>
               </Link>
-            </SidebarMenuButton>
+            </Button>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild variant={location.pathname.startsWith('/email-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Button asChild variant={location.pathname.startsWith('/email-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Link to="/email-analytics">
                 <BarChart className="h-4 w-4 mr-2" />
                 <span>Email Analytics</span>
               </Link>
-            </SidebarMenuButton>
+            </Button>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarContent>
@@ -72,12 +71,12 @@ export const AppSidebar = () => {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild variant={location.pathname.startsWith('/settings') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Button asChild variant={location.pathname.startsWith('/settings') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Link to="/settings">
                 <Settings className="h-4 w-4 mr-2" />
                 <span>Settings</span>
               </Link>
-            </SidebarMenuButton>
+            </Button>
           </SidebarMenuItem>
         </SidebarMenu>
         <Button variant="ghost" onClick={signOut} className="w-full justify-start text-muted-foreground hover:text-foreground">
