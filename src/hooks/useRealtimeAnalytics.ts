@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,6 +10,7 @@ interface UseRealtimeAnalyticsOptions {
   enableProcessingUpdates?: boolean;
   enableCacheUpdates?: boolean;
   reconnectInterval?: number;
+  disabled?: boolean; // Add option to disable real-time features
 }
 
 export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) => {
@@ -24,7 +26,8 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
 
   // Connection management with exponential backoff
   const connect = useCallback(() => {
-    if (!user?.id) return;
+    // Skip if disabled or no user
+    if (options.disabled || !user?.id) return;
 
     try {
       // Subscribe to processing queue updates
@@ -89,8 +92,8 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
         subscriptionsRef.current.push(processingChannel);
       }
 
-      // Subscribe to cache updates
-      if (options.enableCacheUpdates !== false) {
+      // Subscribe to cache updates (simplified - only if explicitly enabled)
+      if (options.enableCacheUpdates === true) {
         const cacheChannel = supabase
           .channel('analytics-cache-global')
           .on(
@@ -126,85 +129,6 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
         subscriptionsRef.current.push(cacheChannel);
       }
 
-      // Subscribe to realtime events
-      const eventsChannel = supabase
-        .channel(`analytics-events-${user.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'realtime_events',
-            filter: `target_users=cs.{${user.id}}`,
-          },
-          (payload) => {
-            if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
-              const event = payload.new as AnalyticsEvent;
-              setAnalyticsEvents(prev => [event, ...prev.slice(0, 49)]); // Keep last 50 events
-            }
-          }
-        )
-        .subscribe();
-
-      subscriptionsRef.current.push(eventsChannel);
-
-      // Subscribe to webinar-specific updates if webinarId is provided
-      if (options.webinarId) {
-        const webinarChannel = supabase
-          .channel(`webinar-analytics-${options.webinarId}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'zoom_participants',
-              filter: `webinar_id=eq.${options.webinarId}`,
-            },
-            (payload) => {
-              // Trigger background processing for new participant data
-              if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
-                enqueueAnalysisTask('participant_analysis', {
-                  webinar_id: options.webinarId,
-                  participant_id: payload.new.id,
-                }, 3); // Medium priority
-              }
-            }
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'zoom_poll_responses',
-              filter: `poll_id=in.(select id from zoom_polls where webinar_id=eq.${options.webinarId})`,
-            },
-            () => {
-              // Trigger poll analysis update
-              enqueueAnalysisTask('poll_analysis', {
-                webinar_id: options.webinarId,
-              }, 2); // High priority
-            }
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'zoom_qna',
-              filter: `webinar_id=eq.${options.webinarId}`,
-            },
-            () => {
-              // Trigger Q&A analysis update
-              enqueueAnalysisTask('qna_analysis', {
-                webinar_id: options.webinarId,
-              }, 2); // High priority
-            }
-          )
-          .subscribe();
-
-        subscriptionsRef.current.push(webinarChannel);
-      }
-
     } catch (error) {
       console.error('Failed to establish realtime connections:', error);
       scheduleReconnect();
@@ -228,7 +152,11 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
   // Disconnect all subscriptions
   const disconnect = useCallback(() => {
     subscriptionsRef.current.forEach(channel => {
-      supabase.removeChannel(channel);
+      try {
+        supabase.removeChannel(channel);
+      } catch (error) {
+        console.warn('Error removing channel:', error);
+      }
     });
     subscriptionsRef.current = [];
     setIsConnected(false);
@@ -314,11 +242,13 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
     }
   }, []);
 
-  // Initialize connections
+  // Initialize connections only if not disabled
   useEffect(() => {
-    connect();
+    if (!options.disabled) {
+      connect();
+    }
     return disconnect;
-  }, [connect, disconnect]);
+  }, [connect, disconnect, options.disabled]);
 
   return {
     isConnected,

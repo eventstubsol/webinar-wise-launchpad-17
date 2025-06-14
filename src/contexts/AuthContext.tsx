@@ -1,3 +1,4 @@
+
 import React, {
   createContext,
   useContext,
@@ -139,55 +140,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session: Session | null) => {
-        console.log('[AuthProvider] Auth state change event:', event);
-        
-        if (event === 'INITIAL_SESSION') {
-          // Skip initial session event
-          return;
-        }
-
+    // Get initial session first
+    const getInitialSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user || null;
         setUser(user);
 
         if (user) {
           setProfileLoading(true);
           try {
-            const profile = await fetchProfile(user.id);
-            if (profile) {
-              setProfile(profile);
-            }
+            await Promise.all([
+              fetchProfile(user.id),
+              fetchSettings(user.id)
+            ]);
+          } catch (error) {
+            console.error('[AuthProvider] Error fetching user data:', error);
           } finally {
             setProfileLoading(false);
           }
-
-          try {
-            const settings = await fetchSettings(user.id);
-            if (settings) {
-              setSettings(settings);
-            }
-          } catch (settingsError) {
-            console.error('Failed to fetch settings after sign-in:', settingsError);
-          }
-        } else {
-          setProfile(null);
-          setSettings(null);
         }
-
+      } catch (error) {
+        console.error('[AuthProvider] Error getting initial session:', error);
+      } finally {
         setLoading(false);
       }
-    );
+    };
 
-    // Fetch initial user
-    supabase.auth.getUser().then(({ data: { user: initialUser } }) => {
-      setUser(initialUser || null);
-      if (initialUser) {
-        fetchProfile(initialUser.id);
-        fetchSettings(initialUser.id);
+    getInitialSession();
+
+    // Set up auth state listener
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session: Session | null) => {
+        console.log('[AuthProvider] Auth state change event:', event);
+        
+        if (event === 'INITIAL_SESSION') {
+          // Skip initial session event as we handle it above
+          return;
+        }
+
+        const user = session?.user || null;
+        setUser(user);
+
+        if (user && event === 'SIGNED_IN') {
+          setProfileLoading(true);
+          // Use setTimeout to prevent potential deadlock in auth state change
+          setTimeout(async () => {
+            try {
+              await Promise.all([
+                fetchProfile(user.id),
+                fetchSettings(user.id)
+              ]);
+            } catch (error) {
+              console.error('[AuthProvider] Error fetching user data after sign in:', error);
+            } finally {
+              setProfileLoading(false);
+            }
+          }, 0);
+        } else if (event === 'SIGNED_OUT') {
+          setProfile(null);
+          setSettings(null);
+          setProfileLoading(false);
+        }
       }
-      setLoading(false);
-    });
+    );
 
     return () => {
       authListener.subscription.unsubscribe();
@@ -202,21 +218,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) throw error;
-      
-      setUser(data.user);
-      
-      if (data.user) {
-        const profile = await fetchProfile(data.user.id);
-        if (profile) {
-          setProfile(profile);
-        }
-        
-        const settings = await fetchSettings(data.user.id);
-        if (settings) {
-          setSettings(settings);
-        }
-      }
-
       return data;
     } catch (error: any) {
       console.error('Sign-in error:', error.message);
@@ -235,21 +236,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) throw error;
-
-      setUser(data.user);
-      
-      if (data.user) {
-        const profile = await fetchProfile(data.user.id);
-        if (profile) {
-          setProfile(profile);
-        }
-        
-        const settings = await fetchSettings(data.user.id);
-        if (settings) {
-          setSettings(settings);
-        }
-      }
-
       return data;
     } catch (error: any) {
       console.error('Sign-up error:', error.message);

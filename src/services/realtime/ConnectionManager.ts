@@ -9,25 +9,24 @@ export class ConnectionManager {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
   private reconnectTimeout: NodeJS.Timeout | null = null;
+  private healthCheckInterval: NodeJS.Timeout | null = null;
 
   constructor() {
-    this.setupConnectionMonitoring();
+    // Temporarily disable automatic health checking to prevent infinite recursion
+    // this.setupConnectionMonitoring();
   }
 
   private setupConnectionMonitoring() {
     // Monitor connection status through subscription callbacks
-    setInterval(() => {
+    this.healthCheckInterval = setInterval(() => {
       this.checkConnectionHealth();
     }, 30000); // Check every 30 seconds
   }
 
   private checkConnectionHealth() {
-    // Simple health check by testing if we can create a test channel
-    const testChannel = supabase.channel('health-check');
-    testChannel.subscribe((status) => {
-      this.isConnected = status === 'SUBSCRIBED';
-      supabase.removeChannel(testChannel);
-    });
+    // Simplified health check without creating test channels to prevent recursion
+    // Just check if we have active channels as a proxy for connection health
+    this.isConnected = this.channels.size > 0;
   }
 
   private handleReconnection() {
@@ -52,13 +51,23 @@ export class ConnectionManager {
     
     const currentSubscriptions = Array.from(this.subscriptions.values());
     
+    // Clean up existing channels
     this.channels.forEach(channel => {
-      supabase.removeChannel(channel);
+      try {
+        supabase.removeChannel(channel);
+      } catch (error) {
+        console.warn('Error removing channel during reconnect:', error);
+      }
     });
     this.channels.clear();
 
+    // Recreate subscriptions
     for (const subscription of currentSubscriptions) {
-      this.subscribe(subscription.channel, subscription.callback, subscription.id);
+      try {
+        this.subscribe(subscription.channel, subscription.callback, subscription.id);
+      } catch (error) {
+        console.error('Error recreating subscription:', error);
+      }
     }
   }
 
@@ -75,29 +84,33 @@ export class ConnectionManager {
       callback,
     });
 
-    if (!this.channels.has(channelName)) {
-      const channel = supabase.channel(channelName);
-      this.channels.set(channelName, channel);
-    }
-
-    const channel = this.channels.get(channelName);
-    this.setupChannelSubscriptions(channel, channelName, callback);
-
-    channel.subscribe((status: string) => {
-      if (status === 'SUBSCRIBED') {
-        console.log(`Successfully subscribed to ${channelName}`);
-        this.isConnected = true;
-        this.reconnectAttempts = 0;
-        if (this.reconnectTimeout) {
-          clearTimeout(this.reconnectTimeout);
-          this.reconnectTimeout = null;
-        }
-      } else if (status === 'CHANNEL_ERROR') {
-        console.error(`Failed to subscribe to ${channelName}`);
-        this.isConnected = false;
-        this.handleReconnection();
+    try {
+      if (!this.channels.has(channelName)) {
+        const channel = supabase.channel(channelName);
+        this.channels.set(channelName, channel);
       }
-    });
+
+      const channel = this.channels.get(channelName);
+      this.setupChannelSubscriptions(channel, channelName, callback);
+
+      channel.subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`Successfully subscribed to ${channelName}`);
+          this.isConnected = true;
+          this.reconnectAttempts = 0;
+          if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+          }
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error(`Failed to subscribe to ${channelName}`);
+          this.isConnected = false;
+          this.handleReconnection();
+        }
+      });
+    } catch (error) {
+      console.error('Error setting up subscription:', error);
+    }
 
     return id;
   }
@@ -210,8 +223,12 @@ export class ConnectionManager {
     if (!channelStillInUse) {
       const channel = this.channels.get(subscription.channel);
       if (channel) {
-        supabase.removeChannel(channel);
-        this.channels.delete(subscription.channel);
+        try {
+          supabase.removeChannel(channel);
+          this.channels.delete(subscription.channel);
+        } catch (error) {
+          console.warn('Error removing channel during unsubscribe:', error);
+        }
       }
     }
   }
@@ -219,11 +236,15 @@ export class ConnectionManager {
   public broadcast(channelName: string, eventName: string, data: any): void {
     const channel = this.channels.get(channelName);
     if (channel) {
-      channel.send({
-        type: 'broadcast',
-        event: eventName,
-        payload: data,
-      });
+      try {
+        channel.send({
+          type: 'broadcast',
+          event: eventName,
+          payload: data,
+        });
+      } catch (error) {
+        console.error('Error broadcasting message:', error);
+      }
     }
   }
 
@@ -245,8 +266,17 @@ export class ConnectionManager {
       this.reconnectTimeout = null;
     }
 
+    if (this.healthCheckInterval) {
+      clearTimeout(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+    }
+
     this.channels.forEach(channel => {
-      supabase.removeChannel(channel);
+      try {
+        supabase.removeChannel(channel);
+      } catch (error) {
+        console.warn('Error removing channel during disconnect:', error);
+      }
     });
 
     this.channels.clear();
