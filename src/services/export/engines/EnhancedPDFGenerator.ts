@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf, Image, Font } from '@react-pdf/renderer';
 import { ExportConfig, BrandingConfig } from '../types';
@@ -428,3 +429,4 @@ export class EnhancedPDFGenerator {
       }));
   }
 }
+
