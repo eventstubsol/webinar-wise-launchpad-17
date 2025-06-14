@@ -1,15 +1,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase as typedSupabase } from "@/integrations/supabase/client";
-// Use an untyped client to bypass missing table types
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 import { EmailCampaign } from "@/types/email";
-
-// Use vanilla client to bypass missing type support for new tables
-const supabase = createClient(
-  (import.meta as any).env ? (import.meta as any).env.VITE_SUPABASE_URL : "",
-  (import.meta as any).env ? (import.meta as any).env.VITE_SUPABASE_ANON_KEY : ""
-);
 
 export function useEmailCampaigns(userId: string) {
   const queryClient = useQueryClient();
@@ -21,7 +13,6 @@ export function useEmailCampaigns(userId: string) {
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    // Manually map and coerce rows, fill missing fields with fallback
     return (data as any[]).map((row: any) => ({
       id: row.id,
       user_id: row.user_id,
@@ -45,7 +36,6 @@ export function useEmailCampaigns(userId: string) {
 
   const mutation = useMutation({
     mutationFn: async (newCampaign: Partial<EmailCampaign>) => {
-      // Fill DB required fields
       if (!newCampaign.user_id) throw new Error("user_id required");
       if (!newCampaign.campaign_type) throw new Error("campaign_type required");
       if (!newCampaign.subject_template) throw new Error("subject_template required");
@@ -53,7 +43,6 @@ export function useEmailCampaigns(userId: string) {
       if (!newCampaign.status) newCampaign.status = "draft";
       const insertObj = {
         ...newCampaign,
-        // Add fallback defaults for DB required fields if missing
       };
       const { data, error } = await supabase
         .from("email_campaigns")
