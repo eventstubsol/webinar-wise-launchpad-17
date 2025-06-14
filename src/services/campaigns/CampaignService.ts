@@ -1,10 +1,13 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { Campaign, AudienceSegment, CampaignTemplate, CampaignPerformanceSummary } from '@/types/campaign';
+import { Database } from '@/integrations/supabase/types';
+
+type CampaignInsert = Database['public']['Tables']['email_campaigns']['Insert'];
+type CampaignRow = Database['public']['Tables']['email_campaigns']['Row'];
 
 export class CampaignService {
   // Campaign CRUD operations
-  static async createCampaign(campaignData: Partial<Campaign>) {
+  static async createCampaign(campaignData: CampaignInsert) {
     const { data, error } = await supabase
       .from('email_campaigns')
       .insert(campaignData)
@@ -46,7 +49,7 @@ export class CampaignService {
     return data;
   }
 
-  static async updateCampaign(id: string, updates: Partial<Campaign>) {
+  static async updateCampaign(id: string, updates: Partial<CampaignRow>) {
     const { data, error } = await supabase
       .from('email_campaigns')
       .update(updates)

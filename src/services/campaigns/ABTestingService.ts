@@ -1,9 +1,12 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { CampaignVariant, ABTestConfig } from '@/types/campaign';
+import { Database } from '@/integrations/supabase/types';
+
+type CampaignVariantInsert = Database['public']['Tables']['campaign_variants']['Insert'];
+type CampaignVariantRow = Database['public']['Tables']['campaign_variants']['Row'];
 
 export class ABTestingService {
-  static async createVariant(variantData: Partial<CampaignVariant>) {
+  static async createVariant(variantData: CampaignVariantInsert) {
     const { data, error } = await supabase
       .from('campaign_variants')
       .insert(variantData)
@@ -25,7 +28,7 @@ export class ABTestingService {
     return data;
   }
 
-  static async updateVariant(id: string, updates: Partial<CampaignVariant>) {
+  static async updateVariant(id: string, updates: Partial<CampaignVariantRow>) {
     const { data, error } = await supabase
       .from('campaign_variants')
       .update(updates)
@@ -46,10 +49,10 @@ export class ABTestingService {
     if (error) throw error;
   }
 
-  static async setupABTest(campaignId: string, config: ABTestConfig) {
+  static async setupABTest(campaignId: string, config: any) {
     // Create variants based on config
     const variants = await Promise.all(
-      config.variants.map(variant => 
+      config.variants.map((variant: any) => 
         this.createVariant({
           ...variant,
           campaign_id: campaignId

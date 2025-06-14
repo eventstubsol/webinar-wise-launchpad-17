@@ -1,9 +1,12 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { AudienceSegment, SegmentFilterGroup } from '@/types/campaign';
+import { Database } from '@/integrations/supabase/types';
+
+type AudienceSegmentInsert = Database['public']['Tables']['audience_segments']['Insert'];
+type AudienceSegmentRow = Database['public']['Tables']['audience_segments']['Row'];
 
 export class AudienceSegmentService {
-  static async createSegment(segmentData: Partial<AudienceSegment>) {
+  static async createSegment(segmentData: AudienceSegmentInsert) {
     const { data, error } = await supabase
       .from('audience_segments')
       .insert(segmentData)
@@ -20,7 +23,7 @@ export class AudienceSegmentService {
     return data;
   }
 
-  static async getSegments(userId: string) {
+  static async getSegments(userId: string): Promise<AudienceSegmentRow[]> {
     const { data, error } = await supabase
       .from('audience_segments')
       .select('*')
@@ -29,7 +32,7 @@ export class AudienceSegmentService {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data;
+    return data || [];
   }
 
   static async getSegment(id: string) {
@@ -43,7 +46,7 @@ export class AudienceSegmentService {
     return data;
   }
 
-  static async updateSegment(id: string, updates: Partial<AudienceSegment>) {
+  static async updateSegment(id: string, updates: Partial<AudienceSegmentRow>) {
     const { data, error } = await supabase
       .from('audience_segments')
       .update(updates)
@@ -79,7 +82,7 @@ export class AudienceSegmentService {
     return data;
   }
 
-  static async previewSegment(filterCriteria: SegmentFilterGroup) {
+  static async previewSegment(filterCriteria: Record<string, any>) {
     // This would implement the actual filtering logic
     // For now, return a mock count
     return { estimated_count: 150, preview_contacts: [] };
