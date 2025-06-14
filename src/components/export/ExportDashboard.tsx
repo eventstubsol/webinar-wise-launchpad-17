@@ -9,6 +9,7 @@ import { ConnectionHealthIndicator } from '../realtime/ConnectionHealthIndicator
 import { FileText, Calendar, Activity, TrendingUp, Package, Users, Wifi } from 'lucide-react';
 import { ExportJobManager } from '@/services/export/job/ExportJobManager';
 import { useToast } from '@/hooks/use-toast';
+import { AdvancedExportConfiguration } from './advanced/AdvancedExportConfiguration';
 
 // Mock data for bulk export demo
 const mockWebinars = [
@@ -129,14 +130,19 @@ export function ExportDashboard() {
         </Card>
       </div>
 
-      <Tabs defaultValue="builder" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+      <Tabs defaultValue="advanced" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="advanced">Advanced Builder</TabsTrigger>
           <TabsTrigger value="builder">Report Builder</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Export</TabsTrigger>
           <TabsTrigger value="queue">Enhanced Queue</TabsTrigger>
           <TabsTrigger value="schedule">Advanced Scheduling</TabsTrigger>
           <TabsTrigger value="health">Connection Health</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="advanced">
+          <AdvancedExportConfiguration />
+        </TabsContent>
 
         <TabsContent value="builder">
           <ReportBuilder />

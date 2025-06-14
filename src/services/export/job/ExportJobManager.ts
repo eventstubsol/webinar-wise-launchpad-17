@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { PDFGenerator } from '../PDFGenerator';
 import { ExcelGenerator } from '../ExcelGenerator';
@@ -6,6 +5,11 @@ import { PowerPointGenerator } from '../PowerPointGenerator';
 import { ExportConfig } from '../types';
 import { ExportDataProvider } from '../data/ExportDataProvider';
 import { ExportJobRetryManager } from './ExportJobRetryManager';
+import { EnhancedPDFGenerator } from '../engines/EnhancedPDFGenerator';
+import { EnhancedExcelGenerator } from '../engines/EnhancedExcelGenerator';
+import { EnhancedPowerPointGenerator } from '../engines/EnhancedPowerPointGenerator';
+import { CSVExportEngine } from '../engines/CSVExportEngine';
+import { EnhancedExportDataProvider } from '../data/EnhancedExportDataProvider';
 
 export class ExportJobManager {
   static async createExportJob(
@@ -90,9 +94,9 @@ export class ExportJobManager {
         .update({ progress_percentage: 25 })
         .eq('id', jobId);
 
-      // Fetch webinar data
+      // Fetch enhanced webinar data
       const dataFetchStart = Date.now();
-      const webinarData = await ExportDataProvider.fetchWebinarData(config);
+      const processedData = await EnhancedExportDataProvider.fetchWebinarData(config);
       const dataFetchTime = Date.now() - dataFetchStart;
       
       // Update progress
@@ -105,24 +109,28 @@ export class ExportJobManager {
       let fileName: string;
       const generationStart = Date.now();
 
-      // Generate export based on type
+      // Generate export based on type using enhanced generators
       switch (job.export_type) {
         case 'pdf':
-          fileBlob = await PDFGenerator.generateAnalyticsReport(webinarData, config);
+          fileBlob = await EnhancedPDFGenerator.generateAnalyticsReport(processedData.webinars, config);
           fileName = `${config.title.replace(/\s+/g, '_')}_report.pdf`;
           break;
         case 'excel':
-          fileBlob = ExcelGenerator.generateWebinarReport(webinarData, config);
+          fileBlob = EnhancedExcelGenerator.generateWebinarReport(processedData.webinars, config);
           fileName = `${config.title.replace(/\s+/g, '_')}_data.xlsx`;
           break;
         case 'powerpoint':
-          fileBlob = await PowerPointGenerator.generateAnalyticsPresentation({
-            totalWebinars: webinarData.length,
-            totalParticipants: webinarData.reduce((sum, w) => sum + (w.total_attendees || 0), 0),
-            avgEngagement: webinarData.reduce((sum, w) => sum + (w.engagement_score || 0), 0) / (webinarData.length || 1),
-            webinars: webinarData
+          fileBlob = await EnhancedPowerPointGenerator.generateAnalyticsPresentation({
+            totalWebinars: processedData.analytics.totalWebinars,
+            totalParticipants: processedData.analytics.totalParticipants,
+            avgEngagement: processedData.analytics.avgEngagement,
+            webinars: processedData.webinars
           }, config);
           fileName = `${config.title.replace(/\s+/g, '_')}_presentation.pptx`;
+          break;
+        case 'csv':
+          fileBlob = await CSVExportEngine.generateParticipantsCSV(processedData.webinars, config);
+          fileName = `${config.title.replace(/\s+/g, '_')}_data.csv`;
           break;
         default:
           throw new Error(`Unsupported export type: ${job.export_type}`);
@@ -136,9 +144,9 @@ export class ExportJobManager {
         .update({ progress_percentage: 75 })
         .eq('id', jobId);
 
-      // Upload the file
+      // Upload the file using enhanced data provider
       const uploadStart = Date.now();
-      const fileUrl = await ExportDataProvider.uploadFile(fileBlob, fileName);
+      const fileUrl = await EnhancedExportDataProvider.uploadFile(fileBlob, fileName);
       const uploadTime = Date.now() - uploadStart;
 
       const totalProcessingTime = Date.now() - processingStartTime;
@@ -147,7 +155,7 @@ export class ExportJobManager {
       const existingMetrics = job.performance_metrics as Record<string, any> | null;
       const baseMetrics = existingMetrics || {};
 
-      // Update job with completion and performance metrics
+      // Update job with completion and enhanced performance metrics
       await supabase
         .from('export_queue')
         .update({
@@ -163,13 +171,14 @@ export class ExportJobManager {
             generation_time_ms: generationTime,
             upload_time_ms: uploadTime,
             file_size_bytes: fileBlob.size,
-            records_processed: webinarData.length,
+            records_processed: processedData.metadata.totalRecords,
+            data_quality_score: processedData.metadata.dataQuality,
             completed_at: new Date().toISOString()
           }
         })
         .eq('id', jobId);
 
-      // Add to report history
+      // Add to report history with enhanced metadata
       await supabase
         .from('report_history')
         .insert({
