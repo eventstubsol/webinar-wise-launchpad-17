@@ -1,3 +1,4 @@
+
 import React, {
   createContext,
   useContext,
@@ -15,9 +16,12 @@ import { Profile } from '@/types/profile';
 
 interface UserSettings {
   id: string;
-  theme: 'light' | 'dark' | 'system';
-  notifications_enabled: boolean;
-  // Add other settings as needed
+  email_notifications: boolean;
+  marketing_emails: boolean;
+  theme_preference: 'light' | 'dark' | 'system';
+  timezone: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface AuthContextType {
@@ -29,6 +33,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<any>;
   signUp: (email: string, password: string, metadata?: any) => Promise<any>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<any>;
+  updatePassword: (password: string) => Promise<any>;
   updateProfile: (updates: Partial<Profile>) => Promise<Profile | null>;
   updateSettings: (updates: Partial<UserSettings>) => Promise<UserSettings | null>;
 }
@@ -255,6 +261,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      return { error };
+    } catch (error: any) {
+      console.error('Reset password error:', error.message);
+      throw error;
+    }
+  };
+
+  const updatePassword = async (password: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      return { error };
+    } catch (error: any) {
+      console.error('Update password error:', error.message);
+      throw error;
+    }
+  };
+
   const value: AuthContextType = {
     user,
     profile,
@@ -264,6 +290,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signIn,
     signUp,
     signOut,
+    resetPassword,
+    updatePassword,
     updateProfile: async (updates: Partial<Profile>) => {
       if (!user || !profile) return null;
       
