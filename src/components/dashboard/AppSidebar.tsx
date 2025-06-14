@@ -9,7 +9,18 @@ import {
   SidebarMenu,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, Video, Users, Settings, Send, BarChart, LogOut } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  Video, 
+  Users, 
+  Settings, 
+  Send, 
+  BarChart, 
+  LogOut, 
+  Target,
+  Brain,
+  Zap
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 
@@ -62,6 +73,38 @@ export const AppSidebar = () => {
               <Link to="/email-analytics">
                 <BarChart className="h-4 w-4 mr-2" />
                 <span>Email Analytics</span>
+              </Link>
+            </Button>
+          </SidebarMenuItem>
+          
+          {/* Advanced Features Section */}
+          <div className="px-3 py-2">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              Advanced Features
+            </div>
+          </div>
+          
+          <SidebarMenuItem>
+            <Button asChild variant={location.pathname.startsWith('/personalization') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Link to="/personalization">
+                <Target className="h-4 w-4 mr-2" />
+                <span>Personalization</span>
+              </Link>
+            </Button>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <Button asChild variant={location.pathname.startsWith('/segmentation') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Link to="/segmentation">
+                <Users className="h-4 w-4 mr-2" />
+                <span>Segmentation</span>
+              </Link>
+            </Button>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <Button asChild variant={location.pathname.startsWith('/predictive-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
+              <Link to="/predictive-analytics">
+                <Brain className="h-4 w-4 mr-2" />
+                <span>Predictive Analytics</span>
               </Link>
             </Button>
           </SidebarMenuItem>

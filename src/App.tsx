@@ -1,4 +1,3 @@
-
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/components/providers/theme-provider';
@@ -23,6 +22,9 @@ import Unsubscribe from '@/pages/Unsubscribe';
 import EmailTemplates from '@/pages/EmailTemplates';
 import Campaigns from '@/pages/Campaigns';
 import EmailAnalytics from '@/pages/EmailAnalytics';
+import Personalization from '@/pages/Personalization';
+import Segmentation from '@/pages/Segmentation';
+import PredictiveAnalytics from '@/pages/PredictiveAnalytics';
 
 const App = () => {
   return (
@@ -47,6 +49,12 @@ const App = () => {
                 <Route path="/templates" element={<ProtectedRoute><EmailTemplates /></ProtectedRoute>} />
                 <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
                 <Route path="/email-analytics" element={<ProtectedRoute><EmailAnalytics /></ProtectedRoute>} />
+                
+                {/* Advanced Features */}
+                <Route path="/personalization" element={<ProtectedRoute><Personalization /></ProtectedRoute>} />
+                <Route path="/segmentation" element={<ProtectedRoute><Segmentation /></ProtectedRoute>} />
+                <Route path="/predictive-analytics" element={<ProtectedRoute><PredictiveAnalytics /></ProtectedRoute>} />
+                
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
                 <Route path="/advanced-analytics" element={<ProtectedRoute><AdvancedAnalytics /></ProtectedRoute>} />

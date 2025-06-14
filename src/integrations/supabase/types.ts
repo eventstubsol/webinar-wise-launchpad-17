@@ -260,6 +260,63 @@ export type Database = {
           },
         ]
       }
+      behavioral_events: {
+        Row: {
+          campaign_id: string | null
+          device_type: string | null
+          email_address: string
+          event_data: Json | null
+          event_type: string
+          id: string
+          location_data: Json | null
+          session_id: string | null
+          timestamp: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          device_type?: string | null
+          email_address: string
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          location_data?: Json | null
+          session_id?: string | null
+          timestamp?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          device_type?: string | null
+          email_address?: string
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          location_data?: Json | null
+          session_id?: string | null
+          timestamp?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "behavioral_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "behavioral_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_analytics: {
         Row: {
           campaign_id: string
@@ -752,6 +809,53 @@ export type Database = {
           },
         ]
       }
+      content_personalization_rules: {
+        Row: {
+          conditions: Json
+          content_variations: Json
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          performance_metrics: Json | null
+          rule_name: string
+          rule_type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          conditions?: Json
+          content_variations?: Json
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          performance_metrics?: Json | null
+          rule_name: string
+          rule_type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          conditions?: Json
+          content_variations?: Json
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          performance_metrics?: Json | null
+          rule_name?: string
+          rule_type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_personalization_rules_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       csv_import_rows: {
         Row: {
           created_at: string | null
@@ -1090,6 +1194,54 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "deliverability_reports_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dynamic_segment_membership: {
+        Row: {
+          added_at: string | null
+          email_address: string
+          id: string
+          last_updated_at: string | null
+          membership_reason: Json | null
+          membership_score: number | null
+          segment_id: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string | null
+          email_address: string
+          id?: string
+          last_updated_at?: string | null
+          membership_reason?: Json | null
+          membership_score?: number | null
+          segment_id: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string | null
+          email_address?: string
+          id?: string
+          last_updated_at?: string | null
+          membership_reason?: Json | null
+          membership_score?: number | null
+          segment_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dynamic_segment_membership_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "audience_segments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dynamic_segment_membership_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -1895,6 +2047,56 @@ export type Database = {
           },
         ]
       }
+      engagement_scoring_models: {
+        Row: {
+          created_at: string | null
+          feature_weights: Json | null
+          id: string
+          is_active: boolean | null
+          last_trained_at: string | null
+          model_config: Json
+          model_name: string
+          model_type: string
+          performance_metrics: Json | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          feature_weights?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_trained_at?: string | null
+          model_config?: Json
+          model_name: string
+          model_type: string
+          performance_metrics?: Json | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          feature_weights?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_trained_at?: string | null
+          model_config?: Json
+          model_name?: string
+          model_type?: string
+          performance_metrics?: Json | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "engagement_scoring_models_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       export_dead_letter_queue: {
         Row: {
           created_at: string | null
@@ -2086,6 +2288,71 @@ export type Database = {
           },
         ]
       }
+      optimization_experiments: {
+        Row: {
+          control_group_size: number | null
+          created_at: string | null
+          end_date: string | null
+          experiment_name: string
+          experiment_type: string
+          hypothesis: string | null
+          id: string
+          results: Json | null
+          start_date: string | null
+          statistical_significance: number | null
+          status: string | null
+          success_metrics: Json | null
+          test_configurations: Json
+          updated_at: string | null
+          user_id: string
+          winner_variant: string | null
+        }
+        Insert: {
+          control_group_size?: number | null
+          created_at?: string | null
+          end_date?: string | null
+          experiment_name: string
+          experiment_type: string
+          hypothesis?: string | null
+          id?: string
+          results?: Json | null
+          start_date?: string | null
+          statistical_significance?: number | null
+          status?: string | null
+          success_metrics?: Json | null
+          test_configurations?: Json
+          updated_at?: string | null
+          user_id: string
+          winner_variant?: string | null
+        }
+        Update: {
+          control_group_size?: number | null
+          created_at?: string | null
+          end_date?: string | null
+          experiment_name?: string
+          experiment_type?: string
+          hypothesis?: string | null
+          id?: string
+          results?: Json | null
+          start_date?: string | null
+          statistical_significance?: number | null
+          status?: string | null
+          success_metrics?: Json | null
+          test_configurations?: Json
+          updated_at?: string | null
+          user_id?: string
+          winner_variant?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "optimization_experiments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       personalization_rules: {
         Row: {
           conditions: Json
@@ -2126,6 +2393,77 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "personalization_rules_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      predictive_models: {
+        Row: {
+          accuracy_score: number | null
+          algorithm: string
+          created_at: string | null
+          f1_score: number | null
+          feature_columns: Json | null
+          id: string
+          is_active: boolean | null
+          last_trained_at: string | null
+          model_file_path: string | null
+          model_name: string
+          model_parameters: Json | null
+          model_type: string
+          precision_score: number | null
+          recall_score: number | null
+          target_column: string | null
+          training_data_size: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          accuracy_score?: number | null
+          algorithm: string
+          created_at?: string | null
+          f1_score?: number | null
+          feature_columns?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_trained_at?: string | null
+          model_file_path?: string | null
+          model_name: string
+          model_parameters?: Json | null
+          model_type: string
+          precision_score?: number | null
+          recall_score?: number | null
+          target_column?: string | null
+          training_data_size?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          accuracy_score?: number | null
+          algorithm?: string
+          created_at?: string | null
+          f1_score?: number | null
+          feature_columns?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_trained_at?: string | null
+          model_file_path?: string | null
+          model_name?: string
+          model_parameters?: Json | null
+          model_type?: string
+          precision_score?: number | null
+          recall_score?: number | null
+          target_column?: string | null
+          training_data_size?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "predictive_models_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -2528,6 +2866,65 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "send_time_optimization_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_behavior_profiles: {
+        Row: {
+          churn_risk_score: number | null
+          content_preferences: Json | null
+          created_at: string | null
+          email_address: string
+          engagement_score: number | null
+          id: string
+          interaction_history: Json | null
+          last_engagement_at: string | null
+          lifecycle_stage: string | null
+          predicted_ltv: number | null
+          preferred_day_of_week: number | null
+          preferred_send_hour: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          churn_risk_score?: number | null
+          content_preferences?: Json | null
+          created_at?: string | null
+          email_address: string
+          engagement_score?: number | null
+          id?: string
+          interaction_history?: Json | null
+          last_engagement_at?: string | null
+          lifecycle_stage?: string | null
+          predicted_ltv?: number | null
+          preferred_day_of_week?: number | null
+          preferred_send_hour?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          churn_risk_score?: number | null
+          content_preferences?: Json | null
+          created_at?: string | null
+          email_address?: string
+          engagement_score?: number | null
+          id?: string
+          interaction_history?: Json | null
+          last_engagement_at?: string | null
+          lifecycle_stage?: string | null
+          predicted_ltv?: number | null
+          preferred_day_of_week?: number | null
+          preferred_send_hour?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_behavior_profiles_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -3953,6 +4350,10 @@ export type Database = {
         Args: { p_campaign_id: string }
         Returns: undefined
       }
+      calculate_engagement_score: {
+        Args: { p_user_id: string; p_email: string }
+        Returns: number
+      }
       decrypt_token: {
         Args: { encrypted_token: string }
         Returns: string
@@ -3978,6 +4379,10 @@ export type Database = {
       invalidate_cache_dependencies: {
         Args: { dep_pattern: string }
         Returns: number
+      }
+      update_behavior_profile: {
+        Args: { p_user_id: string; p_email: string }
+        Returns: undefined
       }
       update_segment_size: {
         Args: { p_segment_id: string }
