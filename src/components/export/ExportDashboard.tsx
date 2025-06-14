@@ -4,10 +4,79 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ReportBuilder } from './ReportBuilder';
 import { ExportQueueMonitor } from './ExportQueueMonitor';
-import { ScheduleManager } from './ScheduleManager';
-import { FileText, Calendar, Activity, TrendingUp } from 'lucide-react';
+import { AdvancedScheduleManager } from './AdvancedScheduleManager';
+import { BulkExportSelector } from './bulk/BulkExportSelector';
+import { FileText, Calendar, Activity, TrendingUp, Package, Users } from 'lucide-react';
+import { ExportJobManager } from '@/services/export/job/ExportJobManager';
+import { useToast } from '@/hooks/use-toast';
+
+// Mock data for bulk export demo
+const mockWebinars = [
+  {
+    id: '1',
+    title: 'Q3 Product Launch Webinar',
+    startTime: '2025-06-01T14:00:00Z',
+    participantCount: 156,
+    duration: 90,
+    status: 'completed'
+  },
+  {
+    id: '2',
+    title: 'Monthly Team Update',
+    startTime: '2025-06-05T10:00:00Z',
+    participantCount: 45,
+    duration: 30,
+    status: 'completed'
+  },
+  {
+    id: '3',
+    title: 'Customer Onboarding Training',
+    startTime: '2025-06-08T16:00:00Z',
+    participantCount: 89,
+    duration: 60,
+    status: 'completed'
+  },
+  {
+    id: '4',
+    title: 'Sales Strategy Workshop',
+    startTime: '2025-06-10T09:00:00Z',
+    participantCount: 67,
+    duration: 120,
+    status: 'completed'
+  }
+];
 
 export function ExportDashboard() {
+  const { toast } = useToast();
+
+  const handleBulkExport = async (selectedIds: string[], format: string, template?: string) => {
+    try {
+      // Create individual export jobs for each selected webinar
+      const exportPromises = selectedIds.map(webinarId => 
+        ExportJobManager.createExportJob(format as 'pdf' | 'excel' | 'powerpoint' | 'csv', {
+          title: `Bulk Export - Webinar ${webinarId}`,
+          description: `Automated bulk export using ${template || 'default'} template`,
+          webinarIds: [webinarId],
+          templateId: template
+        })
+      );
+
+      await Promise.all(exportPromises);
+      
+      toast({
+        title: "Bulk Export Started",
+        description: `Successfully queued ${selectedIds.length} export jobs. You'll be notified when they're ready.`
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: "Failed to start bulk export. Please try again.",
+        variant: "destructive"
+      });
+      throw error;
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -61,14 +130,32 @@ export function ExportDashboard() {
       </div>
 
       <Tabs defaultValue="builder" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="builder">Report Builder</TabsTrigger>
+          <TabsTrigger value="bulk">Bulk Export</TabsTrigger>
           <TabsTrigger value="queue">Export Queue</TabsTrigger>
-          <TabsTrigger value="schedule">Schedule Manager</TabsTrigger>
+          <TabsTrigger value="schedule">Advanced Scheduling</TabsTrigger>
         </TabsList>
 
         <TabsContent value="builder">
           <ReportBuilder />
+        </TabsContent>
+
+        <TabsContent value="bulk">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Bulk Export Manager
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BulkExportSelector 
+                webinars={mockWebinars}
+                onExport={handleBulkExport}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="queue">
@@ -76,7 +163,7 @@ export function ExportDashboard() {
         </TabsContent>
 
         <TabsContent value="schedule">
-          <ScheduleManager />
+          <AdvancedScheduleManager />
         </TabsContent>
       </Tabs>
     </div>
