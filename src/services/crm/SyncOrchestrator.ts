@@ -31,20 +31,22 @@ export class SyncOrchestrator {
       actualDirection = syncDirection as 'incoming' | 'outgoing';
     }
 
-    // Create sync log entry
-    const syncLog = await this.createSyncLog({
+    // Create sync log entry - simplified to avoid deep type instantiation
+    const syncLogData = {
       connection_id: connectionId,
-      sync_type: 'full_sync',
-      operation_type: 'update',
+      sync_type: 'full_sync' as const,
+      operation_type: 'update' as const,
       direction: actualDirection,
-      status: 'pending',
+      status: 'pending' as const,
       records_processed: 0,
       records_success: 0,
       records_failed: 0,
       records_conflicts: 0,
       started_at: new Date().toISOString(),
       created_at: new Date().toISOString()
-    });
+    };
+
+    const syncLog = await this.createSyncLog(syncLogData);
 
     try {
       let result: CRMSyncResult;
@@ -234,11 +236,11 @@ export class SyncOrchestrator {
     connection: CRMConnection,
     fieldMappings: CRMFieldMapping[]
   ): Promise<void> {
-    // Check if participant already exists
+    // Check if participant already exists using participant_email field
     const { data: existingParticipant } = await supabase
       .from('zoom_participants')
       .select('*')
-      .eq('email', contact.email)
+      .eq('participant_email', contact.email)
       .single();
 
     const participantData: Record<string, any> = {};
@@ -263,14 +265,19 @@ export class SyncOrchestrator {
         throw new Error(`Failed to update participant: ${error.message}`);
       }
     } else {
-      // Create new participant
+      // Create new participant - use correct field names for zoom_participants table
+      const newParticipantData = {
+        ...participantData,
+        participant_email: contact.email,
+        participant_uuid: `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        // Add other required fields based on the zoom_participants schema
+        first_name: contact.firstName || '',
+        last_name: contact.lastName || ''
+      };
+
       const { error } = await supabase
         .from('zoom_participants')
-        .insert({
-          ...participantData,
-          email: contact.email,
-          participant_uuid: `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        });
+        .insert(newParticipantData);
 
       if (error) {
         throw new Error(`Failed to create participant: ${error.message}`);
@@ -360,16 +367,10 @@ export class SyncOrchestrator {
     });
   }
 
-  private static async createSyncLog(log: Omit<CRMSyncLog, 'id'>): Promise<CRMSyncLog> {
+  private static async createSyncLog(logData: any): Promise<any> {
     const { data, error } = await supabase
       .from('crm_sync_logs')
-      .insert({
-        ...log,
-        sync_type: log.sync_type,
-        operation_type: log.operation_type,
-        direction: log.direction,
-        status: log.status
-      })
+      .insert(logData)
       .select()
       .single();
 
@@ -377,20 +378,10 @@ export class SyncOrchestrator {
       throw new Error(`Failed to create sync log: ${error.message}`);
     }
 
-    return {
-      ...data,
-      sync_type: data.sync_type as 'full_sync' | 'incremental_sync' | 'real_time_update',
-      operation_type: data.operation_type as 'create' | 'update' | 'delete',
-      direction: data.direction as 'incoming' | 'outgoing',
-      status: data.status as 'pending' | 'success' | 'failed' | 'conflict',
-      conflict_details: (data.conflict_details as Record<string, any>) || undefined,
-      data_before: (data.data_before as Record<string, any>) || undefined,
-      data_after: (data.data_after as Record<string, any>) || undefined,
-      field_changes: (data.field_changes as Record<string, any>) || undefined
-    };
+    return data;
   }
 
-  private static async updateSyncLog(logId: string, updates: Partial<CRMSyncLog>): Promise<void> {
+  private static async updateSyncLog(logId: string, updates: any): Promise<void> {
     const { error } = await supabase
       .from('crm_sync_logs')
       .update(updates)
