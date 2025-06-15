@@ -1,4 +1,3 @@
-
 /**
  * Enhanced token encryption service with improved error handling
  * and fallback mechanisms for different environments
@@ -21,18 +20,11 @@ export class TokenEncryptionService {
    * Get encryption salt from environment with fallback
    */
   private static getEncryptionSalt(): string {
-    // Try Vite environment variable first (for browser)
-    try {
-      if (typeof window !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_ENCRYPTION_SALT) {
-        return (globalThis as any).import.meta.env.VITE_ENCRYPTION_SALT;
-      }
-    } catch (error) {
-      // Ignore errors accessing import.meta
-    }
+    // Vite exposes env variables through import.meta.env
+    const salt = import.meta.env.VITE_ENCRYPTION_SALT;
     
-    // Fallback for other environments
-    if (typeof process !== 'undefined' && process.env && process.env.ENCRYPTION_SALT) {
-      return process.env.ENCRYPTION_SALT;
+    if (salt) {
+      return salt;
     }
     
     // Default fallback salt (not ideal for production but prevents crashes)

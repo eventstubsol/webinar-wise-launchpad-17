@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -50,12 +51,12 @@ const SyncAnalytics = () => {
 
         const { data: lastSuccessfulSync, error: syncError } = await supabase
           .from('zoom_sync_logs')
-          .select('completed_at, processed_items')
+          .select('completed_at,processed_items')
           .eq('connection_id', connection.id)
           .eq('sync_status', 'completed')
           .order('completed_at', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (webinarError || syncError) {
           console.error("Sync Analytics Error:", webinarError || syncError);
