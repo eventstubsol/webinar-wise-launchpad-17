@@ -24,24 +24,36 @@ export function DashboardHeader() {
     queryFn: async () => {
       if (!connection?.id) return null;
       
-      const { data, error } = await supabase
-        .from('zoom_sync_logs')
-        .select('completed_at')
-        .eq('connection_id', connection.id)
-        .eq('sync_status', 'completed')
-        .order('completed_at', { ascending: false })
-        .limit(1)
-        .single();
+      try {
+        const { data, error } = await supabase
+          .from('zoom_sync_logs')
+          .select('completed_at')
+          .eq('connection_id', connection.id)
+          .eq('sync_status', 'completed')
+          .order('completed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching last sync:', error);
+        if (error) {
+          // This will be caught by the outer catch block, but it's good practice.
+          throw error;
+        }
+
+        return data;
+      } catch (error) {
+        console.error('Failed to fetch last sync timestamp:', error);
         return null;
       }
-
-      return data;
     },
     enabled: !!connection?.id,
     refetchInterval: 30000,
+    retry: (failureCount, error: any) => {
+      // Don't retry on 4xx errors, which indicate a client-side or data issue.
+      if (error?.status >= 400 && error?.status < 500) {
+        return false;
+      }
+      return failureCount < 2;
+    },
   });
 
   const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
@@ -83,7 +95,7 @@ export function DashboardHeader() {
   const status = getConnectionStatus();
   const StatusIcon = status.icon;
 
-  const formatLastSync = (dateString: string | null) => {
+  const formatLastSync = (dateString: string | null | undefined) => {
     if (!dateString) return 'Never synced';
     try {
       return `Last sync: ${format(new Date(dateString), 'MMM d, yyyy h:mm a')}`;
@@ -122,7 +134,7 @@ export function DashboardHeader() {
               Zoom {status.label}
             </Badge>
             <span className="text-sm text-gray-500">
-              {formatLastSync(lastSyncData?.completed_at || connection?.last_sync_at || null)}
+              {formatLastSync(lastSyncData?.completed_at || connection?.last_sync_at)}
             </span>
           </div>
           
