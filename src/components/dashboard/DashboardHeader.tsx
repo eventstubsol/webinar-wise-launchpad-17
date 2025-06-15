@@ -8,10 +8,12 @@ import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { Search, Bell, RefreshCw, Wifi, WifiOff, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useZoomSync } from '@/hooks/useZoomSync';
 
 export function DashboardHeader() {
   const { user, profile } = useAuth();
-  const { isConnected, isExpired, isLoading } = useZoomConnection();
+  const { connection, isConnected, isExpired, isLoading } = useZoomConnection();
+  const { startSync, isSyncing } = useZoomSync(connection?.id);
 
   const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -39,7 +41,7 @@ export function DashboardHeader() {
         <h1 className="text-xl font-semibold text-gray-900">WebinarWise</h1>
       </div>
 
-      <div className="ml-auto flex items-center space-x-4">
+      <div className="ml-auto flex items-center space-x-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <Input
@@ -53,8 +55,19 @@ export function DashboardHeader() {
           <StatusIcon className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
           Zoom {status.label}
         </Badge>
+        
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => startSync('incremental')}
+          disabled={!isConnected || isSyncing}
+          aria-label="Sync recent data"
+          className="h-8 w-8"
+        >
+          <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+        </Button>
 
-        <Button variant="ghost" size="sm">
+        <Button variant="ghost" size="icon" className="h-8 w-8">
           <Bell className="w-4 h-4" />
         </Button>
 
