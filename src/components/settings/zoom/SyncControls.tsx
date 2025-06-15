@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Switch } from '@/components/ui/switch';
@@ -40,9 +39,9 @@ export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
       return enabled;
     },
     onSuccess: (enabled) => {
-      queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
+      queryClient.invalidateQueries({ queryKey: ['zoom-connection', connection.id] });
       toast({
-        title: "Settings Updated",
+        title: "Success",
         description: `Auto-sync has been ${enabled ? 'enabled' : 'disabled'}.`,
       });
     },
@@ -52,32 +51,38 @@ export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
         description: error.message,
         variant: "destructive",
       });
+      // Revert optimistic update on error if needed
+      queryClient.invalidateQueries({ queryKey: ['zoom-connection', connection.id] });
     },
   });
 
-  const handleIncrementalSync = async () => {
-    setIsSyncing(true);
-    try {
-      await startIncrementalSync();
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleInitialSync = async () => {
-    setIsSyncing(true);
-    try {
-      await startInitialSync();
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleAutoSyncToggle = (enabled: boolean) => {
+  const handleToggleAutoSync = (enabled: boolean) => {
     autoSyncMutation.mutate(enabled);
   };
 
-  const syncInProgress = isSyncing || isStarting;
+  const handleManualSync = async (syncType: 'initial' | 'incremental') => {
+    setIsSyncing(true);
+    try {
+      if (syncType === 'initial') {
+        await startInitialSync(connection.id);
+      } else {
+        await startIncrementalSync(connection.id);
+      }
+      toast({
+        title: "Sync Started",
+        description: "Your webinar data sync is now in progress. Check the Sync Center for updates.",
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+      toast({
+        title: "Sync Failed to Start",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -93,7 +98,7 @@ export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
         </div>
         <Switch
           checked={connection.auto_sync_enabled || false}
-          onCheckedChange={handleAutoSyncToggle}
+          onCheckedChange={handleToggleAutoSync}
           disabled={autoSyncMutation.isPending}
         />
       </div>
@@ -109,7 +114,7 @@ export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
             </div>
           </div>
           <Button
-            onClick={handleIncrementalSync}
+            onClick={() => handleManualSync('incremental')}
             disabled={syncInProgress}
             size="sm"
             variant="outline"
@@ -128,7 +133,7 @@ export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
             </div>
           </div>
           <Button
-            onClick={handleInitialSync}
+            onClick={() => handleManualSync('initial')}
             disabled={syncInProgress}
             size="sm"
             variant="outline"

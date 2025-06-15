@@ -18,7 +18,7 @@ serve(async (req) => {
     const envError = RequestValidator.validateEnvironment();
     if (envError) {
       console.error('Environment validation failed:', envError);
-      return ResponseUtils.createErrorResponse(envError, 500);
+      return ResponseUtils.createErrorResponse(envError.message, 500);
     }
 
     // Parse and validate request
@@ -45,7 +45,10 @@ serve(async (req) => {
     }
 
     // Exchange code for tokens
-    const redirectUri = request.redirectUri || `${new URL(req.url).origin}/auth/zoom/callback`;
+    const redirectUri = Deno.env.get('ZOOM_REDIRECT_URI') || request.redirectUri;
+    if (!redirectUri) {
+      return ResponseUtils.createErrorResponse('Redirect URI is not configured.', 500);
+    }
     
     let tokenData: TokenResponse;
     try {

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -16,6 +15,33 @@ interface CRMConnectionFormProps {
   onSuccess: () => void;
 }
 
+const crmOptions = [
+  {
+    id: 'salesforce',
+    name: 'Salesforce',
+    description: 'Connect to Salesforce CRM for seamless contact management',
+    icon: '🔷'
+  },
+  {
+    id: 'hubspot',
+    name: 'HubSpot',
+    description: 'Integrate with HubSpot for marketing automation',
+    icon: '🟠'
+  },
+  {
+    id: 'pipedrive',
+    name: 'Pipedrive',
+    description: 'Sync with Pipedrive for sales pipeline management',
+    icon: '🟢'
+  },
+  {
+    id: 'custom',
+    name: 'Custom API',
+    description: 'Connect to any REST API endpoint',
+    icon: '⚙️'
+  }
+];
+
 export function CRMConnectionForm({ onClose, onSuccess }: CRMConnectionFormProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -31,33 +57,6 @@ export function CRMConnectionForm({ onClose, onSuccess }: CRMConnectionFormProps
     syncDirection: 'bidirectional' as 'incoming' | 'outgoing' | 'bidirectional',
     syncFrequency: 24
   });
-
-  const crmOptions = [
-    {
-      id: 'salesforce',
-      name: 'Salesforce',
-      description: 'Connect to Salesforce CRM for seamless contact management',
-      icon: '🔷'
-    },
-    {
-      id: 'hubspot',
-      name: 'HubSpot',
-      description: 'Integrate with HubSpot for marketing automation',
-      icon: '🟠'
-    },
-    {
-      id: 'pipedrive',
-      name: 'Pipedrive',
-      description: 'Sync with Pipedrive for sales pipeline management',
-      icon: '🟢'
-    },
-    {
-      id: 'custom',
-      name: 'Custom API',
-      description: 'Connect to any REST API endpoint',
-      icon: '⚙️'
-    }
-  ];
 
   const handleNext = () => {
     if (!formData.connectionName) {

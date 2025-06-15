@@ -22,7 +22,7 @@ serve(async (req) => {
   }
 
   try {
-    // Initialize Supabase client
+    // Initialize Supabase client with user's auth context
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -52,22 +52,20 @@ serve(async (req) => {
       .single();
 
     if (credentialsError || !credentials) {
-      console.error('No Zoom credentials found:', credentialsError);
+      console.error('No active Zoom credentials found:', credentialsError);
       return new Response(
-        JSON.stringify({ error: 'No Zoom credentials configured' }),
+        JSON.stringify({ error: 'No active Zoom credentials configured for this user.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     console.log('Validating credentials for user:', user.id, 'account:', credentials.account_id);
 
-    // Use a simpler token request without explicit scopes
+    // Request Server-to-Server OAuth token from Zoom
     const tokenRequestBody = new URLSearchParams({
       grant_type: 'account_credentials',
       account_id: credentials.account_id
     });
-
-    console.log('Token request body:', tokenRequestBody.toString());
 
     const tokenResponse = await fetch('https://zoom.us/oauth/token', {
       method: 'POST',
@@ -83,146 +81,68 @@ serve(async (req) => {
       console.error('Zoom token request failed:', tokenResponse.status, errorText);
       return new Response(
         JSON.stringify({ 
-          error: 'Invalid Zoom credentials',
-          details: 'Unable to authenticate with Zoom API. Please verify your Client ID, Client Secret, and Account ID.',
-          statusCode: tokenResponse.status,
-          zoomError: errorText
+          error: 'Invalid Zoom credentials. Please verify your Client ID, Client Secret, and Account ID.',
+          details: errorText,
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
     const tokenData = await tokenResponse.json();
-    console.log('Token obtained successfully. Scopes:', tokenData.scope);
 
-    // Try /users/me first - this should work with basic user scopes
-    console.log('Testing token with /users/me endpoint...');
+    // Validate the token by fetching basic user info
     const userTestResponse = await fetch('https://api.zoom.us/v2/users/me', {
-      headers: {
-        'Authorization': `Bearer ${tokenData.access_token}`,
-      },
+      headers: { 'Authorization': `Bearer ${tokenData.access_token}` },
     });
 
-    let accountData = null;
-    let accountEndpoint = '';
-
-    if (userTestResponse.ok) {
-      accountData = await userTestResponse.json();
-      accountEndpoint = '/users/me';
-      console.log('Success with /users/me endpoint. User data:', {
-        id: accountData.id,
-        email: accountData.email,
-        type: accountData.type,
-        plan_type: accountData.plan_type
-      });
-    } else {
+    if (!userTestResponse.ok) {
       const userErrorText = await userTestResponse.text();
-      console.error('Failed /users/me:', userTestResponse.status, userErrorText);
-      
+      console.error('Failed /users/me validation:', userTestResponse.status, userErrorText);
       return new Response(
         JSON.stringify({ 
-          error: 'Failed to validate Zoom credentials',
-          details: 'Unable to access basic user information. Please check your app permissions in Zoom Marketplace.',
-          tokenScopes: tokenData.scope,
-          statusCode: userTestResponse.status,
-          zoomError: userErrorText
+          error: 'Failed to validate token. Check app permissions in Zoom Marketplace.',
+          details: userErrorText,
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    const accountData = await userTestResponse.json();
 
-    // Try to get account information if we have account scopes
-    if (tokenData.scope && tokenData.scope.includes('account:read')) {
-      console.log('Attempting to get account info with account scopes...');
-      
-      const accountResponse = await fetch(`https://api.zoom.us/v2/accounts/${credentials.account_id}`, {
-        headers: {
-          'Authorization': `Bearer ${tokenData.access_token}`,
-        },
-      });
-
-      if (accountResponse.ok) {
-        const accountInfo = await accountResponse.json();
-        console.log('Account info retrieved successfully:', {
-          id: accountInfo.id,
-          account_name: accountInfo.account_name,
-          owner_email: accountInfo.owner_email
-        });
-        // Use account info instead of user info if available
-        accountData = {
-          ...accountData,
-          account_name: accountInfo.account_name,
-          owner_email: accountInfo.owner_email,
-          account_id: accountInfo.id
-        };
-      } else {
-        const accountErrorText = await accountResponse.text();
-        console.log('Account info not available:', accountResponse.status, accountErrorText);
-        // Continue with user info - this is not a failure
-      }
-    }
-
-    console.log('Using endpoint:', accountEndpoint, 'for account validation');
-
-    // Create or update zoom connection record with properly encrypted placeholder tokens
+    // Prepare connection data using validated info
     const connectionData = {
       user_id: user.id,
       zoom_user_id: accountData.id,
       zoom_account_id: accountData.account_id || accountData.id,
-      zoom_email: accountData.email || accountData.owner_email || 'Unknown',
-      zoom_account_type: accountData.plan_type || accountData.type || 'Unknown',
+      zoom_email: accountData.email,
+      zoom_account_type: accountData.plan_type || (accountData.type === 1 ? 'Basic' : 'Licensed'),
       access_token: encryptPlaceholderToken('SERVER_TO_SERVER_VALIDATED', user.id),
       refresh_token: encryptPlaceholderToken('SERVER_TO_SERVER_NOT_APPLICABLE', user.id),
-      token_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year from now
-      scopes: tokenData.scope ? tokenData.scope.split(' ') : ['user:read:admin'],
+      token_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year
+      scopes: tokenData.scope?.split(' ') || [],
       connection_status: 'active',
       is_primary: true,
       auto_sync_enabled: true,
       sync_frequency_hours: 24,
     };
 
-    // Check if connection already exists
-    const { data: existingConnection } = await supabaseClient
+    // Use service role for database operations
+    const serviceClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+    
+    // Upsert connection data
+    const { data: connection, error: upsertError } = await serviceClient
       .from('zoom_connections')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('zoom_account_id', connectionData.zoom_account_id)
+      .upsert(connectionData, { onConflict: 'user_id, zoom_account_id' })
+      .select()
       .single();
 
-    let connection;
-    if (existingConnection) {
-      // Update existing connection
-      const { data: updatedConnection, error: updateError } = await supabaseClient
-        .from('zoom_connections')
-        .update(connectionData)
-        .eq('id', existingConnection.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        console.error('Failed to update connection:', updateError);
-        return new Response(
-          JSON.stringify({ error: 'Failed to update connection' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      connection = updatedConnection;
-    } else {
-      // Create new connection
-      const { data: newConnection, error: insertError } = await supabaseClient
-        .from('zoom_connections')
-        .insert(connectionData)
-        .select()
-        .single();
-
-      if (insertError) {
-        console.error('Failed to create connection:', insertError);
-        return new Response(
-          JSON.stringify({ error: 'Failed to create connection' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      connection = newConnection;
+    if (upsertError) {
+      console.error('Failed to upsert connection:', upsertError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to save connection to database' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     return new Response(
@@ -232,14 +152,8 @@ serve(async (req) => {
         connection: connection,
         accountInfo: {
           id: accountData.id,
-          email: accountData.email || accountData.owner_email,
+          email: accountData.email,
           plan_type: accountData.plan_type || accountData.type,
-          account_name: accountData.account_name
-        },
-        debugInfo: {
-          endpointUsed: accountEndpoint,
-          tokenScopes: tokenData.scope,
-          hasAccountAccess: tokenData.scope && tokenData.scope.includes('account:read')
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
