@@ -85,7 +85,11 @@ class ZoomAPIClient {
           return await this.makeRequest(endpoint, options, retryCount + 1);
         } catch (refreshError) {
           console.error(`Refresh token flow failed for ${endpoint}:`, refreshError.message);
-          // If refresh fails, throw the original error
+          // If refresh fails, throw a specific auth error
+          const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
+          (authError as any).status = 401; // Keep the status code
+          (authError as any).isAuthError = true;
+          throw authError;
         }
       }
 
@@ -94,6 +98,9 @@ class ZoomAPIClient {
       const error = new Error(`Zoom API request failed: ${response.status} ${response.statusText}`);
       // Attach status for better error handling upstream
       (error as any).status = response.status;
+      if (response.status === 401) {
+        (error as any).isAuthError = true;
+      }
       try {
         (error as any).body = JSON.parse(errorText);
       } catch {

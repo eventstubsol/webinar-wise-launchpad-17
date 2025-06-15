@@ -99,19 +99,26 @@ export async function processSequentialSync(
           'webinar_failed', 
           Math.floor((processedCount / webinars.length) * 80) + 20
         );
+        
+        if (error.isAuthError) {
+            // If we get an auth error, we should stop the whole sync.
+            throw error;
+        }
       }
     }
 
     // Complete the sync
     const endTime = new Date().toISOString();
-    const duration = Math.floor((new Date(endTime).getTime() - new Date().getTime()) / 1000);
+    const duration = Math.floor((new Date(endTime).getTime() - new Date(syncOperation.createdAt).getTime()) / 1000);
+    const finalStatus = errors.length === webinars.length ? 'failed' : (processedCount > 0 ? 'completed' : 'failed');
 
     await updateSyncLog(supabase, syncLogId, {
-      sync_status: processedCount > 0 ? 'completed' : 'failed',
+      sync_status: finalStatus,
       processed_items: processedCount,
       failed_items: failedCount,
       completed_at: endTime,
       duration_seconds: Math.abs(duration),
+      error_message: errors.length > 0 ? `${failedCount} out of ${webinars.length} webinars failed to sync.` : null,
       error_details: errors.length > 0 ? { errors } : null,
       sync_stage: 'completed',
       stage_progress_percentage: 100
@@ -122,9 +129,13 @@ export async function processSequentialSync(
   } catch (error) {
     console.error('Sync operation failed:', error);
     
+    const isAuthError = !!error.isAuthError;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'failed',
-      error_message: error instanceof Error ? error.message : 'Unknown error',
+      error_message: errorMessage,
+      error_details: { isAuthError }, // Store the auth error flag
       completed_at: new Date().toISOString(),
       sync_stage: 'failed',
       stage_progress_percentage: 0

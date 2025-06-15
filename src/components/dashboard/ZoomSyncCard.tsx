@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +36,8 @@ export function ZoomSyncCard() {
           totalWebinars: webinarsResult.count || 0,
           lastSync: syncLogsResult.data?.completed_at || connection.last_sync_at,
           lastSyncStatus: syncLogsResult.data?.sync_status,
-          lastSyncError: syncLogsResult.data?.error_message
+          lastSyncError: syncLogsResult.data?.error_message,
+          lastSyncErrorDetails: syncLogsResult.data?.error_details,
         };
       } catch (error) {
         console.error('Error fetching sync stats:', error);
@@ -45,7 +45,8 @@ export function ZoomSyncCard() {
           totalWebinars: 0,
           lastSync: null,
           lastSyncStatus: null,
-          lastSyncError: null
+          lastSyncError: null,
+          lastSyncErrorDetails: null,
         };
       }
     },
@@ -89,6 +90,8 @@ export function ZoomSyncCard() {
     }
   };
 
+  const isAuthError = isExpired || (syncStats?.lastSyncErrorDetails && (syncStats.lastSyncErrorDetails as any).isAuthError);
+
   if (!isConnected) {
     return (
       <Card>
@@ -121,7 +124,11 @@ export function ZoomSyncCard() {
             <Database className="h-5 w-5" />
             Webinar Data Sync
           </div>
-          {syncStats?.lastSyncStatus && getStatusBadge(syncStats.lastSyncStatus)}
+          {isAuthError ? (
+            <Badge variant="destructive">Reconnect Required</Badge>
+          ) : (
+            syncStats?.lastSyncStatus && getStatusBadge(syncStats.lastSyncStatus)
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -143,14 +150,14 @@ export function ZoomSyncCard() {
         </div>
 
         {/* Show authentication error prominently */}
-        {isExpired && (
+        {isAuthError && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3">
             <div className="flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
               <div className="text-sm">
                 <p className="text-red-800 font-medium">Connection Expired</p>
                 <p className="text-red-700">Your Zoom authentication has expired. Please reconnect your account to resume syncing.</p>
-                <Button asChild variant="outline" size="sm" className="mt-2">
+                <Button asChild variant="outline" size="sm" className="mt-2 bg-white hover:bg-gray-50">
                   <Link to="/settings">
                     Reconnect Zoom Account
                   </Link>
@@ -160,26 +167,14 @@ export function ZoomSyncCard() {
           </div>
         )}
 
-        {/* Show error message if last sync failed */}
-        {syncStats?.lastSyncStatus === 'failed' && syncStats?.lastSyncError && (
+        {/* Show other error messages if last sync failed */}
+        {syncStats?.lastSyncStatus === 'failed' && !isAuthError && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3">
             <div className="flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
               <div className="text-sm">
                 <p className="text-red-800 font-medium">Last sync failed</p>
-                <p className="text-red-700">{syncStats.lastSyncError}</p>
-                {syncStats.lastSyncError.includes('401') && (
-                  <div className="mt-2">
-                    <p className="text-red-600">
-                      This usually means your Zoom authentication has expired.
-                    </p>
-                    <Button asChild variant="outline" size="sm" className="mt-1">
-                      <Link to="/settings">
-                        Reconnect Zoom Account
-                      </Link>
-                    </Button>
-                  </div>
-                )}
+                <p className="text-red-700">{syncStats.lastSyncError || 'An unknown error occurred.'}</p>
               </div>
             </div>
           </div>
@@ -193,7 +188,7 @@ export function ZoomSyncCard() {
           </Button>
         </div>
 
-        {syncStats?.totalWebinars === 0 && !isExpired && (
+        {syncStats?.totalWebinars === 0 && !isAuthError && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-sm text-blue-800">
               No webinar data found. Go to the Sync Center to import all your webinars from Zoom.

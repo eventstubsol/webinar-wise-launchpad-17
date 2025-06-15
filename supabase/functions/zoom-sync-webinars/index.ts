@@ -49,7 +49,13 @@ serve(async (req) => {
     console.error('Sync function error:', error);
     const status = error.status || 500;
     const message = error.message || 'Internal server error';
-    const body = error.body ? JSON.stringify({ error: message, ...error.body }) : JSON.stringify({ error: message });
+
+    const responseBody: { error: string, isAuthError?: boolean } = { error: message };
+    if (error.isAuthError) {
+      responseBody.isAuthError = true;
+    }
+    
+    const body = JSON.stringify(responseBody);
 
     return new Response(body, { status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
   }
