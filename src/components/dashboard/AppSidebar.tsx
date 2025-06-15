@@ -8,17 +8,26 @@ import {
   SidebarFooter,
   SidebarMenu,
   SidebarMenuItem,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { 
   LayoutDashboard, 
   Video, 
-  Users, 
+  BarChart3, 
+  Database,
+  FileText,
   Settings, 
   Send, 
-  BarChart, 
+  Users, 
   LogOut, 
   Target,
   Brain,
+  Upload,
+  Download,
+  Activity,
   Zap
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,93 +37,166 @@ export const AppSidebar = () => {
   const location = useLocation();
   const { signOut } = useAuth();
 
+  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path);
+
   return (
     <Sidebar>
       <SidebarHeader>
-        <img src="/lovable-uploads/d3011340-f45f-4d8c-b42a-3c95a640618a.png" alt="Logo" className="h-8 w-auto" />
+        <img src="/lovable-uploads/d3011340-f45f-4d8c-b42a-3c95a640618a.png" alt="Webinar Wise" className="h-8 w-auto" />
       </SidebarHeader>
       
       <SidebarContent>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <Button asChild variant={location.pathname === '/dashboard' ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Link to="/dashboard">
-                <LayoutDashboard className="h-4 w-4 mr-2" />
-                <span>Dashboard</span>
-              </Link>
-            </Button>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <Button asChild variant={location.pathname.startsWith('/webinars') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Link to="/webinars">
-                <Video className="h-4 w-4 mr-2" />
-                <span>Webinars</span>
-              </Link>
-            </Button>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <Button asChild variant={location.pathname.startsWith('/templates') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Link to="/templates">
-                <Users className="h-4 w-4 mr-2" />
-                <span>Templates</span>
-              </Link>
-            </Button>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <Button asChild variant={location.pathname.startsWith('/campaigns') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Link to="/campaigns">
-                <Send className="h-4 w-4 mr-2" />
-                <span>Campaigns</span>
-              </Link>
-            </Button>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <Button asChild variant={location.pathname.startsWith('/email-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Link to="/email-analytics">
-                <BarChart className="h-4 w-4 mr-2" />
-                <span>Email Analytics</span>
-              </Link>
-            </Button>
-          </SidebarMenuItem>
-          
-          {/* Advanced Features Section */}
-          <div className="px-3 py-2">
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              Advanced Features
-            </div>
-          </div>
-          
-          <SidebarMenuItem>
-            <Button asChild variant={location.pathname.startsWith('/personalization') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Link to="/personalization">
-                <Target className="h-4 w-4 mr-2" />
-                <span>Personalization</span>
-              </Link>
-            </Button>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <Button asChild variant={location.pathname.startsWith('/segmentation') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Link to="/segmentation">
-                <Users className="h-4 w-4 mr-2" />
-                <span>Segmentation</span>
-              </Link>
-            </Button>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <Button asChild variant={location.pathname.startsWith('/predictive-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
-              <Link to="/predictive-analytics">
-                <Brain className="h-4 w-4 mr-2" />
-                <span>Predictive Analytics</span>
-              </Link>
-            </Button>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        {/* Core Webinar Features */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Webinar Analytics</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/dashboard') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/dashboard">
+                    <LayoutDashboard className="h-4 w-4 mr-2" />
+                    <span>Dashboard</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/webinars') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/webinars">
+                    <Video className="h-4 w-4 mr-2" />
+                    <span>Webinars</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/advanced-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/advanced-analytics">
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    <span>Advanced Analytics</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
+        {/* Email Marketing */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Email Marketing</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/templates') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/templates">
+                    <FileText className="h-4 w-4 mr-2" />
+                    <span>Templates</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/campaigns') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/campaigns">
+                    <Send className="h-4 w-4 mr-2" />
+                    <span>Campaigns</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/email-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/email-analytics">
+                    <Activity className="h-4 w-4 mr-2" />
+                    <span>Email Analytics</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
+        {/* Data Management */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Data Management</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/csv-upload') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/csv-upload">
+                    <Upload className="h-4 w-4 mr-2" />
+                    <span>Import Data</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/reports') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/reports">
+                    <Download className="h-4 w-4 mr-2" />
+                    <span>Reports & Export</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/integrations') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/integrations">
+                    <Database className="h-4 w-4 mr-2" />
+                    <span>CRM Integrations</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
+        {/* Advanced Features */}
+        <SidebarGroup>
+          <SidebarGroupLabel>AI & Advanced</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/ai-insights') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/ai-insights">
+                    <Brain className="h-4 w-4 mr-2" />
+                    <span>AI Insights</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/personalization') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/personalization">
+                    <Target className="h-4 w-4 mr-2" />
+                    <span>Personalization</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/segmentation') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/segmentation">
+                    <Users className="h-4 w-4 mr-2" />
+                    <span>Segmentation</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/predictive-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/predictive-analytics">
+                    <Zap className="h-4 w-4 mr-2" />
+                    <span>Predictive Analytics</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
       
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <Button asChild variant={location.pathname.startsWith('/settings') ? 'secondary' : 'ghost'} className="w-full justify-start">
+            <Button asChild variant={isActive('/settings') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Link to="/settings">
                 <Settings className="h-4 w-4 mr-2" />
                 <span>Settings</span>

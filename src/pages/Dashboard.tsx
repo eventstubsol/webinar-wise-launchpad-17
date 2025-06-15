@@ -3,10 +3,11 @@ import React from "react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/dashboard/AppSidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
-import { MetricsCards } from "@/components/dashboard/MetricsCards";
-import { ChartsSection } from "@/components/dashboard/ChartsSection";
-import { DataTables } from "@/components/dashboard/DataTables";
-import { CSVUploadSection } from "@/components/dashboard/CSVUploadSection";
+import { WebinarMetricsCards } from "@/components/dashboard/WebinarMetricsCards";
+import { WebinarChartsSection } from "@/components/dashboard/WebinarChartsSection";
+import { WebinarDataTables } from "@/components/dashboard/WebinarDataTables";
+import { ZoomConnectionCard } from "@/components/dashboard/ZoomConnectionCard";
+import { QuickActionsCard } from "@/components/dashboard/QuickActionsCard";
 import { useZoomConnection } from "@/hooks/useZoomConnection";
 
 export default function Dashboard() {
@@ -19,14 +20,36 @@ export default function Dashboard() {
       <SidebarInset>
         <DashboardHeader />
         <div className="p-6 space-y-6">
+          {/* Connection Status & Quick Actions */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <ZoomConnectionCard />
+            </div>
+            <div>
+              <QuickActionsCard />
+            </div>
+          </div>
+
           {hasZoomConnection ? (
             <>
-              <MetricsCards />
-              <ChartsSection />
-              <DataTables />
+              {/* Webinar Metrics */}
+              <WebinarMetricsCards />
+              
+              {/* Analytics Charts */}
+              <WebinarChartsSection />
+              
+              {/* Data Tables */}
+              <WebinarDataTables />
             </>
           ) : (
-            <CSVUploadSection />
+            <div className="text-center py-12">
+              <div className="max-w-md mx-auto">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect Your Zoom Account</h3>
+                <p className="text-gray-600 mb-6">
+                  Connect your Zoom account to start analyzing your webinar data and unlock powerful insights.
+                </p>
+              </div>
+            </div>
           )}
         </div>
       </SidebarInset>

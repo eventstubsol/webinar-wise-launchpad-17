@@ -26,6 +26,9 @@ import EmailAnalytics from '@/pages/EmailAnalytics';
 import Personalization from '@/pages/Personalization';
 import Segmentation from '@/pages/Segmentation';
 import PredictiveAnalytics from '@/pages/PredictiveAnalytics';
+import Reports from '@/pages/Reports';
+import Integrations from '@/pages/Integrations';
+import AIInsights from '@/pages/AIInsights';
 
 const App = () => {
   return (
@@ -43,23 +46,29 @@ const App = () => {
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/unsubscribe" element={<Unsubscribe />} />
 
+                {/* Core Webinar Features */}
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/webinars" element={<ProtectedRoute><WebinarList /></ProtectedRoute>} />
                 <Route path="/webinars/:id" element={<ProtectedRoute><WebinarDetailView /></ProtectedRoute>} />
+                <Route path="/advanced-analytics" element={<ProtectedRoute><AdvancedAnalytics /></ProtectedRoute>} />
 
+                {/* Email Marketing */}
                 <Route path="/templates" element={<ProtectedRoute><EmailTemplates /></ProtectedRoute>} />
                 <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
                 <Route path="/email-analytics" element={<ProtectedRoute><EmailAnalytics /></ProtectedRoute>} />
                 
-                {/* Advanced Features */}
+                {/* Data Management */}
+                <Route path="/csv-upload" element={<ProtectedRoute><CSVUpload /></ProtectedRoute>} />
+                <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+                <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
+
+                {/* AI & Advanced Features */}
+                <Route path="/ai-insights" element={<ProtectedRoute><AIInsights /></ProtectedRoute>} />
                 <Route path="/personalization" element={<ProtectedRoute><Personalization /></ProtectedRoute>} />
                 <Route path="/segmentation" element={<ProtectedRoute><Segmentation /></ProtectedRoute>} />
                 <Route path="/predictive-analytics" element={<ProtectedRoute><PredictiveAnalytics /></ProtectedRoute>} />
                 
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-
-                <Route path="/advanced-analytics" element={<ProtectedRoute><AdvancedAnalytics /></ProtectedRoute>} />
-                <Route path="/csv-upload" element={<ProtectedRoute><CSVUpload /></ProtectedRoute>} />
 
                 <Route path="/auth/zoom/callback" element={<ProtectedRoute><ZoomCallbackHandler /></ProtectedRoute>} />
 
