@@ -44,7 +44,7 @@ export const useZoomSync = (connectionId?: string) => {
         description: `${syncType === 'initial' ? 'Full' : 'Incremental'} sync has been initiated.`,
       });
 
-      // Poll for sync status
+      // Poll for sync status using the database-generated sync ID
       const syncId = data.syncId;
       pollSyncStatus(syncId);
 

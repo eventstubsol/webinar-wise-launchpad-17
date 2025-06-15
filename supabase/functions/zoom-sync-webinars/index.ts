@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -156,12 +157,12 @@ serve(async (req) => {
       );
     }
 
-    // Generate unique sync ID
-    const syncId = `sync_${Date.now()}_${requestBody.connectionId.slice(-8)}`;
+    // Generate tracking ID for this sync operation
+    const trackingId = `sync_${Date.now()}_${requestBody.connectionId.slice(-8)}`;
     
     // Create sync operation
     const syncOperation: SyncOperation = {
-      id: syncId,
+      id: trackingId,
       connectionId: requestBody.connectionId,
       userId: user.id,
       syncType: requestBody.syncType,
@@ -171,11 +172,10 @@ serve(async (req) => {
       createdAt: new Date()
     };
 
-    // Create sync log entry
+    // Create sync log entry - let Supabase generate the UUID for id field
     const { data: syncLog, error: syncLogError } = await supabase
       .from('zoom_sync_logs')
       .insert({
-        id: syncId,
         connection_id: requestBody.connectionId,
         sync_type: requestBody.syncType,
         sync_status: 'started',
@@ -201,13 +201,14 @@ serve(async (req) => {
     }
 
     // Start background sync process with real API calls
-    EdgeRuntime.waitUntil(processSyncOperation(supabase, syncOperation, connection));
+    EdgeRuntime.waitUntil(processSyncOperation(supabase, syncOperation, connection, syncLog.id));
 
-    // Return immediate response with sync ID
+    // Return immediate response with the database-generated sync ID
     return new Response(
       JSON.stringify({
         success: true,
-        syncId: syncId,
+        syncId: syncLog.id,
+        trackingId: trackingId,
         status: 'started',
         estimatedDuration: getEstimatedDuration(requestBody.syncType),
         message: `${requestBody.syncType} sync initiated successfully`
@@ -237,7 +238,8 @@ serve(async (req) => {
 async function processSyncOperation(
   supabase: any, 
   operation: SyncOperation, 
-  connection: any
+  connection: any,
+  syncLogId: string
 ): Promise<void> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30 * 60 * 1000); // 30 minute timeout
@@ -246,19 +248,19 @@ async function processSyncOperation(
     console.log(`Starting background sync: ${operation.id}`);
     
     // Update sync status to in_progress
-    await updateSyncStatus(supabase, operation.id, 'in_progress');
+    await updateSyncStatus(supabase, syncLogId, 'in_progress');
 
     // Perform the actual sync with real Zoom API calls
     let result;
     switch (operation.syncType) {
       case 'single':
-        result = await syncSingleWebinarWithAPI(supabase, operation, connection, controller.signal);
+        result = await syncSingleWebinarWithAPI(supabase, operation, connection, controller.signal, syncLogId);
         break;
       case 'incremental':
-        result = await syncIncrementalWebinarsWithAPI(supabase, operation, connection, controller.signal);
+        result = await syncIncrementalWebinarsWithAPI(supabase, operation, connection, controller.signal, syncLogId);
         break;
       case 'initial':
-        result = await syncInitialWebinarsWithAPI(supabase, operation, connection, controller.signal);
+        result = await syncInitialWebinarsWithAPI(supabase, operation, connection, controller.signal, syncLogId);
         break;
       default:
         throw new Error(`Unknown sync type: ${operation.syncType}`);
@@ -275,7 +277,7 @@ async function processSyncOperation(
         failed_items: result.failed || 0,
         updated_at: new Date().toISOString()
       })
-      .eq('id', operation.id);
+      .eq('id', syncLogId);
 
     // Update connection last_sync_at
     await supabase
@@ -301,7 +303,7 @@ async function processSyncOperation(
         error_details: { error: error instanceof Error ? error.stack : error },
         updated_at: new Date().toISOString()
       })
-      .eq('id', operation.id);
+      .eq('id', syncLogId);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -312,13 +314,14 @@ async function syncSingleWebinarWithAPI(
   supabase: any, 
   operation: SyncOperation, 
   connection: any, 
-  signal: AbortSignal
+  signal: AbortSignal,
+  syncLogId: string
 ): Promise<{ total: number; processed: number; failed: number }> {
   if (!operation.webinarId) {
     throw new Error('Webinar ID is required for single webinar sync');
   }
 
-  await updateSyncProgress(supabase, operation.id, 1, 0, 'Fetching webinar details from Zoom API...');
+  await updateSyncProgress(supabase, syncLogId, 1, 0, 'Fetching webinar details from Zoom API...');
 
   try {
     // Make real API calls to Zoom
@@ -333,7 +336,7 @@ async function syncSingleWebinarWithAPI(
     // Save to database using DatabaseSyncOperations logic
     await saveWebinarToDatabase(supabase, webinarData, registrants, participants, operation.connectionId);
 
-    await updateSyncProgress(supabase, operation.id, 1, 1, 'Webinar sync completed');
+    await updateSyncProgress(supabase, syncLogId, 1, 1, 'Webinar sync completed');
     return { total: 1, processed: 1, failed: 0 };
   } catch (error) {
     console.error('Failed to sync single webinar:', error);
@@ -345,9 +348,10 @@ async function syncIncrementalWebinarsWithAPI(
   supabase: any, 
   operation: SyncOperation, 
   connection: any, 
-  signal: AbortSignal
+  signal: AbortSignal,
+  syncLogId: string
 ): Promise<{ total: number; processed: number; failed: number }> {
-  await updateSyncProgress(supabase, operation.id, 0, 0, 'Starting incremental sync...');
+  await updateSyncProgress(supabase, syncLogId, 0, 0, 'Starting incremental sync...');
 
   try {
     // Get webinars from last sync date
@@ -376,7 +380,7 @@ async function syncIncrementalWebinarsWithAPI(
 
       await updateSyncProgress(
         supabase, 
-        operation.id, 
+        syncLogId, 
         webinarList.length, 
         processed, 
         `Processing webinar ${processed + failed + 1} of ${webinarList.length}...`
@@ -394,9 +398,10 @@ async function syncInitialWebinarsWithAPI(
   supabase: any, 
   operation: SyncOperation, 
   connection: any, 
-  signal: AbortSignal
+  signal: AbortSignal,
+  syncLogId: string
 ): Promise<{ total: number; processed: number; failed: number }> {
-  await updateSyncProgress(supabase, operation.id, 0, 0, 'Starting initial sync...');
+  await updateSyncProgress(supabase, syncLogId, 0, 0, 'Starting initial sync...');
 
   try {
     // Get all webinars
@@ -425,7 +430,7 @@ async function syncInitialWebinarsWithAPI(
 
       await updateSyncProgress(
         supabase, 
-        operation.id, 
+        syncLogId, 
         webinarList.length, 
         processed, 
         `Processing webinar ${processed + failed + 1} of ${webinarList.length}...`
