@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,6 @@ interface SyncControlsProps {
 export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [isSyncing, setIsSyncing] = useState(false);
   
   const {
     startInitialSync,
@@ -61,12 +60,11 @@ export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
   };
 
   const handleManualSync = async (syncType: 'initial' | 'incremental') => {
-    setIsSyncing(true);
     try {
       if (syncType === 'initial') {
-        await startInitialSync(connection.id);
+        await startInitialSync();
       } else {
-        await startIncrementalSync(connection.id);
+        await startIncrementalSync();
       }
       toast({
         title: "Sync Started",
@@ -79,8 +77,6 @@ export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
         description: errorMessage,
         variant: "destructive",
       });
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -115,12 +111,12 @@ export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
           </div>
           <Button
             onClick={() => handleManualSync('incremental')}
-            disabled={syncInProgress}
+            disabled={isStarting}
             size="sm"
             variant="outline"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${syncInProgress ? 'animate-spin' : ''}`} />
-            {syncInProgress ? 'Syncing...' : 'Quick Sync'}
+            <RefreshCw className={`h-4 w-4 mr-2 ${isStarting ? 'animate-spin' : ''}`} />
+            {isStarting ? 'Syncing...' : 'Quick Sync'}
           </Button>
         </div>
 
@@ -134,12 +130,12 @@ export const SyncControls: React.FC<SyncControlsProps> = ({ connection }) => {
           </div>
           <Button
             onClick={() => handleManualSync('initial')}
-            disabled={syncInProgress}
+            disabled={isStarting}
             size="sm"
             variant="outline"
           >
-            <Zap className={`h-4 w-4 mr-2 ${syncInProgress ? 'animate-spin' : ''}`} />
-            {syncInProgress ? 'Syncing...' : 'Full Sync'}
+            <Zap className={`h-4 w-4 mr-2 ${isStarting ? 'animate-spin' : ''}`} />
+            {isStarting ? 'Syncing...' : 'Full Sync'}
           </Button>
         </div>
       </div>
