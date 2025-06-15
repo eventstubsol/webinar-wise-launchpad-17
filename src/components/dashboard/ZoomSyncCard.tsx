@@ -2,7 +2,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Database, Calendar, Users, Clock, AlertTriangle } from 'lucide-react';
+import { Database, Calendar, Users, Clock, AlertTriangle, Settings } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
 export function ZoomSyncCard() {
-  const { connection, isConnected } = useZoomConnection();
+  const { connection, isConnected, isExpired } = useZoomConnection();
 
   // Get sync statistics
   const { data: syncStats } = useQuery({
@@ -30,7 +30,7 @@ export function ZoomSyncCard() {
             .eq('connection_id', connection.id)
             .order('created_at', { ascending: false })
             .limit(1)
-            .maybeSingle() // Changed from .single() to .maybeSingle()
+            .maybeSingle()
         ]);
 
         return {
@@ -50,9 +50,8 @@ export function ZoomSyncCard() {
       }
     },
     enabled: !!connection?.id,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
     retry: (failureCount, error) => {
-      // Don't retry on 4xx errors to prevent spam
       const hasStatus = error && typeof error === 'object' && 'status' in error;
       const status = hasStatus ? (error as any).status : null;
       
@@ -99,10 +98,16 @@ export function ZoomSyncCard() {
             Webinar Data Sync
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <p className="text-muted-foreground text-sm">
             Connect your Zoom account to sync webinar data and view analytics.
           </p>
+          <Button asChild variant="default" size="sm">
+            <Link to="/settings">
+              <Settings className="w-4 h-4 mr-2" />
+              Connect Zoom Account
+            </Link>
+          </Button>
         </CardContent>
       </Card>
     );
@@ -137,6 +142,24 @@ export function ZoomSyncCard() {
           </div>
         </div>
 
+        {/* Show authentication error prominently */}
+        {isExpired && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+              <div className="text-sm">
+                <p className="text-red-800 font-medium">Connection Expired</p>
+                <p className="text-red-700">Your Zoom authentication has expired. Please reconnect your account to resume syncing.</p>
+                <Button asChild variant="outline" size="sm" className="mt-2">
+                  <Link to="/settings">
+                    Reconnect Zoom Account
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Show error message if last sync failed */}
         {syncStats?.lastSyncStatus === 'failed' && syncStats?.lastSyncError && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3">
@@ -146,9 +169,16 @@ export function ZoomSyncCard() {
                 <p className="text-red-800 font-medium">Last sync failed</p>
                 <p className="text-red-700">{syncStats.lastSyncError}</p>
                 {syncStats.lastSyncError.includes('401') && (
-                  <p className="text-red-600 mt-1">
-                    This usually means your Zoom authentication has expired. Try reconnecting your Zoom account.
-                  </p>
+                  <div className="mt-2">
+                    <p className="text-red-600">
+                      This usually means your Zoom authentication has expired.
+                    </p>
+                    <Button asChild variant="outline" size="sm" className="mt-1">
+                      <Link to="/settings">
+                        Reconnect Zoom Account
+                      </Link>
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
@@ -163,7 +193,7 @@ export function ZoomSyncCard() {
           </Button>
         </div>
 
-        {syncStats?.totalWebinars === 0 && (
+        {syncStats?.totalWebinars === 0 && !isExpired && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-sm text-blue-800">
               No webinar data found. Go to the Sync Center to import all your webinars from Zoom.

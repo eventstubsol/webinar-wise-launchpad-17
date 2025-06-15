@@ -12,11 +12,13 @@ import { useZoomSync } from '@/hooks/useZoomSync';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 export function DashboardHeader() {
   const { user, profile } = useAuth();
   const { connection, isConnected, isExpired, isLoading } = useZoomConnection();
   const { startSync, isSyncing } = useZoomSync(connection?.id);
+  const { toast } = useToast();
 
   // Get the last sync timestamp
   const { data: lastSyncData } = useQuery({
@@ -35,7 +37,6 @@ export function DashboardHeader() {
           .maybeSingle();
 
         if (error) {
-          // This will be caught by the outer catch block, but it's good practice.
           throw error;
         }
 
@@ -48,7 +49,6 @@ export function DashboardHeader() {
     enabled: !!connection?.id,
     refetchInterval: 30000,
     retry: (failureCount, error: any) => {
-      // Don't retry on 4xx errors, which indicate a client-side or data issue.
       if (error?.status >= 400 && error?.status < 500) {
         return false;
       }
@@ -105,7 +105,25 @@ export function DashboardHeader() {
   };
 
   const handleSyncClick = () => {
-    if (isConnected && !isSyncing) {
+    if (!isConnected) {
+      toast({
+        title: "Connection Required",
+        description: "Please connect your Zoom account in Settings to sync data.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isExpired) {
+      toast({
+        title: "Connection Expired",
+        description: "Your Zoom connection has expired. Please reconnect in Settings.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isSyncing) {
       startSync('incremental');
     }
   };
@@ -140,12 +158,12 @@ export function DashboardHeader() {
           
           <Button
             onClick={handleSyncClick}
-            disabled={!isConnected || isSyncing}
+            disabled={isSyncing}
             size="sm"
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            Sync
+            {isSyncing ? 'Syncing...' : 'Sync'}
           </Button>
         </div>
 
