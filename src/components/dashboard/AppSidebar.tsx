@@ -28,7 +28,8 @@ import {
   Upload,
   Download,
   Activity,
-  Zap
+  Zap,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -121,6 +122,14 @@ export const AppSidebar = () => {
           <SidebarGroupLabel>Data Management</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <Button asChild variant={isActive('/sync-center') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                  <Link to="/sync-center">
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    <span>Sync Center</span>
+                  </Link>
+                </Button>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <Button asChild variant={isActive('/csv-upload') ? 'secondary' : 'ghost'} className="w-full justify-start">
                   <Link to="/csv-upload">

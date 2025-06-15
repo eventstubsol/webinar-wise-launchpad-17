@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +7,7 @@ import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { ZoomConnectButton } from '@/components/zoom/ZoomConnectButton';
 
 export function ZoomConnectionCard() {
-  const { connection, isLoading, isConnected, isExpired, refetch } = useZoomConnection();
+  const { connection, isLoading, isConnected, isExpired } = useZoomConnection();
 
   const getStatusInfo = () => {
     if (isLoading) {
@@ -49,10 +48,6 @@ export function ZoomConnectionCard() {
   const status = getStatusInfo();
   const StatusIcon = status.icon;
 
-  const handleSyncNow = () => {
-    refetch();
-  };
-
   return (
     <Card>
       <CardHeader>
@@ -83,10 +78,6 @@ export function ZoomConnectionCard() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleSyncNow}>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Sync Now
-              </Button>
               <Button variant="ghost" size="sm">
                 <Settings className="w-4 h-4 mr-2" />
                 Settings

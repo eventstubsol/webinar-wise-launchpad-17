@@ -29,6 +29,7 @@ import PredictiveAnalytics from '@/pages/PredictiveAnalytics';
 import Reports from '@/pages/Reports';
 import Integrations from '@/pages/Integrations';
 import AIInsights from '@/pages/AIInsights';
+import SyncCenter from '@/pages/SyncCenter';
 
 const App = () => {
   return (
@@ -58,6 +59,7 @@ const App = () => {
                 <Route path="/email-analytics" element={<ProtectedRoute><EmailAnalytics /></ProtectedRoute>} />
                 
                 {/* Data Management */}
+                <Route path="/sync-center" element={<ProtectedRoute><SyncCenter /></ProtectedRoute>} />
                 <Route path="/csv-upload" element={<ProtectedRoute><CSVUpload /></ProtectedRoute>} />
                 <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
                 <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />

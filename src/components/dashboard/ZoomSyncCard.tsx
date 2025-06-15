@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +5,8 @@ import { Database, Calendar, Users, Clock } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { SyncWebinarsButton } from '@/components/zoom/sync/SyncWebinarsButton';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 
 export function ZoomSyncCard() {
   const { connection, isConnected } = useZoomConnection();
@@ -115,17 +115,17 @@ export function ZoomSyncCard() {
         </div>
 
         <div className="pt-2 border-t">
-          <SyncWebinarsButton 
-            connectionId={connection?.id}
-            variant="outline"
-            size="sm"
-          />
+          <Button asChild variant="outline" size="sm">
+            <Link to="/sync-center">
+              Go to Sync Center
+            </Link>
+          </Button>
         </div>
 
         {syncStats?.totalWebinars === 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-sm text-blue-800">
-              No webinar data found. Click "Full Sync" to import all your webinars from Zoom.
+              No webinar data found. Go to the Sync Center to import all your webinars from Zoom.
             </p>
           </div>
         )}

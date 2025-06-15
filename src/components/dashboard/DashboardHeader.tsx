@@ -8,11 +8,10 @@ import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { Search, Bell, RefreshCw, Wifi, WifiOff, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { SyncWebinarsButton } from '@/components/zoom/sync/SyncWebinarsButton';
 
 export function DashboardHeader() {
   const { user, profile } = useAuth();
-  const { connection, isConnected, isExpired, isLoading } = useZoomConnection();
+  const { isConnected, isExpired, isLoading } = useZoomConnection();
 
   const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -32,19 +31,6 @@ export function DashboardHeader() {
 
   const status = getConnectionStatus();
   const StatusIcon = status.icon;
-
-  const formatLastSync = (dateString: string | null) => {
-    if (!dateString) return 'Never';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
-    return date.toLocaleDateString();
-  };
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-4 border-b px-4">
@@ -67,18 +53,6 @@ export function DashboardHeader() {
           <StatusIcon className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
           Zoom {status.label}
         </Badge>
-
-        {isConnected && (
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
-            <span>Last sync: {formatLastSync(connection?.last_sync_at || null)}</span>
-            <SyncWebinarsButton 
-              connectionId={connection?.id}
-              variant="outline"
-              size="sm"
-              showProgress={false}
-            />
-          </div>
-        )}
 
         <Button variant="ghost" size="sm">
           <Bell className="w-4 h-4" />
