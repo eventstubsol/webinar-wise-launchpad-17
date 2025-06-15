@@ -77,58 +77,45 @@ export class TokenUtils {
     // Check if Web Crypto API is available
     if (!TokenEncryptionService.isSupported()) {
       try {
-        return atob(encryptedToken); // Fallback for unsupported environments
+        return atob(encryptedToken);
       } catch (error) {
-        console.error('Base64 decoding failed:', error);
-        throw new Error('Failed to decrypt token');
+        console.error('Base64 decode failed:', error);
+        throw new Error('Failed to decrypt token - unsupported environment');
       }
     }
 
     try {
       return await TokenEncryptionService.decryptToken(encryptedToken, userId);
     } catch (error) {
-      // Try fallback base64 decoding for legacy tokens
-      try {
-        console.warn('Secure decryption failed, trying base64 fallback');
-        return atob(encryptedToken);
-      } catch (fallbackError) {
-        console.error('Both secure and fallback decryption failed');
-        throw new Error('Failed to decrypt token');
-      }
+      console.error('Secure decryption failed:', error);
+      throw new Error('Failed to decrypt token');
     }
   }
 
   /**
-   * Rotate encryption key for user tokens
+   * Rotate encryption for existing tokens (for migration)
    */
-  static async rotateEncryptionKey(userId: string): Promise<void> {
-    if (!TokenEncryptionService.isSupported()) {
-      console.warn('Web Crypto API not supported, cannot rotate encryption key');
-      return;
+  static async rotateEncryptionKey(oldEncryptedToken: string, userId: string): Promise<string> {
+    try {
+      // First decrypt with old method
+      const decrypted = await this.decryptToken(oldEncryptedToken, userId);
+      // Then encrypt with new method
+      return await this.encryptToken(decrypted, userId);
+    } catch (error) {
+      console.error('Token rotation failed:', error);
+      throw error;
     }
-
-    return await TokenEncryptionService.rotateEncryptionKey(userId);
   }
 
   /**
-   * Validate token decryption health
+   * Validate that token can be decrypted successfully
    */
   static async validateTokenDecryption(encryptedToken: string, userId: string): Promise<boolean> {
-    // Server-to-Server tokens are always valid if they're placeholders
-    if (this.isServerToServerPlaceholder(encryptedToken)) {
-      const decrypted = this.decryptServerToServerToken(encryptedToken);
-      return decrypted.includes('SERVER_TO_SERVER_');
+    try {
+      const decrypted = await this.decryptToken(encryptedToken, userId);
+      return decrypted.length > 0;
+    } catch {
+      return false;
     }
-
-    if (!TokenEncryptionService.isSupported()) {
-      try {
-        atob(encryptedToken);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-
-    return await TokenEncryptionService.validateTokenDecryption(encryptedToken, userId);
   }
 }

@@ -10,7 +10,7 @@ export class SimpleTokenEncryption {
   static async encryptToken(token: string, userKey: string): Promise<string> {
     try {
       // Generate a simple key from user information
-      const keyMaterial = new TextEncoder().encode(userKey);
+      const keyMaterial = new TextEncoder().encode(userKey + (Deno.env.get('ENCRYPTION_SALT') || 'webinar-wise-salt'));
       const key = await crypto.subtle.importKey(
         'raw',
         await crypto.subtle.digest('SHA-256', keyMaterial),
@@ -41,6 +41,47 @@ export class SimpleTokenEncryption {
       console.error('Token encryption failed:', error);
       // Fallback to base64 encoding
       return btoa(token);
+    }
+  }
+
+  static async decryptToken(encryptedToken: string, userKey: string): Promise<string> {
+    try {
+      // Try to decrypt assuming it's encrypted
+      const keyMaterial = new TextEncoder().encode(userKey + (Deno.env.get('ENCRYPTION_SALT') || 'webinar-wise-salt'));
+      const key = await crypto.subtle.importKey(
+        'raw',
+        await crypto.subtle.digest('SHA-256', keyMaterial),
+        this.ALGORITHM,
+        false,
+        ['decrypt']
+      );
+
+      const encryptedBytes = Uint8Array.from(atob(encryptedToken), c => c.charCodeAt(0));
+      
+      if (encryptedBytes.length < this.IV_LENGTH) {
+        throw new Error('Invalid encrypted token format');
+      }
+
+      // Extract IV and encrypted data
+      const iv = encryptedBytes.slice(0, this.IV_LENGTH);
+      const encryptedData = encryptedBytes.slice(this.IV_LENGTH);
+
+      const decryptedBytes = await crypto.subtle.decrypt(
+        { name: this.ALGORITHM, iv: iv },
+        key,
+        encryptedData
+      );
+
+      return new TextDecoder().decode(decryptedBytes);
+    } catch (error) {
+      console.log('Decryption failed, trying base64 decode:', error.message);
+      // Fallback to base64 decoding for non-encrypted tokens
+      try {
+        return atob(encryptedToken);
+      } catch (base64Error) {
+        console.error('Base64 decode also failed:', base64Error);
+        throw new Error('Failed to decrypt token');
+      }
     }
   }
 }

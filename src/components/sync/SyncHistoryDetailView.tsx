@@ -1,276 +1,233 @@
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Clock, 
-  Database, 
-  AlertTriangle, 
   CheckCircle, 
-  XCircle,
-  Activity,
-  Zap,
-  Users
+  XCircle, 
+  Loader2, 
+  AlertTriangle,
+  Info,
+  Database,
+  Zap
 } from 'lucide-react';
 import { format, formatDuration, intervalToDuration } from 'date-fns';
 
-interface SyncHistoryEntry {
-  id: string;
-  sync_type: string;
-  sync_status: string;
-  started_at: string;
-  completed_at: string | null;
-  total_items: number | null;
-  processed_items: number | null;
-  failed_items: number | null;
-  api_calls_made: number | null;
-  rate_limit_hits: number | null;
-  error_message: string | null;
-  error_details: any;
-  duration_seconds: number | null;
-}
-
 interface SyncHistoryDetailViewProps {
-  syncEntry: SyncHistoryEntry;
-  performanceMetrics?: {
-    avgWebinarSyncTime: number;
-    totalApiCalls: number;
-    dataVolumeSynced: number;
-  };
+  syncEntry: any;
 }
 
 export const SyncHistoryDetailView: React.FC<SyncHistoryDetailViewProps> = ({
   syncEntry,
-  performanceMetrics,
 }) => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'failed':
-        return <XCircle className="h-5 w-5 text-red-500" />;
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      case 'in_progress':
+      case 'started':
+        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
       case 'cancelled':
-        return <XCircle className="h-5 w-5 text-gray-500" />;
+        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
       default:
-        return <Activity className="h-5 w-5 text-blue-500" />;
+        return <Clock className="h-4 w-4 text-gray-400" />;
     }
   };
 
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'secondary';
-      case 'failed':
-        return 'destructive';
-      case 'cancelled':
-        return 'outline';
-      default:
-        return 'default';
-    }
-  };
-
-  const formatSyncDuration = () => {
-    if (!syncEntry.started_at || !syncEntry.completed_at) return 'N/A';
-    
+  const formatSyncDuration = (start: string, end: string | null): string => {
+    if (!start || !end) return '-';
     try {
-      const duration = intervalToDuration({
-        start: new Date(syncEntry.started_at),
-        end: new Date(syncEntry.completed_at),
-      });
-      return formatDuration(duration, { format: ['hours', 'minutes', 'seconds'] }) || '< 1 second';
-    } catch {
-      return 'N/A';
+      const duration = intervalToDuration({ start: new Date(start), end: new Date(end) });
+      return formatDuration(duration, { format: ['minutes', 'seconds'], zero: false }) || '< 1 second';
+    } catch (e) {
+      return '-';
     }
-  };
-
-  const getSuccessRate = () => {
-    if (!syncEntry.total_items || syncEntry.total_items === 0) return 0;
-    const successful = (syncEntry.processed_items || 0) - (syncEntry.failed_items || 0);
-    return Math.round((successful / syncEntry.total_items) * 100);
   };
 
   const getProgressPercentage = () => {
     if (!syncEntry.total_items || syncEntry.total_items === 0) return 0;
-    return Math.round(((syncEntry.processed_items || 0) / syncEntry.total_items) * 100);
+    return Math.round((syncEntry.processed_items / syncEntry.total_items) * 100);
+  };
+
+  const formatCurrentStage = (stage: string | null, webinarId: string | null): string => {
+    if (!stage) return 'Not started';
+    
+    const stageLabels: { [key: string]: string } = {
+      'initializing': 'Initializing sync operation',
+      'fetching_webinar_list': 'Fetching webinar list from Zoom',
+      'fetching_recent_webinars': 'Fetching recent webinars',
+      'starting_webinar': 'Starting webinar sync',
+      'webinar_details': 'Fetching webinar details',
+      'registrants': 'Fetching registrants',
+      'participants': 'Fetching participants',
+      'polls': 'Fetching polls and responses',
+      'qa': 'Fetching Q&A data',
+      'recordings': 'Fetching recordings',
+      'webinar_completed': 'Webinar sync completed',
+      'webinar_failed': 'Webinar sync failed',
+      'completed': 'Sync completed successfully',
+      'failed': 'Sync failed'
+    };
+
+    const label = stageLabels[stage] || stage;
+    return webinarId ? `${label} (Webinar: ${webinarId})` : label;
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              {getStatusIcon(syncEntry.sync_status)}
-              {syncEntry.sync_type.replace('_', ' ').toUpperCase()} Sync
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Badge variant={getStatusBadgeVariant(syncEntry.sync_status)}>
-                {syncEntry.sync_status}
-              </Badge>
-              <span className="text-sm text-muted-foreground">
-                {format(new Date(syncEntry.started_at), 'MMM d, yyyy, p')}
+    <div className="space-y-4">
+      {/* Status Overview */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="flex items-center gap-2">
+          {getStatusIcon(syncEntry.sync_status)}
+          <div>
+            <div className="text-sm font-medium">Status</div>
+            <div className="text-xs text-muted-foreground capitalize">
+              {syncEntry.sync_status.replace('_', ' ')}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Database className="h-4 w-4 text-blue-500" />
+          <div>
+            <div className="text-sm font-medium">Items</div>
+            <div className="text-xs text-muted-foreground">
+              {syncEntry.processed_items || 0} / {syncEntry.total_items || 0}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 text-purple-500" />
+          <div>
+            <div className="text-sm font-medium">Duration</div>
+            <div className="text-xs text-muted-foreground">
+              {formatSyncDuration(syncEntry.started_at, syncEntry.completed_at)}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Zap className="h-4 w-4 text-green-500" />
+          <div>
+            <div className="text-sm font-medium">API Calls</div>
+            <div className="text-xs text-muted-foreground">
+              {syncEntry.api_calls_made || 0}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      {syncEntry.total_items > 0 && (
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>Progress</span>
+            <span>{getProgressPercentage()}%</span>
+          </div>
+          <Progress value={getProgressPercentage()} className="h-2" />
+        </div>
+      )}
+
+      {/* Current Stage */}
+      {syncEntry.sync_stage && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <div className="flex items-center gap-2 text-blue-800">
+            <Info className="h-4 w-4" />
+            <span className="font-medium">Current Stage:</span>
+          </div>
+          <p className="text-sm text-blue-700 mt-1">
+            {formatCurrentStage(syncEntry.sync_stage, syncEntry.current_webinar_id)}
+          </p>
+          {syncEntry.stage_progress_percentage !== null && (
+            <div className="mt-2">
+              <Progress value={syncEntry.stage_progress_percentage} className="h-1" />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Timing Details */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <h4 className="font-medium text-sm">Timing</h4>
+          <div className="text-xs space-y-1">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Started:</span>
+              <span>{format(new Date(syncEntry.started_at), 'MMM d, HH:mm:ss')}</span>
+            </div>
+            {syncEntry.completed_at && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Completed:</span>
+                <span>{format(new Date(syncEntry.completed_at), 'MMM d, HH:mm:ss')}</span>
+              </div>
+            )}
+            {syncEntry.duration_seconds && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Duration:</span>
+                <span>{syncEntry.duration_seconds}s</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h4 className="font-medium text-sm">Performance</h4>
+          <div className="text-xs space-y-1">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Success Rate:</span>
+              <span>
+                {syncEntry.total_items > 0 
+                  ? `${Math.round(((syncEntry.processed_items || 0) / syncEntry.total_items) * 100)}%`
+                  : '-'
+                }
               </span>
             </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Failed Items:</span>
+              <span>{syncEntry.failed_items || 0}</span>
+            </div>
+            {syncEntry.rate_limit_hits > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Rate Limits:</span>
+                <span className="text-yellow-600">{syncEntry.rate_limit_hits}</span>
+              </div>
+            )}
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold">{syncEntry.total_items || 0}</div>
-              <div className="text-sm text-muted-foreground">Total Items</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
-                {(syncEntry.processed_items || 0) - (syncEntry.failed_items || 0)}
-              </div>
-              <div className="text-sm text-muted-foreground">Successful</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-red-600">{syncEntry.failed_items || 0}</div>
-              <div className="text-sm text-muted-foreground">Failed</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold">{formatSyncDuration()}</div>
-              <div className="text-sm text-muted-foreground">Duration</div>
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="mt-4 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Progress</span>
-              <span>{getProgressPercentage()}%</span>
-            </div>
-            <Progress value={getProgressPercentage()} className="h-2" />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Performance Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Zap className="h-4 w-4" />
-              API Performance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>API Calls Made:</span>
-                <span className="font-medium">{syncEntry.api_calls_made || 0}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Rate Limit Hits:</span>
-                <span className="font-medium text-orange-600">
-                  {syncEntry.rate_limit_hits || 0}
-                </span>
-              </div>
-              {performanceMetrics && (
-                <div className="flex justify-between text-sm">
-                  <span>Avg Time/Item:</span>
-                  <span className="font-medium">
-                    {performanceMetrics.avgWebinarSyncTime.toFixed(1)}s
-                  </span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Database className="h-4 w-4" />
-              Data Volume
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Success Rate:</span>
-                <span className="font-medium text-green-600">{getSuccessRate()}%</span>
-              </div>
-              {performanceMetrics && (
-                <>
-                  <div className="flex justify-between text-sm">
-                    <span>Data Synced:</span>
-                    <span className="font-medium">
-                      {(performanceMetrics.dataVolumeSynced / 1024 / 1024).toFixed(1)} MB
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Total API Calls:</span>
-                    <span className="font-medium">{performanceMetrics.totalApiCalls}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Processing Stats
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Items/Min:</span>
-                <span className="font-medium">
-                  {syncEntry.duration_seconds 
-                    ? Math.round(((syncEntry.processed_items || 0) / syncEntry.duration_seconds) * 60)
-                    : 0}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Error Rate:</span>
-                <span className="font-medium text-red-600">
-                  {syncEntry.total_items 
-                    ? Math.round(((syncEntry.failed_items || 0) / syncEntry.total_items) * 100)
-                    : 0}%
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        </div>
       </div>
 
       {/* Error Details */}
       {syncEntry.error_message && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-4 w-4" />
-              Error Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div>
-                <div className="text-sm font-medium mb-1">Error Message:</div>
-                <div className="text-sm bg-red-50 p-3 rounded-md border border-red-200">
-                  {syncEntry.error_message}
-                </div>
+        <Alert variant="destructive">
+          <XCircle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Error:</strong> {syncEntry.error_message}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Additional Error Details */}
+      {syncEntry.error_details && syncEntry.error_details.errors && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+          <h4 className="font-medium text-sm text-red-800 mb-2">Detailed Errors:</h4>
+          <div className="space-y-1">
+            {syncEntry.error_details.errors.slice(0, 5).map((error: string, index: number) => (
+              <div key={index} className="text-xs text-red-700">
+                • {error}
               </div>
-              
-              {syncEntry.error_details && (
-                <div>
-                  <div className="text-sm font-medium mb-1">Additional Details:</div>
-                  <div className="text-xs bg-gray-50 p-3 rounded-md border overflow-auto max-h-40">
-                    <pre>{JSON.stringify(syncEntry.error_details, null, 2)}</pre>
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+            ))}
+            {syncEntry.error_details.errors.length > 5 && (
+              <div className="text-xs text-red-600">
+                ... and {syncEntry.error_details.errors.length - 5} more errors
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

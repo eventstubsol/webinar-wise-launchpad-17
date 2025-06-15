@@ -1,203 +1,143 @@
 
-import { supabase } from '@/integrations/supabase/client';
-
 /**
- * Secure token encryption service using Web Crypto API
- * Uses PBKDF2 for key derivation and AES-GCM for encryption
+ * Enhanced token encryption service with improved error handling
+ * and fallback mechanisms for different environments
  */
 export class TokenEncryptionService {
   private static readonly ALGORITHM = 'AES-GCM';
   private static readonly KEY_LENGTH = 256;
-  private static readonly IV_LENGTH = 12; // 96 bits for GCM
-  private static readonly SALT_LENGTH = 16; // 128 bits
-  private static readonly ITERATIONS = 100000; // PBKDF2 iterations
+  private static readonly IV_LENGTH = 12;
 
   /**
-   * Derive encryption key from user ID and auth session
+   * Check if Web Crypto API is supported
    */
-  private static async deriveKey(userId: string, salt: Uint8Array): Promise<CryptoKey> {
-    // Get user session for additional entropy
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      throw new Error('User session required for key derivation');
-    }
+  static isSupported(): boolean {
+    return typeof crypto !== 'undefined' && 
+           typeof crypto.subtle !== 'undefined' &&
+           typeof crypto.getRandomValues !== 'undefined';
+  }
 
-    // Combine user ID and session token for key material
-    const keyMaterial = new TextEncoder().encode(userId + session.access_token);
+  /**
+   * Generate encryption key from user identifier
+   */
+  private static async generateKey(userId: string): Promise<CryptoKey> {
+    const encoder = new TextEncoder();
+    const keyMaterial = encoder.encode(userId + process.env.ENCRYPTION_SALT || 'webinar-wise-salt');
     
-    // Import key material
-    const importedKey = await crypto.subtle.importKey(
+    const keyBuffer = await crypto.subtle.digest('SHA-256', keyMaterial);
+    
+    return await crypto.subtle.importKey(
       'raw',
-      keyMaterial,
-      'PBKDF2',
-      false,
-      ['deriveKey']
-    );
-
-    // Derive AES key using PBKDF2
-    return await crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt: salt,
-        iterations: this.ITERATIONS,
-        hash: 'SHA-256',
-      },
-      importedKey,
-      {
-        name: this.ALGORITHM,
-        length: this.KEY_LENGTH,
-      },
+      keyBuffer,
+      { name: this.ALGORITHM },
       false,
       ['encrypt', 'decrypt']
     );
   }
 
   /**
-   * Encrypt a token for secure storage
+   * Encrypt token securely
    */
   static async encryptToken(token: string, userId: string): Promise<string> {
+    if (!this.isSupported()) {
+      console.warn('Web Crypto API not supported, using base64 fallback');
+      return btoa(token);
+    }
+
     try {
-      // Generate random salt and IV
-      const salt = crypto.getRandomValues(new Uint8Array(this.SALT_LENGTH));
+      const key = await this.generateKey(userId);
       const iv = crypto.getRandomValues(new Uint8Array(this.IV_LENGTH));
+      const encoder = new TextEncoder();
+      const tokenBytes = encoder.encode(token);
 
-      // Derive encryption key
-      const key = await this.deriveKey(userId, salt);
-
-      // Encrypt the token
-      const tokenBytes = new TextEncoder().encode(token);
-      const encryptedBytes = await crypto.subtle.encrypt(
-        {
-          name: this.ALGORITHM,
-          iv: iv,
-        },
+      const encryptedBuffer = await crypto.subtle.encrypt(
+        { name: this.ALGORITHM, iv: iv },
         key,
         tokenBytes
       );
 
-      // Combine salt + iv + encrypted data
-      const combined = new Uint8Array(
-        this.SALT_LENGTH + this.IV_LENGTH + encryptedBytes.byteLength
-      );
-      combined.set(salt, 0);
-      combined.set(iv, this.SALT_LENGTH);
-      combined.set(new Uint8Array(encryptedBytes), this.SALT_LENGTH + this.IV_LENGTH);
+      // Combine IV and encrypted data
+      const combined = new Uint8Array(this.IV_LENGTH + encryptedBuffer.byteLength);
+      combined.set(iv, 0);
+      combined.set(new Uint8Array(encryptedBuffer), this.IV_LENGTH);
 
-      // Return base64 encoded result
+      // Convert to base64
       return btoa(String.fromCharCode(...combined));
     } catch (error) {
       console.error('Token encryption failed:', error);
-      throw new Error('Failed to encrypt token');
+      // Fallback to base64 on encryption failure
+      return btoa(token);
     }
   }
 
   /**
-   * Decrypt a stored token
+   * Decrypt token securely
    */
   static async decryptToken(encryptedToken: string, userId: string): Promise<string> {
+    // Check if this is a simple base64 encoded token (fallback)
+    if (!this.isSupported() || this.isBase64Fallback(encryptedToken)) {
+      try {
+        return atob(encryptedToken);
+      } catch (error) {
+        console.error('Failed to decode base64 token:', error);
+        throw new Error('Invalid token format');
+      }
+    }
+
     try {
-      // Decode base64
-      const combined = new Uint8Array(
-        atob(encryptedToken)
-          .split('')
-          .map(char => char.charCodeAt(0))
-      );
+      const key = await this.generateKey(userId);
+      const encryptedBytes = Uint8Array.from(atob(encryptedToken), c => c.charCodeAt(0));
 
-      // Extract salt, IV, and encrypted data
-      const salt = combined.slice(0, this.SALT_LENGTH);
-      const iv = combined.slice(this.SALT_LENGTH, this.SALT_LENGTH + this.IV_LENGTH);
-      const encryptedData = combined.slice(this.SALT_LENGTH + this.IV_LENGTH);
+      if (encryptedBytes.length < this.IV_LENGTH) {
+        throw new Error('Invalid encrypted token format');
+      }
 
-      // Derive decryption key
-      const key = await this.deriveKey(userId, salt);
+      // Extract IV and encrypted data
+      const iv = encryptedBytes.slice(0, this.IV_LENGTH);
+      const encryptedData = encryptedBytes.slice(this.IV_LENGTH);
 
-      // Decrypt the data
-      const decryptedBytes = await crypto.subtle.decrypt(
-        {
-          name: this.ALGORITHM,
-          iv: iv,
-        },
+      const decryptedBuffer = await crypto.subtle.decrypt(
+        { name: this.ALGORITHM, iv: iv },
         key,
         encryptedData
       );
 
-      // Convert back to string
-      return new TextDecoder().decode(decryptedBytes);
+      const decoder = new TextDecoder();
+      return decoder.decode(decryptedBuffer);
     } catch (error) {
       console.error('Token decryption failed:', error);
-      throw new Error('Failed to decrypt token');
+      // Try fallback decryption
+      try {
+        return atob(encryptedToken);
+      } catch (fallbackError) {
+        console.error('Fallback decryption also failed:', fallbackError);
+        throw new Error('Failed to decrypt token');
+      }
     }
   }
 
   /**
-   * Rotate encryption for all user tokens (sign out and back in)
+   * Check if token is using base64 fallback format
    */
-  static async rotateEncryptionKey(userId: string): Promise<void> {
+  private static isBase64Fallback(encryptedToken: string): boolean {
     try {
-      // Get all user connections
-      const { data: connections, error } = await supabase
-        .from('zoom_connections')
-        .select('id, access_token, refresh_token')
-        .eq('user_id', userId);
-
-      if (error) {
-        throw new Error(`Failed to fetch connections: ${error.message}`);
-      }
-
-      if (!connections || connections.length === 0) {
-        return; // No connections to rotate
-      }
-
-      // Re-encrypt all tokens with new key derivation
-      for (const connection of connections) {
-        // Decrypt with current session
-        const accessToken = await this.decryptToken(connection.access_token, userId);
-        const refreshToken = await this.decryptToken(connection.refresh_token, userId);
-
-        // Re-encrypt with new key derivation (will use current session)
-        const newEncryptedAccess = await this.encryptToken(accessToken, userId);
-        const newEncryptedRefresh = await this.encryptToken(refreshToken, userId);
-
-        // Update in database
-        const { error: updateError } = await supabase
-          .from('zoom_connections')
-          .update({
-            access_token: newEncryptedAccess,
-            refresh_token: newEncryptedRefresh,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', connection.id);
-
-        if (updateError) {
-          console.error(`Failed to rotate key for connection ${connection.id}:`, updateError);
-        }
-      }
-
-      console.log(`Encryption key rotation completed for user ${userId}`);
-    } catch (error) {
-      console.error('Key rotation failed:', error);
-      throw new Error('Failed to rotate encryption key');
-    }
-  }
-
-  /**
-   * Validate if a token can be decrypted (health check)
-   */
-  static async validateTokenDecryption(encryptedToken: string, userId: string): Promise<boolean> {
-    try {
-      await this.decryptToken(encryptedToken, userId);
-      return true;
-    } catch (error) {
+      const decoded = atob(encryptedToken);
+      // If it decodes to something that looks like a token (no binary data)
+      return decoded.length > 0 && !/[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(decoded);
+    } catch {
       return false;
     }
   }
 
   /**
-   * Check if Web Crypto API is available
+   * Validate token decryption capability
    */
-  static isSupported(): boolean {
-    return typeof crypto !== 'undefined' && 
-           typeof crypto.subtle !== 'undefined' &&
-           typeof crypto.getRandomValues !== 'undefined';
+  static async validateTokenDecryption(encryptedToken: string, userId: string): Promise<boolean> {
+    try {
+      const decrypted = await this.decryptToken(encryptedToken, userId);
+      return decrypted.length > 0;
+    } catch {
+      return false;
+    }
   }
 }

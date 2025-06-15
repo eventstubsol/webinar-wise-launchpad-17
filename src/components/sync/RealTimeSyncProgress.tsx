@@ -1,43 +1,41 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
+  RefreshCw, 
+  Play, 
+  Pause, 
   Loader2, 
-  Square, 
-  Clock, 
   CheckCircle, 
   XCircle, 
-  WifiOff,
-  Wifi 
+  Clock,
+  Activity
 } from 'lucide-react';
-import { useRealTimeSyncProgress } from '@/hooks/useRealTimeSyncProgress';
+import { useZoomConnection } from '@/hooks/useZoomConnection';
+import { useZoomSync } from '@/hooks/useZoomSync';
+import { formatDistanceToNow } from 'date-fns';
 
 interface RealTimeSyncProgressProps {
   connectionId: string;
 }
 
-export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({ 
-  connectionId 
+export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
+  connectionId,
 }) => {
-  const {
-    activeProgress,
-    activeSyncLog,
-    recentWebinars,
-    progressPercentage,
-    estimatedTimeRemaining,
-    isConnected,
-    error,
-    cancelSync
-  } = useRealTimeSyncProgress(connectionId);
-
-  const isActive = activeSyncLog && (
-    activeSyncLog.sync_status === 'started' || 
-    activeSyncLog.sync_status === 'in_progress'
-  );
+  const { connection } = useZoomConnection();
+  const { 
+    isSyncing, 
+    syncProgress, 
+    syncStatus, 
+    currentOperation, 
+    startSync, 
+    lastSyncResult,
+    estimatedTimeRemaining 
+  } = useZoomSync(connectionId);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -45,73 +43,41 @@ export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
         return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'failed':
         return <XCircle className="h-4 w-4 text-red-500" />;
-      case 'processing':
-        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+      case 'in_progress':
+      case 'started':
+        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
       default:
-        return null;
+        return <Clock className="h-4 w-4 text-gray-400" />;
     }
   };
 
-  const getStatusVariant = (status: string) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'secondary';
+        return <Badge variant="secondary">Completed</Badge>;
       case 'failed':
-        return 'destructive';
-      case 'processing':
-        return 'default';
+        return <Badge variant="destructive">Failed</Badge>;
+      case 'in_progress':
+      case 'started':
+        return <Badge variant="default">In Progress</Badge>;
       default:
-        return 'outline';
+        return <Badge variant="outline">Ready</Badge>;
     }
   };
 
-  if (!isActive) {
+  const formatTime = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+    return `${Math.round(seconds / 3600)}h`;
+  };
+
+  if (!connection) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Sync Progress</span>
-            <div className="flex items-center space-x-1">
-              {isConnected ? (
-                <Wifi className="h-4 w-4 text-green-500" />
-              ) : (
-                <WifiOff className="h-4 w-4 text-red-500" />
-              )}
-              <span className="text-sm text-gray-500">
-                {isConnected ? 'Connected' : 'Disconnected'}
-              </span>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-gray-500 text-center py-4">
-            No active sync in progress
-          </p>
-          
-          {/* Recent Webinars */}
-          {recentWebinars.length > 0 && (
-            <div className="mt-4">
-              <h4 className="text-sm font-medium mb-2">Recent Syncs</h4>
-              <div className="space-y-2">
-                {recentWebinars.map((webinar) => (
-                  <div 
-                    key={webinar.id} 
-                    className="flex items-center justify-between p-2 border rounded"
-                  >
-                    <div className="flex items-center space-x-2">
-                      {getStatusIcon(webinar.status)}
-                      <span className="text-sm">{webinar.name}</span>
-                    </div>
-                    <Badge variant={getStatusVariant(webinar.status)}>
-                      {webinar.status}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <Alert>
+        <AlertDescription>
+          No Zoom connection found. Please connect your Zoom account first.
+        </AlertDescription>
+      </Alert>
     );
   }
 
@@ -119,121 +85,99 @@ export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span>Sync in Progress</span>
-          <div className="flex items-center space-x-2">
-            <div className="flex items-center space-x-1">
-              {isConnected ? (
-                <Wifi className="h-4 w-4 text-green-500" />
-              ) : (
-                <WifiOff className="h-4 w-4 text-red-500" />
-              )}
-              <span className="text-sm text-gray-500">
-                {isConnected ? 'Live' : 'Offline'}
-              </span>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={cancelSync}
-              className="flex items-center space-x-1"
-            >
-              <Square className="h-3 w-3" />
-              <span>Cancel</span>
-            </Button>
+          <div className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Real-time Sync Progress
           </div>
+          {syncStatus && getStatusBadge(syncStatus)}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {/* Progress Bar */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span>Overall Progress</span>
-            <span>{progressPercentage}%</span>
-          </div>
-          <Progress value={progressPercentage} className="h-3" />
-        </div>
-
-        {/* Current Status */}
-        {activeProgress && (
-          <div className="space-y-2">
-            <div className="text-sm">
-              <p className="font-medium">
-                Syncing webinar {activeProgress.current_webinar_index} of {activeProgress.total_webinars}
-              </p>
-              {activeProgress.current_webinar_name && (
-                <p className="text-gray-600">{activeProgress.current_webinar_name}</p>
-              )}
+        {/* Active Sync Progress */}
+        {isSyncing && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Sync Progress</span>
+              <span className="text-sm text-muted-foreground">{syncProgress}%</span>
             </div>
+            <Progress value={syncProgress} className="h-2" />
             
-            {activeProgress.current_stage && (
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>{activeProgress.current_stage}</span>
+            {currentOperation && (
+              <div className="text-sm text-muted-foreground">
+                <span className="font-medium">Current: </span>
+                {currentOperation}
+              </div>
+            )}
+            
+            {estimatedTimeRemaining && (
+              <div className="text-sm text-muted-foreground">
+                <span className="font-medium">Est. time remaining: </span>
+                {formatTime(estimatedTimeRemaining)}
               </div>
             )}
           </div>
         )}
 
-        {/* Time Remaining */}
-        {estimatedTimeRemaining && (
-          <div className="flex items-center space-x-1 text-sm text-gray-600">
-            <Clock className="h-3 w-3" />
-            <span>{estimatedTimeRemaining}</span>
+        {/* Last Sync Result */}
+        {!isSyncing && lastSyncResult && (
+          <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              {getStatusIcon(lastSyncResult.status)}
+              <span className="font-medium">Last Sync</span>
+              <span className="text-sm text-muted-foreground">
+                {formatDistanceToNow(new Date(lastSyncResult.completedAt || lastSyncResult.startedAt), { addSuffix: true })}
+              </span>
+            </div>
+            
+            {lastSyncResult.status === 'completed' && (
+              <div className="text-sm space-y-1">
+                <div>✓ {lastSyncResult.processedItems} webinars synced successfully</div>
+                {lastSyncResult.duration && (
+                  <div>⏱ Completed in {formatTime(lastSyncResult.duration)}</div>
+                )}
+              </div>
+            )}
+            
+            {lastSyncResult.status === 'failed' && lastSyncResult.error && (
+              <div className="text-sm text-red-600">
+                Error: {lastSyncResult.error}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Sync Stats */}
-        {activeSyncLog && (
-          <div className="grid grid-cols-3 gap-4 pt-2 border-t">
-            <div className="text-center">
-              <div className="text-lg font-semibold">
-                {activeSyncLog.processed_items || 0}
-              </div>
-              <div className="text-xs text-gray-500">Processed</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-semibold">
-                {(activeSyncLog.total_items || 0) - (activeSyncLog.processed_items || 0)}
-              </div>
-              <div className="text-xs text-gray-500">Remaining</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-semibold text-red-600">
-                {activeSyncLog.failed_items || 0}
-              </div>
-              <div className="text-xs text-gray-500">Failed</div>
-            </div>
-          </div>
-        )}
+        {/* Sync Controls */}
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => startSync('incremental')} 
+            disabled={isSyncing}
+            variant="outline"
+            size="sm"
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            Quick Sync
+          </Button>
+          
+          <Button 
+            onClick={() => startSync('initial')} 
+            disabled={isSyncing}
+            size="sm"
+          >
+            <Play className="mr-2 h-4 w-4" />
+            Full Sync
+          </Button>
+        </div>
 
-        {/* Recent Webinars */}
-        {recentWebinars.length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium mb-2">Recently Completed</h4>
-            <div className="space-y-1 max-h-32 overflow-y-auto">
-              {recentWebinars.slice(0, 3).map((webinar) => (
-                <div 
-                  key={webinar.id} 
-                  className="flex items-center justify-between text-xs p-1"
-                >
-                  <div className="flex items-center space-x-1">
-                    {getStatusIcon(webinar.status)}
-                    <span className="truncate">{webinar.name}</span>
-                  </div>
-                  <Badge variant={getStatusVariant(webinar.status)} className="text-xs">
-                    {webinar.status}
-                  </Badge>
-                </div>
-              ))}
+        {/* Connection Info */}
+        <div className="pt-4 border-t text-xs text-muted-foreground space-y-1">
+          <div>Connected as: {connection.zoom_email}</div>
+          <div>Account: {connection.zoom_account_type || 'Unknown'}</div>
+          {connection.last_sync_at && (
+            <div>
+              Last sync: {formatDistanceToNow(new Date(connection.last_sync_at), { addSuffix: true })}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </CardContent>
     </Card>
   );
