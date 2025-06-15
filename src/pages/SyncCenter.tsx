@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,37 +38,70 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const SyncAnalytics = () => {
     const { connection } = useZoomConnection();
-    const { data: stats, isLoading } = useQuery({
+    const { data: stats, isLoading, error } = useQuery({
       queryKey: ['zoom-sync-analytics', connection?.id],
       queryFn: async () => {
         if (!connection?.id) return null;
         
-        const { count: totalWebinars, error: webinarError } = await supabase
-          .from('zoom_webinars')
-          .select('id', { count: 'exact' })
-          .eq('connection_id', connection.id);
+        try {
+          // First, check if the connection has any webinars at all
+          const { count: totalWebinars, error: webinarError } = await supabase
+            .from('zoom_webinars')
+            .select('id', { count: 'exact' })
+            .eq('connection_id', connection.id);
 
-        const { data: lastSuccessfulSync, error: syncError } = await supabase
-          .from('zoom_sync_logs')
-          .select('completed_at,processed_items')
-          .eq('connection_id', connection.id)
-          .eq('sync_status', 'completed')
-          .order('completed_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          if (webinarError) {
+            console.error("Error fetching webinars:", webinarError);
+            return {
+              totalWebinars: 0,
+              lastSyncDate: null,
+              webinarsSyncedLast: 0,
+            };
+          }
 
-        if (webinarError || syncError) {
-          console.error("Sync Analytics Error:", webinarError || syncError);
+          // Only query sync logs if there might be data
+          let lastSuccessfulSync = null;
+          if (totalWebinars && totalWebinars > 0) {
+            const { data: syncData, error: syncError } = await supabase
+              .from('zoom_sync_logs')
+              .select('completed_at,processed_items')
+              .eq('connection_id', connection.id)
+              .eq('sync_status', 'completed')
+              .order('completed_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (syncError) {
+              console.error("Error fetching sync logs:", syncError);
+            } else {
+              lastSuccessfulSync = syncData;
+            }
+          }
+
+          return {
+            totalWebinars: totalWebinars || 0,
+            lastSyncDate: lastSuccessfulSync?.completed_at || null,
+            webinarsSyncedLast: lastSuccessfulSync?.processed_items || 0,
+          };
+        } catch (error) {
+          console.error("Sync Analytics Error:", error);
+          return {
+            totalWebinars: 0,
+            lastSyncDate: null,
+            webinarsSyncedLast: 0,
+          };
         }
-
-        return {
-          totalWebinars: totalWebinars || 0,
-          lastSyncDate: lastSuccessfulSync?.completed_at,
-          webinarsSyncedLast: lastSuccessfulSync?.processed_items || 0,
-        };
       },
       enabled: !!connection?.id,
       refetchInterval: 30000,
+      retry: (failureCount, error) => {
+        // Don't retry on 4xx errors
+        if (error && typeof error === 'object' && 'status' in error && 
+            error.status >= 400 && error.status < 500) {
+          return false;
+        }
+        return failureCount < 2;
+      },
     });
 
     if (isLoading) {
@@ -79,7 +111,29 @@ const SyncAnalytics = () => {
             <CardTitle>Sync Overview</CardTitle>
           </CardHeader>
           <CardContent>
-            <p>Loading analytics...</p>
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <p>Loading analytics...</p>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (error) {
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sync Overview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Error Loading Analytics</AlertTitle>
+              <AlertDescription>
+                Unable to load sync analytics. Please try refreshing the page.
+              </AlertDescription>
+            </Alert>
           </CardContent>
         </Card>
       );
@@ -119,17 +173,36 @@ const SyncHistory = () => {
     queryKey: ['zoom-sync-history', connection?.id],
     queryFn: async () => {
       if (!connection?.id) return [];
-      const { data, error } = await supabase
-        .from('zoom_sync_logs')
-        .select('*')
-        .eq('connection_id', connection.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      if (error) throw new Error(error.message);
-      return data || [];
+      
+      try {
+        const { data, error } = await supabase
+          .from('zoom_sync_logs')
+          .select('*')
+          .eq('connection_id', connection.id)
+          .order('created_at', { ascending: false })
+          .limit(20);
+        
+        if (error) {
+          console.error("Error fetching sync history:", error);
+          return [];
+        }
+        
+        return data || [];
+      } catch (error) {
+        console.error("Sync history query failed:", error);
+        return [];
+      }
     },
     enabled: !!connection?.id,
     refetchInterval: 5000,
+    retry: (failureCount, error) => {
+      // Don't retry on 4xx errors
+      if (error && typeof error === 'object' && 'status' in error && 
+          error.status >= 400 && error.status < 500) {
+        return false;
+      }
+      return failureCount < 2;
+    },
   });
 
   // Set up sync completion notifications
@@ -232,10 +305,24 @@ const SyncHistory = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading && <p>Loading history...</p>}
-          {error && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>}
+          {isLoading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <p>Loading history...</p>
+            </div>
+          )}
           
-          {history && history.length === 0 && (
+          {error && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                Unable to load sync history. Please try refreshing the page.
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {!isLoading && !error && history && history.length === 0 && (
             <div className="text-center py-8">
               <List className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">No Sync History</h3>
@@ -243,7 +330,7 @@ const SyncHistory = () => {
             </div>
           )}
           
-          {history && history.length > 0 && (
+          {!isLoading && !error && history && history.length > 0 && (
             <Accordion type="single" collapsible onValueChange={setSelectedSyncId}>
               {history.map((log) => (
                 <AccordionItem value={log.id} key={log.id}>
@@ -288,7 +375,12 @@ const SyncCenterPage = () => {
     const { user } = useAuth();
 
     if (isLoading) {
-        return <div className="p-8 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto" /></div>;
+        return (
+          <div className="p-8 text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+            <p className="mt-2 text-muted-foreground">Loading sync center...</p>
+          </div>
+        );
     }
     
     if (!isConnected) {
