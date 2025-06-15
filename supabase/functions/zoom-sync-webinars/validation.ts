@@ -1,5 +1,6 @@
 
 import { SyncRequest } from './types.ts';
+import { SimpleTokenEncryption } from './encryption.ts';
 
 export async function validateRequest(req: Request, supabase: any) {
   console.log('Starting request validation...');
@@ -55,18 +56,22 @@ export async function validateRequest(req: Request, supabase: any) {
   
   console.log(`Connection found: ${connection.id}, status: ${connection.connection_status}`);
   console.log('Raw connection data from DB:', connection);
+  
+  const decryptedToken = await SimpleTokenEncryption.decryptToken(connection.access_token, connection.user_id);
+  
   console.log('Detailed token info from DB:', {
     id: connection.id,
     user_id: connection.user_id,
     connection_status: connection.connection_status,
     hasAccessToken: !!connection.access_token,
     accessTokenLength: connection.access_token?.length,
-    accessTokenPrefix: connection.access_token?.substring(0, 20),
+    decryptedTokenLength: decryptedToken?.length,
     hasRefreshToken: !!connection.refresh_token,
     refreshTokenLength: connection.refresh_token?.length,
-    expiresAt: connection.token_expires_at
+    expiresAt: connection.token_expires_at,
+    updatedAt: connection.updated_at,
   });
-  console.log(`Token expires at: ${connection.token_expires_at}`);
+  console.log(`Token expires at: ${connection.token_expires_at}, updated at: ${connection.updated_at}`);
   
   if (connection.connection_status !== 'active') {
     console.error(`Connection is not active: ${connection.connection_status}`);

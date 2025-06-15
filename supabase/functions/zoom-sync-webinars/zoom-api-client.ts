@@ -1,3 +1,4 @@
+
 import { SimpleTokenEncryption } from './encryption.ts';
 
 export async function validateZoomConnection(connection: any): Promise<boolean> {
@@ -141,7 +142,7 @@ class ZoomAPIClient {
   private async makeRequest(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
     const url = `${this.baseURL}${endpoint}`;
     
-    const requestHeaders = {
+    let requestHeaders = {
       'Authorization': `Bearer ${this.accessToken}`,
       'Content-Type': 'application/json',
       ...options.headers,
@@ -154,17 +155,36 @@ class ZoomAPIClient {
       tokenPrefixUsed: this.accessToken.substring(0, 10) + '...'
     });
     
-    // Check if token is expired before making request
+    // Check if token is expired or old before making request
     const expiresAt = new Date(this.connection.token_expires_at);
+    const updatedAt = this.connection.updated_at ? new Date(this.connection.updated_at) : new Date(0);
     const now = new Date();
     const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+    const tokenAgeMinutes = (now.getTime() - updatedAt.getTime()) / (60 * 1000);
 
-    console.log(`Pre-request token check - expires: ${expiresAt.toISOString()}, now: ${now.toISOString()}, needs refresh: ${now.getTime() >= (expiresAt.getTime() - bufferTime)}`);
+    const needsRefreshByExpiry = now.getTime() >= (expiresAt.getTime() - bufferTime);
+    const needsRefreshByAge = tokenAgeMinutes > 50;
 
-    if (this.isOAuth && now.getTime() >= (expiresAt.getTime() - bufferTime) && retryCount === 0) {
-      console.log('Token is expired/expiring, refreshing before request (OAuth connection)');
+    console.log('Token validity check:', {
+        expiresAt: expiresAt.toISOString(),
+        updatedAt: updatedAt.toISOString(),
+        now: now.toISOString(),
+        tokenAgeMinutes: tokenAgeMinutes.toFixed(2),
+        needsRefreshByExpiry,
+        needsRefreshByAge
+    });
+
+    if (this.isOAuth && (needsRefreshByExpiry || needsRefreshByAge) && retryCount === 0) {
+      const reason = needsRefreshByExpiry ? 'token expired/expiring' : 'token is old (>50 minutes)';
+      console.log(`Forcing token refresh: ${reason}`);
       try {
         await this.refreshTokens();
+        // Re-create headers with the new token
+        requestHeaders = {
+            ...requestHeaders,
+            'Authorization': `Bearer ${this.accessToken}`,
+        };
+        console.log('Headers updated with new token.');
       } catch (refreshError) {
         console.error('Pre-emptive token refresh failed:', refreshError);
         const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
