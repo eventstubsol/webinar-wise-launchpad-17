@@ -132,11 +132,14 @@ export function CronExpressionBuilder({ value, onChange, timezone }: CronExpress
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {Array.from({ length: 24 }, (_, i) => (
-                        <SelectItem key={i} value={i.toString()}>
-                          {i.toString().padStart(2, '0')}
-                        </SelectItem>
-                      ))}
+                      {Array.from({ length: 24 }, (_, i) => {
+                        const hourValue = i.toString();
+                        return (
+                          <SelectItem key={`hour-${i}`} value={hourValue}>
+                            {hourValue.padStart(2, '0')}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                   <span className="self-center">:</span>
@@ -147,11 +150,14 @@ export function CronExpressionBuilder({ value, onChange, timezone }: CronExpress
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {Array.from({ length: 60 }, (_, i) => (
-                        <SelectItem key={i} value={i.toString()}>
-                          {i.toString().padStart(2, '0')}
-                        </SelectItem>
-                      ))}
+                      {Array.from({ length: 60 }, (_, i) => {
+                        const minuteValue = i.toString();
+                        return (
+                          <SelectItem key={`minute-${i}`} value={minuteValue}>
+                            {minuteValue.padStart(2, '0')}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -188,11 +194,14 @@ export function CronExpressionBuilder({ value, onChange, timezone }: CronExpress
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Array.from({ length: 31 }, (_, i) => (
-                      <SelectItem key={i + 1} value={(i + 1).toString()}>
-                        {(i + 1).toString()}
-                      </SelectItem>
-                    ))}
+                    {Array.from({ length: 31 }, (_, i) => {
+                      const dayValue = (i + 1).toString();
+                      return (
+                        <SelectItem key={`day-${i + 1}`} value={dayValue}>
+                          {dayValue}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
