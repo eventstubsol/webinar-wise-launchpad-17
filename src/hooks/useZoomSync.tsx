@@ -178,8 +178,14 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
             setSyncProgress(0);
             setCurrentOperation('');
             
-            const errorDetails = syncLogs.error_details || {};
-            if (errorDetails.isAuthError) {
+            const errorDetails = syncLogs.error_details;
+            if (
+              errorDetails &&
+              typeof errorDetails === 'object' &&
+              !Array.isArray(errorDetails) &&
+              'isAuthError' in errorDetails &&
+              (errorDetails as { isAuthError?: boolean }).isAuthError
+            ) {
               toast({
                 title: "Authentication Failed During Sync",
                 description: syncLogs.error_message || "Your Zoom authentication expired. Please reconnect your account.",
