@@ -16,6 +16,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { RealTimeSyncProgress } from '@/components/sync/RealTimeSyncProgress';
 
 const SyncAnalytics = () => {
     const { connection } = useZoomConnection();
@@ -108,7 +109,7 @@ const SyncHistory = () => {
       return data || [];
     },
     enabled: !!connection?.id,
-    refetchInterval: 5000, // Poll for history updates
+    refetchInterval: 5000,
   });
 
   const getStatusIcon = (status: string) => {
@@ -268,7 +269,7 @@ const SyncHistory = () => {
 };
 
 export default function SyncCenter() {
-  const { isConnected, isLoading: isConnectionLoading } = useZoomConnection();
+  const { isConnected, isLoading: isConnectionLoading, connection } = useZoomConnection();
 
   if (isConnectionLoading) {
       return (
@@ -300,6 +301,8 @@ export default function SyncCenter() {
       </header>
       <main className="grid gap-6">
         <SyncAnalytics />
+        {/* Real-time Sync Progress Component */}
+        {connection?.id && <RealTimeSyncProgress connectionId={connection.id} />}
         <SyncHistory />
       </main>
     </div>

@@ -3388,6 +3388,53 @@ export type Database = {
           },
         ]
       }
+      sync_progress: {
+        Row: {
+          completed_webinars: number
+          current_stage: string | null
+          current_webinar_index: number | null
+          current_webinar_name: string | null
+          estimated_completion: string | null
+          id: string
+          started_at: string
+          sync_id: string
+          total_webinars: number
+          updated_at: string
+        }
+        Insert: {
+          completed_webinars?: number
+          current_stage?: string | null
+          current_webinar_index?: number | null
+          current_webinar_name?: string | null
+          estimated_completion?: string | null
+          id?: string
+          started_at?: string
+          sync_id: string
+          total_webinars?: number
+          updated_at?: string
+        }
+        Update: {
+          completed_webinars?: number
+          current_stage?: string | null
+          current_webinar_index?: number | null
+          current_webinar_name?: string | null
+          estimated_completion?: string | null
+          id?: string
+          started_at?: string
+          sync_id?: string
+          total_webinars?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_progress_sync_id_fkey"
+            columns: ["sync_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_sync_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       template_library: {
         Row: {
           category: string
