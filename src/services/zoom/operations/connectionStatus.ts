@@ -149,7 +149,7 @@ export class ConnectionStatusOperations {
       // Check if token is expired first
       if (TokenUtils.isTokenExpired(connection.token_expires_at)) {
         const refreshedConnection = await this.refreshToken(connection);
-        if (refreshedConnection) return 'active';
+        if (refreshedConnection) return 'active' as ConnectionStatus;
 
         await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
         return 'expired' as ConnectionStatus;
