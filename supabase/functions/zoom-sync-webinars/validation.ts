@@ -54,6 +54,16 @@ export async function validateRequest(req: Request, supabase: any) {
   }
   
   console.log(`Connection found: ${connection.id}, status: ${connection.connection_status}`);
+  console.log('Connection data from DB:', {
+    id: connection.id,
+    user_id: connection.user_id,
+    connection_status: connection.connection_status,
+    hasAccessToken: !!connection.access_token,
+    accessTokenLength: connection.access_token?.length,
+    hasRefreshToken: !!connection.refresh_token,
+    refreshTokenLength: connection.refresh_token?.length,
+    expiresAt: connection.token_expires_at
+  });
   console.log(`Token expires at: ${connection.token_expires_at}`);
   
   if (connection.connection_status !== 'active') {

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { CORS_HEADERS, SYNC_PRIORITIES, SyncOperation } from './types.ts';
@@ -11,9 +10,18 @@ serve(async (req) => {
     return new Response(null, { headers: CORS_HEADERS });
   }
 
-  console.log('=== Starting Zoom Sync Request ===');
-  console.log('Method:', req.method);
-  console.log('URL:', req.url);
+  console.log('=== SYNC FUNCTION START ===');
+  console.log(`Request received: ${new Date().toISOString()}`);
+  console.log('Request headers:', Object.fromEntries(req.headers.entries()));
+  console.log('Environment check:', {
+    hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
+    hasServiceKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+    hasZoomClientId: !!Deno.env.get('ZOOM_CLIENT_ID'),
+    hasZoomClientSecret: !!Deno.env.get('ZOOM_CLIENT_SECRET'),
+    hasEncryptionSalt: !!Deno.env.get('ENCRYPTION_SALT')
+  });
+
+  const startTime = Date.now();
 
   try {
     const supabase = createClient(
@@ -24,11 +32,13 @@ serve(async (req) => {
 
     console.log('Supabase client created, validating request...');
     const { user, connection, requestBody } = await validateRequest(req, supabase);
-    console.log('Request validated successfully');
+    const validationTime = Date.now();
+    console.log(`Request validated successfully in ${validationTime - startTime}ms`);
 
     console.log('Creating sync log...');
     const syncLogId = await createSyncLog(supabase, requestBody.connectionId, requestBody.syncType, requestBody.webinarId);
-    console.log(`Sync log created: ${syncLogId}`);
+    const syncLogTime = Date.now();
+    console.log(`Sync log created: ${syncLogId} in ${syncLogTime - validationTime}ms`);
     
     const syncOperation: SyncOperation = {
       id: `sync_${Date.now()}`,
@@ -44,7 +54,7 @@ serve(async (req) => {
     console.log('Starting background sync process...');
     queueMicrotask(() => processSequentialSync(supabase, syncOperation, connection, syncLogId));
 
-    console.log('=== Sync Request Successful ===');
+    console.log(`=== Sync Request Successful (Total time: ${Date.now() - startTime}ms) ===`);
     return new Response(
       JSON.stringify({
         success: true,
@@ -62,6 +72,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('=== Sync Function Error ===');
+    console.error(`Error occurred after ${Date.now() - startTime}ms`);
     console.error('Error details:', error);
     console.error('Error stack:', error.stack);
     

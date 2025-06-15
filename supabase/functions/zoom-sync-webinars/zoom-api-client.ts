@@ -1,3 +1,4 @@
+
 import { SimpleTokenEncryption } from './encryption.ts';
 
 export async function validateZoomConnection(connection: any): Promise<boolean> {
@@ -43,9 +44,13 @@ export async function createZoomAPIClient(connection: any, supabase: any) {
   console.log(`Connection type determined as: ${isOAuth ? 'OAuth' : 'Server-to-Server / Legacy'}`);
   
   try {
+    console.log('Attempting to decrypt access token...');
     accessToken = await SimpleTokenEncryption.decryptToken(connection.access_token, connection.user_id);
+    console.log('Access token decrypted successfully.');
     if (isOAuth) {
+      console.log('Attempting to decrypt refresh token...');
       refreshToken = await SimpleTokenEncryption.decryptToken(connection.refresh_token, connection.user_id);
+      console.log('Refresh token decrypted successfully.');
     }
     console.log('Tokens processed for API client.');
   } catch (error) {
@@ -106,6 +111,7 @@ class ZoomAPIClient {
       
       // Decrypt the new tokens
       try {
+        console.log('Attempting to decrypt new access token...');
         this.accessToken = await SimpleTokenEncryption.decryptToken(data.connection.access_token, this.connection.user_id);
         console.log(`Tokens refreshed successfully for connection: ${this.connection.id}`);
       } catch (decryptError) {
@@ -121,7 +127,18 @@ class ZoomAPIClient {
 
   private async makeRequest(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
     const url = `${this.baseURL}${endpoint}`;
-    console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`);
+    
+    const requestHeaders = {
+      'Authorization': `Bearer ${this.accessToken}`,
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+    
+    console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`, {
+      url: url,
+      hasAuthHeader: !!requestHeaders.Authorization,
+      authHeaderLength: requestHeaders.Authorization?.length
+    });
     
     // Check if token is expired before making request
     const expiresAt = new Date(this.connection.token_expires_at);
@@ -145,14 +162,15 @@ class ZoomAPIClient {
     
     const response = await fetch(url, {
       ...options,
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers: requestHeaders,
     });
 
     console.log(`Zoom API response: ${response.status} for ${endpoint}`);
+    console.log('Zoom API response details:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries())
+    });
 
     if (!response.ok) {
       if (this.isOAuth && response.status === 401 && retryCount < 1) {
