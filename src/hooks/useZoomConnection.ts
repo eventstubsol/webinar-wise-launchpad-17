@@ -1,4 +1,3 @@
-
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
@@ -25,13 +24,13 @@ export const useZoomConnection = () => {
       }
     },
     enabled: !!user?.id,
-    refetchInterval: (data, query) => {
+    refetchInterval: (query) => {
       // If we have a connection, check less frequently
       // If there's an error or no connection, check more frequently but with backoff
       if (query.state.error) {
         return false; // Don't auto-refetch on errors
       }
-      return data ? 60000 : 30000; // 60s when connected, 30s when disconnected
+      return query.state.data ? 60000 : 30000; // 60s when connected, 30s when disconnected
     },
     retry: (failureCount, error) => {
       // Don't retry aggressively on connection errors

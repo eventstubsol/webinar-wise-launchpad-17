@@ -1,4 +1,3 @@
-
 import { ConnectionCrud } from './operations/connectionCrud';
 import { ConnectionStatusOperations } from './operations/connectionStatus';
 import { TokenUtils } from './utils/tokenUtils';
@@ -36,7 +35,6 @@ export class ZoomConnectionService {
   static isTokenExpired = TokenUtils.isTokenExpired;
   static encryptToken = TokenUtils.encryptToken;
   static decryptToken = TokenUtils.decryptToken;
-  static rotateEncryptionKey = TokenUtils.rotateEncryptionKey;
   static validateTokenDecryption = TokenUtils.validateTokenDecryption;
 
   // Migration utilities
