@@ -54,6 +54,8 @@ export const useZoomConnection = () => {
 
   const tokenStatus = connection ? TokenUtils.getTokenStatus(connection) : TokenStatus.NO_CONNECTION;
   const isTokenValid = tokenStatus === TokenStatus.VALID;
+  const isConnected = tokenStatus === TokenStatus.VALID || tokenStatus === TokenStatus.ACCESS_EXPIRED;
+  const isExpired = tokenStatus === TokenStatus.REFRESH_EXPIRED || tokenStatus === TokenStatus.INVALID;
 
   return {
     connection,
@@ -62,5 +64,7 @@ export const useZoomConnection = () => {
     refetch,
     tokenStatus,
     isTokenValid,
+    isConnected,
+    isExpired,
   };
 };
