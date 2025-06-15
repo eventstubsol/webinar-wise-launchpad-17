@@ -14,7 +14,7 @@ import { ProfileProvider } from '@/contexts/ProfileContext';
 import { UserSettingsProvider } from '@/contexts/UserSettingsContext';
 import Settings from '@/pages/Settings';
 import VerifyEmail from '@/pages/VerifyEmail';
-import WebinarList from '@/components/zoom/WebinarList';
+import Webinars from '@/pages/Webinars';
 import WebinarDetailView from '@/components/zoom/webinar/WebinarDetailView';
 import AdvancedAnalytics from '@/pages/AdvancedAnalytics';
 import CSVUpload from '@/pages/CSVUpload';
@@ -48,7 +48,7 @@ const App = () => {
 
                 {/* Core Webinar Features */}
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                <Route path="/webinars" element={<ProtectedRoute><WebinarList /></ProtectedRoute>} />
+                <Route path="/webinars" element={<ProtectedRoute><Webinars /></ProtectedRoute>} />
                 <Route path="/webinars/:id" element={<ProtectedRoute><WebinarDetailView /></ProtectedRoute>} />
                 <Route path="/advanced-analytics" element={<ProtectedRoute><AdvancedAnalytics /></ProtectedRoute>} />
 

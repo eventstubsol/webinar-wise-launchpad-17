@@ -26,7 +26,7 @@ export const WebinarTable: React.FC<WebinarTableProps> = ({ webinars, onViewDeta
   };
 
   const handleViewDetails = (webinarId: string) => {
-    navigate(`/dashboard/webinars/${webinarId}`);
+    navigate(`/webinars/${webinarId}`);
   };
 
   return (

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useWebinars } from '@/hooks/useWebinars';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
@@ -12,7 +11,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Calendar } from 'lucide-react';
 import { WebinarFilters } from './webinar-list/WebinarFilters';
 import { WebinarTable } from './webinar-list/WebinarTable';
 import { WebinarPagination } from './webinar-list/WebinarPagination';
@@ -78,8 +76,8 @@ const WebinarList: React.FC = () => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Webinar List</CardTitle>
-          <CardDescription>Error loading webinars</CardDescription>
+          <CardTitle>Error loading webinars</CardTitle>
+          <CardDescription>There was an issue fetching your webinar data.</CardDescription>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
@@ -97,16 +95,7 @@ const WebinarList: React.FC = () => {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Calendar className="h-5 w-5" />
-          Webinar List
-        </CardTitle>
-        <CardDescription>
-          Manage and view your Zoom webinars
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+      <CardContent className="p-6">
         <WebinarFilters
           searchValue={filters.search}
           statusValue={filters.status}
