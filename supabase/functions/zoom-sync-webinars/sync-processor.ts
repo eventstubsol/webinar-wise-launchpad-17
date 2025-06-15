@@ -20,7 +20,7 @@ export async function processSequentialSync(
       throw new Error('Invalid Zoom connection - tokens may be expired');
     }
 
-    const zoomClient = await createZoomAPIClient(connection);
+    const zoomClient = await createZoomAPIClient(connection, supabase);
     await updateSyncStage(supabase, syncLogId, null, 'fetching_webinar_list', 10);
 
     let webinars = [];

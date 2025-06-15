@@ -1,87 +1,81 @@
 
-/**
- * Simple token encryption utilities for Deno environment
- */
+import { Buffer } from "https://deno.land/std@0.168.0/io/buffer.ts";
+
+const IV_LENGTH = 16;
+const ENCRYPTION_KEY = Deno.env.get('ENCRYPTION_SALT') || 'default-salt-is-not-secure-change-me';
+
 export class SimpleTokenEncryption {
-  private static readonly ALGORITHM = 'AES-GCM';
-  private static readonly KEY_LENGTH = 256;
-  private static readonly IV_LENGTH = 12;
-
-  static async encryptToken(token: string, userKey: string): Promise<string> {
-    try {
-      // Generate a simple key from user information
-      const keyMaterial = new TextEncoder().encode(userKey + (Deno.env.get('ENCRYPTION_SALT') || 'webinar-wise-salt'));
-      const key = await crypto.subtle.importKey(
-        'raw',
-        await crypto.subtle.digest('SHA-256', keyMaterial),
-        this.ALGORITHM,
-        false,
-        ['encrypt']
-      );
-
-      // Generate random IV
-      const iv = crypto.getRandomValues(new Uint8Array(this.IV_LENGTH));
-
-      // Encrypt the token
-      const tokenBytes = new TextEncoder().encode(token);
-      const encryptedBytes = await crypto.subtle.encrypt(
-        { name: this.ALGORITHM, iv: iv },
-        key,
-        tokenBytes
-      );
-
-      // Combine IV and encrypted data
-      const combined = new Uint8Array(this.IV_LENGTH + encryptedBytes.byteLength);
-      combined.set(iv, 0);
-      combined.set(new Uint8Array(encryptedBytes), this.IV_LENGTH);
-
-      // Return base64 encoded result
-      return btoa(String.fromCharCode(...combined));
-    } catch (error) {
-      console.error('Token encryption failed:', error);
-      // Fallback to base64 encoding
-      return btoa(token);
-    }
+  private static async getKey(salt: string): Promise<CryptoKey> {
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(ENCRYPTION_KEY),
+      { name: "HKDF" },
+      false,
+      ["deriveKey"]
+    );
+    return crypto.subtle.deriveKey(
+      {
+        name: "HKDF",
+        salt: new TextEncoder().encode(salt),
+        info: new TextEncoder().encode("ZoomTokenEncryption"),
+        hash: "SHA-256",
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      true,
+      ["encrypt", "decrypt"]
+    );
   }
 
-  static async decryptToken(encryptedToken: string, userKey: string): Promise<string> {
+  static async encryptToken(token: string, salt: string): Promise<string> {
+    const key = await this.getKey(salt);
+    const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+    const encodedToken = new TextEncoder().encode(token);
+
+    const encrypted = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      encodedToken
+    );
+
+    const buffer = new Buffer();
+    await buffer.write(iv);
+    await buffer.write(new Uint8Array(encrypted));
+    
+    return Buffer.from(buffer.bytes()).toString("base64");
+  }
+
+  static async decryptToken(encryptedToken: string, salt: string): Promise<string> {
+    // 1. Try to decrypt using AES-GCM
     try {
-      // Try to decrypt assuming it's encrypted
-      const keyMaterial = new TextEncoder().encode(userKey + (Deno.env.get('ENCRYPTION_SALT') || 'webinar-wise-salt'));
-      const key = await crypto.subtle.importKey(
-        'raw',
-        await crypto.subtle.digest('SHA-256', keyMaterial),
-        this.ALGORITHM,
-        false,
-        ['decrypt']
-      );
+        console.log('Attempting AES-GCM decryption...');
+        const key = await this.getKey(salt);
+        const data = Buffer.from(encryptedToken, "base64");
+        const iv = data.slice(0, IV_LENGTH);
+        const encrypted = data.slice(IV_LENGTH);
 
-      const encryptedBytes = Uint8Array.from(atob(encryptedToken), c => c.charCodeAt(0));
-      
-      if (encryptedBytes.length < this.IV_LENGTH) {
-        throw new Error('Invalid encrypted token format');
-      }
-
-      // Extract IV and encrypted data
-      const iv = encryptedBytes.slice(0, this.IV_LENGTH);
-      const encryptedData = encryptedBytes.slice(this.IV_LENGTH);
-
-      const decryptedBytes = await crypto.subtle.decrypt(
-        { name: this.ALGORITHM, iv: iv },
-        key,
-        encryptedData
-      );
-
-      return new TextDecoder().decode(decryptedBytes);
-    } catch (error) {
-      console.log('Decryption failed, trying base64 decode:', error.message);
-      // Fallback to base64 decoding for non-encrypted tokens
-      try {
-        return atob(encryptedToken);
-      } catch (base64Error) {
-        console.error('Base64 decode also failed:', base64Error);
-        throw new Error('Failed to decrypt token');
-      }
+        const decrypted = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv },
+            key,
+            encrypted
+        );
+        
+        console.log('Successfully decrypted token using AES-GCM.');
+        return new TextDecoder().decode(decrypted);
+    } catch(e) {
+        console.log(`AES-GCM decryption failed: ${e.message}. Attempting fallbacks.`);
+        
+        // 2. Fallback for tokens that might be just base64 encoded
+        try {
+            console.log('Attempting base64 decoding fallback...');
+            const decoded = atob(encryptedToken);
+            console.log('Successfully decoded token using base64 fallback.');
+            return decoded;
+        } catch (e2) {
+            console.log(`Base64 decoding failed: ${e2.message}. Assuming plain text token.`);
+            // 3. If base64 decoding fails, it might be a plain token
+            return encryptedToken;
+        }
     }
   }
 }

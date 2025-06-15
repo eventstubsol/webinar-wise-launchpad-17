@@ -1,4 +1,3 @@
-
 import { SimpleTokenEncryption } from './encryption.ts';
 
 export async function validateZoomConnection(connection: any): Promise<boolean> {
@@ -37,6 +36,12 @@ export async function validateZoomConnection(connection: any): Promise<boolean> 
 
 export async function createZoomAPIClient(connection: any, supabase: any) {
   console.log(`Creating Zoom API client for connection: ${connection.id}`);
+  console.log('Received connection object in createZoomAPIClient:', {
+      id: connection.id,
+      user_id: connection.user_id,
+      has_access_token: !!connection.access_token,
+      has_refresh_token: !!connection.refresh_token
+  });
   
   let accessToken;
   let refreshToken;
@@ -46,11 +51,19 @@ export async function createZoomAPIClient(connection: any, supabase: any) {
   try {
     console.log('Attempting to decrypt access token...');
     accessToken = await SimpleTokenEncryption.decryptToken(connection.access_token, connection.user_id);
-    console.log('Access token decrypted successfully.');
+    console.log('Access token decryption result:', {
+        success: true,
+        length: accessToken.length,
+        prefix: accessToken.substring(0, 10) + '...'
+    });
     if (isOAuth) {
       console.log('Attempting to decrypt refresh token...');
       refreshToken = await SimpleTokenEncryption.decryptToken(connection.refresh_token, connection.user_id);
-      console.log('Refresh token decrypted successfully.');
+      console.log('Refresh token decryption result:', {
+        success: true,
+        length: refreshToken.length,
+        prefix: refreshToken.substring(0, 10) + '...'
+      });
     }
     console.log('Tokens processed for API client.');
   } catch (error) {
@@ -137,7 +150,8 @@ class ZoomAPIClient {
     console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`, {
       url: url,
       hasAuthHeader: !!requestHeaders.Authorization,
-      authHeaderLength: requestHeaders.Authorization?.length
+      authHeaderLength: requestHeaders.Authorization?.length,
+      tokenPrefixUsed: this.accessToken.substring(0, 10) + '...'
     });
     
     // Check if token is expired before making request

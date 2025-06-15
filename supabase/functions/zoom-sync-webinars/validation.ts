@@ -54,12 +54,14 @@ export async function validateRequest(req: Request, supabase: any) {
   }
   
   console.log(`Connection found: ${connection.id}, status: ${connection.connection_status}`);
-  console.log('Connection data from DB:', {
+  console.log('Raw connection data from DB:', connection);
+  console.log('Detailed token info from DB:', {
     id: connection.id,
     user_id: connection.user_id,
     connection_status: connection.connection_status,
     hasAccessToken: !!connection.access_token,
     accessTokenLength: connection.access_token?.length,
+    accessTokenPrefix: connection.access_token?.substring(0, 20),
     hasRefreshToken: !!connection.refresh_token,
     refreshTokenLength: connection.refresh_token?.length,
     expiresAt: connection.token_expires_at
