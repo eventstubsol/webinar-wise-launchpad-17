@@ -19,7 +19,13 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
   const [currentOperation, setCurrentOperation] = useState<string>('');
 
   const startSync = useCallback(async (syncType: 'initial' | 'incremental' = 'incremental') => {
+    console.log('=== Starting Sync ===');
+    console.log('User:', user?.id);
+    console.log('Connection:', connection?.id);
+    console.log('Sync type:', syncType);
+
     if (!user || !connection) {
+      console.error('Missing user or connection for sync');
       toast({
         title: "Not Connected",
         description: "Please connect your Zoom account first to sync data.",
@@ -29,45 +35,26 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     }
 
     const tokenStatus = TokenUtils.getTokenStatus(connection);
+    console.log('Token status:', tokenStatus);
 
-    if (tokenStatus !== TokenStatus.VALID) {
-      if (tokenStatus === TokenStatus.ACCESS_EXPIRED) {
+    if (tokenStatus !== TokenStatus.VALID && tokenStatus !== TokenStatus.ACCESS_EXPIRED) {
+      console.error('Invalid token status:', tokenStatus);
+      
+      if (tokenStatus === TokenStatus.REFRESH_EXPIRED) {
         toast({
-          title: "Refreshing connection...",
-          description: "Your connection token has expired. We are attempting to refresh it automatically.",
+          title: "Connection Expired",
+          description: "Your Zoom connection has expired. Please reconnect in Settings.",
+          variant: "destructive",
         });
-        const refreshedConnection = await ZoomConnectionService.refreshToken(connection);
-        if (!refreshedConnection) {
-            toast({
-              title: "Refresh Failed",
-              description: "Could not refresh your Zoom connection. Please go to settings and reconnect your account.",
-              variant: "destructive",
-            });
-            return;
-        }
-        // if refresh is successful, query will refetch and user can try again.
+        return;
+      } else if (tokenStatus === TokenStatus.INVALID) {
         toast({
-          title: "Connection Refreshed",
-          description: "Your connection is active again. Please try syncing now.",
+          title: "Invalid Connection",
+          description: "Your Zoom connection is invalid. Please reconnect in Settings.",
+          variant: "destructive",
         });
-        // Invalidate connection query to get the new tokens
-        queryClient.invalidateQueries({ queryKey: ['zoom-connection', user.id] });
         return;
       }
-      
-      let title = "Sync Failed";
-      let description = "An unknown connection error occurred.";
-
-      if(tokenStatus === TokenStatus.REFRESH_EXPIRED) {
-        title = "Connection Expired";
-        description = "Your Zoom connection has expired. Please reconnect in Settings.";
-      } else if(tokenStatus === TokenStatus.INVALID) {
-        title = "Invalid Connection";
-        description = "Your Zoom connection is invalid. Please reconnect in Settings.";
-      }
-
-      toast({ title, description, variant: "destructive" });
-      return;
     }
 
     setIsSyncing(true);
@@ -75,6 +62,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     setCurrentOperation('Starting sync...');
 
     try {
+      console.log('Invoking zoom-sync-webinars function...');
       const { data, error } = await supabase.functions.invoke('zoom-sync-webinars', {
         body: {
           connectionId: connection.id,
@@ -82,7 +70,10 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         },
       });
 
+      console.log('Function response:', { data, error });
+
       if (error) {
+        console.error('Function invocation error:', error);
         const errorBody = error.context || {};
         if (errorBody.isAuthError) {
           toast({
@@ -95,11 +86,12 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
               </Button>
             ),
           });
-          throw new Error(error.message); // throw to stop execution
+          throw new Error(error.message);
         }
         throw new Error(error.message || 'Failed to start sync');
       }
 
+      console.log('Sync started successfully, beginning status polling...');
       toast({
         title: "Sync Started",
         description: `${syncType === 'initial' ? 'Full' : 'Incremental'} sync has been initiated.`,
@@ -110,6 +102,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       pollSyncStatus(syncId);
 
     } catch (error) {
+      console.error('Sync start error:', error);
       setIsSyncing(false);
       setSyncProgress(0);
       setCurrentOperation('');
@@ -127,6 +120,8 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
   }, [user, connection, toast, queryClient]);
 
   const pollSyncStatus = useCallback(async (syncId: string) => {
+    console.log('Starting sync status polling for:', syncId);
+    
     const pollInterval = setInterval(async () => {
       try {
         const { data: syncLogs, error } = await supabase
@@ -141,6 +136,8 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         }
 
         if (syncLogs) {
+          console.log('Sync status:', syncLogs.sync_status, `${syncLogs.processed_items}/${syncLogs.total_items}`);
+          
           const progress = syncLogs.total_items > 0 
             ? Math.round((syncLogs.processed_items / syncLogs.total_items) * 100)
             : 0;
@@ -153,6 +150,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           );
 
           if (syncLogs.sync_status === 'completed') {
+            console.log('Sync completed successfully');
             clearInterval(pollInterval);
             setIsSyncing(false);
             setSyncProgress(100);
@@ -173,6 +171,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
               setCurrentOperation('');
             }, 3000);
           } else if (syncLogs.sync_status === 'failed') {
+            console.error('Sync failed:', syncLogs.error_message);
             clearInterval(pollInterval);
             setIsSyncing(false);
             setSyncProgress(0);
@@ -214,6 +213,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     setTimeout(() => {
       clearInterval(pollInterval);
       if (isSyncing) {
+        console.log('Sync polling timeout reached');
         setIsSyncing(false);
         setSyncProgress(0);
         setCurrentOperation('');
