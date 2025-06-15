@@ -5527,6 +5527,10 @@ export type Database = {
         Args: { p_segment_id: string }
         Returns: undefined
       }
+      user_owns_connection: {
+        Args: { connection_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       ai_insight_status: "pending" | "processing" | "completed" | "failed"
