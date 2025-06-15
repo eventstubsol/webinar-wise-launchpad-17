@@ -35,7 +35,9 @@ export const useNotificationSystem = (userId?: string) => {
           browser_notifications_enabled: data.browser_notifications_enabled,
           toast_notifications_enabled: data.toast_notifications_enabled,
           email_notifications_enabled: data.email_notifications_enabled,
-          notification_types: data.notification_types || [],
+          notification_types: Array.isArray(data.notification_types) 
+            ? data.notification_types as string[]
+            : ['sync_complete', 'sync_failed', 'rate_limit_warning'],
         });
       } else {
         // Create default preferences
@@ -72,7 +74,9 @@ export const useNotificationSystem = (userId?: string) => {
         browser_notifications_enabled: data.browser_notifications_enabled,
         toast_notifications_enabled: data.toast_notifications_enabled,
         email_notifications_enabled: data.email_notifications_enabled,
-        notification_types: data.notification_types || [],
+        notification_types: Array.isArray(data.notification_types) 
+          ? data.notification_types as string[]
+          : ['sync_complete', 'sync_failed', 'rate_limit_warning'],
       });
     } catch (error) {
       console.error('Failed to create default preferences:', error);
