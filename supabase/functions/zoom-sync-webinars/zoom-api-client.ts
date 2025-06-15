@@ -1,4 +1,3 @@
-
 import { SimpleTokenEncryption } from './encryption.ts';
 
 export async function validateZoomConnection(connection: any): Promise<boolean> {
@@ -40,36 +39,52 @@ export async function createZoomAPIClient(connection: any, supabase: any) {
   
   let accessToken;
   let refreshToken;
+  const isOAuth = !!connection.refresh_token;
+  console.log(`Connection type determined as: ${isOAuth ? 'OAuth' : 'Server-to-Server / Legacy'}`);
   
   try {
     accessToken = await SimpleTokenEncryption.decryptToken(connection.access_token, connection.user_id);
-    refreshToken = await SimpleTokenEncryption.decryptToken(connection.refresh_token, connection.user_id);
-    console.log('Tokens decrypted successfully');
+    if (isOAuth) {
+      refreshToken = await SimpleTokenEncryption.decryptToken(connection.refresh_token, connection.user_id);
+    }
+    console.log('Tokens processed for API client.');
   } catch (error) {
     console.log('Token decryption failed, assuming plain text tokens:', error.message);
     accessToken = connection.access_token;
-    refreshToken = connection.refresh_token;
+    if (isOAuth) {
+      refreshToken = connection.refresh_token;
+    }
   }
 
-  return new ZoomAPIClient(connection, supabase, accessToken, refreshToken);
+  return new ZoomAPIClient(connection, supabase, accessToken, refreshToken, isOAuth);
 }
 
 class ZoomAPIClient {
   private connection: any;
   private supabase: any;
   private accessToken: string;
-  private refreshTokenValue: string;
+  private refreshTokenValue: string | undefined;
+  private isOAuth: boolean;
   private baseURL = 'https://api.zoom.us/v2';
 
-  constructor(connection: any, supabase: any, accessToken: string, refreshToken: string) {
+  constructor(connection: any, supabase: any, accessToken: string, refreshToken: string | undefined, isOAuth: boolean) {
     this.connection = connection;
     this.supabase = supabase;
     this.accessToken = accessToken;
     this.refreshTokenValue = refreshToken;
+    this.isOAuth = isOAuth;
   }
 
   private async refreshTokens() {
-    console.log(`Attempting to refresh tokens for connection: ${this.connection.id}`);
+    if (!this.isOAuth) {
+      console.log(`Skipping token refresh for non-OAuth connection: ${this.connection.id}`);
+      const authError = new Error('Cannot refresh token. Connection is not OAuth or refresh token is missing.');
+      (authError as any).status = 401;
+      (authError as any).isAuthError = true;
+      throw authError;
+    }
+    
+    console.log(`Attempting to refresh OAuth tokens for connection: ${this.connection.id}`);
     
     try {
       const { data, error } = await this.supabase.functions.invoke('zoom-token-refresh', {
@@ -115,8 +130,8 @@ class ZoomAPIClient {
 
     console.log(`Pre-request token check - expires: ${expiresAt.toISOString()}, now: ${now.toISOString()}, needs refresh: ${now.getTime() >= (expiresAt.getTime() - bufferTime)}`);
 
-    if (now.getTime() >= (expiresAt.getTime() - bufferTime) && retryCount === 0) {
-      console.log('Token is expired/expiring, refreshing before request');
+    if (this.isOAuth && now.getTime() >= (expiresAt.getTime() - bufferTime) && retryCount === 0) {
+      console.log('Token is expired/expiring, refreshing before request (OAuth connection)');
       try {
         await this.refreshTokens();
       } catch (refreshError) {
@@ -140,8 +155,8 @@ class ZoomAPIClient {
     console.log(`Zoom API response: ${response.status} for ${endpoint}`);
 
     if (!response.ok) {
-      if (response.status === 401 && retryCount < 1) {
-        console.log(`Received 401 for ${endpoint}. Attempting token refresh.`);
+      if (this.isOAuth && response.status === 401 && retryCount < 1) {
+        console.log(`Received 401 for ${endpoint}. Attempting OAuth token refresh.`);
         try {
           await this.refreshTokens();
           // Retry the request with the new token

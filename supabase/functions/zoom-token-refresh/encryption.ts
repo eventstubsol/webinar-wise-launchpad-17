@@ -46,6 +46,7 @@ export class SimpleTokenEncryption {
   }
 
   static async decryptToken(encryptedToken: string, salt: string): Promise<string> {
+    // 1. Try to decrypt using AES-GCM
     try {
         const key = await this.getKey(salt);
         const data = Buffer.from(encryptedToken, "base64");
@@ -57,15 +58,20 @@ export class SimpleTokenEncryption {
             key,
             encrypted
         );
-
+        
+        console.log('Successfully decrypted token using AES-GCM.');
         return new TextDecoder().decode(decrypted);
     } catch(e) {
-        // Fallback for tokens that might be just base64 encoded and not encrypted.
+        console.log(`AES-GCM decryption failed: ${e.message}. Attempting fallbacks.`);
+        
+        // 2. Fallback for tokens that might be just base64 encoded
         try {
             const decoded = atob(encryptedToken);
+            console.log('Successfully decoded token using base64 fallback.');
             return decoded;
         } catch (e2) {
-            // If it fails, it might be a plain token
+            console.log(`Base64 decoding failed: ${e2.message}. Assuming plain text token.`);
+            // 3. If base64 decoding fails, it might be a plain token
             return encryptedToken;
         }
     }
