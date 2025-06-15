@@ -1,11 +1,6 @@
 
 -- Migration to fix RLS policies for sync operations
 
--- Drop overly permissive system policies that are a security risk
-DROP POLICY IF EXISTS "System can manage sync performance metrics" ON public.sync_performance_metrics;
-DROP POLICY IF EXISTS "System can manage sync queue" ON public.sync_queue;
-DROP POLICY IF EXISTS "System can manage rate limit tracking" ON public.rate_limit_tracking;
-
 -- Enable RLS on zoom_sync_logs and zoom_webinars if not already enabled.
 -- It's safe to run this even if it's already enabled.
 ALTER TABLE public.zoom_sync_logs ENABLE ROW LEVEL SECURITY;

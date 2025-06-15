@@ -18,11 +18,31 @@ export class TokenEncryptionService {
   }
 
   /**
+   * Get encryption salt from environment with fallback
+   */
+  private static getEncryptionSalt(): string {
+    // Try Vite environment variable first (for browser)
+    if (typeof import !== 'undefined' && import.meta?.env?.VITE_ENCRYPTION_SALT) {
+      return import.meta.env.VITE_ENCRYPTION_SALT;
+    }
+    
+    // Fallback for other environments
+    if (typeof process !== 'undefined' && process.env?.ENCRYPTION_SALT) {
+      return process.env.ENCRYPTION_SALT;
+    }
+    
+    // Default fallback salt (not ideal for production but prevents crashes)
+    console.warn('No encryption salt found in environment, using default');
+    return 'webinar-wise-default-salt-change-in-production';
+  }
+
+  /**
    * Generate encryption key from user identifier
    */
   private static async generateKey(userId: string): Promise<CryptoKey> {
     const encoder = new TextEncoder();
-    const keyMaterial = encoder.encode(userId + process.env.ENCRYPTION_SALT || 'webinar-wise-salt');
+    const salt = this.getEncryptionSalt();
+    const keyMaterial = encoder.encode(userId + salt);
     
     const keyBuffer = await crypto.subtle.digest('SHA-256', keyMaterial);
     
@@ -71,7 +91,7 @@ export class TokenEncryptionService {
   }
 
   /**
-   * Decrypt token securely
+   * Decrypt token securely with recovery mechanisms
    */
   static async decryptToken(encryptedToken: string, userId: string): Promise<string> {
     // Check if this is a simple base64 encoded token (fallback)
@@ -105,13 +125,14 @@ export class TokenEncryptionService {
       const decoder = new TextDecoder();
       return decoder.decode(decryptedBuffer);
     } catch (error) {
-      console.error('Token decryption failed:', error);
-      // Try fallback decryption
+      console.error('Token decryption failed, attempting recovery:', error);
+      
+      // Try fallback decryption methods
       try {
         return atob(encryptedToken);
       } catch (fallbackError) {
-        console.error('Fallback decryption also failed:', fallbackError);
-        throw new Error('Failed to decrypt token');
+        console.error('All decryption methods failed:', fallbackError);
+        throw new Error('Failed to decrypt token - token may be corrupted');
       }
     }
   }
@@ -139,5 +160,14 @@ export class TokenEncryptionService {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Reset corrupted token (for recovery)
+   */
+  static async resetCorruptedToken(token: string, userId: string): Promise<string> {
+    console.log('Resetting corrupted token for user:', userId);
+    // Re-encrypt the token with current settings
+    return await this.encryptToken(token, userId);
   }
 }

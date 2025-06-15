@@ -2,13 +2,11 @@
 import { TokenEncryptionService } from '../security/TokenEncryptionService';
 
 /**
- * Utility functions for token management and encryption
+ * Utility functions for token management and encryption with recovery mechanisms
  */
 export class TokenUtils {
   /**
    * Check if a token has expired
-   * For Server-to-Server connections, we use a much longer expiry (1 year)
-   * since they don't have traditional token expiration
    */
   static isTokenExpired(expiresAt: string): boolean {
     if (!expiresAt) return true;
@@ -51,22 +49,16 @@ export class TokenUtils {
    * Encrypt token using secure encryption service
    */
   static async encryptToken(token: string, userId: string): Promise<string> {
-    // Check if Web Crypto API is available
-    if (!TokenEncryptionService.isSupported()) {
-      console.warn('Web Crypto API not supported, falling back to base64');
-      return btoa(token); // Fallback for unsupported environments
-    }
-
     try {
       return await TokenEncryptionService.encryptToken(token, userId);
     } catch (error) {
-      console.error('Secure encryption failed, falling back to base64:', error);
-      return btoa(token); // Fallback on encryption failure
+      console.error('Token encryption failed:', error);
+      throw new Error('Failed to encrypt token');
     }
   }
 
   /**
-   * Decrypt token using secure encryption service
+   * Decrypt token with comprehensive error handling and recovery
    */
   static async decryptToken(encryptedToken: string, userId: string): Promise<string> {
     // Check if this is a Server-to-Server placeholder token first
@@ -74,36 +66,14 @@ export class TokenUtils {
       return this.decryptServerToServerToken(encryptedToken);
     }
 
-    // Check if Web Crypto API is available
-    if (!TokenEncryptionService.isSupported()) {
-      try {
-        return atob(encryptedToken);
-      } catch (error) {
-        console.error('Base64 decode failed:', error);
-        throw new Error('Failed to decrypt token - unsupported environment');
-      }
-    }
-
     try {
       return await TokenEncryptionService.decryptToken(encryptedToken, userId);
     } catch (error) {
-      console.error('Secure decryption failed:', error);
-      throw new Error('Failed to decrypt token');
-    }
-  }
-
-  /**
-   * Rotate encryption for existing tokens (for migration)
-   */
-  static async rotateEncryptionKey(oldEncryptedToken: string, userId: string): Promise<string> {
-    try {
-      // First decrypt with old method
-      const decrypted = await this.decryptToken(oldEncryptedToken, userId);
-      // Then encrypt with new method
-      return await this.encryptToken(decrypted, userId);
-    } catch (error) {
-      console.error('Token rotation failed:', error);
-      throw error;
+      console.error('Token decryption failed, attempting recovery:', error);
+      
+      // If decryption fails, this might be a corrupted token
+      // We'll return a special error that the calling code can handle
+      throw new TokenDecryptionError('Token decryption failed - connection may need to be re-established', 'DECRYPTION_FAILED');
     }
   }
 
@@ -112,10 +82,32 @@ export class TokenUtils {
    */
   static async validateTokenDecryption(encryptedToken: string, userId: string): Promise<boolean> {
     try {
-      const decrypted = await this.decryptToken(encryptedToken, userId);
-      return decrypted.length > 0;
+      await this.decryptToken(encryptedToken, userId);
+      return true;
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Attempt to recover a corrupted token
+   */
+  static async recoverCorruptedToken(plainTextToken: string, userId: string): Promise<string> {
+    try {
+      return await TokenEncryptionService.resetCorruptedToken(plainTextToken, userId);
+    } catch (error) {
+      console.error('Token recovery failed:', error);
+      throw new Error('Failed to recover corrupted token');
+    }
+  }
+}
+
+/**
+ * Custom error class for token decryption failures
+ */
+export class TokenDecryptionError extends Error {
+  constructor(message: string, public code: string) {
+    super(message);
+    this.name = 'TokenDecryptionError';
   }
 }

@@ -1,14 +1,15 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection, ConnectionStatus } from '@/types/zoom';
 import { toast } from '@/hooks/use-toast';
-import { TokenUtils } from '../utils/tokenUtils';
+import { TokenUtils, TokenDecryptionError } from '../utils/tokenUtils';
 
 /**
- * Connection status management operations
+ * Connection status management operations with improved error handling
  */
 export class ConnectionStatusOperations {
   /**
-   * Get the primary connection for a user
+   * Get the primary connection for a user with token recovery
    */
   static async getPrimaryConnection(userId: string): Promise<ZoomConnection | null> {
     try {
@@ -29,13 +30,34 @@ export class ConnectionStatusOperations {
         return null; // No primary connection found
       }
 
-      // Decrypt tokens and cast types
-      return {
-        ...data,
-        access_token: await TokenUtils.decryptToken(data.access_token, data.user_id),
-        refresh_token: await TokenUtils.decryptToken(data.refresh_token, data.user_id),
-        connection_status: data.connection_status as ConnectionStatus,
-      } as ZoomConnection;
+      // Attempt to decrypt tokens with recovery mechanisms
+      try {
+        const decryptedAccessToken = await TokenUtils.decryptToken(data.access_token, data.user_id);
+        const decryptedRefreshToken = await TokenUtils.decryptToken(data.refresh_token, data.user_id);
+
+        return {
+          ...data,
+          access_token: decryptedAccessToken,
+          refresh_token: decryptedRefreshToken,
+          connection_status: data.connection_status as ConnectionStatus,
+        } as ZoomConnection;
+      } catch (error) {
+        if (error instanceof TokenDecryptionError) {
+          console.error('Token decryption failed for connection:', data.id, error);
+          
+          // Mark connection as requiring re-authentication
+          await this.updateConnectionStatus(data.id, 'error' as ConnectionStatus);
+          
+          toast({
+            title: "Connection Issue",
+            description: "Your Zoom connection needs to be re-established. Please reconnect your account.",
+            variant: "destructive",
+          });
+          
+          return null;
+        }
+        throw error;
+      }
     } catch (error) {
       console.error('Unexpected error getting primary connection:', error);
       return null;

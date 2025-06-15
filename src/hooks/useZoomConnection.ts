@@ -15,21 +15,40 @@ export const useZoomConnection = () => {
     queryKey: ['zoom-connection', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
-      return await ZoomConnectionService.getPrimaryConnection(user.id);
+      
+      try {
+        return await ZoomConnectionService.getPrimaryConnection(user.id);
+      } catch (error) {
+        console.error('Error fetching zoom connection:', error);
+        // Return null instead of throwing to prevent query from being stuck in error state
+        return null;
+      }
     },
     enabled: !!user?.id,
-    refetchInterval: (data) => {
+    refetchInterval: (data, query) => {
       // If we have a connection, check less frequently
-      // If no connection, only poll occasionally to avoid spam
-      return data ? 30000 : 60000; // 30s when connected, 60s when disconnected
+      // If there's an error or no connection, check more frequently but with backoff
+      if (query.state.error) {
+        return false; // Don't auto-refetch on errors
+      }
+      return data ? 60000 : 30000; // 60s when connected, 30s when disconnected
     },
     retry: (failureCount, error) => {
-      // Don't retry on 406 errors, they're expected when no connection exists
-      if (error && typeof error === 'object' && 'status' in error && error.status === 406) {
+      // Don't retry aggressively on connection errors
+      if (failureCount >= 2) {
         return false;
       }
-      return failureCount < 2;
+      
+      // Don't retry on token decryption errors
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'DECRYPTION_FAILED') {
+        return false;
+      }
+      
+      return true;
     },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+    staleTime: 30000, // Consider data stale after 30 seconds
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
   });
 
   const isConnected = !!connection && !ZoomConnectionService.isTokenExpired(connection.token_expires_at);
