@@ -1,4 +1,3 @@
-
 import { SimpleTokenEncryption } from './encryption.ts';
 
 export async function validateZoomConnection(connection: any): Promise<boolean> {
@@ -25,30 +24,47 @@ export async function validateZoomConnection(connection: any): Promise<boolean> 
   }
 }
 
-export async function createZoomAPIClient(connection: any) {
-  // Decrypt the access token
-  let accessToken = connection.access_token;
-  
+export async function createZoomAPIClient(connection: any, supabase: any) {
+  let accessToken;
   try {
-    // Try to decrypt if it's encrypted
-    accessToken = await SimpleTokenEncryption.decryptToken(accessToken, connection.user_id);
+    accessToken = await SimpleTokenEncryption.decryptToken(connection.access_token, connection.user_id);
   } catch (error) {
     console.log('Token decryption failed, assuming plain text token:', error.message);
-    // If decryption fails, assume it's a plain text token
+    accessToken = connection.access_token;
   }
 
-  return new ZoomAPIClient(accessToken);
+  return new ZoomAPIClient(connection, supabase, accessToken);
 }
 
 class ZoomAPIClient {
+  private connection: any;
+  private supabase: any;
   private accessToken: string;
   private baseURL = 'https://api.zoom.us/v2';
 
-  constructor(accessToken: string) {
+  constructor(connection: any, supabase: any, accessToken: string) {
+    this.connection = connection;
+    this.supabase = supabase;
     this.accessToken = accessToken;
   }
 
-  private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+  private async refreshToken() {
+    console.log(`Attempting to refresh token for connection: ${this.connection.id}`);
+    const { data, error } = await this.supabase.functions.invoke('zoom-token-refresh', {
+        body: { connectionId: this.connection.id }
+    });
+
+    if (error) {
+      console.error(`Token refresh invocation failed for connection ${this.connection.id}:`, error);
+      throw new Error('Token refresh failed. Please re-authenticate.');
+    }
+
+    this.connection = data.connection;
+    this.accessToken = await SimpleTokenEncryption.decryptToken(data.connection.access_token, this.connection.user_id);
+    console.log(`Token refreshed successfully for connection: ${this.connection.id}`);
+  }
+
+  private async makeRequest(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
     const url = `${this.baseURL}${endpoint}`;
     
     const response = await fetch(url, {
@@ -61,6 +77,18 @@ class ZoomAPIClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401 && retryCount < 1) {
+        console.log(`Received 401 for ${endpoint}. Attempting token refresh.`);
+        try {
+          await this.refreshToken();
+          // Retry the request with the new token
+          return await this.makeRequest(endpoint, options, retryCount + 1);
+        } catch (refreshError) {
+          console.error(`Refresh token flow failed for ${endpoint}:`, refreshError.message);
+          // If refresh fails, throw the original error
+        }
+      }
+
       const errorText = await response.text();
       console.error(`Zoom API error (${response.status}):`, errorText);
       const error = new Error(`Zoom API request failed: ${response.status} ${response.statusText}`);

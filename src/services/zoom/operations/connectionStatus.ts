@@ -148,6 +148,9 @@ export class ConnectionStatusOperations {
     try {
       // Check if token is expired first
       if (TokenUtils.isTokenExpired(connection.token_expires_at)) {
+        const refreshedConnection = await this.refreshToken(connection);
+        if (refreshedConnection) return 'active';
+
         await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
         return 'expired' as ConnectionStatus;
       }
@@ -168,31 +171,36 @@ export class ConnectionStatusOperations {
 
   /**
    * Refresh an expired access token using the refresh token
-   * Note: This is a placeholder - actual implementation would call Zoom's OAuth endpoint
    */
   static async refreshToken(connection: ZoomConnection): Promise<ZoomConnection | null> {
     try {
-      // TODO: Implement actual token refresh logic with Zoom OAuth endpoint
-      // This would involve:
-      // 1. POST to https://zoom.us/oauth/token with refresh_token
-      // 2. Get new access_token and refresh_token
-      // 3. Update the connection record
-      
-      console.log('Token refresh not yet implemented for connection:', connection.id);
-      
       toast({
-        title: "Token Refresh",
-        description: "Token refresh functionality will be implemented with Zoom OAuth integration.",
+        title: "Refreshing Connection",
+        description: "Your Zoom connection is being refreshed...",
       });
 
-      return connection;
+      const { data, error } = await supabase.functions.invoke('zoom-token-refresh', {
+        body: { connectionId: connection.id },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Unknown error during token refresh.');
+      }
+      
+      toast({
+        title: "Connection Refreshed",
+        description: "Your Zoom token has been successfully refreshed.",
+      });
+
+      return data.connection;
     } catch (error) {
       console.error('Error refreshing token:', error);
       toast({
-        title: "Refresh Error",
-        description: "Failed to refresh access token.",
+        title: "Refresh Failed",
+        description: "Could not refresh your Zoom connection. Please re-authenticate in settings.",
         variant: "destructive",
       });
+      await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
       return null;
     }
   }

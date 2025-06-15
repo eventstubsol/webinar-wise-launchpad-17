@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { ConnectionData } from './types.ts';
 
@@ -40,18 +39,41 @@ export class DatabaseService {
     }
   }
 
-  async saveConnection(connectionData: ConnectionData) {
-    const { data: connection, error } = await this.supabase
+  async upsertConnection(connectionData: ConnectionData) {
+    await this.unsetPrimaryConnections(connectionData.user_id);
+
+    const { data: existing } = await this.supabase
       .from('zoom_connections')
-      .insert(connectionData)
-      .select()
-      .single();
+      .select('id')
+      .eq('user_id', connectionData.user_id)
+      .eq('zoom_user_id', connectionData.zoom_user_id)
+      .maybeSingle();
 
-    if (error) {
-      console.error('Failed to insert connection:', error);
-      throw new Error('Failed to save connection');
+    if (existing) {
+      const { data: updated, error } = await this.supabase
+        .from('zoom_connections')
+        .update({ ...connectionData, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Failed to update connection:', error);
+        throw new Error('Failed to update connection');
+      }
+      return updated;
+    } else {
+      const { data: inserted, error } = await this.supabase
+        .from('zoom_connections')
+        .insert(connectionData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Failed to insert connection:', error);
+        throw new Error('Failed to save connection');
+      }
+      return inserted;
     }
-
-    return connection;
   }
 }
