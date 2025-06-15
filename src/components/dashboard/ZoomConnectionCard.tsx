@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Wifi, WifiOff, RefreshCw, Settings, AlertCircle } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
+import { ZoomConnectButton } from '@/components/zoom/ZoomConnectButton';
 
 export function ZoomConnectionCard() {
-  const { connection, isLoading, isConnected, isExpired, reconnect } = useZoomConnection();
+  const { connection, isLoading, isConnected, isExpired, refetch } = useZoomConnection();
 
   const getStatusInfo = () => {
     if (isLoading) {
@@ -48,6 +49,10 @@ export function ZoomConnectionCard() {
   const status = getStatusInfo();
   const StatusIcon = status.icon;
 
+  const handleSyncNow = () => {
+    refetch();
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -78,7 +83,7 @@ export function ZoomConnectionCard() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={handleSyncNow}>
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Sync Now
               </Button>
@@ -96,10 +101,11 @@ export function ZoomConnectionCard() {
                 : 'Connect your Zoom account to start analyzing your webinar data and unlock powerful insights.'
               }
             </p>
-            <Button onClick={reconnect} className="w-full">
-              <Wifi className="w-4 h-4 mr-2" />
-              {isExpired ? 'Reconnect Zoom' : 'Connect Zoom Account'}
-            </Button>
+            <ZoomConnectButton 
+              variant="default"
+              size="default"
+              className="w-full"
+            />
           </div>
         )}
       </CardContent>
