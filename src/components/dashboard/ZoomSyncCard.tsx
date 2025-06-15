@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Database, Calendar, Users, Clock } from 'lucide-react';
+import { Database, Calendar, Users, Clock, AlertTriangle } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,28 +18,49 @@ export function ZoomSyncCard() {
     queryFn: async () => {
       if (!connection?.id) return null;
 
-      const [webinarsResult, syncLogsResult] = await Promise.all([
-        supabase
-          .from('zoom_webinars')
-          .select('id, synced_at', { count: 'exact' })
-          .eq('connection_id', connection.id),
-        supabase
-          .from('zoom_sync_logs')
-          .select('*')
-          .eq('connection_id', connection.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
-      ]);
+      try {
+        const [webinarsResult, syncLogsResult] = await Promise.all([
+          supabase
+            .from('zoom_webinars')
+            .select('id, synced_at', { count: 'exact' })
+            .eq('connection_id', connection.id),
+          supabase
+            .from('zoom_sync_logs')
+            .select('*')
+            .eq('connection_id', connection.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle() // Changed from .single() to .maybeSingle()
+        ]);
 
-      return {
-        totalWebinars: webinarsResult.count || 0,
-        lastSync: syncLogsResult.data?.completed_at || connection.last_sync_at,
-        lastSyncStatus: syncLogsResult.data?.sync_status
-      };
+        return {
+          totalWebinars: webinarsResult.count || 0,
+          lastSync: syncLogsResult.data?.completed_at || connection.last_sync_at,
+          lastSyncStatus: syncLogsResult.data?.sync_status,
+          lastSyncError: syncLogsResult.data?.error_message
+        };
+      } catch (error) {
+        console.error('Error fetching sync stats:', error);
+        return {
+          totalWebinars: 0,
+          lastSync: null,
+          lastSyncStatus: null,
+          lastSyncError: null
+        };
+      }
     },
     enabled: !!connection?.id,
     refetchInterval: 30000, // Refresh every 30 seconds
+    retry: (failureCount, error) => {
+      // Don't retry on 4xx errors to prevent spam
+      const hasStatus = error && typeof error === 'object' && 'status' in error;
+      const status = hasStatus ? (error as any).status : null;
+      
+      if (typeof status === 'number' && status >= 400 && status < 500) {
+        return false;
+      }
+      return failureCount < 2;
+    },
   });
 
   const formatLastSync = (dateString: string | null) => {
@@ -54,13 +76,14 @@ export function ZoomSyncCard() {
     return date.toLocaleDateString();
   };
 
-  const getStatusBadge = (status: string | undefined) => {
+  const getStatusBadge = (status: string | undefined | null) => {
     switch (status) {
       case 'completed':
         return <Badge variant="secondary">Synced</Badge>;
       case 'failed':
         return <Badge variant="destructive">Failed</Badge>;
       case 'in_progress':
+      case 'started':
         return <Badge variant="default">Syncing</Badge>;
       default:
         return <Badge variant="outline">Not Synced</Badge>;
@@ -113,6 +136,24 @@ export function ZoomSyncCard() {
             </div>
           </div>
         </div>
+
+        {/* Show error message if last sync failed */}
+        {syncStats?.lastSyncStatus === 'failed' && syncStats?.lastSyncError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+              <div className="text-sm">
+                <p className="text-red-800 font-medium">Last sync failed</p>
+                <p className="text-red-700">{syncStats.lastSyncError}</p>
+                {syncStats.lastSyncError.includes('401') && (
+                  <p className="text-red-600 mt-1">
+                    This usually means your Zoom authentication has expired. Try reconnecting your Zoom account.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="pt-2 border-t">
           <Button asChild variant="outline" size="sm">
