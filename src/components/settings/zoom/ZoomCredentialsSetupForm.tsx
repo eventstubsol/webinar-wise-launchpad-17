@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/common/FormField';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ExternalLink, Key, Shield, Info } from 'lucide-react';
+import { ExternalLink, Key, Shield, Info, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ZoomCredentialsService } from '@/services/zoom/ZoomCredentialsService';
 import { ZoomCredentials } from '@/types/zoomCredentials';
@@ -22,6 +22,7 @@ export const ZoomCredentialsSetupForm: React.FC<ZoomCredentialsSetupFormProps> =
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [isSuccess, setIsSuccess] = useState(false);
   
   const [formData, setFormData] = useState({
     account_id: '',
@@ -40,10 +41,14 @@ export const ZoomCredentialsSetupForm: React.FC<ZoomCredentialsSetupFormProps> =
     if (errors.length > 0) {
       setErrors([]);
     }
+    if (isSuccess) {
+      setIsSuccess(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSuccess(false);
     
     if (!user) {
       setErrors(['User not authenticated']);
@@ -67,7 +72,10 @@ export const ZoomCredentialsSetupForm: React.FC<ZoomCredentialsSetupFormProps> =
       });
 
       if (credentials) {
-        onCredentialsSaved?.(credentials);
+        setIsSuccess(true);
+        setTimeout(() => {
+          onCredentialsSaved?.(credentials);
+        }, 1500);
       }
     } catch (error) {
       setErrors(['Failed to save credentials. Please try again.']);
@@ -89,7 +97,7 @@ export const ZoomCredentialsSetupForm: React.FC<ZoomCredentialsSetupFormProps> =
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            To connect your Zoom account, you need to create a OAuth app in your Zoom Marketplace account.
+            To connect your Zoom account, you need to create a Server-to-Server OAuth app in your Zoom Marketplace account.
             <div className="mt-2">
               <Button
                 variant="link"
@@ -103,6 +111,16 @@ export const ZoomCredentialsSetupForm: React.FC<ZoomCredentialsSetupFormProps> =
             </div>
           </AlertDescription>
         </Alert>
+
+        {/* Success display */}
+        {isSuccess && (
+          <Alert className="bg-green-50 border-green-200 text-green-800">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <AlertDescription>
+              Credentials saved successfully! You can now validate the connection.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Error display */}
         {errors.length > 0 && (
@@ -178,13 +196,18 @@ export const ZoomCredentialsSetupForm: React.FC<ZoomCredentialsSetupFormProps> =
           <div className="flex gap-3">
             <Button 
               type="submit" 
-              disabled={isLoading}
+              disabled={isLoading || isSuccess}
               className="flex-1"
             >
               {isLoading ? (
                 <>
                   <LoadingSpinner size="sm" />
                   <span className="ml-2">Saving...</span>
+                </>
+              ) : isSuccess ? (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Saved!
                 </>
               ) : (
                 'Save Credentials'

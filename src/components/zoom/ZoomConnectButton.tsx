@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -26,7 +26,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
   className = '',
 }) => {
   const { toast } = useToast();
-  const { isValidating, startValidation, credentials, user } = useZoomValidation({
+  const { isValidating, startValidation, credentials, user, validationResult } = useZoomValidation({
     onConnectionSuccess,
     onConnectionError,
   });
@@ -105,6 +105,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
       <ZoomButtonStatus
         connection={connection}
         credentials={credentials}
+        validationResult={validationResult}
       />
     </div>
   );

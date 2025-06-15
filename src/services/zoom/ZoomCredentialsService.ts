@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { ZoomCredentials, ZoomCredentialsInsert, ZoomCredentialsUpdate } from '@/types/zoomCredentials';
 import { toast } from '@/hooks/use-toast';
@@ -32,13 +31,33 @@ export class ZoomCredentialsService {
   }
 
   /**
-   * Create new Zoom credentials
+   * Create new Zoom credentials, or update if they already exist.
    */
   static async createCredentials(credentials: ZoomCredentialsInsert): Promise<ZoomCredentials | null> {
     try {
-      // First, deactivate any existing active credentials
-      await this.deactivateExistingCredentials(credentials.user_id);
+      // Check for any existing credentials for this user
+      const { data: existing, error: getError } = await supabase
+        .from('zoom_credentials')
+        .select('id')
+        .eq('user_id', credentials.user_id)
+        .single();
 
+      if (getError && getError.code !== 'PGRST116') {
+        console.error('Error checking for existing credentials:', getError);
+        toast({
+          title: "Database Error",
+          description: "Could not verify existing credentials configuration.",
+          variant: "destructive",
+        });
+        return null;
+      }
+
+      if (existing) {
+        // If credentials exist, update them. The service will show its own toast.
+        return this.updateCredentials(existing.id, { ...credentials, is_active: true });
+      }
+
+      // No credentials exist, so create new ones.
       const { data, error } = await supabase
         .from('zoom_credentials')
         .insert({

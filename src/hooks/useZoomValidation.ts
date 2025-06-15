@@ -18,6 +18,7 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
   const queryClient = useQueryClient();
   const [isValidating, setIsValidating] = useState(false);
   const { credentials } = useZoomCredentials();
+  const [validationResult, setValidationResult] = useState<any>(null);
 
   const validateCredentialsMutation = useMutation({
     mutationFn: async () => {
@@ -42,6 +43,7 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
     },
     onSuccess: (result) => {
       setIsValidating(false);
+      setValidationResult(result);
       
       queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
       
@@ -56,6 +58,7 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
     },
     onError: (error: Error) => {
       setIsValidating(false);
+      setValidationResult({ success: false, error: error.message });
       const errorMessage = error.message || 'Failed to validate Zoom credentials';
       toast({
         title: "Validation Failed",
@@ -68,6 +71,7 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
 
   const startValidation = () => {
     setIsValidating(true);
+    setValidationResult(null);
     validateCredentialsMutation.mutate();
   };
 
@@ -76,5 +80,6 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
     startValidation,
     credentials,
     user,
+    validationResult,
   };
 };
