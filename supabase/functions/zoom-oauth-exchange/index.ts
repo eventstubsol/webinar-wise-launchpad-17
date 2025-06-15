@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { OAuthRequest, TokenResponse, ZoomUser, ConnectionData } from './types.ts';
 import { SimpleTokenEncryption } from './encryption.ts';
@@ -69,8 +68,10 @@ serve(async (req) => {
 
     // Encrypt tokens and prepare connection data
     const tokenExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
-    const userKey = user.id + user.email;
     
+    // FIX: Use a consistent key for encryption (user.id only) to match decryption logic.
+    const userKey = user.id;
+
     const encryptedAccessToken = await SimpleTokenEncryption.encryptToken(tokenData.access_token, userKey);
     const encryptedRefreshToken = await SimpleTokenEncryption.encryptToken(tokenData.refresh_token, userKey);
 
@@ -79,38 +80,26 @@ serve(async (req) => {
       zoom_user_id: zoomUser.id,
       zoom_account_id: zoomUser.account_id || zoomUser.id,
       zoom_email: zoomUser.email,
+      zoom_account_type: zoomUser.type === 2 ? 'Licensed' : 'Basic',
       access_token: encryptedAccessToken,
       refresh_token: encryptedRefreshToken,
       token_expires_at: tokenExpiresAt,
+      scopes: tokenData.scope.split(' '),
       connection_status: 'active',
-      scopes: tokenData.scope ? tokenData.scope.split(' ') : ['webinar:read:admin', 'user:read:admin'],
       is_primary: true,
-      auto_sync_enabled: true,
-      sync_frequency_hours: 24,
-      zoom_account_type: zoomUser.type === 1 ? 'Basic' : zoomUser.type === 2 ? 'Pro' : 'Business'
     };
 
-    // Save connection to database
-    try {
-      await dbService.unsetPrimaryConnections(user.id);
-      const connection = await dbService.saveConnection(connectionData);
-      
-      console.log('Connection saved successfully:', connection.id);
+    // Upsert connection data in the database
+    const connection = await dbService.upsertConnection(connectionData);
+    console.log('Connection data stored successfully for user:', user.id);
 
-      return ResponseUtils.createSuccessResponse({ 
-        success: true, 
-        connection: {
-          id: connection.id,
-          zoom_email: connection.zoom_email,
-          zoom_account_type: connection.zoom_account_type
-        }
-      });
-    } catch (error) {
-      return ResponseUtils.createErrorResponse(error.message, 500);
-    }
+    return ResponseUtils.createSuccessResponse({
+      message: "Zoom account connected successfully",
+      connection,
+    });
 
   } catch (error) {
-    console.error('Unexpected error in OAuth exchange:', error);
-    return ResponseUtils.createErrorResponse('Internal server error', 500);
+    console.error('OAuth exchange function error:', error);
+    return ResponseUtils.createErrorResponse(error.message, 500);
   }
 });

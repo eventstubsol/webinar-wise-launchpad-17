@@ -63,10 +63,20 @@ class ZoomAPIClient {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`Zoom API error (${response.status}):`, errorText);
-      throw new Error(`Zoom API request failed: ${response.status} ${response.statusText}`);
+      const error = new Error(`Zoom API request failed: ${response.status} ${response.statusText}`);
+      // Attach status for better error handling upstream
+      (error as any).status = response.status;
+      try {
+        (error as any).body = JSON.parse(errorText);
+      } catch {
+        (error as any).body = { message: errorText };
+      }
+      throw error;
     }
 
-    return await response.json();
+    // Handle cases where response might be empty
+    const responseText = await response.text();
+    return responseText ? JSON.parse(responseText) : {};
   }
 
   async getWebinar(webinarId: string): Promise<any> {
