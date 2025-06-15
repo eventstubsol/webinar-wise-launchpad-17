@@ -54,12 +54,22 @@ export async function validateRequest(req: Request, supabase: any) {
   }
   
   console.log(`Connection found: ${connection.id}, status: ${connection.connection_status}`);
+  console.log(`Token expires at: ${connection.token_expires_at}`);
   
   if (connection.connection_status !== 'active') {
     console.error(`Connection is not active: ${connection.connection_status}`);
     throw { status: 400, message: `Connection is not active. Status: ${connection.connection_status}` };
   }
+
+  // Enhanced token validation
+  const expiresAt = new Date(connection.token_expires_at);
+  const now = new Date();
+  const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
   
+  console.log(`Token validation - expires: ${expiresAt.toISOString()}, now: ${now.toISOString()}`);
+  console.log(`Token is expired: ${now.getTime() >= expiresAt.getTime()}`);
+  console.log(`Token needs refresh (with buffer): ${now.getTime() >= (expiresAt.getTime() - bufferTime)}`);
+
   // Check for active syncs
   console.log('Checking for active syncs...');
   const { data: activeSyncs, error: activeSyncError } = await supabase

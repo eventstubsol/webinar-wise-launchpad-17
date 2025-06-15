@@ -36,25 +36,23 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
     const tokenStatus = TokenUtils.getTokenStatus(connection);
     console.log('Token status:', tokenStatus);
+    console.log('Token expires at:', connection.token_expires_at);
+    console.log('Current time:', new Date().toISOString());
 
-    if (tokenStatus !== TokenStatus.VALID && tokenStatus !== TokenStatus.ACCESS_EXPIRED) {
-      console.error('Invalid token status:', tokenStatus);
-      
-      if (tokenStatus === TokenStatus.REFRESH_EXPIRED) {
-        toast({
-          title: "Connection Expired",
-          description: "Your Zoom connection has expired. Please reconnect in Settings.",
-          variant: "destructive",
-        });
-        return;
-      } else if (tokenStatus === TokenStatus.INVALID) {
-        toast({
-          title: "Invalid Connection",
-          description: "Your Zoom connection is invalid. Please reconnect in Settings.",
-          variant: "destructive",
-        });
-        return;
-      }
+    // Check if refresh token is expired
+    if (tokenStatus === TokenStatus.REFRESH_EXPIRED || tokenStatus === TokenStatus.INVALID) {
+      console.error('Refresh token expired or invalid:', tokenStatus);
+      toast({
+        title: "Connection Expired",
+        description: "Your Zoom connection has expired. Please reconnect in Settings.",
+        variant: "destructive",
+        action: (
+          <Button asChild variant="secondary" size="sm">
+            <Link to="/settings">Go to Settings</Link>
+          </Button>
+        ),
+      });
+      return;
     }
 
     setIsSyncing(true);
@@ -137,6 +135,8 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
         if (syncLogs) {
           console.log('Sync status:', syncLogs.sync_status, `${syncLogs.processed_items}/${syncLogs.total_items}`);
+          console.log('Sync error message:', syncLogs.error_message);
+          console.log('Sync error details:', syncLogs.error_details);
           
           const progress = syncLogs.total_items > 0 
             ? Math.round((syncLogs.processed_items / syncLogs.total_items) * 100)

@@ -20,12 +20,14 @@ export async function validateZoomConnection(connection: any): Promise<boolean> 
     const now = new Date();
     const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
 
+    console.log(`Token expires at: ${expiresAt.toISOString()}, Current time: ${now.toISOString()}`);
+
     if (now.getTime() >= (expiresAt.getTime() - bufferTime)) {
-      console.log('Access token has expired, will need refresh');
+      console.log('Access token has expired or will expire soon, will need refresh');
       return true; // Still valid for refresh
     }
 
-    console.log('Connection validation successful');
+    console.log('Connection validation successful - token is valid');
     return true;
   } catch (error) {
     console.error('Error validating Zoom connection:', error);
@@ -56,18 +58,18 @@ class ZoomAPIClient {
   private connection: any;
   private supabase: any;
   private accessToken: string;
-  private refreshToken: string;
+  private refreshTokenValue: string;
   private baseURL = 'https://api.zoom.us/v2';
 
   constructor(connection: any, supabase: any, accessToken: string, refreshToken: string) {
     this.connection = connection;
     this.supabase = supabase;
     this.accessToken = accessToken;
-    this.refreshToken = refreshToken;
+    this.refreshTokenValue = refreshToken;
   }
 
-  private async refreshToken() {
-    console.log(`Attempting to refresh token for connection: ${this.connection.id}`);
+  private async refreshTokens() {
+    console.log(`Attempting to refresh tokens for connection: ${this.connection.id}`);
     
     try {
       const { data, error } = await this.supabase.functions.invoke('zoom-token-refresh', {
@@ -90,7 +92,7 @@ class ZoomAPIClient {
       // Decrypt the new tokens
       try {
         this.accessToken = await SimpleTokenEncryption.decryptToken(data.connection.access_token, this.connection.user_id);
-        console.log(`Token refreshed successfully for connection: ${this.connection.id}`);
+        console.log(`Tokens refreshed successfully for connection: ${this.connection.id}`);
       } catch (decryptError) {
         console.log('Using plain text token from refresh response');
         this.accessToken = data.connection.access_token;
@@ -111,10 +113,12 @@ class ZoomAPIClient {
     const now = new Date();
     const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
 
+    console.log(`Pre-request token check - expires: ${expiresAt.toISOString()}, now: ${now.toISOString()}, needs refresh: ${now.getTime() >= (expiresAt.getTime() - bufferTime)}`);
+
     if (now.getTime() >= (expiresAt.getTime() - bufferTime) && retryCount === 0) {
-      console.log('Token is expired, refreshing before request');
+      console.log('Token is expired/expiring, refreshing before request');
       try {
-        await this.refreshToken();
+        await this.refreshTokens();
       } catch (refreshError) {
         console.error('Pre-emptive token refresh failed:', refreshError);
         const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
@@ -139,11 +143,11 @@ class ZoomAPIClient {
       if (response.status === 401 && retryCount < 1) {
         console.log(`Received 401 for ${endpoint}. Attempting token refresh.`);
         try {
-          await this.refreshToken();
+          await this.refreshTokens();
           // Retry the request with the new token
           return await this.makeRequest(endpoint, options, retryCount + 1);
         } catch (refreshError) {
-          console.error(`Refresh token flow failed for ${endpoint}:`, refreshError.message);
+          console.error(`Token refresh flow failed for ${endpoint}:`, refreshError.message);
           // If refresh fails, throw a specific auth error
           const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
           (authError as any).status = 401;
