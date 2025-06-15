@@ -2803,6 +2803,39 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          browser_notifications_enabled: boolean | null
+          created_at: string
+          email_notifications_enabled: boolean | null
+          id: string
+          notification_types: Json | null
+          toast_notifications_enabled: boolean | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          browser_notifications_enabled?: boolean | null
+          created_at?: string
+          email_notifications_enabled?: boolean | null
+          id?: string
+          notification_types?: Json | null
+          toast_notifications_enabled?: boolean | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          browser_notifications_enabled?: boolean | null
+          created_at?: string
+          email_notifications_enabled?: boolean | null
+          id?: string
+          notification_types?: Json | null
+          toast_notifications_enabled?: boolean | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       optimization_experiments: {
         Row: {
           control_group_size: number | null
@@ -3090,6 +3123,50 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      rate_limit_tracking: {
+        Row: {
+          api_calls_limit: number
+          api_calls_made: number
+          connection_id: string
+          created_at: string
+          id: string
+          reset_time: string
+          updated_at: string
+          user_id: string
+          warning_threshold: number | null
+        }
+        Insert: {
+          api_calls_limit?: number
+          api_calls_made?: number
+          connection_id: string
+          created_at?: string
+          id?: string
+          reset_time: string
+          updated_at?: string
+          user_id: string
+          warning_threshold?: number | null
+        }
+        Update: {
+          api_calls_limit?: number
+          api_calls_made?: number
+          connection_id?: string
+          created_at?: string
+          id?: string
+          reset_time?: string
+          updated_at?: string
+          user_id?: string
+          warning_threshold?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rate_limit_tracking_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       realtime_events: {
         Row: {
@@ -3388,6 +3465,44 @@ export type Database = {
           },
         ]
       }
+      sync_performance_metrics: {
+        Row: {
+          id: string
+          metadata: Json | null
+          metric_name: string
+          metric_unit: string | null
+          metric_value: number
+          recorded_at: string
+          sync_id: string
+        }
+        Insert: {
+          id?: string
+          metadata?: Json | null
+          metric_name: string
+          metric_unit?: string | null
+          metric_value: number
+          recorded_at?: string
+          sync_id: string
+        }
+        Update: {
+          id?: string
+          metadata?: Json | null
+          metric_name?: string
+          metric_unit?: string | null
+          metric_value?: number
+          recorded_at?: string
+          sync_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_performance_metrics_sync_id_fkey"
+            columns: ["sync_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_sync_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_progress: {
         Row: {
           completed_webinars: number
@@ -3428,6 +3543,59 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "sync_progress_sync_id_fkey"
+            columns: ["sync_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_sync_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          estimated_duration_seconds: number | null
+          id: string
+          queue_position: number
+          started_at: string | null
+          status: string
+          sync_id: string
+          updated_at: string
+          webinar_id: string
+          webinar_title: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          estimated_duration_seconds?: number | null
+          id?: string
+          queue_position: number
+          started_at?: string | null
+          status?: string
+          sync_id: string
+          updated_at?: string
+          webinar_id: string
+          webinar_title?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          estimated_duration_seconds?: number | null
+          id?: string
+          queue_position?: number
+          started_at?: string | null
+          status?: string
+          sync_id?: string
+          updated_at?: string
+          webinar_id?: string
+          webinar_title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_queue_sync_id_fkey"
             columns: ["sync_id"]
             isOneToOne: false
             referencedRelation: "zoom_sync_logs"
