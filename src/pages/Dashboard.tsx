@@ -3,8 +3,9 @@ import React from 'react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/dashboard/AppSidebar';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { ZoomConnectionCard } from '@/components/dashboard/ZoomConnectionCard';
-import { ZoomSyncCard } from '@/components/dashboard/ZoomSyncCard';
+import { MetricsCards } from '@/components/dashboard/MetricsCards';
+import { ChartsSection } from '@/components/dashboard/ChartsSection';
+import { DataTables } from '@/components/dashboard/DataTables';
 
 export default function Dashboard() {
   return (
@@ -15,13 +16,17 @@ export default function Dashboard() {
         <main className="p-6 space-y-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600">Welcome to your webinar analytics dashboard.</p>
+            <p className="text-gray-600">Welcome back! Here's an overview of your webinars</p>
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ZoomConnectionCard />
-            <ZoomSyncCard />
-          </div>
+          {/* Metrics Cards Section */}
+          <MetricsCards />
+          
+          {/* Charts Section */}
+          <ChartsSection />
+          
+          {/* Data Tables Section */}
+          <DataTables />
         </main>
       </SidebarInset>
     </SidebarProvider>
