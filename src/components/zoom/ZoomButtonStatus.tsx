@@ -38,9 +38,15 @@ export const ZoomButtonStatus: React.FC<ZoomButtonStatusProps> = ({
 
   // Priority 2: Show existing connection status
   if (connection && !ZoomConnectionService.isTokenExpired(connection.token_expires_at)) {
+    // Check if this is a Server-to-Server connection with placeholder tokens
+    const isServerToServer = connection.access_token && 
+      (connection.access_token.includes('SERVER_TO_SERVER_') || 
+       connection.zoom_account_type !== 'OAuth');
+    
     return (
-      <div className="text-xs text-muted-foreground">
-        Connected as: {connection.zoom_email}
+      <div className="text-xs text-green-600 flex items-center gap-1">
+        <CheckCircle className="w-3 h-3" />
+        <span>Connected: {connection.zoom_email}</span>
       </div>
     );
   }

@@ -45,7 +45,13 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
       setIsValidating(false);
       setValidationResult(result);
       
+      // Immediately invalidate and refetch connection data
       queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
+      
+      // Also update the cache optimistically with the new connection data
+      if (result.connection) {
+        queryClient.setQueryData(['zoom-connection', user?.id], result.connection);
+      }
       
       toast({
         title: "Success!",

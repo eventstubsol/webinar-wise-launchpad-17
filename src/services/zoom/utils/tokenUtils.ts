@@ -21,6 +21,33 @@ export class TokenUtils {
   }
 
   /**
+   * Check if this is a Server-to-Server placeholder token
+   */
+  private static isServerToServerPlaceholder(encryptedToken: string): boolean {
+    try {
+      // Server-to-Server tokens from our edge function use simple base64 encoding
+      const decoded = atob(encryptedToken);
+      return decoded.includes('SERVER_TO_SERVER_');
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Decrypt Server-to-Server placeholder token
+   */
+  private static decryptServerToServerToken(encryptedToken: string): string {
+    try {
+      const decoded = atob(encryptedToken);
+      const [token] = decoded.split(':');
+      return token;
+    } catch (error) {
+      console.error('Failed to decrypt Server-to-Server token:', error);
+      return 'INVALID_TOKEN';
+    }
+  }
+
+  /**
    * Encrypt token using secure encryption service
    */
   static async encryptToken(token: string, userId: string): Promise<string> {
@@ -42,6 +69,11 @@ export class TokenUtils {
    * Decrypt token using secure encryption service
    */
   static async decryptToken(encryptedToken: string, userId: string): Promise<string> {
+    // Check if this is a Server-to-Server placeholder token first
+    if (this.isServerToServerPlaceholder(encryptedToken)) {
+      return this.decryptServerToServerToken(encryptedToken);
+    }
+
     // Check if Web Crypto API is available
     if (!TokenEncryptionService.isSupported()) {
       try {
@@ -82,6 +114,12 @@ export class TokenUtils {
    * Validate token decryption health
    */
   static async validateTokenDecryption(encryptedToken: string, userId: string): Promise<boolean> {
+    // Server-to-Server tokens are always valid if they're placeholders
+    if (this.isServerToServerPlaceholder(encryptedToken)) {
+      const decrypted = this.decryptServerToServerToken(encryptedToken);
+      return decrypted.includes('SERVER_TO_SERVER_');
+    }
+
     if (!TokenEncryptionService.isSupported()) {
       try {
         atob(encryptedToken);
