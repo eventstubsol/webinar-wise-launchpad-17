@@ -3,14 +3,14 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar, RefreshCw, Settings } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
-import { SyncWebinarsButton } from '@/components/zoom/sync/SyncWebinarsButton';
+import { Link } from 'react-router-dom';
 
 interface WebinarEmptyStateProps {
   hasFilters: boolean;
 }
 
 export const WebinarEmptyState: React.FC<WebinarEmptyStateProps> = ({ hasFilters }) => {
-  const { connection, isConnected } = useZoomConnection();
+  const { isConnected } = useZoomConnection();
 
   if (!isConnected) {
     return (
@@ -20,9 +20,11 @@ export const WebinarEmptyState: React.FC<WebinarEmptyStateProps> = ({ hasFilters
         <p className="text-gray-600 mb-6">
           Connect your Zoom account to view and analyze your webinars.
         </p>
-        <Button>
-          <Settings className="w-4 h-4 mr-2" />
-          Connect Zoom Account
+        <Button asChild>
+          <Link to="/settings">
+            <Settings className="w-4 h-4 mr-2" />
+            Connect Zoom Account
+          </Link>
         </Button>
       </div>
     );
@@ -46,13 +48,13 @@ export const WebinarEmptyState: React.FC<WebinarEmptyStateProps> = ({ hasFilters
       <h3 className="text-lg font-medium text-gray-900 mb-2">No Webinar Data</h3>
       <p className="text-gray-600 mb-6">
         Your Zoom account is connected, but we haven't synced your webinar data yet. 
-        Click the button below to import your webinars.
+        Go to the Sync Center to import your webinars.
       </p>
-      <SyncWebinarsButton 
-        connectionId={connection?.id}
-        variant="default"
-        size="default"
-      />
+      <Button asChild>
+        <Link to="/sync-center">
+          <RefreshCw className="mr-2 h-4 w-4" /> Go to Sync Center
+        </Link>
+      </Button>
     </div>
   );
 };
