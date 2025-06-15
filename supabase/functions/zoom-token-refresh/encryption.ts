@@ -1,5 +1,5 @@
+
 import { Buffer } from "https://deno.land/std@0.168.0/io/buffer.ts";
-import { create as createHmac } from "https://deno.land/std@0.168.0/hash/hkdf.ts";
 
 const IV_LENGTH = 16;
 const ENCRYPTION_KEY = Deno.env.get('ENCRYPTION_SALT') || 'default-salt-is-not-secure-change-me';
