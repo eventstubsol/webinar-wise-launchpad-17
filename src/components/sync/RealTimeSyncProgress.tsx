@@ -16,12 +16,45 @@ import {
   Activity
 } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
-import { useZoomSync } from '@/hooks/useZoomSync';
 import { formatDistanceToNow } from 'date-fns';
 
 interface RealTimeSyncProgressProps {
   connectionId: string;
 }
+
+interface SyncResult {
+  status: string;
+  completedAt?: string;
+  startedAt: string;
+  processedItems?: number;
+  duration?: number;
+  error?: string;
+}
+
+interface ZoomSyncHook {
+  isSyncing: boolean;
+  syncProgress: number;
+  currentOperation: string;
+  startSync: (type?: 'initial' | 'incremental') => Promise<void>;
+  syncStatus?: string;
+  lastSyncResult?: SyncResult;
+  estimatedTimeRemaining?: number;
+}
+
+// Mock hook implementation for now - this should be implemented properly
+const useZoomSync = (connectionId: string): ZoomSyncHook => {
+  return {
+    isSyncing: false,
+    syncProgress: 0,
+    currentOperation: '',
+    startSync: async (type?: 'initial' | 'incremental') => {
+      console.log('Starting sync:', type);
+    },
+    syncStatus: 'idle',
+    lastSyncResult: undefined,
+    estimatedTimeRemaining: undefined
+  };
+};
 
 export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
   connectionId,
@@ -30,7 +63,7 @@ export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
   const { 
     isSyncing, 
     syncProgress, 
-    syncStatus, 
+    syncStatus = 'idle', 
     currentOperation, 
     startSync, 
     lastSyncResult,
@@ -131,7 +164,7 @@ export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
             
             {lastSyncResult.status === 'completed' && (
               <div className="text-sm space-y-1">
-                <div>✓ {lastSyncResult.processedItems} webinars synced successfully</div>
+                <div>✓ {lastSyncResult.processedItems || 0} webinars synced successfully</div>
                 {lastSyncResult.duration && (
                   <div>⏱ Completed in {formatTime(lastSyncResult.duration)}</div>
                 )}

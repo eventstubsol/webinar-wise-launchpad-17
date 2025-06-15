@@ -1,5 +1,5 @@
 
-import { SimpleTokenEncryption } from '../zoom-oauth-exchange/encryption.ts';
+import { SimpleTokenEncryption } from './encryption.ts';
 
 export async function validateZoomConnection(connection: any): Promise<boolean> {
   try {
