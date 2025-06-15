@@ -1,11 +1,13 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { ZoomConnection } from '@/types/zoom';
+import { TokenUtils, TokenStatus } from '@/services/zoom/utils/tokenUtils';
+import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
 
-export const useZoomSync = (connectionId?: string) => {
+export const useZoomSync = (connection?: ZoomConnection | null) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -14,12 +16,54 @@ export const useZoomSync = (connectionId?: string) => {
   const [currentOperation, setCurrentOperation] = useState<string>('');
 
   const startSync = useCallback(async (syncType: 'initial' | 'incremental' = 'incremental') => {
-    if (!user || !connectionId) {
+    if (!user || !connection) {
       toast({
-        title: "Authentication Required",
-        description: "Please connect your Zoom account first.",
+        title: "Not Connected",
+        description: "Please connect your Zoom account first to sync data.",
         variant: "destructive",
       });
+      return;
+    }
+
+    const tokenStatus = TokenUtils.getTokenStatus(connection);
+
+    if (tokenStatus !== TokenStatus.VALID) {
+      if (tokenStatus === TokenStatus.ACCESS_EXPIRED) {
+        toast({
+          title: "Refreshing connection...",
+          description: "Your connection token has expired. We are attempting to refresh it automatically.",
+        });
+        const refreshedConnection = await ZoomConnectionService.refreshToken(connection);
+        if (!refreshedConnection) {
+            toast({
+              title: "Refresh Failed",
+              description: "Could not refresh your Zoom connection. Please go to settings and reconnect your account.",
+              variant: "destructive",
+            });
+            return;
+        }
+        // if refresh is successful, query will refetch and user can try again.
+        toast({
+          title: "Connection Refreshed",
+          description: "Your connection is active again. Please try syncing now.",
+        });
+        // Invalidate connection query to get the new tokens
+        queryClient.invalidateQueries({ queryKey: ['zoom-connection', user.id] });
+        return;
+      }
+      
+      let title = "Sync Failed";
+      let description = "An unknown connection error occurred.";
+
+      if(tokenStatus === TokenStatus.REFRESH_EXPIRED) {
+        title = "Connection Expired";
+        description = "Your Zoom connection has expired. Please reconnect in Settings.";
+      } else if(tokenStatus === TokenStatus.INVALID) {
+        title = "Invalid Connection";
+        description = "Your Zoom connection is invalid. Please reconnect in Settings.";
+      }
+
+      toast({ title, description, variant: "destructive" });
       return;
     }
 
@@ -30,7 +74,7 @@ export const useZoomSync = (connectionId?: string) => {
     try {
       const { data, error } = await supabase.functions.invoke('zoom-sync-webinars', {
         body: {
-          connectionId,
+          connectionId: connection.id,
           syncType,
         },
       });
@@ -61,7 +105,7 @@ export const useZoomSync = (connectionId?: string) => {
         variant: "destructive",
       });
     }
-  }, [user, connectionId, toast]);
+  }, [user, connection, toast, queryClient]);
 
   const pollSyncStatus = useCallback(async (syncId: string) => {
     const pollInterval = setInterval(async () => {

@@ -1,6 +1,8 @@
+
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
+import { TokenUtils, TokenStatus } from '@/services/zoom/utils/tokenUtils';
 
 export const useZoomConnection = () => {
   const { user } = useAuth();
@@ -50,15 +52,15 @@ export const useZoomConnection = () => {
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
   });
 
-  const isConnected = !!connection && !ZoomConnectionService.isTokenExpired(connection.token_expires_at);
-  const isExpired = !!connection && ZoomConnectionService.isTokenExpired(connection.token_expires_at);
+  const tokenStatus = connection ? TokenUtils.getTokenStatus(connection) : TokenStatus.NO_CONNECTION;
+  const isTokenValid = tokenStatus === TokenStatus.VALID;
 
   return {
     connection,
-    isConnected,
-    isExpired,
     isLoading,
     error,
     refetch,
+    tokenStatus,
+    isTokenValid,
   };
 };

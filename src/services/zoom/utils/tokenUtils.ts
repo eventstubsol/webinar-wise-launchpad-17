@@ -1,5 +1,13 @@
-
 import { TokenEncryptionService } from '../security/TokenEncryptionService';
+import type { ZoomConnection } from '@/types/zoom';
+
+export enum TokenStatus {
+  VALID = 'VALID',
+  ACCESS_EXPIRED = 'ACCESS_EXPIRED', // Access token expired, refresh might be possible
+  REFRESH_EXPIRED = 'REFRESH_EXPIRED', // Refresh token is also expired/invalid, re-auth needed
+  INVALID = 'INVALID', // No tokens, corrupted, or error state
+  NO_CONNECTION = 'NO_CONNECTION', // No connection object found
+}
 
 /**
  * Utility functions for token management and encryption with recovery mechanisms
@@ -99,6 +107,33 @@ export class TokenUtils {
       console.error('Token recovery failed:', error);
       throw new Error('Failed to recover corrupted token');
     }
+  }
+
+  /**
+   * Get the status of a connection's token
+   */
+  static getTokenStatus(connection: ZoomConnection | null): TokenStatus {
+    if (!connection) {
+      return TokenStatus.NO_CONNECTION;
+    }
+    
+    if (connection.connection_status === 'error' || connection.connection_status === 'revoked') {
+      return TokenStatus.INVALID;
+    }
+
+    if (!connection.access_token || !connection.refresh_token) {
+      return TokenStatus.INVALID;
+    }
+    
+    if (connection.connection_status === 'expired') {
+      return TokenStatus.REFRESH_EXPIRED;
+    }
+
+    if (this.isTokenExpired(connection.token_expires_at)) {
+      return TokenStatus.ACCESS_EXPIRED; // Expired but might be refreshable
+    }
+
+    return TokenStatus.VALID;
   }
 }
 

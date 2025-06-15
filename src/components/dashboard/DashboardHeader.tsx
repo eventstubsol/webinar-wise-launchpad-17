@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,11 +12,12 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { TokenStatus } from '@/services/zoom/utils/tokenUtils';
 
 export function DashboardHeader() {
   const { user, profile } = useAuth();
-  const { connection, isConnected, isExpired, isLoading } = useZoomConnection();
-  const { startSync, isSyncing } = useZoomSync(connection?.id);
+  const { connection, tokenStatus, isLoading } = useZoomConnection();
+  const { startSync, isSyncing } = useZoomSync(connection);
   const { toast } = useToast();
 
   // Get the last sync timestamp
@@ -68,28 +68,39 @@ export function DashboardHeader() {
         className: 'text-gray-600 bg-gray-100'
       };
     }
-    if (isExpired) {
-      return { 
-        icon: AlertCircle, 
-        label: 'Expired', 
-        variant: 'destructive' as const,
-        className: 'text-red-600 bg-red-100 border-red-300'
-      };
+
+    switch (tokenStatus) {
+      case TokenStatus.VALID:
+        return { 
+          icon: Wifi, 
+          label: 'Connected', 
+          variant: 'default' as const,
+          className: 'text-green-700 bg-green-100 border-green-300'
+        };
+      case TokenStatus.ACCESS_EXPIRED:
+        return {
+          icon: RefreshCw,
+          label: 'Refreshing...',
+          variant: 'destructive' as const,
+          className: 'text-yellow-600 bg-yellow-100 border-yellow-300 animate-pulse'
+        };
+      case TokenStatus.REFRESH_EXPIRED:
+      case TokenStatus.INVALID:
+        return { 
+          icon: AlertCircle, 
+          label: 'Connection Expired', 
+          variant: 'destructive' as const,
+          className: 'text-red-600 bg-red-100 border-red-300'
+        };
+      case TokenStatus.NO_CONNECTION:
+      default:
+        return { 
+          icon: WifiOff, 
+          label: 'Not Connected', 
+          variant: 'outline' as const,
+          className: 'text-red-600 bg-red-100 border-red-300'
+        };
     }
-    if (isConnected) {
-      return { 
-        icon: Wifi, 
-        label: 'Connected', 
-        variant: 'default' as const,
-        className: 'text-green-700 bg-green-100 border-green-300'
-      };
-    }
-    return { 
-      icon: WifiOff, 
-      label: 'Not Connected', 
-      variant: 'outline' as const,
-      className: 'text-red-600 bg-red-100 border-red-300'
-    };
   };
 
   const status = getConnectionStatus();
@@ -105,28 +116,12 @@ export function DashboardHeader() {
   };
 
   const handleSyncClick = () => {
-    if (!isConnected) {
-      toast({
-        title: "Connection Required",
-        description: "Please connect your Zoom account in Settings to sync data.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (isExpired) {
-      toast({
-        title: "Connection Expired",
-        description: "Your Zoom connection has expired. Please reconnect in Settings.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     if (!isSyncing) {
       startSync('incremental');
     }
   };
+  
+  const isSyncButtonDisabled = isSyncing || isLoading || tokenStatus === TokenStatus.NO_CONNECTION || tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED;
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-4 border-b px-4">
@@ -148,7 +143,7 @@ export function DashboardHeader() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
             <Badge className={`flex items-center gap-1 ${status.className}`}>
-              <StatusIcon className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+              <StatusIcon className={`w-3 h-3 ${isLoading || tokenStatus === TokenStatus.ACCESS_EXPIRED ? 'animate-spin' : ''}`} />
               Zoom {status.label}
             </Badge>
             <span className="text-sm text-gray-500">
@@ -158,7 +153,7 @@ export function DashboardHeader() {
           
           <Button
             onClick={handleSyncClick}
-            disabled={isSyncing}
+            disabled={isSyncButtonDisabled}
             size="sm"
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
           >
