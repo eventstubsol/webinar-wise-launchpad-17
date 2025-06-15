@@ -34,6 +34,7 @@ import { SyncHistoryDetailView } from '@/components/sync/SyncHistoryDetailView';
 import { SyncQueueVisualization } from '@/components/sync/SyncQueueVisualization';
 import { PerformanceMetricsDashboard } from '@/components/sync/PerformanceMetricsDashboard';
 import { NotificationService } from '@/services/notifications/NotificationService';
+import { useAuth } from '@/contexts/AuthContext';
 
 const SyncAnalytics = () => {
     const { connection } = useZoomConnection();
@@ -275,7 +276,7 @@ const SyncHistory = () => {
       </Card>
       
       {selectedSync && (
-        <SyncHistoryDetailView syncLog={selectedSync} />
+        <SyncHistoryDetailView syncEntry={selectedSync} />
       )}
     </div>
   );
@@ -283,6 +284,7 @@ const SyncHistory = () => {
 
 const SyncCenterPage = () => {
     const { connection, isLoading, isConnected } = useZoomConnection();
+    const { user } = useAuth();
 
     if (isLoading) {
         return <div className="p-8 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto" /></div>;
@@ -344,7 +346,7 @@ const SyncCenterPage = () => {
                 <SyncHistory />
               </TabsContent>
               <TabsContent value="performance" className="mt-6">
-                <PerformanceMetricsDashboard connectionId={connection?.id} />
+                <PerformanceMetricsDashboard connectionId={connection?.id} userId={user?.id} />
               </TabsContent>
             </Tabs>
         </div>
