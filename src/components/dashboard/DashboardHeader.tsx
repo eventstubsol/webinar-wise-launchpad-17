@@ -53,7 +53,7 @@ export function DashboardHeader() {
         icon: RefreshCw, 
         label: 'Checking...', 
         variant: 'secondary' as const,
-        className: 'text-gray-600'
+        className: 'text-gray-600 bg-gray-100'
       };
     }
     if (isExpired) {
@@ -61,7 +61,7 @@ export function DashboardHeader() {
         icon: AlertCircle, 
         label: 'Expired', 
         variant: 'destructive' as const,
-        className: 'text-red-600 bg-red-50 border-red-200'
+        className: 'text-red-600 bg-red-100 border-red-300'
       };
     }
     if (isConnected) {
@@ -69,14 +69,14 @@ export function DashboardHeader() {
         icon: Wifi, 
         label: 'Connected', 
         variant: 'default' as const,
-        className: 'text-green-700 bg-green-50 border-green-200'
+        className: 'text-green-700 bg-green-100 border-green-300'
       };
     }
     return { 
       icon: WifiOff, 
       label: 'Not Connected', 
       variant: 'outline' as const,
-      className: 'text-red-600 bg-red-50 border-red-200'
+      className: 'text-red-600 bg-red-100 border-red-300'
     };
   };
 
@@ -105,7 +105,7 @@ export function DashboardHeader() {
         <h1 className="text-xl font-semibold text-gray-900">WebinarWise</h1>
       </div>
 
-      <div className="ml-auto flex items-center space-x-4">
+      <div className="ml-auto flex items-center space-x-6">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <Input
@@ -115,13 +115,13 @@ export function DashboardHeader() {
           />
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col items-end">
-            <Badge variant={status.variant} className={`flex items-center gap-1 ${status.className}`}>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <Badge className={`flex items-center gap-1 ${status.className}`}>
               <StatusIcon className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
               Zoom {status.label}
             </Badge>
-            <span className="text-xs text-gray-500 mt-1">
+            <span className="text-sm text-gray-500">
               {formatLastSync(lastSyncData?.completed_at || connection?.last_sync_at || null)}
             </span>
           </div>
@@ -130,10 +130,10 @@ export function DashboardHeader() {
             onClick={handleSyncClick}
             disabled={!isConnected || isSyncing}
             size="sm"
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
           >
             <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            {isSyncing ? 'Syncing...' : 'Sync'}
+            Sync
           </Button>
         </div>
 
