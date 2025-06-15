@@ -4948,6 +4948,7 @@ export type Database = {
           completed_at: string | null
           connection_id: string
           created_at: string | null
+          current_webinar_id: string | null
           duration_seconds: number | null
           error_details: Json | null
           error_message: string | null
@@ -4957,7 +4958,9 @@ export type Database = {
           rate_limit_hits: number | null
           resource_id: string | null
           resource_type: string | null
+          stage_progress_percentage: number | null
           started_at: string
+          sync_stage: string | null
           sync_status: string
           sync_type: string
           total_items: number | null
@@ -4968,6 +4971,7 @@ export type Database = {
           completed_at?: string | null
           connection_id: string
           created_at?: string | null
+          current_webinar_id?: string | null
           duration_seconds?: number | null
           error_details?: Json | null
           error_message?: string | null
@@ -4977,7 +4981,9 @@ export type Database = {
           rate_limit_hits?: number | null
           resource_id?: string | null
           resource_type?: string | null
+          stage_progress_percentage?: number | null
           started_at?: string
+          sync_stage?: string | null
           sync_status: string
           sync_type: string
           total_items?: number | null
@@ -4988,6 +4994,7 @@ export type Database = {
           completed_at?: string | null
           connection_id?: string
           created_at?: string | null
+          current_webinar_id?: string | null
           duration_seconds?: number | null
           error_details?: Json | null
           error_message?: string | null
@@ -4997,7 +5004,9 @@ export type Database = {
           rate_limit_hits?: number | null
           resource_id?: string | null
           resource_type?: string | null
+          stage_progress_percentage?: number | null
           started_at?: string
+          sync_stage?: string | null
           sync_status?: string
           sync_type?: string
           total_items?: number | null

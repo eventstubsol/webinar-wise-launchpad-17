@@ -36,6 +36,11 @@ const SYNC_PRIORITIES = {
   initial: 3      // NORMAL - initial sync
 };
 
+// Rate limiting constants
+const RATE_LIMIT_DELAY = 100; // 100ms between API calls (10 requests/second)
+const MAX_RETRIES = 3;
+const BASE_RETRY_DELAY = 1000; // 1 second base delay
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -171,7 +176,7 @@ serve(async (req) => {
       createdAt: new Date()
     };
 
-    // Create sync log entry - let Supabase generate the UUID for id field
+    // Create sync log entry with enhanced tracking fields
     const { data: syncLog, error: syncLogError } = await supabase
       .from('zoom_sync_logs')
       .insert({
@@ -183,7 +188,10 @@ serve(async (req) => {
         started_at: new Date().toISOString(),
         total_items: 0,
         processed_items: 0,
-        failed_items: 0
+        failed_items: 0,
+        current_webinar_id: null,
+        sync_stage: 'initializing',
+        stage_progress_percentage: 0
       })
       .select('id')
       .single();
@@ -199,8 +207,8 @@ serve(async (req) => {
       );
     }
 
-    // Start background sync process with real API calls
-    EdgeRuntime.waitUntil(processSyncOperation(supabase, syncOperation, connection, syncLog.id));
+    // Start background sequential sync process
+    EdgeRuntime.waitUntil(processSequentialSyncOperation(supabase, syncOperation, connection, syncLog.id));
 
     // Return immediate response with the database-generated sync ID
     return new Response(
@@ -210,7 +218,8 @@ serve(async (req) => {
         trackingId: trackingId,
         status: 'started',
         estimatedDuration: getEstimatedDuration(requestBody.syncType),
-        message: `${requestBody.syncType} sync initiated successfully`
+        message: `Sequential ${requestBody.syncType} sync initiated successfully`,
+        processingMode: 'sequential'
       }),
       { 
         status: 200, 
@@ -233,33 +242,33 @@ serve(async (req) => {
   }
 });
 
-// Background sync processing function with REAL Zoom API calls
-async function processSyncOperation(
+// Background sequential sync processing function
+async function processSequentialSyncOperation(
   supabase: any, 
   operation: SyncOperation, 
   connection: any,
   syncLogId: string
 ): Promise<void> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30 * 60 * 1000); // 30 minute timeout
+  const timeoutId = setTimeout(() => controller.abort(), 45 * 60 * 1000); // 45 minute timeout
 
   try {
-    console.log(`Starting background sync: ${operation.id}`);
+    console.log(`Starting sequential background sync: ${operation.id}`);
     
     // Update sync status to in_progress
     await updateSyncStatus(supabase, syncLogId, 'in_progress');
 
-    // Perform the actual sync with real Zoom API calls
+    // Perform the sequential sync with real Zoom API calls
     let result;
     switch (operation.syncType) {
       case 'single':
-        result = await syncSingleWebinarWithAPI(supabase, operation, connection, controller.signal, syncLogId);
+        result = await syncSingleWebinarSequentially(supabase, operation, connection, controller.signal, syncLogId);
         break;
       case 'incremental':
-        result = await syncIncrementalWebinarsWithAPI(supabase, operation, connection, controller.signal, syncLogId);
+        result = await syncIncrementalWebinarsSequentially(supabase, operation, connection, controller.signal, syncLogId);
         break;
       case 'initial':
-        result = await syncInitialWebinarsWithAPI(supabase, operation, connection, controller.signal, syncLogId);
+        result = await syncInitialWebinarsSequentially(supabase, operation, connection, controller.signal, syncLogId);
         break;
       default:
         throw new Error(`Unknown sync type: ${operation.syncType}`);
@@ -274,6 +283,9 @@ async function processSyncOperation(
         total_items: result.total || 0,
         processed_items: result.processed || 0,
         failed_items: result.failed || 0,
+        current_webinar_id: null,
+        sync_stage: 'completed',
+        stage_progress_percentage: 100,
         updated_at: new Date().toISOString()
       })
       .eq('id', syncLogId);
@@ -287,10 +299,10 @@ async function processSyncOperation(
       })
       .eq('id', operation.connectionId);
 
-    console.log(`Sync completed successfully: ${operation.id}`);
+    console.log(`Sequential sync completed successfully: ${operation.id}`);
 
   } catch (error) {
-    console.error(`Sync failed: ${operation.id}`, error);
+    console.error(`Sequential sync failed: ${operation.id}`, error);
     
     // Update sync status to failed
     await supabase
@@ -300,6 +312,8 @@ async function processSyncOperation(
         completed_at: new Date().toISOString(),
         error_message: error instanceof Error ? error.message : 'Unknown error',
         error_details: { error: error instanceof Error ? error.stack : error },
+        sync_stage: 'failed',
+        stage_progress_percentage: 0,
         updated_at: new Date().toISOString()
       })
       .eq('id', syncLogId);
@@ -308,8 +322,8 @@ async function processSyncOperation(
   }
 }
 
-// Real Zoom API integration functions
-async function syncSingleWebinarWithAPI(
+// Sequential processing functions with enhanced progress tracking
+async function syncSingleWebinarSequentially(
   supabase: any, 
   operation: SyncOperation, 
   connection: any, 
@@ -320,24 +334,10 @@ async function syncSingleWebinarWithAPI(
     throw new Error('Webinar ID is required for single webinar sync');
   }
 
-  await updateSyncProgress(supabase, syncLogId, 1, 0, 'Fetching webinar details from Zoom API...');
+  await updateSyncStageProgress(supabase, syncLogId, operation.webinarId, 'starting_webinar', 0);
 
   try {
-    // Make real API calls to Zoom
-    const webinarData = await makeZoomAPICall(connection, `/webinars/${operation.webinarId}`);
-    const registrants = await makeZoomAPICall(connection, `/webinars/${operation.webinarId}/registrants`);
-    const participants = await makeZoomAPICall(connection, `/report/webinars/${operation.webinarId}/participants`);
-    const panelists = await makeZoomAPICall(connection, `/webinars/${operation.webinarId}/panelists`);
-    const trackingSources = await makeZoomAPICall(connection, `/webinars/${operation.webinarId}/tracking_sources`);
-    
-    if (signal.aborted) {
-      throw new Error('Sync operation was cancelled');
-    }
-
-    // Save to database using DatabaseSyncOperations logic
-    await saveWebinarToDatabase(supabase, webinarData, registrants, participants, panelists, trackingSources, operation.connectionId);
-
-    await updateSyncProgress(supabase, syncLogId, 1, 1, 'Webinar sync completed');
+    await processWebinarSequentially(supabase, operation.webinarId, connection, syncLogId, operation.connectionId, signal);
     return { total: 1, processed: 1, failed: 0 };
   } catch (error) {
     console.error('Failed to sync single webinar:', error);
@@ -345,56 +345,61 @@ async function syncSingleWebinarWithAPI(
       .from('zoom_sync_logs')
       .update({
         failed_items: 1,
-        error_message: `Failed to sync webinar ${operation.webinarId}: ${error.message}`
+        error_message: `Failed to sync webinar ${operation.webinarId}: ${error.message}`,
+        sync_stage: 'webinar_failed'
       })
       .eq('id', syncLogId);
     throw error;
   }
 }
 
-async function syncIncrementalWebinarsWithAPI(
+async function syncIncrementalWebinarsSequentially(
   supabase: any, 
   operation: SyncOperation, 
   connection: any, 
   signal: AbortSignal,
   syncLogId: string
 ): Promise<{ total: number; processed: number; failed: number }> {
-  await updateSyncProgress(supabase, syncLogId, 0, 0, 'Starting incremental sync...');
+  await updateSyncStageProgress(supabase, syncLogId, null, 'fetching_recent_webinars', 5);
 
   try {
     // Get webinars from last sync date
-    const webinars = await makeZoomAPICall(connection, '/users/me/webinars?type=past&page_size=100');
+    const webinars = await makeZoomAPICall(connection, '/users/me/webinars?type=past&page_size=50');
     const webinarList = webinars.webinars || [];
     
+    await supabase
+      .from('zoom_sync_logs')
+      .update({ total_items: webinarList.length })
+      .eq('id', syncLogId);
+
     let processed = 0;
     let failed = 0;
 
-    for (const webinar of webinarList) {
+    for (let i = 0; i < webinarList.length; i++) {
+      const webinar = webinarList[i];
+      
       if (signal.aborted) {
         throw new Error('Sync operation was cancelled');
       }
 
       try {
-        const webinarData = await makeZoomAPICall(connection, `/webinars/${webinar.id}`);
-        const registrants = await makeZoomAPICall(connection, `/webinars/${webinar.id}/registrants`);
-        const participants = await makeZoomAPICall(connection, `/report/webinars/${webinar.id}/participants`);
-        const panelists = await makeZoomAPICall(connection, `/webinars/${webinar.id}/panelists`);
-        const trackingSources = await makeZoomAPICall(connection, `/webinars/${webinar.id}/tracking_sources`);
-        
-        await saveWebinarToDatabase(supabase, webinarData, registrants, participants, panelists, trackingSources, operation.connectionId);
+        await processWebinarSequentially(supabase, webinar.id, connection, syncLogId, operation.connectionId, signal);
         processed++;
       } catch (error) {
         console.error(`Failed to sync webinar ${webinar.id}:`, error);
         failed++;
       }
 
-      await updateSyncProgress(
-        supabase, 
-        syncLogId, 
-        webinarList.length, 
-        processed, 
-        `Processing webinar ${processed + failed} of ${webinarList.length}...`
-      );
+      // Update overall progress
+      const overallProgress = Math.round(((i + 1) / webinarList.length) * 100);
+      await supabase
+        .from('zoom_sync_logs')
+        .update({
+          processed_items: processed,
+          failed_items: failed,
+          stage_progress_percentage: overallProgress
+        })
+        .eq('id', syncLogId);
     }
 
     return { total: webinarList.length, processed, failed };
@@ -404,49 +409,59 @@ async function syncIncrementalWebinarsWithAPI(
   }
 }
 
-async function syncInitialWebinarsWithAPI(
+async function syncInitialWebinarsSequentially(
   supabase: any, 
   operation: SyncOperation, 
   connection: any, 
   signal: AbortSignal,
   syncLogId: string
 ): Promise<{ total: number; processed: number; failed: number }> {
-  await updateSyncProgress(supabase, syncLogId, 0, 0, 'Starting initial sync...');
+  await updateSyncStageProgress(supabase, syncLogId, null, 'fetching_webinar_list', 5);
 
   try {
     // Get all webinars
     const webinars = await makeZoomAPICall(connection, '/users/me/webinars?type=past&page_size=100');
     const webinarList = webinars.webinars || [];
     
+    await supabase
+      .from('zoom_sync_logs')
+      .update({ total_items: webinarList.length })
+      .eq('id', syncLogId);
+
     let processed = 0;
     let failed = 0;
+    const failedWebinars: Array<{ id: string; error: string }> = [];
 
-    for (const webinar of webinarList) {
+    for (let i = 0; i < webinarList.length; i++) {
+      const webinar = webinarList[i];
+      
       if (signal.aborted) {
         throw new Error('Sync operation was cancelled');
       }
 
       try {
-        const webinarData = await makeZoomAPICall(connection, `/webinars/${webinar.id}`);
-        const registrants = await makeZoomAPICall(connection, `/webinars/${webinar.id}/registrants`);
-        const participants = await makeZoomAPICall(connection, `/report/webinars/${webinar.id}/participants`);
-        const panelists = await makeZoomAPICall(connection, `/webinars/${webinar.id}/panelists`);
-        const trackingSources = await makeZoomAPICall(connection, `/webinars/${webinar.id}/tracking_sources`);
-        
-        await saveWebinarToDatabase(supabase, webinarData, registrants, participants, panelists, trackingSources, operation.connectionId);
+        await processWebinarSequentially(supabase, webinar.id, connection, syncLogId, operation.connectionId, signal);
         processed++;
       } catch (error) {
         console.error(`Failed to sync webinar ${webinar.id}:`, error);
         failed++;
+        failedWebinars.push({ 
+          id: webinar.id, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        });
       }
 
-      await updateSyncProgress(
-        supabase, 
-        syncLogId, 
-        webinarList.length, 
-        processed, 
-        `Processing webinar ${processed + failed} of ${webinarList.length}...`
-      );
+      // Update overall progress
+      const overallProgress = Math.round(((i + 1) / webinarList.length) * 100);
+      await supabase
+        .from('zoom_sync_logs')
+        .update({
+          processed_items: processed,
+          failed_items: failed,
+          stage_progress_percentage: overallProgress,
+          error_details: failedWebinars.length > 0 ? { failed_webinars: failedWebinars } : null
+        })
+        .eq('id', syncLogId);
     }
 
     return { total: webinarList.length, processed, failed };
@@ -456,7 +471,155 @@ async function syncInitialWebinarsWithAPI(
   }
 }
 
-// Helper function to make Zoom API calls
+// Sequential webinar processing with all data types
+async function processWebinarSequentially(
+  supabase: any,
+  webinarId: string,
+  connection: any,
+  syncLogId: string,
+  connectionId: string,
+  signal: AbortSignal
+): Promise<void> {
+  const stages = [
+    { name: 'webinar_details', label: 'Fetching webinar details', progress: 15 },
+    { name: 'registrants', label: 'Fetching registrants', progress: 35 },
+    { name: 'participants', label: 'Fetching participants', progress: 55 },
+    { name: 'polls', label: 'Fetching polls and responses', progress: 75 },
+    { name: 'qa', label: 'Fetching Q&A data', progress: 90 },
+    { name: 'recordings', label: 'Fetching recordings', progress: 100 }
+  ];
+
+  let webinarData: any = null;
+  let registrants: any[] = [];
+  let participants: any[] = [];
+  let panelists: any[] = [];
+  let trackingSources: any[] = [];
+
+  for (const stage of stages) {
+    if (signal.aborted) {
+      throw new Error('Sync operation was cancelled');
+    }
+
+    await updateSyncStageProgress(supabase, syncLogId, webinarId, stage.name, stage.progress);
+    
+    try {
+      switch (stage.name) {
+        case 'webinar_details':
+          webinarData = await retryAPICall(() => makeZoomAPICall(connection, `/webinars/${webinarId}`));
+          break;
+        case 'registrants':
+          registrants = await retryAPICall(() => makeZoomAPICall(connection, `/webinars/${webinarId}/registrants`));
+          break;
+        case 'participants':
+          // Only fetch participants for past webinars
+          if (webinarData && new Date(webinarData.start_time) < new Date()) {
+            participants = await retryAPICall(() => makeZoomAPICall(connection, `/report/webinars/${webinarId}/participants`));
+          }
+          break;
+        case 'polls':
+          // Polls are optional
+          try {
+            const pollData = await retryAPICall(() => makeZoomAPICall(connection, `/report/webinars/${webinarId}/polls`));
+            // polls = pollData.questions || [];
+          } catch (error) {
+            console.log(`No polls available for webinar ${webinarId}`);
+          }
+          break;
+        case 'qa':
+          // Q&A is optional
+          try {
+            const qaData = await retryAPICall(() => makeZoomAPICall(connection, `/report/webinars/${webinarId}/qa`));
+            // qa = qaData.questions || [];
+          } catch (error) {
+            console.log(`No Q&A available for webinar ${webinarId}`);
+          }
+          break;
+        case 'recordings':
+          // Recordings are optional
+          try {
+            await retryAPICall(() => makeZoomAPICall(connection, `/webinars/${webinarId}/recordings`));
+          } catch (error) {
+            console.log(`No recordings available for webinar ${webinarId}`);
+          }
+          break;
+      }
+
+      // Rate limiting - wait between API calls
+      await delay(RATE_LIMIT_DELAY);
+
+    } catch (error) {
+      console.error(`Failed to fetch ${stage.name} for webinar ${webinarId}:`, error);
+      // Continue with next stage for non-critical data
+      if (stage.name === 'webinar_details') {
+        throw error; // Critical data, fail the whole webinar
+      }
+    }
+  }
+
+  // Save webinar data to database
+  if (webinarData) {
+    await saveWebinarToDatabase(supabase, webinarData, registrants, participants, panelists, trackingSources, connectionId);
+    await updateSyncStageProgress(supabase, syncLogId, webinarId, 'webinar_completed', 100);
+  } else {
+    throw new Error('Failed to fetch webinar details');
+  }
+}
+
+// Helper function with retry logic and exponential backoff
+async function retryAPICall<T>(apiCall: () => Promise<T>): Promise<T> {
+  let lastError: Error;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Unknown error');
+      
+      if (attempt === MAX_RETRIES - 1) {
+        throw lastError;
+      }
+
+      // Exponential backoff: 1s, 2s, 4s
+      const delayMs = BASE_RETRY_DELAY * Math.pow(2, attempt);
+      console.log(`API call failed, retrying in ${delayMs}ms. Attempt ${attempt + 1}/${MAX_RETRIES}`);
+      await delay(delayMs);
+    }
+  }
+
+  throw lastError!;
+}
+
+// Helper functions
+async function updateSyncStatus(supabase: any, syncId: string, status: string): Promise<void> {
+  await supabase
+    .from('zoom_sync_logs')
+    .update({
+      sync_status: status,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', syncId);
+}
+
+async function updateSyncStageProgress(
+  supabase: any, 
+  syncId: string, 
+  webinarId: string | null,
+  stage: string,
+  progress: number
+): Promise<void> {
+  await supabase
+    .from('zoom_sync_logs')
+    .update({
+      current_webinar_id: webinarId,
+      sync_stage: stage,
+      stage_progress_percentage: Math.max(0, Math.min(100, progress)),
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', syncId);
+
+  console.log(`Sync ${syncId}: ${stage} (${progress}%) - Webinar: ${webinarId || 'N/A'}`);
+}
+
 async function makeZoomAPICall(connection: any, endpoint: string): Promise<any> {
   const response = await fetch(`https://api.zoom.us/v2${endpoint}`, {
     headers: {
@@ -472,7 +635,6 @@ async function makeZoomAPICall(connection: any, endpoint: string): Promise<any> 
   return await response.json();
 }
 
-// Helper function to save webinar data to database
 async function saveWebinarToDatabase(
   supabase: any,
   webinarData: any,
@@ -553,44 +715,18 @@ async function saveWebinarToDatabase(
   }
 }
 
-// Helper functions
-async function updateSyncStatus(supabase: any, syncId: string, status: string): Promise<void> {
-  await supabase
-    .from('zoom_sync_logs')
-    .update({
-      sync_status: status,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', syncId);
-}
-
-async function updateSyncProgress(
-  supabase: any, 
-  syncId: string, 
-  total: number, 
-  processed: number, 
-  currentOperation: string
-): Promise<void> {
-  await supabase
-    .from('zoom_sync_logs')
-    .update({
-      total_items: total,
-      processed_items: processed,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', syncId);
-
-  console.log(`Sync ${syncId}: ${processed}/${total} - ${currentOperation}`);
+async function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function getEstimatedDuration(syncType: string): string {
   switch (syncType) {
     case 'single':
-      return '30 seconds - 2 minutes';
+      return '1-3 minutes (sequential processing)';
     case 'incremental':
-      return '2-5 minutes';
+      return '3-8 minutes (sequential processing)';
     case 'initial':
-      return '5-15 minutes';
+      return '10-30 minutes (sequential processing)';
     default:
       return 'Unknown';
   }

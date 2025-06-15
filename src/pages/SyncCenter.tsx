@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { RefreshCw, Download, ServerCrash, Clock, CheckCircle, XCircle, Loader2, List, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Download, ServerCrash, Clock, CheckCircle, XCircle, Loader2, List, AlertTriangle, Zap } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useZoomSync } from '@/hooks/useZoomSync';
 import { useQuery } from '@tanstack/react-query';
@@ -92,7 +92,6 @@ const SyncAnalytics = () => {
     );
 };
 
-
 const SyncHistory = () => {
   const { connection } = useZoomConnection();
   const { startSync, isSyncing } = useZoomSync(connection?.id);
@@ -133,12 +132,39 @@ const SyncHistory = () => {
     }
   };
 
+  const formatSyncStage = (stage: string | null, webinarId: string | null): string => {
+    if (!stage) return 'Not started';
+    
+    const stageLabels: { [key: string]: string } = {
+      'initializing': 'Initializing sync',
+      'fetching_webinar_list': 'Fetching webinar list',
+      'fetching_recent_webinars': 'Fetching recent webinars',
+      'starting_webinar': 'Starting webinar sync',
+      'webinar_details': 'Fetching webinar details',
+      'registrants': 'Fetching registrants',
+      'participants': 'Fetching participants',
+      'polls': 'Fetching polls and responses',
+      'qa': 'Fetching Q&A data',
+      'recordings': 'Fetching recordings',
+      'webinar_completed': 'Webinar completed',
+      'webinar_failed': 'Webinar failed',
+      'completed': 'Sync completed',
+      'failed': 'Sync failed'
+    };
+
+    const label = stageLabels[stage] || stage;
+    return webinarId ? `${label} (${webinarId})` : label;
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-            <CardTitle>Sync History & Logs</CardTitle>
-            <CardDescription>Detailed history of your recent sync operations.</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5" />
+              Sequential Sync History & Logs
+            </CardTitle>
+            <CardDescription>Detailed history of your webinar sync operations with sequential processing.</CardDescription>
         </div>
         <div className="flex gap-2">
             <Button variant="outline" onClick={() => startSync('incremental')} disabled={isSyncing}>
@@ -153,9 +179,9 @@ const SyncHistory = () => {
         {isSyncing && (
           <Alert className="mb-4">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <AlertTitle>Sync in Progress</AlertTitle>
+            <AlertTitle>Sequential Sync in Progress</AlertTitle>
             <AlertDescription>
-              A sync is currently running. This list will update automatically upon completion.
+              Webinars are being processed one by one for optimal reliability. This list will update automatically.
             </AlertDescription>
           </Alert>
         )}
@@ -188,11 +214,32 @@ const SyncHistory = () => {
                     </div>
                 </AccordionTrigger>
                 <AccordionContent className="bg-muted/50 p-4 rounded-md border-l-4">
-                    <div className="grid grid-cols-3 gap-4 text-sm mb-2">
+                    <div className="grid grid-cols-3 gap-4 text-sm mb-4">
                         <div><span className="font-semibold">Processed:</span> {log.processed_items || 0} / {log.total_items || 0}</div>
                         <div><span className="font-semibold text-green-600">Successful:</span> {(log.processed_items || 0) - (log.failed_items || 0)}</div>
                         <div><span className="font-semibold text-red-600">Failed:</span> {log.failed_items || 0}</div>
                     </div>
+
+                    {/* Enhanced Progress Information */}
+                    {(log.sync_stage || log.current_webinar_id || log.stage_progress_percentage) && (
+                      <div className="bg-background p-3 rounded-md mb-4 border">
+                        <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                          <Zap className="h-4 w-4" />
+                          Sequential Processing Status
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="font-medium">Current Stage:</span>
+                            <p className="text-muted-foreground">{formatSyncStage(log.sync_stage, log.current_webinar_id)}</p>
+                          </div>
+                          <div>
+                            <span className="font-medium">Stage Progress:</span>
+                            <p className="text-muted-foreground">{log.stage_progress_percentage || 0}%</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {log.error_message && (
                         <Alert variant="destructive" className="mt-4">
                             <AlertTriangle className="h-4 w-4" />
@@ -209,7 +256,7 @@ const SyncHistory = () => {
                         </div>
                     )}
                     {log.sync_status === 'completed' && !log.error_message && (
-                      <p className="text-sm text-muted-foreground mt-2">Sync completed successfully.</p>
+                      <p className="text-sm text-muted-foreground mt-2">Sequential sync completed successfully.</p>
                     )}
                 </AccordionContent>
               </AccordionItem>
@@ -250,7 +297,7 @@ export default function SyncCenter() {
     <div className="p-6 space-y-6">
       <header>
         <h1 className="text-3xl font-bold text-gray-900">Sync Center</h1>
-        <p className="text-gray-600">Monitor and manage your Zoom data synchronization.</p>
+        <p className="text-gray-600">Monitor and manage your sequential Zoom data synchronization.</p>
       </header>
       <main className="grid gap-6">
         <SyncAnalytics />
