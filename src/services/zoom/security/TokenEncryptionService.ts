@@ -22,8 +22,12 @@ export class TokenEncryptionService {
    */
   private static getEncryptionSalt(): string {
     // Try Vite environment variable first (for browser)
-    if (typeof import !== 'undefined' && import.meta && import.meta.env && import.meta.env.VITE_ENCRYPTION_SALT) {
-      return import.meta.env.VITE_ENCRYPTION_SALT;
+    try {
+      if (typeof window !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_ENCRYPTION_SALT) {
+        return (globalThis as any).import.meta.env.VITE_ENCRYPTION_SALT;
+      }
+    } catch (error) {
+      // Ignore errors accessing import.meta
     }
     
     // Fallback for other environments
