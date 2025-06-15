@@ -12,7 +12,7 @@ export interface ZoomParticipant {
   participant_name: string;
   participant_email: string | null;
   participant_user_id: string | null;
-  join_time: string;
+  join_time: string | null;
   leave_time: string | null;
   duration: number | null;
   attentiveness_score: number | null;

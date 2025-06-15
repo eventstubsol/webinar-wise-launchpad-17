@@ -265,14 +265,19 @@ export class SyncOrchestrator {
         throw new Error(`Failed to update participant: ${error.message}`);
       }
     } else {
-      // Create new participant - use correct field names for zoom_participants table
+      // Create new participant
+      const webinarId = connection.config.defaultWebinarIdForImport as string;
+      if (!webinarId) {
+        throw new Error('Default webinar ID for import not configured in CRM connection.');
+      }
+
       const newParticipantData = {
         ...participantData,
+        webinar_id: webinarId,
+        participant_id: `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        participant_name: `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || contact.email,
         participant_email: contact.email,
-        participant_uuid: `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        // Add other required fields based on the zoom_participants schema
-        first_name: contact.firstName || '',
-        last_name: contact.lastName || ''
+        join_time: null,
       };
 
       const { error } = await supabase
