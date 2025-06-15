@@ -10,7 +10,7 @@ export class ZoomWebinarTransformService {
    * Transform Zoom API webinar response to database format
    */
   static transformWebinarForDatabase(
-    apiWebinar: ZoomWebinarApiResponse,
+    apiWebinar: any, // Using any as ZoomWebinarApiResponse is not available here
     connectionId: string
   ): Omit<ZoomWebinar, 'id' | 'created_at' | 'updated_at'> {
     return {
@@ -41,6 +41,14 @@ export class ZoomWebinarTransformService {
       total_minutes: null, // Will be calculated after participants sync
       avg_attendance_duration: null, // Will be calculated after participants sync
       synced_at: new Date().toISOString(),
+      password: apiWebinar.password || null,
+      h323_password: apiWebinar.h323_password || null,
+      pstn_password: apiWebinar.pstn_password || null,
+      encrypted_password: apiWebinar.encrypted_password || null,
+      settings: apiWebinar.settings || null,
+      tracking_fields: apiWebinar.tracking_fields || null,
+      recurrence: apiWebinar.recurrence || null,
+      occurrences: apiWebinar.occurrences || null,
     };
   }
 }

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -328,18 +327,27 @@ async function syncSingleWebinarWithAPI(
     const webinarData = await makeZoomAPICall(connection, `/webinars/${operation.webinarId}`);
     const registrants = await makeZoomAPICall(connection, `/webinars/${operation.webinarId}/registrants`);
     const participants = await makeZoomAPICall(connection, `/report/webinars/${operation.webinarId}/participants`);
+    const panelists = await makeZoomAPICall(connection, `/webinars/${operation.webinarId}/panelists`);
+    const trackingSources = await makeZoomAPICall(connection, `/webinars/${operation.webinarId}/tracking_sources`);
     
     if (signal.aborted) {
       throw new Error('Sync operation was cancelled');
     }
 
     // Save to database using DatabaseSyncOperations logic
-    await saveWebinarToDatabase(supabase, webinarData, registrants, participants, operation.connectionId);
+    await saveWebinarToDatabase(supabase, webinarData, registrants, participants, panelists, trackingSources, operation.connectionId);
 
     await updateSyncProgress(supabase, syncLogId, 1, 1, 'Webinar sync completed');
     return { total: 1, processed: 1, failed: 0 };
   } catch (error) {
     console.error('Failed to sync single webinar:', error);
+    await supabase
+      .from('zoom_sync_logs')
+      .update({
+        failed_items: 1,
+        error_message: `Failed to sync webinar ${operation.webinarId}: ${error.message}`
+      })
+      .eq('id', syncLogId);
     throw error;
   }
 }
@@ -370,8 +378,10 @@ async function syncIncrementalWebinarsWithAPI(
         const webinarData = await makeZoomAPICall(connection, `/webinars/${webinar.id}`);
         const registrants = await makeZoomAPICall(connection, `/webinars/${webinar.id}/registrants`);
         const participants = await makeZoomAPICall(connection, `/report/webinars/${webinar.id}/participants`);
+        const panelists = await makeZoomAPICall(connection, `/webinars/${webinar.id}/panelists`);
+        const trackingSources = await makeZoomAPICall(connection, `/webinars/${webinar.id}/tracking_sources`);
         
-        await saveWebinarToDatabase(supabase, webinarData, registrants, participants, operation.connectionId);
+        await saveWebinarToDatabase(supabase, webinarData, registrants, participants, panelists, trackingSources, operation.connectionId);
         processed++;
       } catch (error) {
         console.error(`Failed to sync webinar ${webinar.id}:`, error);
@@ -383,7 +393,7 @@ async function syncIncrementalWebinarsWithAPI(
         syncLogId, 
         webinarList.length, 
         processed, 
-        `Processing webinar ${processed + failed + 1} of ${webinarList.length}...`
+        `Processing webinar ${processed + failed} of ${webinarList.length}...`
       );
     }
 
@@ -420,8 +430,10 @@ async function syncInitialWebinarsWithAPI(
         const webinarData = await makeZoomAPICall(connection, `/webinars/${webinar.id}`);
         const registrants = await makeZoomAPICall(connection, `/webinars/${webinar.id}/registrants`);
         const participants = await makeZoomAPICall(connection, `/report/webinars/${webinar.id}/participants`);
+        const panelists = await makeZoomAPICall(connection, `/webinars/${webinar.id}/panelists`);
+        const trackingSources = await makeZoomAPICall(connection, `/webinars/${webinar.id}/tracking_sources`);
         
-        await saveWebinarToDatabase(supabase, webinarData, registrants, participants, operation.connectionId);
+        await saveWebinarToDatabase(supabase, webinarData, registrants, participants, panelists, trackingSources, operation.connectionId);
         processed++;
       } catch (error) {
         console.error(`Failed to sync webinar ${webinar.id}:`, error);
@@ -433,7 +445,7 @@ async function syncInitialWebinarsWithAPI(
         syncLogId, 
         webinarList.length, 
         processed, 
-        `Processing webinar ${processed + failed + 1} of ${webinarList.length}...`
+        `Processing webinar ${processed + failed} of ${webinarList.length}...`
       );
     }
 
@@ -466,6 +478,8 @@ async function saveWebinarToDatabase(
   webinarData: any,
   registrants: any,
   participants: any,
+  panelists: any,
+  trackingSources: any,
   connectionId: string
 ): Promise<void> {
   // Transform and insert webinar
@@ -482,19 +496,60 @@ async function saveWebinarToDatabase(
     start_time: webinarData.start_time,
     duration: webinarData.duration,
     timezone: webinarData.timezone,
-    synced_at: new Date().toISOString()
+    synced_at: new Date().toISOString(),
+    password: webinarData.password,
+    h323_password: webinarData.h323_password,
+    pstn_password: webinarData.pstn_password,
+    encrypted_password: webinarData.encrypted_password,
+    settings: webinarData.settings,
+    tracking_fields: webinarData.tracking_fields,
+    recurrence: webinarData.recurrence,
+    occurrences: webinarData.occurrences
   };
 
-  const { data: webinar } = await supabase
+  const { data: webinar, error: webinarError } = await supabase
     .from('zoom_webinars')
     .upsert(webinarInsert, { onConflict: 'connection_id,webinar_id' })
     .select('id')
     .single();
 
+  if (webinarError) {
+    console.error(`Error saving webinar ${webinarData.id}:`, webinarError);
+    throw webinarError;
+  }
+  
   if (webinar) {
-    // Insert registrants and participants
-    // Note: This is a simplified version - the full implementation would include all transformations
-    console.log(`Saved webinar ${webinarData.id} to database with ID ${webinar.id}`);
+    const webinarDbId = webinar.id;
+
+    // Insert panelists
+    if (panelists?.panelists?.length > 0) {
+      const panelistsToInsert = panelists.panelists.map((p: any) => ({
+        webinar_id: webinarDbId,
+        panelist_id: p.id,
+        panelist_email: p.email,
+        name: p.name,
+        join_url: p.join_url,
+      }));
+      await supabase.from('zoom_panelists').delete().eq('webinar_id', webinarDbId);
+      const { error: panelistError } = await supabase.from('zoom_panelists').insert(panelistsToInsert);
+      if (panelistError) console.error(`Error inserting panelists for webinar ${webinarDbId}:`, panelistError);
+    }
+    
+    // Insert tracking sources
+    if (trackingSources?.tracking_sources?.length > 0) {
+        const trackingToInsert = trackingSources.tracking_sources.map((ts: any) => ({
+            webinar_id: webinarDbId,
+            source_name: ts.source_name,
+            tracking_url: ts.tracking_url,
+            registration_count: ts.registration_count,
+            visitor_count: ts.visitor_count,
+        }));
+        await supabase.from('zoom_webinar_tracking').delete().eq('webinar_id', webinarDbId);
+        const { error: trackingError } = await supabase.from('zoom_webinar_tracking').insert(trackingToInsert);
+        if (trackingError) console.error(`Error inserting tracking sources for webinar ${webinarDbId}:`, trackingError);
+    }
+    
+    console.log(`Saved webinar ${webinarData.id} and related data to database with ID ${webinar.id}`);
   }
 }
 

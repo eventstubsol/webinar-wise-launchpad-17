@@ -1,4 +1,3 @@
-
 /**
  * Database types for Zoom webinars and related data
  */
@@ -37,6 +36,14 @@ export interface ZoomWebinar {
   synced_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+  password?: string | null;
+  h323_password?: string | null;
+  pstn_password?: string | null;
+  encrypted_password?: string | null;
+  settings?: Record<string, any> | null;
+  tracking_fields?: Record<string, any>[] | null;
+  recurrence?: Record<string, any> | null;
+  occurrences?: Record<string, any>[] | null;
 }
 
 /** Webinar registrant information */
@@ -65,6 +72,13 @@ export interface ZoomRegistrant {
   attended: boolean | null;
   created_at: string | null;
   updated_at: string | null;
+  job_title?: string | null;
+  purchasing_time_frame?: string | null;
+  role_in_purchase_process?: string | null;
+  no_of_employees?: string | null;
+  industry?: string | null;
+  org?: string | null;
+  language?: string | null;
 }
 
 /** Recording files and metadata */
@@ -87,4 +101,37 @@ export interface ZoomRecording {
   expires_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+/** Panelist information for a webinar */
+export interface ZoomPanelist {
+  id: string;
+  webinar_id: string;
+  panelist_id?: string;
+  panelist_email?: string;
+  name?: string;
+  join_url?: string;
+  created_at: string;
+}
+
+/** Chat message from a webinar */
+export interface ZoomChatMessage {
+  id: string;
+  webinar_id: string;
+  sender_name?: string;
+  sender_email?: string;
+  message?: string;
+  sent_at?: string;
+  created_at: string;
+}
+
+/** Tracking source information for a webinar */
+export interface ZoomWebinarTracking {
+  id: string;
+  webinar_id: string;
+  source_name?: string;
+  tracking_url?: string;
+  visitor_count?: number;
+  registration_count?: number;
+  created_at: string;
 }

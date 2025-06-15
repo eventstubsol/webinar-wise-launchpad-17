@@ -7,7 +7,7 @@
 export type { ZoomConnection, ZoomTokenRefreshLog } from './connectionTypes';
 
 // Webinar and related types
-export type { ZoomWebinar, ZoomRegistrant, ZoomRecording } from './webinarTypes';
+export type { ZoomWebinar, ZoomRegistrant, ZoomRecording, ZoomPanelist, ZoomChatMessage, ZoomWebinarTracking } from './webinarTypes';
 
 // Participant types
 export type { ZoomParticipant } from './participantTypes';
