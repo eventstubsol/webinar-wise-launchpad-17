@@ -11,13 +11,13 @@ export default function AIInsights() {
       <AppSidebar />
       <SidebarInset>
         <DashboardHeader />
-        <div className="p-6">
-          <div className="mb-6">
+        <main className="p-6 space-y-6">
+          <div>
             <h1 className="text-3xl font-bold text-gray-900">AI Insights</h1>
-            <p className="text-gray-600">AI-powered analysis and insights for your webinar data</p>
+            <p className="text-gray-600">AI-powered analysis and insights for your webinar data.</p>
           </div>
           <AIInsightsDashboard />
-        </div>
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );

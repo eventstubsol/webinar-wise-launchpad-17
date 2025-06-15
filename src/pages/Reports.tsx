@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/dashboard/AppSidebar';
@@ -44,10 +43,10 @@ export default function Reports() {
       <AppSidebar />
       <SidebarInset>
         <DashboardHeader />
-        <div className="p-6">
-          <div className="mb-6">
+        <main className="p-6 space-y-6">
+          <div>
             <h1 className="text-3xl font-bold text-gray-900">Reports & Export</h1>
-            <p className="text-gray-600">Generate and download comprehensive reports of your webinar data</p>
+            <p className="text-gray-600">Generate and download comprehensive reports of your webinar data.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -81,7 +80,7 @@ export default function Reports() {
               );
             })}
           </div>
-        </div>
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );
