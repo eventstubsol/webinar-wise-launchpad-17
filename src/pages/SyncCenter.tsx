@@ -95,9 +95,12 @@ const SyncAnalytics = () => {
       enabled: !!connection?.id,
       refetchInterval: 30000,
       retry: (failureCount, error) => {
+        // Type guard for error with status property
+        const hasStatus = error && typeof error === 'object' && 'status' in error;
+        const status = hasStatus ? (error as any).status : null;
+        
         // Don't retry on 4xx errors
-        if (error && typeof error === 'object' && 'status' in error && 
-            error.status >= 400 && error.status < 500) {
+        if (typeof status === 'number' && status >= 400 && status < 500) {
           return false;
         }
         return failureCount < 2;
@@ -196,9 +199,12 @@ const SyncHistory = () => {
     enabled: !!connection?.id,
     refetchInterval: 5000,
     retry: (failureCount, error) => {
+      // Type guard for error with status property
+      const hasStatus = error && typeof error === 'object' && 'status' in error;
+      const status = hasStatus ? (error as any).status : null;
+      
       // Don't retry on 4xx errors
-      if (error && typeof error === 'object' && 'status' in error && 
-          error.status >= 400 && error.status < 500) {
+      if (typeof status === 'number' && status >= 400 && status < 500) {
         return false;
       }
       return failureCount < 2;
