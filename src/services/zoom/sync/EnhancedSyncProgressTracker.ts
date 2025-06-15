@@ -38,7 +38,7 @@ export class EnhancedSyncProgressTracker {
    */
   async updateSyncLog(
     syncLogId: string,
-    updates: Partial<Omit<ZoomSyncLog, 'id' | 'created_at'>>
+    updates: Record<string, any>
   ): Promise<void> {
     const { error } = await supabase
       .from('zoom_sync_logs')
@@ -143,7 +143,7 @@ export class EnhancedSyncProgressTracker {
   /**
    * Get current sync status for a connection
    */
-  async getCurrentSyncStatus(connectionId: string): Promise<ZoomSyncLog | null> {
+  async getCurrentSyncStatus(connectionId: string): Promise<any> {
     const { data, error } = await supabase
       .from('zoom_sync_logs')
       .select('*')

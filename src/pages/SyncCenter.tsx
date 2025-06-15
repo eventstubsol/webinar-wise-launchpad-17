@@ -9,7 +9,6 @@ import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useZoomSync } from '@/hooks/useZoomSync';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomSyncLog } from '@/types/zoom';
 import { format, formatDistanceToNow, formatDuration, intervalToDuration } from 'date-fns';
 import {
   Accordion,
@@ -106,7 +105,7 @@ const SyncHistory = () => {
         .order('created_at', { ascending: false })
         .limit(10);
       if (error) throw new Error(error.message);
-      return data as ZoomSyncLog[];
+      return data || [];
     },
     enabled: !!connection?.id,
     refetchInterval: 5000, // Poll for history updates

@@ -26,4 +26,8 @@ export interface ZoomSyncLog {
   error_details: SyncErrorDetails | null;
   created_at: string | null;
   updated_at: string | null;
+  // New fields for sequential sync tracking
+  current_webinar_id: string | null;
+  sync_stage: string | null;
+  stage_progress_percentage: number | null;
 }

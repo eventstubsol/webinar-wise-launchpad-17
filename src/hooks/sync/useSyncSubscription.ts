@@ -1,17 +1,17 @@
 
 import { useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomSyncLog, SyncStatus } from '@/types/zoom';
+import { SyncStatus } from '@/types/zoom';
 import { SyncError, SyncHistoryEntry } from './types';
 
 interface UseSyncSubscriptionProps {
   connectionId: string;
-  onSyncUpdate: (syncLog: ZoomSyncLog) => void;
+  onSyncUpdate: (syncLog: any) => void;
   onHistoryUpdate: (entry: SyncHistoryEntry) => void;
   onError: (error: SyncError) => void;
   onConnectionChange: (connected: boolean) => void;
   updateProgressHistory: (processed: number) => void;
-  transformToHistoryEntry: (syncLog: ZoomSyncLog) => SyncHistoryEntry;
+  transformToHistoryEntry: (syncLog: any) => SyncHistoryEntry;
 }
 
 export const useSyncSubscription = ({
@@ -39,7 +39,7 @@ export const useSyncSubscription = ({
           filter: `connection_id=eq.${connectionId}`,
         },
         (payload) => {
-          const syncLog = payload.new as ZoomSyncLog;
+          const syncLog = payload.new as any;
           
           if (payload.eventType === 'DELETE') {
             return;

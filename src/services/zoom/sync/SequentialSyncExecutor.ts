@@ -1,4 +1,3 @@
-
 import { ZoomWebinarService } from '../api/ZoomWebinarService';
 import { ZoomConnectionService } from '../ZoomConnectionService';
 import { BatchOperations } from '../operations/crud/BatchOperations';
@@ -122,7 +121,13 @@ export class SequentialSyncExecutor {
     await this.progressTracker.updateSyncLog(syncLogId, {
       processed_items: processedCount,
       failed_items: failedCount,
-      error_details: failedWebinars.length > 0 ? { failed_webinars: failedWebinars } : null
+      error_details: failedWebinars.length > 0 ? { 
+        error_message: `${failedWebinars.length} webinars failed to sync`,
+        error_code: 'PARTIAL_SYNC_FAILURE',
+        retry_count: 0,
+        last_retry_at: new Date().toISOString(),
+        failed_webinars: failedWebinars 
+      } : null
     });
   }
 
@@ -283,7 +288,8 @@ export class SequentialSyncExecutor {
           case 'recordings':
             // Recordings are optional - don't fail if not available
             try {
-              await this.retryApiCall(() => ZoomWebinarService.getWebinarRecordings?.(webinarId));
+              // Note: This method doesn't exist yet, so we'll skip for now
+              console.log(`Skipping recordings for webinar ${webinarId} - method not implemented`);
             } catch (error) {
               console.log(`No recordings available for webinar ${webinarId}`);
             }
