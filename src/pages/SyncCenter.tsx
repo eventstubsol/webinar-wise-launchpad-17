@@ -19,7 +19,6 @@ import {
   Settings
 } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
-import { useZoomSync } from '@/hooks/useZoomSync';
 import { useNotificationSystem } from '@/hooks/useNotificationSystem';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -50,7 +49,7 @@ const SyncAnalytics = () => {
 
         const { data: lastSuccessfulSync, error: syncError } = await supabase
           .from('zoom_sync_logs')
-          .select('*')
+          .select('completed_at, processed_items')
           .eq('connection_id', connection.id)
           .eq('sync_status', 'completed')
           .order('completed_at', { ascending: false })
@@ -112,7 +111,6 @@ const SyncAnalytics = () => {
 
 const SyncHistory = () => {
   const { connection } = useZoomConnection();
-  const { startSync, isSyncing } = useZoomSync(connection?.id);
   const [selectedSyncId, setSelectedSyncId] = useState<string | null>(null);
   
   const { data: history, isLoading, error } = useQuery({
@@ -226,216 +224,131 @@ const SyncHistory = () => {
                 <Zap className="h-5 w-5" />
                 Sequential Sync History & Logs
               </CardTitle>
-              <CardDescription>Detailed history of your webinar sync operations with sequential processing.</CardDescription>
-          </div>
-          <div className="flex gap-2">
-              <Button variant="outline" onClick={() => startSync('incremental')} disabled={isSyncing}>
-                  <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} /> Sync Recent
-              </Button>
-              <Button onClick={() => startSync('initial')} disabled={isSyncing}>
-                  <Download className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} /> Full Sync
-              </Button>
+              <CardDescription>
+                Detailed logs and history of your synchronization jobs.
+              </CardDescription>
           </div>
         </CardHeader>
         <CardContent>
-          {isSyncing && (
-            <Alert className="mb-4">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <AlertTitle>Sequential Sync in Progress</AlertTitle>
-              <AlertDescription>
-                Webinars are being processed one by one for optimal reliability. This list will update automatically.
-              </AlertDescription>
-            </Alert>
+          {isLoading && <p>Loading history...</p>}
+          {error && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>}
+          
+          {history && history.length === 0 && (
+            <div className="text-center py-8">
+              <List className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No Sync History</h3>
+              <p className="mt-1 text-sm text-gray-500">Run a sync to see its history here.</p>
+            </div>
           )}
           
-          {isLoading && <p>Loading history...</p>}
-          {error && <p className="text-red-500">Could not load sync history.</p>}
-          {history && history.length === 0 && !isLoading && <p>No sync history found. Start a sync to see logs here.</p>}
-          
           {history && history.length > 0 && (
-            <div className="space-y-4">
-              {/* Quick Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
-                <div className="text-center">
-                  <div className="text-lg font-semibold text-green-600">
-                    {history.filter(h => h.sync_status === 'completed').length}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Successful</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-semibold text-red-600">
-                    {history.filter(h => h.sync_status === 'failed').length}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Failed</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-semibold">
-                    {history.filter(h => h.sync_status === 'completed')
-                      .reduce((sum, h) => sum + (h.processed_items || 0), 0)}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Items Synced</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-semibold">
-                    {history.filter(h => h.sync_status === 'completed')
-                      .reduce((sum, h) => sum + (h.api_calls_made || 0), 0)}
-                  </div>
-                  <div className="text-sm text-muted-foreground">API Calls Made</div>
-                </div>
-              </div>
-
-              {/* Detailed History */}
-              <Accordion type="single" collapsible className="w-full">
-                {history.map((log) => (
-                  <AccordionItem value={log.id} key={log.id}>
-                    <AccordionTrigger 
-                      className="hover:no-underline"
-                      onClick={() => setSelectedSyncId(selectedSyncId === log.id ? null : log.id)}
-                    >
-                        <div className="flex items-center justify-between w-full pr-4">
-                            <div className="flex items-center gap-3">
-                                {/* ... keep existing status icon and basic info the same ... */}
-                                <div>
-                                    <p className="font-medium capitalize">{log.sync_type} Sync</p>
-                                    <p className="text-sm text-muted-foreground">
-                                    {format(new Date(log.created_at), 'MMM d, yyyy, p')}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <Badge variant={log.sync_status === 'failed' ? 'destructive' : 'secondary'} className="capitalize">
-                                    {log.sync_status.replace('_', ' ')}
-                                </Badge>
-                                <span className="text-sm text-muted-foreground w-28 text-right">
-                                    {/* ... keep existing duration calculation the same ... */}
-                                </span>
-                            </div>
-                        </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="bg-muted/50 p-0 rounded-md border-l-4">
-                      {selectedSyncId === log.id && (
-                        <div className="p-4">
-                          <SyncHistoryDetailView syncEntry={log} />
-                        </div>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </div>
+            <Accordion type="single" collapsible onValueChange={setSelectedSyncId}>
+              {history.map((log) => (
+                <AccordionItem value={log.id} key={log.id}>
+                  <AccordionTrigger>
+                    <div className="flex items-center justify-between w-full pr-4">
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(log.sync_status)}
+                        <span className="font-medium capitalize">{log.sync_type} Sync</span>
+                        <Badge variant="outline">{log.sync_status}</Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="p-4 bg-gray-50 rounded-b-md">
+                      <p><strong>Status:</strong> {log.sync_status}</p>
+                      <p><strong>Started:</strong> {format(new Date(log.created_at), "PPP p")}</p>
+                      {log.completed_at && <p><strong>Duration:</strong> {getSyncDuration(log.created_at, log.completed_at)}</p>}
+                      <p><strong>Current Stage:</strong> {formatSyncStage(log.sync_stage, log.current_webinar_id)}</p>
+                      {log.processed_items !== null && <p><strong>Items Processed:</strong> {log.processed_items}</p>}
+                      {log.error_message && <p className="text-red-500"><strong>Error:</strong> {log.error_message}</p>}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
           )}
         </CardContent>
       </Card>
+      
+      {selectedSync && (
+        <SyncHistoryDetailView syncLog={selectedSync} />
+      )}
     </div>
   );
 };
 
-export default function SyncCenter() {
-  const { isConnected, isLoading: isConnectionLoading, connection } = useZoomConnection();
-  const { preferences } = useNotificationSystem(connection?.user_id);
+const SyncCenterPage = () => {
+    const { connection, isLoading, isConnected } = useZoomConnection();
 
-  // Request notification permission on first load
-  useEffect(() => {
-    if (preferences?.browser_notifications_enabled) {
-      NotificationService.requestPermission();
+    if (isLoading) {
+        return <div className="p-8 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto" /></div>;
     }
-  }, [preferences?.browser_notifications_enabled]);
-
-  if (isConnectionLoading) {
-      return (
-        <div className="flex items-center justify-center p-8 h-full">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      );
-  }
-
-  if (!isConnected) {
+    
+    if (!isConnected) {
+        return (
+            <div className="p-8">
+                <Alert variant="destructive">
+                    <ServerCrash className="h-4 w-4" />
+                    <AlertTitle>Not Connected to Zoom</AlertTitle>
+                    <AlertDescription>
+                        Please connect your Zoom account in the settings to use the Sync Center.
+                    </AlertDescription>
+                </Alert>
+            </div>
+        );
+    }
+    
     return (
-        <div className="p-6">
-            <Alert variant="destructive">
-                <ServerCrash className="h-4 w-4" />
-                <AlertTitle>Zoom Not Connected</AlertTitle>
-                <AlertDescription>
-                Please connect your Zoom account in settings to enable data synchronization.
-                </AlertDescription>
-            </Alert>
+        <div className="container mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">Sync Center</h1>
+                <p className="text-muted-foreground">Monitor and manage your Zoom data synchronization.</p>
+              </div>
+              <div className="mt-4 sm:mt-0">
+                <Button>
+                  <Settings className="mr-2 h-4 w-4" />
+                  Configure Sync
+                </Button>
+              </div>
+            </div>
+
+            <RealTimeSyncProgress connectionId={connection?.id} />
+
+            <Tabs defaultValue="overview">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="overview">
+                  <Activity className="mr-2 h-4 w-4" />
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger value="history">
+                  <Clock className="mr-2 h-4 w-4" />
+                  History
+                </TabsTrigger>
+                <TabsTrigger value="performance">
+                  <Zap className="mr-2 h-4 w-4" />
+                  Performance
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="overview" className="mt-6">
+                <SyncAnalytics />
+                <div className="mt-8">
+                    <SyncQueueVisualization connectionId={connection?.id} />
+                </div>
+              </TabsContent>
+              <TabsContent value="history" className="mt-6">
+                <SyncHistory />
+              </TabsContent>
+              <TabsContent value="performance" className="mt-6">
+                <PerformanceMetricsDashboard connectionId={connection?.id} />
+              </TabsContent>
+            </Tabs>
         </div>
     );
-  }
+};
 
-  return (
-    <div className="p-6 space-y-6">
-      <header>
-        <h1 className="text-3xl font-bold text-gray-900">Sync Center</h1>
-        <p className="text-gray-600">Monitor and manage your comprehensive Zoom data synchronization.</p>
-      </header>
-      
-      <main>
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="queue">Sync Queue</TabsTrigger>
-            <TabsTrigger value="history">History</TabsTrigger>
-            <TabsTrigger value="performance">Performance</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-6">
-            <SyncAnalytics />
-            {connection?.id && <RealTimeSyncProgress connectionId={connection.id} />}
-          </TabsContent>
-
-          <TabsContent value="queue" className="space-y-6">
-            {connection?.id && <SyncQueueVisualization connectionId={connection.id} />}
-          </TabsContent>
-
-          <TabsContent value="history" className="space-y-6">
-            <SyncHistory />
-          </TabsContent>
-
-          <TabsContent value="performance" className="space-y-6">
-            {connection?.id && connection.user_id && (
-              <PerformanceMetricsDashboard 
-                connectionId={connection.id} 
-                userId={connection.user_id}
-              />
-            )}
-          </TabsContent>
-
-          <TabsContent value="settings" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  Notification Settings
-                </CardTitle>
-                <CardDescription>
-                  Configure how you want to be notified about sync events.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <p className="text-sm text-blue-800">
-                      Notification preferences can be configured in your account settings. 
-                      Browser notifications require permission and will be requested when enabled.
-                    </p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Current Settings:</h4>
-                    <ul className="text-sm space-y-1 ml-4">
-                      <li>• Browser notifications: {preferences?.browser_notifications_enabled ? 'Enabled' : 'Disabled'}</li>
-                      <li>• Toast notifications: {preferences?.toast_notifications_enabled ? 'Enabled' : 'Disabled'}</li>
-                      <li>• Email notifications: {preferences?.email_notifications_enabled ? 'Enabled' : 'Disabled'}</li>
-                    </ul>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </main>
-    </div>
-  );
-}
+export default SyncCenterPage;
