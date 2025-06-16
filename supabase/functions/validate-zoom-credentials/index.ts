@@ -65,23 +65,15 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // First, clean up any existing invalid connections for this user
-    const { data: existingConnections } = await serviceClient
+    // First, clean up any existing connections for this user
+    const { error: deleteError } = await serviceClient
       .from('zoom_connections')
-      .select('id, access_token')
+      .delete()
       .eq('user_id', user.id);
 
-    if (existingConnections) {
-      for (const conn of existingConnections) {
-        // Delete connections with invalid tokens (< 50 chars indicates corrupted OAuth)
-        if (conn.access_token && conn.access_token.length < 50) {
-          console.log('Deleting invalid connection:', conn.id);
-          await serviceClient
-            .from('zoom_connections')
-            .delete()
-            .eq('id', conn.id);
-        }
-      }
+    if (deleteError) {
+      console.error('Error cleaning up existing connections:', deleteError);
+      // Continue anyway, as this might just mean no existing connections
     }
 
     // Request Server-to-Server OAuth token from Zoom
@@ -147,20 +139,17 @@ serve(async (req) => {
       sync_frequency_hours: 24,
     };
     
-    // Upsert connection data (will replace any existing connection for this user/account)
-    const { data: connection, error: upsertError } = await serviceClient
+    // Insert new connection data
+    const { data: connection, error: insertError } = await serviceClient
       .from('zoom_connections')
-      .upsert(connectionData, { 
-        onConflict: 'user_id',
-        ignoreDuplicates: false 
-      })
+      .insert(connectionData)
       .select()
       .single();
 
-    if (upsertError) {
-      console.error('Failed to upsert connection:', upsertError);
+    if (insertError) {
+      console.error('Failed to insert connection:', insertError);
       return new Response(
-        JSON.stringify({ error: 'Failed to save connection to database', details: upsertError.message }),
+        JSON.stringify({ error: 'Failed to save connection to database', details: insertError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
