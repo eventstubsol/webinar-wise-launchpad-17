@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Link, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, RefreshCw, AlertTriangle } from 'lucide-react';
 import { ZoomConnection } from '@/types/zoom';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
 
@@ -13,13 +13,22 @@ interface ZoomButtonContentProps {
 export const ZoomButtonContent: React.FC<ZoomButtonContentProps> = ({
   isLoading,
   isValidating,
-  connection,
+  connection
 }) => {
-  if (isLoading || isValidating) {
+  if (isLoading) {
     return (
       <>
-        <Loader className="h-4 w-4 animate-spin" />
-        <span>{isValidating ? 'Validating...' : 'Loading...'}</span>
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Checking...
+      </>
+    );
+  }
+
+  if (isValidating) {
+    return (
+      <>
+        <RefreshCw className="w-4 h-4 animate-spin" />
+        Validating...
       </>
     );
   }
@@ -30,24 +39,24 @@ export const ZoomButtonContent: React.FC<ZoomButtonContentProps> = ({
     if (isExpired) {
       return (
         <>
-          <AlertCircle className="h-4 w-4" />
-          <span>Revalidate Credentials</span>
+          <AlertTriangle className="w-4 h-4" />
+          Reconnect Zoom
         </>
       );
     }
-
+    
     return (
       <>
-        <CheckCircle className="h-4 w-4" />
-        <span>Credentials Validated</span>
+        <WifiOff className="w-4 h-4" />
+        Disconnect Zoom
       </>
     );
   }
 
   return (
     <>
-      <Link className="h-4 w-4" />
-      <span>Validate Credentials</span>
+      <Wifi className="w-4 h-4" />
+      Validate Connection
     </>
   );
 };

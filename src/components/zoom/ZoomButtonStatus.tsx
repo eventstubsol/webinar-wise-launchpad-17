@@ -1,80 +1,62 @@
 
 import React from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { CheckCircle, AlertTriangle, XCircle, Info } from 'lucide-react';
 import { ZoomConnection } from '@/types/zoom';
-import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
 import { ZoomCredentials } from '@/types/zoomCredentials';
-import { AlertCircle, CheckCircle } from 'lucide-react';
 
 interface ZoomButtonStatusProps {
   connection: ZoomConnection | null;
   credentials: ZoomCredentials | null;
-  validationResult?: any | null;
+  validationResult: any;
 }
 
 export const ZoomButtonStatus: React.FC<ZoomButtonStatusProps> = ({
   connection,
   credentials,
-  validationResult,
+  validationResult
 }) => {
-  // Priority 1: Show validation result if available
-  if (validationResult) {
-    if (validationResult.success) {
-      return (
-        <div className="text-xs text-green-600 flex items-center gap-1">
-          <CheckCircle className="w-3 h-3" />
-          <span>Validated: {validationResult.accountInfo?.email || 'Success'}</span>
-        </div>
-      );
-    }
-    if (validationResult.error) {
-      return (
-        <div className="text-xs text-red-600 flex items-center gap-1">
-          <AlertCircle className="w-3 h-3" />
-          <span>Validation Failed. Please check credentials.</span>
-        </div>
-      );
-    }
-  }
-
-  // Priority 2: Show existing connection status
-  if (connection && !ZoomConnectionService.isTokenExpired(connection.token_expires_at)) {
-    // Check if this is a Server-to-Server connection with placeholder tokens
-    const isServerToServer = connection.access_token && 
-      (connection.access_token.includes('SERVER_TO_SERVER_') || 
-       connection.zoom_account_type !== 'OAuth');
-    
+  if (validationResult?.success) {
     return (
-      <div className="text-xs text-green-600 flex items-center gap-1">
-        <CheckCircle className="w-3 h-3" />
-        <span>Connected: {connection.zoom_email}</span>
-      </div>
-    );
-  }
-  
-  if (connection && ZoomConnectionService.isTokenExpired(connection.token_expires_at)) {
-    return (
-      <div className="text-xs text-red-500 flex items-center gap-1">
-        <AlertCircle className="w-3 h-3" />
-        <span>Connection expired. Please re-validate.</span>
-      </div>
+      <Alert className="bg-green-50 border-green-200">
+        <CheckCircle className="h-4 w-4 text-green-600" />
+        <AlertDescription className="text-green-800">
+          Zoom connection validated successfully! Your integration is ready.
+        </AlertDescription>
+      </Alert>
     );
   }
 
-  // Priority 3: Prompt to configure
-  if (!credentials && !connection) {
+  if (validationResult?.error) {
     return (
-      <div className="text-xs text-muted-foreground">
-        Configure OAuth credentials to enable validation.
-      </div>
+      <Alert variant="destructive">
+        <XCircle className="h-4 w-4" />
+        <AlertDescription>
+          Validation failed: {validationResult.error}
+        </AlertDescription>
+      </Alert>
     );
   }
 
-  // Priority 4: Prompt to validate
-  if (credentials && !connection) {
+  if (!credentials) {
     return (
-      <div className="text-xs text-muted-foreground">
-        Ready to validate credentials.
-      </div>
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertDescription>
+          Please configure your Zoom Server-to-Server OAuth app credentials first.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (connection?.connection_type === 'oauth' && connection.access_token?.length < 50) {
+    return (
+      <Alert variant="destructive">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertDescription>
+          Your current connection has an invalid token. Click "Validate Connection" to fix this.
+        </AlertDescription>
+      </Alert>
     );
   }
 

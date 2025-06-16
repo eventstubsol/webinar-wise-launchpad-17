@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { CheckCircle, AlertTriangle, XCircle, Loader2 } from 'lucide-react';
 
 interface ConnectionStatusAlertProps {
   isLoading: boolean;
@@ -12,25 +12,14 @@ interface ConnectionStatusAlertProps {
 export const ConnectionStatusAlert: React.FC<ConnectionStatusAlertProps> = ({
   isLoading,
   isConnected,
-  isExpired,
+  isExpired
 }) => {
   if (isLoading) {
     return (
       <Alert>
-        <Clock className="h-4 w-4" />
-        <AlertTitle>Loading</AlertTitle>
-        <AlertDescription>Checking validation status...</AlertDescription>
-      </Alert>
-    );
-  }
-
-  if (!isConnected) {
-    return (
-      <Alert>
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Not Validated</AlertTitle>
+        <Loader2 className="h-4 w-4 animate-spin" />
         <AlertDescription>
-          Validate your Zoom credentials to start syncing webinar data and analytics.
+          Checking your Zoom connection status...
         </AlertDescription>
       </Alert>
     );
@@ -39,21 +28,30 @@ export const ConnectionStatusAlert: React.FC<ConnectionStatusAlertProps> = ({
   if (isExpired) {
     return (
       <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Validation Expired</AlertTitle>
+        <XCircle className="h-4 w-4" />
         <AlertDescription>
-          Your Zoom credentials need to be revalidated. Please validate them again.
+          Your Zoom connection has expired or is invalid. Please re-validate your credentials to restore the connection.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (isConnected) {
+    return (
+      <Alert className="bg-green-50 border-green-200">
+        <CheckCircle className="h-4 w-4 text-green-600" />
+        <AlertDescription className="text-green-800">
+          Your Zoom account is successfully connected and ready to sync webinar data.
         </AlertDescription>
       </Alert>
     );
   }
 
   return (
-    <Alert className="border-green-200 bg-green-50">
-      <CheckCircle className="h-4 w-4 text-green-600" />
-      <AlertTitle className="text-green-800">Credentials Validated</AlertTitle>
-      <AlertDescription className="text-green-700">
-        Your Zoom credentials are validated and ready for data syncing.
+    <Alert variant="destructive">
+      <AlertTriangle className="h-4 w-4" />
+      <AlertDescription>
+        No active Zoom connection found. Please validate your credentials to establish a connection.
       </AlertDescription>
     </Alert>
   );
