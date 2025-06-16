@@ -28,11 +28,17 @@ export const ZoomConnectionManager: React.FC<ZoomConnectionManagerProps> = ({
     
     if (hasCredentials) {
       // Check if the existing connection is valid for Server-to-Server
-      if (connection && connection.access_token?.length > 50) {
-        return { status: 'valid', label: 'Server-to-Server Connected', color: 'bg-green-500' };
-      } else {
-        return { status: 'needs_validation', label: 'Needs Validation', color: 'bg-yellow-500' };
+      if (connection) {
+        // Check for invalid OAuth token (short tokens are corrupted OAuth tokens)
+        if (connection.access_token && connection.access_token.length < 50) {
+          return { status: 'invalid_oauth', label: 'Invalid OAuth Token', color: 'bg-red-500' };
+        }
+        // Check if it's a proper Server-to-Server connection
+        if (connection.access_token?.length > 50) {
+          return { status: 'valid', label: 'Server-to-Server Connected', color: 'bg-green-500' };
+        }
       }
+      return { status: 'needs_validation', label: 'Needs Validation', color: 'bg-yellow-500' };
     }
     
     if (!connection) {
@@ -41,7 +47,7 @@ export const ZoomConnectionManager: React.FC<ZoomConnectionManagerProps> = ({
     
     // Check for invalid OAuth token
     if (connection.access_token?.length < 50) {
-      return { status: 'invalid', label: 'Invalid OAuth Token', color: 'bg-red-500' };
+      return { status: 'invalid_oauth', label: 'Invalid OAuth Token', color: 'bg-red-500' };
     }
     
     return { status: 'unknown', label: 'Connection Issue', color: 'bg-yellow-500' };
@@ -124,11 +130,11 @@ export const ZoomConnectionManager: React.FC<ZoomConnectionManagerProps> = ({
         )}
 
         {/* Status-specific alerts */}
-        {connectionStatus.status === 'invalid' && (
+        {connectionStatus.status === 'invalid_oauth' && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Your Zoom connection has an invalid token (likely corrupted OAuth data). 
+              Your Zoom connection has an invalid OAuth token (corrupted data). 
               Click "Fix Connection" to remove it and enable Server-to-Server validation.
             </AlertDescription>
           </Alert>
@@ -163,7 +169,7 @@ export const ZoomConnectionManager: React.FC<ZoomConnectionManagerProps> = ({
         )}
 
         <div className="flex gap-2">
-          {connectionStatus.status === 'invalid' && (
+          {connectionStatus.status === 'invalid_oauth' && (
             <Button 
               onClick={handleFixConnection}
               disabled={isFixing}
