@@ -13,18 +13,17 @@ export async function processComprehensiveSync(
   try {
     // Initialize Zoom API client with enhanced error handling
     const zoomApi = await import('./zoom-api-client.ts');
-    const client = await zoomApi.createZoomAPIClient(connection);
+    const client = await zoomApi.createZoomAPIClient(connection, supabase);
     
     // Fetch webinars list with comprehensive data
     console.log('Fetching webinars list...');
     await updateSyncStage(supabase, syncLogId, null, 'fetching_webinar_list', 10);
     
-    const webinarsResponse = await client.get('/users/me/webinars', {
-      page_size: 300,
+    // Use the correct method from ZoomAPIClient
+    const webinars = await client.listWebinarsWithRange({
       type: 'all'
     });
     
-    const webinars = webinarsResponse.webinars || [];
     console.log(`Found ${webinars.length} webinars to sync`);
     
     if (webinars.length === 0) {
@@ -56,7 +55,7 @@ export async function processComprehensiveSync(
         
         // Fetch detailed webinar information with all fields
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_details', null);
-        const webinarDetails = await client.get(`/webinars/${webinar.id}`);
+        const webinarDetails = await client.getWebinar(webinar.id);
         console.log(`Fetched webinar details for ${webinar.id}:`, {
           hasSettings: !!webinarDetails.settings,
           hasStartUrl: !!webinarDetails.start_url,
@@ -67,20 +66,14 @@ export async function processComprehensiveSync(
         
         // Fetch registrants
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'registrants', null);
-        const registrantsResponse = await client.get(`/webinars/${webinar.id}/registrants`, {
-          page_size: 300
-        });
-        const registrants = registrantsResponse.registrants || [];
+        const registrants = await client.getWebinarRegistrants(webinar.id);
         console.log(`Fetched ${registrants.length} registrants for webinar ${webinar.id}`);
         
         // Fetch participants/attendees
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'participants', null);
         let participants = [];
         try {
-          const participantsResponse = await client.get(`/report/webinars/${webinar.id}/participants`, {
-            page_size: 300
-          });
-          participants = participantsResponse.participants || [];
+          participants = await client.getWebinarParticipants(webinar.id);
           console.log(`Fetched ${participants.length} participants for webinar ${webinar.id}`);
         } catch (participantError) {
           console.log(`No participants data available for webinar ${webinar.id} (likely not started yet)`);
@@ -90,8 +83,7 @@ export async function processComprehensiveSync(
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'polls', null);
         let polls = [];
         try {
-          const pollsResponse = await client.get(`/webinars/${webinar.id}/polls`);
-          polls = pollsResponse.polls || [];
+          polls = await client.getWebinarPolls(webinar.id);
           console.log(`Fetched ${polls.length} polls for webinar ${webinar.id}`);
         } catch (pollError) {
           console.log(`No polls data available for webinar ${webinar.id}`);
@@ -101,8 +93,7 @@ export async function processComprehensiveSync(
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'qa', null);
         let qnaData = [];
         try {
-          const qnaResponse = await client.get(`/report/webinars/${webinar.id}/qa`);
-          qnaData = qnaResponse.questions || [];
+          qnaData = await client.getWebinarQA(webinar.id);
           console.log(`Fetched ${qnaData.length} Q&A items for webinar ${webinar.id}`);
         } catch (qnaError) {
           console.log(`No Q&A data available for webinar ${webinar.id}`);
