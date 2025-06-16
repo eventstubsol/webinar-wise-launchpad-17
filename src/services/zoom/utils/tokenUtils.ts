@@ -55,16 +55,8 @@ export class TokenUtils {
         return TokenStatus.INVALID;
       }
 
-      // If we have an access token and it's not expired, we're good
-      if (connection.access_token && !this.isTokenExpired(connection.token_expires_at)) {
-        return TokenStatus.VALID;
-      }
-
-      // If token is expired but we have credentials, we can refresh (return as valid since we can auto-refresh)
-      if (this.isTokenExpired(connection.token_expires_at)) {
-        return TokenStatus.ACCESS_EXPIRED;
-      }
-
+      // For Server-to-Server, if we have valid credentials, always return VALID
+      // Token refresh happens silently in the background without user intervention
       return TokenStatus.VALID;
     }
 
@@ -102,6 +94,12 @@ export class TokenUtils {
    * Check if connection needs token refresh
    */
   static needsTokenRefresh(connection: ZoomConnection): boolean {
+    // For Server-to-Server connections, check if token is expired but don't require user intervention
+    if (this.isServerToServerConnection(connection)) {
+      return this.isTokenExpired(connection.token_expires_at);
+    }
+    
+    // For OAuth connections, only refresh if access token is expired but refresh token is valid
     const status = this.getTokenStatus(connection);
     return status === TokenStatus.ACCESS_EXPIRED;
   }

@@ -155,8 +155,15 @@ export class ConnectionStatusOperations {
       // Check if token needs refresh
       if (TokenUtils.needsTokenRefresh(connection)) {
         if (TokenUtils.canRefreshToken(connection)) {
-          const refreshedConnection = await this.refreshToken(connection);
-          if (refreshedConnection) return 'active' as ConnectionStatus;
+          // For Server-to-Server connections, refresh silently without UI indication
+          if (TokenUtils.isServerToServerConnection(connection)) {
+            const refreshedConnection = await this.refreshTokenSilently(connection);
+            if (refreshedConnection) return 'active' as ConnectionStatus;
+          } else {
+            // For OAuth connections, use the regular refresh with UI feedback
+            const refreshedConnection = await this.refreshToken(connection);
+            if (refreshedConnection) return 'active' as ConnectionStatus;
+          }
         }
 
         await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
@@ -228,6 +235,30 @@ export class ConnectionStatusOperations {
       });
       
       await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
+      return null;
+    }
+  }
+
+  /**
+   * Silently refresh Server-to-Server tokens without UI feedback
+   */
+  static async refreshTokenSilently(connection: ZoomConnection): Promise<ZoomConnection | null> {
+    try {
+      console.log('Silently refreshing Server-to-Server token for connection:', connection.id);
+
+      const { data, error } = await supabase.functions.invoke('validate-zoom-credentials', { 
+        body: { connectionId: connection.id } 
+      });
+
+      if (error) {
+        console.error('Silent token refresh failed:', error);
+        return null;
+      }
+
+      console.log('Server-to-Server token refreshed silently');
+      return data.connection;
+    } catch (error) {
+      console.error('Error during silent token refresh:', error);
       return null;
     }
   }
