@@ -77,6 +77,7 @@ export async function processSequentialSync(supabase: any, syncOperation: any, c
     
     let processedCount = 0;
     let errorCount = 0;
+    const errors: string[] = [];
     
     for (const webinarData of uniqueWebinars) {
       try {
@@ -119,6 +120,7 @@ export async function processSequentialSync(supabase: any, syncOperation: any, c
       } catch (error) {
         console.error(`Error processing webinar ${webinarData.id}:`, error);
         errorCount++;
+        errors.push(`Webinar ${webinarData.id}: ${error.message}`);
       }
     }
     
@@ -128,6 +130,7 @@ export async function processSequentialSync(supabase: any, syncOperation: any, c
       sync_status: 'completed',
       processed_items: processedCount,
       error_count: errorCount,
+      error_details: errors.length > 0 ? { errors } : null,
       completed_at: new Date().toISOString()
     });
     
@@ -141,15 +144,21 @@ export async function processSequentialSync(supabase: any, syncOperation: any, c
     const errorDetails = {
       message: error.message,
       status: error.status,
-      isAuthError: error.isAuthError || false
+      isAuthError: error.isAuthError || false,
+      stack: error.stack
     };
     
-    await updateSyncLog(supabase, syncLogId, {
-      sync_status: 'failed',
-      error_message: error.message,
-      error_details: errorDetails,
-      completed_at: new Date().toISOString()
-    });
+    // Ensure sync status is properly updated on failure
+    try {
+      await updateSyncLog(supabase, syncLogId, {
+        sync_status: 'failed',
+        error_message: error.message,
+        error_details: errorDetails,
+        completed_at: new Date().toISOString()
+      });
+    } catch (updateError) {
+      console.error('Failed to update sync log on error:', updateError);
+    }
     
     throw error;
   }
