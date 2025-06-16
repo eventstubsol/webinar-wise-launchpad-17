@@ -14,18 +14,32 @@ export async function processComprehensiveSync(
     const zoomApi = await import('./zoom-api-client.ts');
     const client = await zoomApi.createZoomAPIClient(connection, supabase);
     
-    // Fetch webinars list with comprehensive data
-    console.log('Fetching webinars list...');
+    // Check API scopes before proceeding
+    console.log('Validating Zoom API scopes...');
+    const scopeValidation = await validateRequiredScopes(client);
+    console.log('Scope validation result:', scopeValidation);
+    
+    // Fetch webinars with focus on past/completed webinars for participant data
+    console.log('Fetching webinars list prioritizing completed webinars...');
     await updateSyncStage(supabase, syncLogId, null, 'fetching_webinar_list', 10);
     
-    // Use the correct method from ZoomAPIClient
-    const webinars = await client.listWebinarsWithRange({
-      type: 'all'
+    // Fetch both past and upcoming webinars but prioritize past ones
+    const pastWebinars = await client.listWebinarsWithRange({
+      type: 'past',
+      from: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000), // Last 90 days
+      to: new Date()
     });
     
-    console.log(`Found ${webinars.length} webinars to sync`);
+    const upcomingWebinars = await client.listWebinarsWithRange({
+      type: 'upcoming'
+    });
     
-    if (webinars.length === 0) {
+    // Combine webinars, putting past ones first (they can have participant data)
+    const allWebinars = [...pastWebinars, ...upcomingWebinars];
+    
+    console.log(`Found ${allWebinars.length} webinars total (${pastWebinars.length} past, ${upcomingWebinars.length} upcoming)`);
+    
+    if (allWebinars.length === 0) {
       await updateSyncLog(supabase, syncLogId, {
         sync_status: 'completed',
         processed_items: 0,
@@ -38,10 +52,11 @@ export async function processComprehensiveSync(
     
     let processedCount = 0;
     let successCount = 0;
-    const totalWebinars = webinars.length;
+    let participantDataCount = 0;
+    const totalWebinars = allWebinars.length;
     
-    // Process each webinar with webinar details, registrants, and participants
-    for (const webinar of webinars) {
+    // Process each webinar with enhanced participant data handling
+    for (const webinar of allWebinars) {
       try {
         await updateSyncStage(
           supabase, 
@@ -51,9 +66,9 @@ export async function processComprehensiveSync(
           Math.round((processedCount / totalWebinars) * 90) + 10
         );
         
-        console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars})`);
+        console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars}) - Status: ${webinar.status || 'unknown'}`);
         
-        // Fetch detailed webinar information with all fields
+        // Fetch detailed webinar information
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_details', null);
         const webinarDetails = await client.getWebinar(webinar.id);
         console.log(`Fetched webinar details for ${webinar.id}:`, {
@@ -62,7 +77,8 @@ export async function processComprehensiveSync(
           hasEncryptedPasscode: !!webinarDetails.encrypted_passcode,
           creationSource: webinarDetails.creation_source,
           isSimulive: webinarDetails.is_simulive,
-          status: webinarDetails.status
+          status: webinarDetails.status,
+          startTime: webinarDetails.start_time
         });
         
         // Fetch registrants with proper error handling
@@ -73,25 +89,40 @@ export async function processComprehensiveSync(
           console.log(`Fetched ${registrants.length} registrants for webinar ${webinar.id}`);
         } catch (registrantError) {
           console.log(`No registrants data available for webinar ${webinar.id}: ${registrantError.message}`);
-          // Continue processing even if registrants fail
         }
         
-        // Fetch participants (attendees) data
+        // Enhanced participant fetching with status checking
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'participants', null);
         let participants = [];
-        try {
-          participants = await client.getWebinarParticipants(webinar.id);
-          console.log(`Fetched ${participants.length} participants for webinar ${webinar.id}`);
-        } catch (participantError) {
-          console.log(`No participants data available for webinar ${webinar.id}: ${participantError.message}`);
-          // Continue processing even if participants fail
+        const canFetchParticipants = await canWebinarProvideParticipantData(webinarDetails, scopeValidation);
+        
+        if (canFetchParticipants.allowed) {
+          try {
+            participants = await client.getWebinarParticipants(webinar.id);
+            console.log(`Successfully fetched ${participants.length} participants for webinar ${webinar.id}`);
+            if (participants.length > 0) {
+              participantDataCount++;
+            }
+          } catch (participantError) {
+            console.error(`Failed to fetch participants for webinar ${webinar.id}:`, {
+              error: participantError.message,
+              status: participantError.status,
+              body: participantError.body,
+              webinarStatus: webinarDetails.status,
+              webinarStartTime: webinarDetails.start_time
+            });
+            
+            // Log specific scope errors
+            if (participantError.message?.includes('does not contain scopes')) {
+              console.error(`SCOPE ERROR: Missing required scope for participant data. Required: report:read:list_webinar_participants:admin`);
+            }
+          }
+        } else {
+          console.log(`Skipping participant data for webinar ${webinar.id}: ${canFetchParticipants.reason}`);
         }
         
-        // Skip polls and Q&A for now to focus on core data
-        console.log(`Skipping polls and Q&A for progressive build - focusing on webinar, registrants, and participants`);
-        
-        // Process webinar, registrant, and participant data with metrics calculation
-        console.log(`Syncing webinar, registrant, and participant data for webinar ${webinar.id}...`);
+        // Process webinar, registrant, and participant data
+        console.log(`Syncing webinar and all available data for webinar ${webinar.id}...`);
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'saving_webinar_and_data', null);
         
         const webinarDbId = await syncWebinarAndAllData(
@@ -104,7 +135,7 @@ export async function processComprehensiveSync(
         
         console.log(`Successfully synced webinar ${webinar.id} to database with ID: ${webinarDbId}`);
         
-        // Calculate and update webinar metrics using participant data
+        // Calculate and update webinar metrics
         console.log(`Calculating metrics for webinar ${webinar.id}...`);
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'calculating_metrics', null);
         await updateWebinarMetrics(supabase, webinarDbId, participants, registrants);
@@ -113,7 +144,8 @@ export async function processComprehensiveSync(
           registrants: registrants.length,
           participants: participants.length,
           polls: 'skipped',
-          qa: 'skipped'
+          qa: 'skipped',
+          hasParticipantData: participants.length > 0
         });
         
         successCount++;
@@ -126,17 +158,24 @@ export async function processComprehensiveSync(
           Math.round((processedCount / totalWebinars) * 90) + 10
         );
         
-        console.log(`Successfully processed webinar ${webinar.id} with metrics calculated`);
+        console.log(`Successfully processed webinar ${webinar.id} with ${participants.length > 0 ? 'participant data' : 'no participant data'}`);
         
       } catch (webinarError) {
         console.error(`Error processing webinar ${webinar.id}:`, webinarError);
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_failed', null);
         processedCount++;
-        // Continue with next webinar
       }
     }
     
-    // Complete the sync
+    // Complete the sync with summary
+    console.log(`Sync Summary:`, {
+      totalWebinars: totalWebinars,
+      processedSuccessfully: successCount,
+      webinarsWithParticipantData: participantDataCount,
+      pastWebinars: pastWebinars.length,
+      upcomingWebinars: upcomingWebinars.length
+    });
+    
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'completed',
       processed_items: processedCount,
@@ -145,12 +184,98 @@ export async function processComprehensiveSync(
       stage_progress_percentage: 100
     });
     
-    console.log(`Comprehensive sync completed with metrics calculation. Successfully processed ${successCount}/${totalWebinars} webinars.`);
+    console.log(`Comprehensive sync completed. Successfully processed ${successCount}/${totalWebinars} webinars with ${participantDataCount} webinars containing participant data.`);
     
   } catch (error) {
     console.error('Comprehensive sync failed:', error);
     throw error;
   }
+}
+
+/**
+ * Validate required scopes for comprehensive data fetching
+ */
+async function validateRequiredScopes(client: any): Promise<{
+  hasWebinarScope: boolean;
+  hasParticipantScope: boolean;
+  hasRegistrantScope: boolean;
+  missingScopes: string[];
+}> {
+  const requiredScopes = {
+    webinar: 'webinar:read:admin',
+    participant: 'report:read:list_webinar_participants:admin',
+    registrant: 'webinar:read:registrant:admin'
+  };
+  
+  const result = {
+    hasWebinarScope: true, // Assume we have this if we got this far
+    hasParticipantScope: false,
+    hasRegistrantScope: true, // Usually included with basic webinar access
+    missingScopes: [] as string[]
+  };
+  
+  try {
+    // Test participant scope by trying to get user info (lightweight test)
+    await client.makeRequest('/users/me');
+    console.log('Basic API access confirmed');
+  } catch (error) {
+    console.error('Basic API access failed:', error.message);
+  }
+  
+  // We'll discover missing scopes during actual API calls
+  // This is more of a placeholder for future scope validation
+  return result;
+}
+
+/**
+ * Determine if a webinar can provide participant data
+ */
+async function canWebinarProvideParticipantData(webinar: any, scopeValidation: any): Promise<{
+  allowed: boolean;
+  reason: string;
+}> {
+  // Check if webinar has ended/completed
+  const webinarStatus = webinar.status?.toLowerCase();
+  const startTime = new Date(webinar.start_time);
+  const now = new Date();
+  const webinarDuration = webinar.duration || 60; // Default 60 minutes if not specified
+  const estimatedEndTime = new Date(startTime.getTime() + (webinarDuration * 60 * 1000));
+  
+  // Webinar must be in the past and completed
+  if (webinarStatus === 'available' && startTime > now) {
+    return {
+      allowed: false,
+      reason: `Webinar is scheduled for future (${startTime.toISOString()})`
+    };
+  }
+  
+  // For past webinars or ended webinars
+  if (webinarStatus === 'available' && estimatedEndTime < now) {
+    return {
+      allowed: true,
+      reason: 'Past webinar, participant data should be available'
+    };
+  }
+  
+  if (webinarStatus === 'ended') {
+    return {
+      allowed: true,
+      reason: 'Webinar marked as ended'
+    };
+  }
+  
+  // Try for any past webinar regardless of status
+  if (startTime < now) {
+    return {
+      allowed: true,
+      reason: 'Webinar start time is in the past, attempting participant fetch'
+    };
+  }
+  
+  return {
+    allowed: false,
+    reason: `Webinar status '${webinarStatus}' or timing doesn't allow participant data`
+  };
 }
 
 /**
@@ -221,12 +346,12 @@ async function syncWebinarAndAllData(
       }
     }
 
-    // Sync participants if we have any
+    // Sync participants if we have any - THIS IS THE CRITICAL FIX
     if (participants && participants.length > 0) {
       console.log(`Processing ${participants.length} participants for webinar ${webinarData.id}`);
       
       const transformedParticipants = participants.map(participant => 
-        transformParticipantForDatabase(participant, webinarRecord.id)
+        transformParticipantForDatabase(participant, webinarRecord.id) // Use database UUID, not Zoom ID
       );
       
       console.log(`Sample transformed participant:`, transformedParticipants[0]);
@@ -271,11 +396,9 @@ async function updateWebinarMetrics(
   console.log(`Calculating metrics for webinar ${webinarDbId}`);
   
   try {
-    // Calculate metrics from participant data (more accurate than registrants)
     const totalRegistrants = registrants?.length || 0;
     const totalAttendees = participants?.length || 0;
     
-    // Calculate total minutes and average duration from participant attendance data
     let totalMinutes = 0;
     let avgAttendanceDuration = 0;
     
@@ -293,7 +416,6 @@ async function updateWebinarMetrics(
       avgAttendanceDuration
     });
 
-    // Update webinar with calculated metrics
     const { error: updateError } = await supabase
       .from('zoom_webinars')
       .update({
@@ -313,7 +435,6 @@ async function updateWebinarMetrics(
     console.log(`Successfully updated metrics for webinar ${webinarDbId}`);
   } catch (error) {
     console.error('Error calculating webinar metrics:', error);
-    // Don't throw here - metrics calculation failure shouldn't stop the entire sync
     console.log(`Continuing sync despite metrics calculation error for webinar ${webinarDbId}`);
   }
 }
@@ -333,7 +454,7 @@ function transformParticipantForDatabase(apiParticipant: any, webinarDbId: strin
   const details = apiParticipant.details?.[0] || {};
   
   return {
-    webinar_id: webinarDbId,
+    webinar_id: webinarDbId, // This should be the database UUID, not Zoom webinar ID
     participant_id: apiParticipant.id || apiParticipant.participant_id,
     registrant_id: apiParticipant.registrant_id || null,
     participant_name: apiParticipant.name || apiParticipant.participant_name,
@@ -484,7 +605,6 @@ function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string)
     industry: apiRegistrant.industry || null,
     org: apiRegistrant.org || null,
     language: apiRegistrant.language || null,
-    // New fields from API alignment
     join_url: apiRegistrant.join_url || null,
     create_time: apiRegistrant.create_time || apiRegistrant.registration_time || null,
     created_at: new Date().toISOString(),

@@ -7,13 +7,11 @@ export async function validateZoomConnection(connection: any): Promise<boolean> 
       return false;
     }
 
-    // Check if token is valid string
     if (typeof connection.access_token !== 'string' || connection.access_token.length < 10) {
       console.error('Invalid access token format');
       return false;
     }
 
-    // For Server-to-Server connections, we don't need to validate expiry the same way
     const isServerToServer = !connection.refresh_token || connection.refresh_token.includes('SERVER_TO_SERVER_NOT_APPLICABLE');
     
     if (isServerToServer) {
@@ -21,16 +19,15 @@ export async function validateZoomConnection(connection: any): Promise<boolean> 
       return true;
     }
 
-    // For OAuth connections, check token expiry
     const expiresAt = new Date(connection.token_expires_at);
     const now = new Date();
-    const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+    const bufferTime = 5 * 60 * 1000;
 
     console.log(`Token expires at: ${expiresAt.toISOString()}, Current time: ${now.toISOString()}`);
 
     if (now.getTime() >= (expiresAt.getTime() - bufferTime)) {
       console.log('OAuth access token has expired or will expire soon, will need refresh');
-      return true; // Still valid for refresh
+      return true;
     }
 
     console.log('Connection validation successful - token is valid');
@@ -47,7 +44,6 @@ export async function createZoomAPIClient(connection: any, supabase: any) {
   const isServerToServer = !connection.refresh_token || connection.refresh_token.includes('SERVER_TO_SERVER_NOT_APPLICABLE');
   console.log(`Connection type determined as: ${isServerToServer ? 'Server-to-Server' : 'OAuth'}`);
   
-  // Use tokens directly (no decryption needed)
   const accessToken = connection.access_token;
   const refreshToken = isServerToServer ? undefined : connection.refresh_token;
   
@@ -121,7 +117,6 @@ class ZoomAPIClient {
       const tokenData = await tokenResponse.json();
       this.accessToken = tokenData.access_token;
 
-      // Update the connection with the new token (plain text)
       const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
 
       const { error: updateError } = await this.supabase
@@ -201,11 +196,10 @@ class ZoomAPIClient {
       
       console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`);
       
-      // Check if token needs refresh (only for OAuth connections)
       if (this.isOAuth) {
         const expiresAt = new Date(this.connection.token_expires_at);
         const now = new Date();
-        const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+        const bufferTime = 5 * 60 * 1000;
 
         if (now.getTime() >= (expiresAt.getTime() - bufferTime) && retryCount === 0) {
           console.log(`Forcing OAuth token refresh: token expired/expiring`);
@@ -334,8 +328,17 @@ class ZoomAPIClient {
       const response = await this.makeRequest(`/report/webinars/${webinarId}/participants?page_size=300`);
       return response.participants || [];
     } catch (error) {
-      console.log(`No participants for webinar ${webinarId}:`, error.message);
-      return [];
+      console.error(`Participant API error for webinar ${webinarId}:`, {
+        status: error.status,
+        message: error.message,
+        body: error.body
+      });
+      
+      if (error.message?.includes('does not contain scopes')) {
+        throw new Error(`Missing required scope 'report:read:list_webinar_participants:admin' for participant data. Please update your Zoom app scopes.`);
+      }
+      
+      throw error;
     }
   }
 
