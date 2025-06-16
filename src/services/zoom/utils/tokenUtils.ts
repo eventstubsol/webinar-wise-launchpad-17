@@ -33,7 +33,7 @@ export class TokenUtils {
     return connection.connection_type === 'server_to_server' ||
            connection.zoom_account_type === 'Server-to-Server' ||
            (connection.access_token && connection.access_token.includes('SERVER_TO_SERVER')) ||
-           (connection.client_id && connection.client_secret && connection.account_id);
+           !!(connection.client_id && connection.client_secret && connection.account_id);
   }
 
   /**
