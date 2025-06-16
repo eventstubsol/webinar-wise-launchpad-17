@@ -1,381 +1,354 @@
-// Enhanced sync processor with comprehensive monitoring integration
 
-import { SyncOperation } from './types.ts';
-import { makeZoomApiCall, retryApiCall } from './zoom-api.ts';
-import { updateSyncLog, updateSyncStage, saveWebinarToDatabase } from './database-operations.ts';
+import { validateZoomConnection, createZoomAPIClient } from './zoom-api-client.ts';
 
-const SYNC_TIMEOUT_MS = 45 * 60 * 1000;
-
-export async function processSequentialSyncWithMonitoring(
-  supabase: any, 
-  operation: SyncOperation, 
+export async function processComprehensiveSync(
+  supabase: any,
+  syncOperation: any,
   connection: any,
   syncLogId: string
 ): Promise<void> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
-  const startTime = Date.now();
-
+  console.log(`Starting comprehensive sync operation: ${syncOperation.id}`);
+  
   try {
-    console.log(`Starting enhanced sequential sync: ${operation.id}`);
-    await updateSyncLog(supabase, syncLogId, { sync_status: 'in_progress' });
-
-    // Initialize performance tracking
-    await recordPerformanceMetric(supabase, syncLogId, 'sync_started', 1, 'count');
-
-    // Get webinars to sync
-    let webinars = [];
-    switch (operation.syncType) {
-      case 'single':
-        if (operation.webinarId) {
-          const webinarData = await makeZoomApiCall(connection, `/webinars/${operation.webinarId}`);
-          webinars = [webinarData];
-        }
-        break;
-      case 'incremental':
-        const { webinars: recentWebinars } = await makeZoomApiCall(connection, '/users/me/webinars?type=past&page_size=50');
-        webinars = recentWebinars;
-        break;
-      case 'initial':
-        const { webinars: allWebinars } = await makeZoomApiCall(connection, '/users/me/webinars?type=past&page_size=100');
-        webinars = allWebinars;
-        break;
+    // Validate connection and create API client
+    const isValid = await validateZoomConnection(connection);
+    if (!isValid) {
+      throw new Error('Invalid Zoom connection - tokens may be expired');
     }
 
-    // Initialize sync queue
-    await initializeSyncQueue(supabase, syncLogId, webinars);
+    const zoomClient = await createZoomAPIClient(connection, supabase);
 
-    // Initialize sync progress tracking
-    await createSyncProgress(supabase, syncLogId, webinars.length);
+    let webinars = [];
+    
+    if (syncOperation.syncType === 'single' && syncOperation.webinarId) {
+      // Single webinar sync
+      try {
+        const webinar = await zoomClient.getWebinar(syncOperation.webinarId);
+        webinars = [webinar];
+      } catch (error) {
+        console.error(`Failed to fetch single webinar ${syncOperation.webinarId}:`, error);
+        throw new Error(`Webinar ${syncOperation.webinarId} not found or inaccessible`);
+      }
+    } else {
+      // Fetch webinars with extended 90-day range for both past and upcoming
+      const now = new Date();
+      const past90Days = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+      const future90Days = new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000));
 
-    // Track API calls
-    let apiCallsMade = 1; // Initial webinar list call
-    let rateLimitHits = 0;
+      console.log(`Fetching webinars from ${past90Days.toISOString()} to ${future90Days.toISOString()}`);
 
-    const result = await processWebinarListWithMonitoring(
-      supabase, 
-      webinars, 
-      connection, 
-      syncLogId, 
-      operation.connectionId, 
-      controller.signal,
-      { apiCallsMade, rateLimitHits }
-    );
+      // Fetch past and upcoming webinars
+      const [pastWebinars, upcomingWebinars] = await Promise.all([
+        zoomClient.listWebinarsWithRange({
+          from: past90Days,
+          to: now,
+          type: 'past'
+        }),
+        zoomClient.listWebinarsWithRange({
+          from: now,
+          to: future90Days,
+          type: 'upcoming'
+        })
+      ]);
 
-    const endTime = Date.now();
-    const durationSeconds = Math.round((endTime - startTime) / 1000);
+      // Merge and deduplicate
+      const allWebinars = [...pastWebinars, ...upcomingWebinars];
+      const uniqueWebinars = new Map();
+      
+      allWebinars.forEach(webinar => {
+        if (!uniqueWebinars.has(webinar.id)) {
+          uniqueWebinars.set(webinar.id, webinar);
+        }
+      });
+      
+      webinars = Array.from(uniqueWebinars.values());
+      console.log(`Total unique webinars after deduplication: ${webinars.length}`);
+    }
 
-    // Record final performance metrics
-    await recordPerformanceMetric(supabase, syncLogId, 'sync_duration', durationSeconds, 'seconds');
-    await recordPerformanceMetric(supabase, syncLogId, 'api_calls_made', result.apiCallsMade, 'count');
-    await recordPerformanceMetric(supabase, syncLogId, 'rate_limit_hits', result.rateLimitHits, 'count');
-    await recordPerformanceMetric(supabase, syncLogId, 'data_volume_bytes', result.dataVolume || 0, 'bytes');
-    await recordPerformanceMetric(supabase, syncLogId, 'success_rate', ((result.processed - result.failed) / result.total) * 100, 'percentage');
+    if (webinars.length === 0) {
+      await updateSyncLog(supabase, syncLogId, {
+        sync_status: 'completed',
+        total_items: 0,
+        processed_items: 0,
+        completed_at: new Date().toISOString()
+      });
+      return;
+    }
 
-    // Update rate limit tracking
-    await updateRateLimitTracking(supabase, operation.connectionId, operation.userId, result.apiCallsMade);
-
+    // Update total items count
     await updateSyncLog(supabase, syncLogId, {
-      sync_status: 'completed',
-      completed_at: new Date().toISOString(),
-      duration_seconds: durationSeconds,
-      total_items: result.total,
-      processed_items: result.processed,
-      failed_items: result.failed,
-      api_calls_made: result.apiCallsMade,
-      rate_limit_hits: result.rateLimitHits,
-      sync_stage: 'completed',
+      total_items: webinars.length,
+      sync_status: 'in_progress'
     });
 
-    // Clean up sync progress and queue
-    await supabase.from('sync_progress').delete().eq('sync_id', syncLogId);
-    await supabase.from('sync_queue').update({ status: 'completed' }).eq('sync_id', syncLogId);
+    // Process webinars with comprehensive data collection
+    let processedCount = 0;
+    let failedCount = 0;
+    const errors = [];
 
-    await supabase.from('zoom_connections').update({ last_sync_at: new Date().toISOString() }).eq('id', operation.connectionId);
-    console.log(`Enhanced sequential sync completed: ${operation.id}`);
+    for (const webinar of webinars) {
+      try {
+        await updateSyncStage(
+          supabase, 
+          syncLogId, 
+          webinar.id.toString(), 
+          'comprehensive_sync', 
+          Math.floor((processedCount / webinars.length) * 80) + 20
+        );
+
+        await processComprehensiveWebinarData(supabase, zoomClient, webinar, connection.id, syncLogId);
+        processedCount++;
+
+        console.log(`Successfully processed webinar ${webinar.id} with comprehensive data (${processedCount}/${webinars.length})`);
+        
+      } catch (error) {
+        failedCount++;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        errors.push(`Webinar ${webinar.id}: ${errorMessage}`);
+        
+        console.error(`Failed to process webinar ${webinar.id}:`, error);
+        
+        if (error.isAuthError) {
+          throw error;
+        }
+      }
+    }
+
+    // Complete the sync
+    const endTime = new Date().toISOString();
+    const finalStatus = errors.length === webinars.length ? 'failed' : (processedCount > 0 ? 'completed' : 'failed');
+
+    await updateSyncLog(supabase, syncLogId, {
+      sync_status: finalStatus,
+      processed_items: processedCount,
+      failed_items: failedCount,
+      completed_at: endTime,
+      error_message: errors.length > 0 ? `${failedCount} out of ${webinars.length} webinars failed to sync.` : null,
+      error_details: errors.length > 0 ? { errors } : null,
+      sync_stage: 'completed',
+      stage_progress_percentage: 100
+    });
+
+    console.log(`Comprehensive sync completed: ${processedCount} processed, ${failedCount} failed`);
 
   } catch (error) {
-    console.error(`Enhanced sequential sync failed: ${operation.id}`, error);
+    console.error('Comprehensive sync operation failed:', error);
     
-    const endTime = Date.now();
-    const durationSeconds = Math.round((endTime - startTime) / 1000);
-
-    // Record failure metrics
-    await recordPerformanceMetric(supabase, syncLogId, 'sync_duration', durationSeconds, 'seconds');
-    await recordPerformanceMetric(supabase, syncLogId, 'sync_failed', 1, 'count');
+    const isAuthError = !!error.isAuthError;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'failed',
+      error_message: errorMessage,
+      error_details: { isAuthError },
       completed_at: new Date().toISOString(),
-      duration_seconds: durationSeconds,
-      error_message: error instanceof Error ? error.message : 'Unknown error',
-      error_details: { error: error instanceof Error ? error.stack : String(error) },
       sync_stage: 'failed',
-    });
-
-    // Clean up sync progress and mark queue items as failed
-    await supabase.from('sync_progress').delete().eq('sync_id', syncLogId);
-    await supabase.from('sync_queue').update({ 
-      status: 'failed', 
-      error_message: error instanceof Error ? error.message : 'Unknown error'
-    }).eq('sync_id', syncLogId);
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-async function initializeSyncQueue(supabase: any, syncLogId: string, webinars: any[]): Promise<void> {
-  const queueItems = webinars.map((webinar, index) => ({
-    sync_id: syncLogId,
-    webinar_id: webinar.id.toString(),
-    webinar_title: webinar.topic,
-    queue_position: index + 1,
-    status: 'pending',
-    estimated_duration_seconds: 120, // 2 minutes per webinar estimate
-  }));
-
-  await supabase.from('sync_queue').insert(queueItems);
-}
-
-async function processWebinarListWithMonitoring(
-  supabase: any, 
-  list: any[], 
-  conn: any, 
-  logId: string, 
-  connId: string, 
-  signal: AbortSignal,
-  counters: { apiCallsMade: number; rateLimitHits: number }
-) {
-  await updateSyncLog(supabase, logId, { total_items: list.length });
-  let processed = 0, failed = 0, dataVolume = 0;
-  const failedWebinars: any[] = [];
-
-  for (let i = 0; i < list.length; i++) {
-    if (signal.aborted) throw new Error('Sync operation was cancelled');
-    const webinar = list[i];
-    
-    try {
-      // Update queue status
-      await supabase.from('sync_queue')
-        .update({ 
-          status: 'processing', 
-          started_at: new Date().toISOString() 
-        })
-        .eq('sync_id', logId)
-        .eq('webinar_id', webinar.id.toString());
-
-      // Update real-time progress
-      await updateSyncProgress(
-        supabase, 
-        logId, 
-        list.length, 
-        i, 
-        webinar.topic || `Webinar ${webinar.id}`, 
-        'starting_webinar'
-      );
-      
-      const webinarResult = await processWebinarWithMonitoring(
-        supabase, 
-        webinar.id, 
-        conn, 
-        logId, 
-        connId, 
-        signal,
-        counters
-      );
-      
-      processed++;
-      dataVolume += webinarResult.dataSize || 0;
-      
-      // Update queue completion
-      await supabase.from('sync_queue')
-        .update({ 
-          status: 'completed', 
-          completed_at: new Date().toISOString() 
-        })
-        .eq('sync_id', logId)
-        .eq('webinar_id', webinar.id.toString());
-      
-      // Update completion progress
-      await updateSyncProgress(
-        supabase, 
-        logId, 
-        list.length, 
-        processed, 
-        webinar.topic || `Webinar ${webinar.id}`, 
-        'webinar_completed'
-      );
-      
-    } catch (error) {
-      failed++;
-      failedWebinars.push({ id: webinar.id, error: error.message });
-      
-      // Update queue failure
-      await supabase.from('sync_queue')
-        .update({ 
-          status: 'failed', 
-          completed_at: new Date().toISOString(),
-          error_message: error instanceof Error ? error.message : 'Unknown error'
-        })
-        .eq('sync_id', logId)
-        .eq('webinar_id', webinar.id.toString());
-
-      console.error(`Failed to process webinar ${webinar.id}:`, error);
-    }
-    
-    await updateSyncLog(supabase, logId, {
-      processed_items: processed,
-      failed_items: failed,
-      stage_progress_percentage: Math.round(((i + 1) / list.length) * 100),
-      error_details: failedWebinars.length > 0 ? { failed_webinars: failedWebinars } : null,
+      stage_progress_percentage: 0
     });
   }
-  
-  return { 
-    total: list.length, 
-    processed, 
-    failed, 
-    apiCallsMade: counters.apiCallsMade,
-    rateLimitHits: counters.rateLimitHits,
-    dataVolume
-  };
 }
 
-async function processWebinarWithMonitoring(
-  supabase: any, 
-  webinarId: string, 
-  conn: any, 
-  logId: string, 
-  connId: string, 
-  signal: AbortSignal,
-  counters: { apiCallsMade: number; rateLimitHits: number }
-) {
-  const webinarStartTime = Date.now();
-  
-  await updateSyncStage(supabase, logId, webinarId, 'webinar_details', 15);
-  
+async function processComprehensiveWebinarData(
+  supabase: any,
+  zoomClient: any,
+  webinar: any,
+  connectionId: string,
+  syncLogId: string
+): Promise<void> {
+  const webinarId = webinar.id.toString();
+
   try {
-    const webinarData = await retryApiCall(() => makeZoomApiCall(conn, `/webinars/${webinarId}`));
-    counters.apiCallsMade++;
+    // Stage 1: Get enhanced webinar details
+    await updateSyncStage(supabase, syncLogId, webinarId, 'webinar_details', null);
+    const webinarDetails = await zoomClient.getWebinar(webinarId);
     
-    await updateSyncProgress(supabase, logId, null, null, webinarData.topic, 'webinar_details');
+    // Stage 2: Get all related data in parallel for efficiency
+    await updateSyncStage(supabase, syncLogId, webinarId, 'fetching_all_data', null);
     
-    // Simulate data processing and size calculation
-    const dataSize = JSON.stringify(webinarData).length;
-    
-    await updateSyncStage(supabase, logId, webinarId, 'saving_to_db', 95);
-    await updateSyncProgress(supabase, logId, null, null, webinarData.topic, 'saving_to_db');
-    
-    await saveWebinarToDatabase(supabase, webinarData, connId);
-    
-    await updateSyncStage(supabase, logId, webinarId, 'webinar_completed', 100);
-    
-    const webinarDuration = Date.now() - webinarStartTime;
-    await recordPerformanceMetric(supabase, logId, 'webinar_sync_time', Math.round(webinarDuration / 1000), 'seconds', {
-      webinar_id: webinarId,
-      webinar_title: webinarData.topic
+    const [registrants, participants, polls, qa] = await Promise.allSettled([
+      zoomClient.getWebinarRegistrants(webinarId),
+      zoomClient.getWebinarParticipants(webinarId),
+      zoomClient.getWebinarPolls(webinarId),
+      zoomClient.getWebinarQA(webinarId)
+    ]);
+
+    // Extract data from settled promises
+    const registrantsData = registrants.status === 'fulfilled' ? registrants.value : [];
+    const participantsData = participants.status === 'fulfilled' ? participants.value : [];
+    const pollsData = polls.status === 'fulfilled' ? polls.value : [];
+    const qaData = qa.status === 'fulfilled' ? qa.value : [];
+
+    console.log(`Data collected for webinar ${webinarId}:`, {
+      registrants: registrantsData.length,
+      participants: participantsData.length,
+      polls: pollsData.length,
+      qa: qaData.length
     });
+
+    // Stage 3: Save all data comprehensively
+    await updateSyncStage(supabase, syncLogId, webinarId, 'saving_comprehensive_data', null);
     
-    return { dataSize };
+    await saveComprehensiveWebinarData(
+      supabase,
+      webinarDetails,
+      registrantsData,
+      participantsData,
+      pollsData,
+      qaData,
+      connectionId
+    );
+
+    await updateSyncStage(supabase, syncLogId, webinarId, 'webinar_completed', null);
+    
   } catch (error) {
-    if (error.message?.includes('rate limit')) {
-      counters.rateLimitHits++;
-    }
+    console.error(`Error processing comprehensive webinar data for ${webinarId}:`, error);
     throw error;
   }
 }
 
-async function recordPerformanceMetric(
-  supabase: any, 
-  syncId: string, 
-  metricName: string, 
-  metricValue: number, 
-  metricUnit: string,
-  metadata: any = {}
+async function saveComprehensiveWebinarData(
+  supabase: any,
+  webinarData: any,
+  registrants: any[],
+  participants: any[],
+  polls: any[],
+  qa: any[],
+  connectionId: string
 ): Promise<void> {
-  try {
-    await supabase.from('sync_performance_metrics').insert({
-      sync_id: syncId,
-      metric_name: metricName,
-      metric_value: metricValue,
-      metric_unit: metricUnit,
-      metadata
-    });
-  } catch (error) {
-    console.error('Failed to record performance metric:', error);
-  }
-}
-
-async function updateRateLimitTracking(
-  supabase: any, 
-  connectionId: string, 
-  userId: string, 
-  apiCallsMade: number
-): Promise<void> {
-  try {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-
-    await supabase.from('rate_limit_tracking').upsert({
-      user_id: userId,
-      connection_id: connectionId,
-      api_calls_made: apiCallsMade,
-      api_calls_limit: 100, // Default Zoom daily limit
-      reset_time: tomorrow.toISOString(),
-      warning_threshold: 80
-    }, {
-      onConflict: 'user_id,connection_id',
-      updateColumns: ['api_calls_made', 'updated_at']
-    });
-  } catch (error) {
-    console.error('Failed to update rate limit tracking:', error);
-  }
-}
-
-async function createSyncProgress(supabase: any, syncId: string, totalWebinars: number) {
-  const estimatedCompletion = new Date(Date.now() + (totalWebinars * 2 * 60 * 1000)).toISOString();
-  
-  await supabase.from('sync_progress').insert({
-    sync_id: syncId,
-    total_webinars: totalWebinars,
-    completed_webinars: 0,
-    current_webinar_index: 0,
-    current_stage: 'Initializing sync...',
-    estimated_completion: estimatedCompletion
-  });
-}
-
-async function updateSyncProgress(
-  supabase: any, 
-  syncId: string, 
-  totalWebinars: number | null, 
-  completedWebinars: number | null, 
-  webinarName: string | null, 
-  stage: string
-) {
-  const updateData: any = {
-    current_stage: stage,
-    updated_at: new Date().toISOString()
+  // Transform webinar data with enhanced mapping
+  const webinarInsert = {
+    connection_id: connectionId,
+    webinar_id: webinarData.id.toString(),
+    webinar_uuid: webinarData.uuid,
+    topic: webinarData.topic,
+    start_time: webinarData.start_time,
+    duration: webinarData.duration,
+    timezone: webinarData.timezone,
+    host_id: webinarData.host_id,
+    host_email: webinarData.host_email,
+    status: webinarData.status || 'available',
+    agenda: webinarData.agenda,
+    type: webinarData.type,
+    join_url: webinarData.join_url,
+    registration_url: webinarData.registration_url,
+    password: webinarData.password,
+    h323_password: webinarData.h323_password || webinarData.h323_passcode,
+    pstn_password: webinarData.pstn_password,
+    encrypted_password: webinarData.encrypted_password || webinarData.encrypted_passcode,
+    settings: webinarData.settings,
+    tracking_fields: webinarData.tracking_fields,
+    recurrence: webinarData.recurrence,
+    occurrences: webinarData.occurrences,
+    synced_at: new Date().toISOString(),
   };
-  
-  if (totalWebinars !== null) updateData.total_webinars = totalWebinars;
-  if (completedWebinars !== null) {
-    updateData.completed_webinars = completedWebinars;
-    updateData.current_webinar_index = completedWebinars + 1;
+
+  // Save webinar
+  const { data: webinarResult, error: webinarError } = await supabase
+    .from('zoom_webinars')
+    .upsert(webinarInsert, { onConflict: 'connection_id,webinar_id' })
+    .select('id')
+    .single();
+
+  if (webinarError) {
+    console.error(`Error saving webinar ${webinarData.id}:`, webinarError);
+    throw webinarError;
   }
-  if (webinarName) updateData.current_webinar_name = webinarName;
-  
-  // Recalculate estimated completion if we have progress
-  if (totalWebinars && completedWebinars !== null) {
-    const remaining = totalWebinars - completedWebinars;
-    if (remaining > 0) {
-      const estimatedCompletion = new Date(Date.now() + (remaining * 2 * 60 * 1000)).toISOString();
-      updateData.estimated_completion = estimatedCompletion;
+
+  const webinarDbId = webinarResult.id;
+
+  // Save registrants
+  if (registrants.length > 0) {
+    const registrantInserts = registrants.map(registrant => ({
+      webinar_id: webinarDbId,
+      registrant_id: registrant.id || registrant.registrant_id,
+      registrant_email: registrant.email,
+      first_name: registrant.first_name,
+      last_name: registrant.last_name,
+      registration_time: registrant.registration_time,
+      status: registrant.status || 'approved',
+      custom_questions: registrant.custom_questions || null,
+      org: registrant.org,
+      job_title: registrant.job_title,
+      phone: registrant.phone,
+      city: registrant.city,
+      state: registrant.state,
+      country: registrant.country,
+      synced_at: new Date().toISOString()
+    }));
+
+    const { error: registrantsError } = await supabase
+      .from('zoom_registrants')
+      .upsert(registrantInserts, { onConflict: 'webinar_id,registrant_id' });
+
+    if (registrantsError) {
+      console.error(`Error saving registrants for webinar ${webinarData.id}:`, registrantsError);
     }
   }
-  
-  await supabase.from('sync_progress')
-    .update(updateData)
-    .eq('sync_id', syncId);
+
+  // Save participants
+  if (participants.length > 0) {
+    const participantInserts = participants.map(participant => ({
+      webinar_id: webinarDbId,
+      participant_id: participant.id || participant.participant_id,
+      participant_name: participant.name || participant.participant_name,
+      participant_email: participant.user_email || participant.participant_email,
+      join_time: participant.join_time,
+      leave_time: participant.leave_time,
+      duration: participant.duration,
+      attentiveness_score: participant.attentiveness_score,
+      posted_chat: participant.posted_chat || false,
+      raised_hand: participant.raised_hand || false,
+      answered_polling: participant.answered_polling || false,
+      asked_question: participant.asked_question || false,
+      synced_at: new Date().toISOString()
+    }));
+
+    const { error: participantsError } = await supabase
+      .from('zoom_participants')
+      .upsert(participantInserts, { onConflict: 'webinar_id,participant_id' });
+
+    if (participantsError) {
+      console.error(`Error saving participants for webinar ${webinarData.id}:`, participantsError);
+    }
+  }
+
+  // Calculate and update metrics
+  const totalRegistrants = registrants.length;
+  const totalAttendees = participants.length;
+  const totalMinutes = participants.reduce((sum, p) => sum + (p.duration || 0), 0);
+  const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
+
+  const { error: updateError } = await supabase
+    .from('zoom_webinars')
+    .update({
+      total_registrants: totalRegistrants,
+      total_attendees: totalAttendees,
+      total_minutes: totalMinutes,
+      avg_attendance_duration: avgDuration,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', webinarDbId);
+
+  if (updateError) {
+    console.error(`Error updating metrics for webinar ${webinarData.id}:`, updateError);
+  }
+
+  console.log(`Comprehensive data saved for webinar ${webinarData.id}: ${totalRegistrants} registrants, ${totalAttendees} attendees`);
+}
+
+async function updateSyncLog(supabase: any, syncLogId: string, updates: Record<string, any>): Promise<void> {
+  const { error } = await supabase
+    .from('zoom_sync_logs')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', syncLogId);
+  if (error) console.error(`Failed to update sync log ${syncLogId}:`, error);
+}
+
+async function updateSyncStage(supabase: any, syncLogId: string, webinarId: string | null, stage: string, progress: number | null): Promise<void> {
+  await updateSyncLog(supabase, syncLogId, {
+    current_webinar_id: webinarId,
+    sync_stage: stage,
+    stage_progress_percentage: progress ? Math.max(0, Math.min(100, progress)) : null,
+  });
+  console.log(`Sync ${syncLogId}: ${stage} ${progress ? `(${progress}%)` : ''} - Webinar: ${webinarId || 'N/A'}`);
 }

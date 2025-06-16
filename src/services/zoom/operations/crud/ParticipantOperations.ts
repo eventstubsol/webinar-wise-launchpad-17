@@ -3,40 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { ZoomDataTransformers } from '../../utils/dataTransformers';
 
 /**
- * Database operations for registrants and participants
+ * Database operations for webinar participants
  */
 export class ParticipantOperations {
-  /**
-   * Upsert registrants for a webinar
-   */
-  static async upsertRegistrants(registrants: any[], webinarDbId: string): Promise<void> {
-    if (!registrants || registrants.length === 0) return;
-
-    const transformedRegistrants = registrants.map(registrant => {
-      const transformed = ZoomDataTransformers.transformRegistrant(registrant, webinarDbId);
-      return {
-        ...transformed,
-        // Convert CustomQuestion[] to Json format
-        custom_questions: transformed.custom_questions ? JSON.parse(JSON.stringify(transformed.custom_questions)) : null,
-        updated_at: new Date().toISOString()
-      };
-    });
-
-    const { error } = await supabase
-      .from('zoom_registrants')
-      .upsert(
-        transformedRegistrants,
-        {
-          onConflict: 'webinar_id,registrant_id',
-          ignoreDuplicates: false
-        }
-      );
-
-    if (error) {
-      throw new Error(`Failed to upsert registrants: ${error.message}`);
-    }
-  }
-
   /**
    * Upsert participants for a webinar
    */
@@ -64,5 +33,34 @@ export class ParticipantOperations {
     if (error) {
       throw new Error(`Failed to upsert participants: ${error.message}`);
     }
+  }
+
+  /**
+   * Get participant metrics for a webinar
+   */
+  static async getParticipantMetrics(webinarDbId: string): Promise<{
+    totalAttendees: number;
+    totalMinutes: number;
+    avgDuration: number;
+  }> {
+    const { data: participants, error } = await supabase
+      .from('zoom_participants')
+      .select('duration')
+      .eq('webinar_id', webinarDbId);
+
+    if (error) {
+      console.error('Failed to get participant metrics:', error);
+      return { totalAttendees: 0, totalMinutes: 0, avgDuration: 0 };
+    }
+
+    const totalAttendees = participants?.length || 0;
+    const totalMinutes = participants?.reduce((sum, p) => sum + (p.duration || 0), 0) || 0;
+    const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
+
+    return {
+      totalAttendees,
+      totalMinutes,
+      avgDuration
+    };
   }
 }

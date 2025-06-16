@@ -1,15 +1,13 @@
 
-import { WebinarOperations } from './WebinarOperations';
-import { ParticipantOperations } from './ParticipantOperations';
-import { InteractionOperations } from './InteractionOperations';
-import { MetricsOperations } from './MetricsOperations';
+import { ComprehensiveBatchOperations } from './ComprehensiveBatchOperations';
 
 /**
  * Database operations for batch processing multiple data types
+ * Now delegates to the comprehensive batch operations
  */
 export class BatchOperations {
   /**
-   * Batch operation: Process all data for a webinar
+   * Batch operation: Process all data for a webinar with comprehensive sync
    */
   static async syncCompleteWebinarData(
     webinarData: any,
@@ -19,26 +17,34 @@ export class BatchOperations {
     qnaData: any[],
     connectionId: string
   ): Promise<string> {
-    // Start transaction-like operation
-    try {
-      // 1. Upsert webinar
-      const webinarDbId = await WebinarOperations.upsertWebinar(webinarData, connectionId);
+    return await ComprehensiveBatchOperations.syncCompleteWebinarData(
+      webinarData,
+      registrants,
+      participants,
+      polls,
+      qnaData,
+      connectionId
+    );
+  }
 
-      // 2. Upsert all related data
-      await Promise.all([
-        ParticipantOperations.upsertRegistrants(registrants, webinarDbId),
-        ParticipantOperations.upsertParticipants(participants, webinarDbId),
-        InteractionOperations.upsertPolls(polls, webinarDbId),
-        InteractionOperations.upsertQnA(qnaData, webinarDbId)
-      ]);
-
-      // 3. Update metrics
-      await MetricsOperations.updateWebinarMetrics(webinarDbId);
-
-      return webinarDbId;
-    } catch (error) {
-      console.error('Error syncing complete webinar data:', error);
-      throw error;
-    }
+  /**
+   * Batch operation: Sync multiple webinars with progress tracking
+   */
+  static async syncMultipleWebinars(
+    webinarDataList: Array<{
+      webinar: any;
+      registrants: any[];
+      participants: any[];
+      polls: any[];
+      qna: any[];
+    }>,
+    connectionId: string,
+    onProgress?: (completed: number, total: number, current: string) => void
+  ): Promise<string[]> {
+    return await ComprehensiveBatchOperations.syncMultipleWebinars(
+      webinarDataList,
+      connectionId,
+      onProgress
+    );
   }
 }
