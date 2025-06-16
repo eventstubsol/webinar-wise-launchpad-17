@@ -86,7 +86,8 @@ export class WebinarTransformers {
       phone: apiRegistrant.phone || null,
       comments: apiRegistrant.comments || null,
       custom_questions: apiRegistrant.custom_questions || null,
-      registration_time: apiRegistrant.registration_time,
+      // Handle null/undefined registration_time by letting database default apply
+      registration_time: apiRegistrant.registration_time || apiRegistrant.create_time || null,
       source_id: apiRegistrant.source_id || null,
       tracking_source: apiRegistrant.tracking_source || null,
       status: apiRegistrant.status || 'approved',
