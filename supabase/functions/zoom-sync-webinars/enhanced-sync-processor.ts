@@ -41,7 +41,7 @@ export async function processComprehensiveSync(
     let successCount = 0;
     const totalWebinars = webinars.length;
     
-    // Process each webinar with comprehensive data extraction
+    // Process each webinar with focus on webinar details and registrants
     for (const webinar of webinars) {
       try {
         await updateSyncStage(
@@ -66,52 +66,28 @@ export async function processComprehensiveSync(
           status: webinarDetails.status
         });
         
-        // Fetch registrants
+        // Fetch registrants with proper error handling
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'registrants', null);
-        const registrants = await client.getWebinarRegistrants(webinar.id);
-        console.log(`Fetched ${registrants.length} registrants for webinar ${webinar.id}`);
-        
-        // Fetch participants/attendees
-        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'participants', null);
-        let participants = [];
+        let registrants = [];
         try {
-          participants = await client.getWebinarParticipants(webinar.id);
-          console.log(`Fetched ${participants.length} participants for webinar ${webinar.id}`);
-        } catch (participantError) {
-          console.log(`No participants data available for webinar ${webinar.id} (likely not started yet)`);
+          registrants = await client.getWebinarRegistrants(webinar.id);
+          console.log(`Fetched ${registrants.length} registrants for webinar ${webinar.id}`);
+        } catch (registrantError) {
+          console.log(`No registrants data available for webinar ${webinar.id}: ${registrantError.message}`);
+          // Continue processing even if registrants fail
         }
         
-        // Fetch polls
-        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'polls', null);
-        let polls = [];
-        try {
-          polls = await client.getWebinarPolls(webinar.id);
-          console.log(`Fetched ${polls.length} polls for webinar ${webinar.id}`);
-        } catch (pollError) {
-          console.log(`No polls data available for webinar ${webinar.id}`);
-        }
+        // Skip participants, polls, and Q&A for now to focus on webinar + registrants
+        console.log(`Skipping participants, polls, and Q&A for progressive build - focusing on registrants`);
         
-        // Fetch Q&A
-        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'qa', null);
-        let qnaData = [];
-        try {
-          qnaData = await client.getWebinarQA(webinar.id);
-          console.log(`Fetched ${qnaData.length} Q&A items for webinar ${webinar.id}`);
-        } catch (qnaError) {
-          console.log(`No Q&A data available for webinar ${webinar.id}`);
-        }
+        // Process webinar and registrant data
+        console.log(`Syncing webinar and registrant data for webinar ${webinar.id}...`);
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'saving_webinar_and_registrants', null);
         
-        // Process all data using embedded comprehensive operations
-        console.log(`Syncing comprehensive data for webinar ${webinar.id}...`);
-        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'saving_comprehensive_data', null);
-        
-        const webinarDbId = await syncCompleteWebinarData(
+        const webinarDbId = await syncWebinarAndRegistrants(
           supabase,
-          webinarDetails, // Use detailed webinar data with all fields
+          webinarDetails,
           registrants,
-          participants,
-          polls,
-          qnaData,
           connection.id
         );
         
@@ -119,9 +95,9 @@ export async function processComprehensiveSync(
         
         console.log(`Data collected for webinar ${webinar.id}:`, {
           registrants: registrants.length,
-          participants: participants.length,
-          polls: polls.length,
-          qa: qnaData.length
+          participants: 'skipped',
+          polls: 'skipped',
+          qa: 'skipped'
         });
         
         successCount++;
@@ -134,7 +110,7 @@ export async function processComprehensiveSync(
           Math.round((processedCount / totalWebinars) * 90) + 10
         );
         
-        console.log(`Successfully processed webinar ${webinar.id} with comprehensive data`);
+        console.log(`Successfully processed webinar ${webinar.id} with webinar details and registrants`);
         
       } catch (webinarError) {
         console.error(`Error processing webinar ${webinar.id}:`, webinarError);
@@ -153,31 +129,27 @@ export async function processComprehensiveSync(
       stage_progress_percentage: 100
     });
     
-    console.log(`Enhanced comprehensive sync completed. Successfully processed ${successCount}/${totalWebinars} webinars with full data extraction.`);
+    console.log(`Progressive sync completed focusing on webinars and registrants. Successfully processed ${successCount}/${totalWebinars} webinars.`);
     
   } catch (error) {
-    console.error('Enhanced comprehensive sync failed:', error);
+    console.error('Progressive sync failed:', error);
     throw error;
   }
 }
 
 /**
- * Complete webinar data sync with all related data and metrics calculation
- * This is embedded in the edge function to avoid import issues
+ * Sync webinar and registrants data (progressive approach - table by table)
  */
-async function syncCompleteWebinarData(
+async function syncWebinarAndRegistrants(
   supabase: any,
   webinarData: any,
   registrants: any[],
-  participants: any[],
-  polls: any[],
-  qnaData: any[],
   connectionId: string
 ): Promise<string> {
-  console.log(`Starting comprehensive sync for webinar ${webinarData.id}`);
+  console.log(`Starting webinar and registrants sync for webinar ${webinarData.id}`);
   
   try {
-    // Transform webinar data for database with enhanced field mapping
+    // First, sync the webinar data (we know this works from previous testing)
     const transformedWebinar = transformWebinarForDatabase(webinarData, connectionId);
     console.log(`Transformed webinar data for ${webinarData.id}:`, {
       status: transformedWebinar.status,
@@ -187,7 +159,7 @@ async function syncCompleteWebinarData(
       creationSource: transformedWebinar.creation_source
     });
 
-    const { data, error } = await supabase
+    const { data: webinarRecord, error: webinarError } = await supabase
       .from('zoom_webinars')
       .upsert(
         transformedWebinar,
@@ -199,28 +171,54 @@ async function syncCompleteWebinarData(
       .select('id')
       .single();
 
-    if (error) {
-      console.error('Failed to upsert enhanced webinar:', error);
-      console.error('Webinar data that failed:', {
-        webinar_id: transformedWebinar.webinar_id,
-        status: transformedWebinar.status,
-        type: transformedWebinar.type,
-        connection_id: transformedWebinar.connection_id
-      });
-      throw new Error(`Failed to upsert webinar: ${error.message}`);
+    if (webinarError) {
+      console.error('Failed to upsert webinar:', webinarError);
+      throw new Error(`Failed to upsert webinar: ${webinarError.message}`);
     }
 
-    console.log(`Enhanced webinar upserted successfully with ID: ${data.id}`);
-    return data.id;
+    console.log(`Webinar upserted successfully with ID: ${webinarRecord.id}`);
+    
+    // Now sync registrants if we have any
+    if (registrants && registrants.length > 0) {
+      console.log(`Processing ${registrants.length} registrants for webinar ${webinarData.id}`);
+      
+      const transformedRegistrants = registrants.map(registrant => 
+        transformRegistrantForDatabase(registrant, webinarRecord.id)
+      );
+      
+      console.log(`Sample transformed registrant:`, transformedRegistrants[0]);
+      
+      const { error: registrantsError } = await supabase
+        .from('zoom_registrants')
+        .upsert(
+          transformedRegistrants,
+          {
+            onConflict: 'webinar_id,registrant_id',
+            ignoreDuplicates: false
+          }
+        );
+
+      if (registrantsError) {
+        console.error('Failed to upsert registrants:', registrantsError);
+        console.error('Sample registrant data that failed:', transformedRegistrants[0]);
+        // Don't throw here - we want to continue even if registrants fail
+        console.log(`Continuing despite registrants error for webinar ${webinarData.id}`);
+      } else {
+        console.log(`Successfully upserted ${transformedRegistrants.length} registrants for webinar ${webinarData.id}`);
+      }
+    } else {
+      console.log(`No registrants to process for webinar ${webinarData.id}`);
+    }
+
+    return webinarRecord.id;
   } catch (error) {
-    console.error(`Error in comprehensive webinar sync for ${webinarData.id}:`, error);
+    console.error(`Error in webinar and registrants sync for ${webinarData.id}:`, error);
     throw error;
   }
 }
 
 /**
- * Transform Zoom API webinar to database format with comprehensive field mapping
- * Embedded function to avoid import issues
+ * Transform Zoom API webinar to database format (same as before)
  */
 function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any {
   // Extract settings for better field mapping
@@ -290,6 +288,51 @@ function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any
     transition_to_live: apiWebinar.transition_to_live || false,
     webinar_created_at: apiWebinar.created_at || null,
     
+    updated_at: new Date().toISOString()
+  };
+}
+
+/**
+ * Transform Zoom API registrant to database format
+ */
+function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string): any {
+  console.log(`Transforming registrant:`, {
+    id: apiRegistrant.id,
+    email: apiRegistrant.email,
+    firstName: apiRegistrant.first_name,
+    lastName: apiRegistrant.last_name
+  });
+  
+  return {
+    webinar_id: webinarDbId,
+    registrant_id: apiRegistrant.id || apiRegistrant.registrant_id,
+    registrant_email: apiRegistrant.email,
+    first_name: apiRegistrant.first_name || null,
+    last_name: apiRegistrant.last_name || null,
+    address: apiRegistrant.address || null,
+    city: apiRegistrant.city || null,
+    state: apiRegistrant.state || null,
+    zip: apiRegistrant.zip || null,
+    country: apiRegistrant.country || null,
+    phone: apiRegistrant.phone || null,
+    comments: apiRegistrant.comments || null,
+    custom_questions: apiRegistrant.custom_questions ? JSON.stringify(apiRegistrant.custom_questions) : null,
+    registration_time: apiRegistrant.registration_time,
+    source_id: apiRegistrant.source_id || null,
+    tracking_source: apiRegistrant.tracking_source || null,
+    status: apiRegistrant.status || 'approved',
+    join_time: apiRegistrant.join_time || null,
+    leave_time: apiRegistrant.leave_time || null,
+    duration: apiRegistrant.duration || null,
+    attended: !!apiRegistrant.join_time,
+    job_title: apiRegistrant.job_title || null,
+    purchasing_time_frame: apiRegistrant.purchasing_time_frame || null,
+    role_in_purchase_process: apiRegistrant.role_in_purchase_process || null,
+    no_of_employees: apiRegistrant.no_of_employees || null,
+    industry: apiRegistrant.industry || null,
+    org: apiRegistrant.org || null,
+    language: apiRegistrant.language || null,
+    created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
 }
