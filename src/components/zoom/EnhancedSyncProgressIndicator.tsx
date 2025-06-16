@@ -40,6 +40,12 @@ export const EnhancedSyncProgressIndicator: React.FC<EnhancedSyncProgressIndicat
     return null;
   }
 
+  // Transform syncHistory to match SyncHistoryEntry interface
+  const transformedSyncHistory = syncHistory.map(entry => ({
+    ...entry,
+    processedItems: entry.itemsProcessed // Map itemsProcessed to processedItems for SyncHistoryCard
+  }));
+
   return (
     <div className="space-y-4">
       {/* Connection Status */}
@@ -65,8 +71,8 @@ export const EnhancedSyncProgressIndicator: React.FC<EnhancedSyncProgressIndicat
       )}
 
       {/* Sync History */}
-      {showHistory && syncHistory.length > 0 && (
-        <SyncHistoryCard syncHistory={syncHistory} />
+      {showHistory && transformedSyncHistory.length > 0 && (
+        <SyncHistoryCard syncHistory={transformedSyncHistory} />
       )}
     </div>
   );

@@ -87,7 +87,7 @@ export const EnhancedSyncStatusCard: React.FC<EnhancedSyncStatusCardProps> = ({
           <CardTitle className="text-sm flex items-center gap-2">
             {getStatusIcon(status)}
             {isActive ? 'Enhanced Sync in Progress' : 'Sync Ready'}
-            <Zap className="h-3 w-3 text-blue-500" title="Enhanced sync system" />
+            <Zap className="h-3 w-3 text-blue-500" />
           </CardTitle>
           {status && (
             <Badge variant={getStatusBadgeVariant(status)}>

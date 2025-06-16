@@ -103,14 +103,20 @@ export const useEnhancedSyncProgress = (connectionId: string): EnhancedSyncProgr
         const { activeSync, activeSyncHealth, recentSyncs } = status;
         
         setIsActive(!!activeSync);
-        setCurrentSync(activeSync);
-        setStatus(activeSync?.sync_status || null);
+        // Fix type casting for currentSync
+        setCurrentSync(activeSync ? {
+          ...activeSync,
+          sync_type: activeSync.sync_type as SyncType,
+          sync_status: activeSync.sync_status as SyncStatus
+        } as ZoomSyncLog : null);
+        // Fix type casting for status
+        setStatus(activeSync?.sync_status ? activeSync.sync_status as SyncStatus : null);
         setProgress(activeSync?.stage_progress_percentage || 0);
         setCurrentOperation(activeSync?.sync_stage || '');
         setSyncHealth(activeSyncHealth);
         
-        // Transform recent syncs to history format
-        const history = recentSyncs.map((sync: ZoomSyncLog) => ({
+        // Transform recent syncs to history format with correct property names
+        const history = recentSyncs.map((sync: any) => ({
           id: sync.id,
           type: sync.sync_type as SyncType,
           status: sync.sync_status as SyncStatus,
