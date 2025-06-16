@@ -30,6 +30,7 @@ import Reports from '@/pages/Reports';
 import Integrations from '@/pages/Integrations';
 import AIInsights from '@/pages/AIInsights';
 import SyncCenter from '@/pages/SyncCenter';
+import ZoomTest from '@/pages/ZoomTest';
 
 const App = () => {
   return (
@@ -71,6 +72,9 @@ const App = () => {
                 <Route path="/predictive-analytics" element={<ProtectedRoute><PredictiveAnalytics /></ProtectedRoute>} />
                 
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+
+                {/* Testing & Debug */}
+                <Route path="/zoom-test" element={<ProtectedRoute><ZoomTest /></ProtectedRoute>} />
 
                 <Route path="/auth/zoom/callback" element={<ProtectedRoute><ZoomCallbackHandler /></ProtectedRoute>} />
 
