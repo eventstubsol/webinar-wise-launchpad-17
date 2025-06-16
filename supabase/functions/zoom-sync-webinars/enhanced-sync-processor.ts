@@ -38,6 +38,7 @@ export async function processComprehensiveSync(
     }
     
     let processedCount = 0;
+    let successCount = 0;
     const totalWebinars = webinars.length;
     
     // Process each webinar with comprehensive data extraction
@@ -61,7 +62,8 @@ export async function processComprehensiveSync(
           hasStartUrl: !!webinarDetails.start_url,
           hasEncryptedPasscode: !!webinarDetails.encrypted_passcode,
           creationSource: webinarDetails.creation_source,
-          isSimulive: webinarDetails.is_simulive
+          isSimulive: webinarDetails.is_simulive,
+          status: webinarDetails.status
         });
         
         // Fetch registrants
@@ -113,6 +115,8 @@ export async function processComprehensiveSync(
           connection.id
         );
         
+        console.log(`Successfully synced webinar ${webinar.id} to database with ID: ${webinarDbId}`);
+        
         console.log(`Data collected for webinar ${webinar.id}:`, {
           registrants: registrants.length,
           participants: participants.length,
@@ -120,6 +124,7 @@ export async function processComprehensiveSync(
           qa: qnaData.length
         });
         
+        successCount++;
         processedCount++;
         await updateSyncStage(
           supabase, 
@@ -134,6 +139,7 @@ export async function processComprehensiveSync(
       } catch (webinarError) {
         console.error(`Error processing webinar ${webinar.id}:`, webinarError);
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_failed', null);
+        processedCount++;
         // Continue with next webinar
       }
     }
@@ -147,7 +153,7 @@ export async function processComprehensiveSync(
       stage_progress_percentage: 100
     });
     
-    console.log(`Enhanced comprehensive sync completed. Processed ${processedCount}/${totalWebinars} webinars with full data extraction.`);
+    console.log(`Enhanced comprehensive sync completed. Successfully processed ${successCount}/${totalWebinars} webinars with full data extraction.`);
     
   } catch (error) {
     console.error('Enhanced comprehensive sync failed:', error);
@@ -171,47 +177,20 @@ async function syncCompleteWebinarData(
   console.log(`Starting comprehensive sync for webinar ${webinarData.id}`);
   
   try {
-    // Transform webinar data for database
+    // Transform webinar data for database with enhanced field mapping
     const transformedWebinar = transformWebinarForDatabase(webinarData, connectionId);
-    
-    // Enhanced field mapping to capture all available Zoom API data
-    const enhancedWebinar = {
-      ...transformedWebinar,
-      // Ensure status is properly mapped from API
-      status: webinarData.status || 'available',
-      
-      // Map settings fields that were previously missing
-      approval_type: webinarData.settings?.approval_type || null,
-      registration_type: webinarData.settings?.registration_type || null,
-      
-      // New fields from schema update
-      start_url: webinarData.start_url || null,
-      encrypted_passcode: webinarData.encrypted_passcode || webinarData.encrypted_password || null,
-      creation_source: webinarData.creation_source || null,
-      is_simulive: webinarData.is_simulive || false,
-      record_file_id: webinarData.record_file_id || null,
-      transition_to_live: webinarData.transition_to_live || false,
-      webinar_created_at: webinarData.created_at || null,
-      
-      // Enhanced password field mapping
-      password: webinarData.password || null,
-      h323_password: webinarData.h323_password || webinarData.h323_passcode || null,
-      pstn_password: webinarData.pstn_password || null,
-      encrypted_password: webinarData.encrypted_password || webinarData.encrypted_passcode || null,
-      
-      // Comprehensive settings and metadata
-      settings: webinarData.settings ? JSON.stringify(webinarData.settings) : null,
-      tracking_fields: webinarData.tracking_fields ? JSON.stringify(webinarData.tracking_fields) : null,
-      recurrence: webinarData.recurrence ? JSON.stringify(webinarData.recurrence) : null,
-      occurrences: webinarData.occurrences ? JSON.stringify(webinarData.occurrences) : null,
-      
-      updated_at: new Date().toISOString()
-    };
+    console.log(`Transformed webinar data for ${webinarData.id}:`, {
+      status: transformedWebinar.status,
+      type: transformedWebinar.type,
+      hasStartUrl: !!transformedWebinar.start_url,
+      hasEncryptedPasscode: !!transformedWebinar.encrypted_passcode,
+      creationSource: transformedWebinar.creation_source
+    });
 
     const { data, error } = await supabase
       .from('zoom_webinars')
       .upsert(
-        enhancedWebinar,
+        transformedWebinar,
         {
           onConflict: 'connection_id,webinar_id',
           ignoreDuplicates: false
@@ -222,10 +201,16 @@ async function syncCompleteWebinarData(
 
     if (error) {
       console.error('Failed to upsert enhanced webinar:', error);
+      console.error('Webinar data that failed:', {
+        webinar_id: transformedWebinar.webinar_id,
+        status: transformedWebinar.status,
+        type: transformedWebinar.type,
+        connection_id: transformedWebinar.connection_id
+      });
       throw new Error(`Failed to upsert webinar: ${error.message}`);
     }
 
-    console.log(`Enhanced webinar upserted with comprehensive data mapping: ${data.id}`);
+    console.log(`Enhanced webinar upserted successfully with ID: ${data.id}`);
     return data.id;
   } catch (error) {
     console.error(`Error in comprehensive webinar sync for ${webinarData.id}:`, error);
@@ -241,6 +226,22 @@ function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any
   // Extract settings for better field mapping
   const settings = apiWebinar.settings || {};
   
+  // Normalize status value to ensure it matches our constraint
+  let normalizedStatus = 'available'; // default fallback
+  if (apiWebinar.status) {
+    const statusMap: { [key: string]: string } = {
+      'available': 'available',
+      'unavailable': 'unavailable', 
+      'started': 'started',
+      'ended': 'ended',
+      'deleted': 'deleted',
+      'scheduled': 'scheduled'
+    };
+    normalizedStatus = statusMap[apiWebinar.status.toLowerCase()] || 'available';
+  }
+  
+  console.log(`Status mapping for webinar ${apiWebinar.id}: ${apiWebinar.status} -> ${normalizedStatus}`);
+  
   return {
     connection_id: connectionId,
     webinar_id: apiWebinar.id?.toString() || apiWebinar.webinar_id?.toString(),
@@ -250,7 +251,7 @@ function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any
     topic: apiWebinar.topic,
     agenda: apiWebinar.agenda || null,
     type: apiWebinar.type || 5,
-    status: apiWebinar.status || 'available',
+    status: normalizedStatus,
     start_time: apiWebinar.start_time || null,
     duration: apiWebinar.duration || null,
     timezone: apiWebinar.timezone || null,
@@ -288,5 +289,7 @@ function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any
     record_file_id: apiWebinar.record_file_id || null,
     transition_to_live: apiWebinar.transition_to_live || false,
     webinar_created_at: apiWebinar.created_at || null,
+    
+    updated_at: new Date().toISOString()
   };
 }
