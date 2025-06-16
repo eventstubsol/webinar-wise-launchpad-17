@@ -64,7 +64,7 @@ export function createTokenExpiredResponse(connection: any) {
   );
 }
 
-export function createConnectedResponse(connection: any, userData: ZoomUserData, apiTest: ApiTestResult) {
+export function createConnectedResponse(connection: any, userData: ZoomUserData, apiTest: ApiTestResult, tokenInfo?: any) {
   return createSuccessResponse(
     'connected',
     'Zoom API connection successful',
@@ -76,7 +76,8 @@ export function createConnectedResponse(connection: any, userData: ZoomUserData,
         isExpired: false
       },
       zoomUser: userData,
-      apiTest
+      apiTest,
+      tokenInfo
     }
   );
 }
@@ -91,12 +92,25 @@ export function createApiErrorResponse(connection: any, apiTest: ApiTestResult, 
         status: connection.connection_status
       },
       apiTest,
-      tokenInfo
+      tokenInfo,
+      troubleshooting: {
+        possibleCauses: [
+          'Token may be expired despite database timestamp',
+          'Token scope may not include required permissions',
+          'Token type mismatch (OAuth vs Server-to-Server)',
+          'Zoom account may be suspended or restricted'
+        ],
+        suggestions: [
+          'Try re-authorizing the Zoom connection',
+          'Check Zoom app permissions and scopes',
+          'Verify Zoom account is active and in good standing'
+        ]
+      }
     }
   );
 }
 
-export function createNetworkErrorResponse(connection: any, apiTest: ApiTestResult) {
+export function createNetworkErrorResponse(connection: any, apiTest: ApiTestResult, tokenInfo?: any) {
   return createSuccessResponse(
     'network_error',
     'Failed to connect to Zoom API',
@@ -105,7 +119,8 @@ export function createNetworkErrorResponse(connection: any, apiTest: ApiTestResu
         id: connection.id,
         status: connection.connection_status
       },
-      apiTest
+      apiTest,
+      tokenInfo
     }
   );
 }

@@ -21,6 +21,10 @@ serve(async (req) => {
 
   try {
     console.log('=== Zoom Test Fetch Started ===');
+    console.log('Environment check:', {
+      hasEncryptionSalt: !!Deno.env.get('ENCRYPTION_SALT'),
+      encryptionSaltLength: Deno.env.get('ENCRYPTION_SALT')?.length || 0
+    });
     
     // Authenticate user
     const { user, supabaseClient } = await authenticateUser(req);
@@ -52,7 +56,7 @@ serve(async (req) => {
       return createTokenExpiredResponse(primaryConnection);
     }
 
-    // Test Zoom API connection
+    // Test Zoom API connection with enhanced debugging
     try {
       const apiResult = await testZoomAPIConnection(primaryConnection);
       
@@ -60,20 +64,22 @@ serve(async (req) => {
         return createConnectedResponse(
           primaryConnection, 
           apiResult.userData!, 
-          apiResult.apiTest
+          apiResult.apiTest,
+          apiResult.tokenInfo
         );
       } else {
         return createApiErrorResponse(
           primaryConnection,
           apiResult.apiTest,
-          { wasDecrypted: true, tokenLength: primaryConnection.access_token?.length }
+          apiResult.tokenInfo || { wasDecrypted: false }
         );
       }
     } catch (testError: any) {
       if (testError.status === 'token_error') {
         return createErrorResponse(200, testError.message, {
           connection: { id: primaryConnection.id, status: primaryConnection.connection_status },
-          decryptionError: testError.decryptionError
+          decryptionError: testError.decryptionError,
+          tokenInfo: testError.tokenInfo
         });
       }
       
