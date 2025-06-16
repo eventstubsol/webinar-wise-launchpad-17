@@ -1,11 +1,12 @@
 import { createZoomAPIClient } from './zoom-api-client.ts';
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { WebinarFetcher } from './webinar-fetcher.ts';
-import { SequentialWebinarProcessor } from './webinar-processor.ts';
+import { SimplifiedWebinarProcessor } from './simplified-webinar-processor.ts';
 
 export async function processBackgroundSync(supabase: any, syncOperation: any, connection: any, syncLogId: string) {
-  console.log(`=== ENHANCED SEQUENTIAL SYNC PROCESSOR START ===`);
-  console.log(`Sync ID: ${syncLogId}, Type: ${syncOperation.syncType}, Connection: ${connection.id}`);
+  console.log(`🚀 === SIMPLIFIED SEQUENTIAL SYNC START ===`);
+  console.log(`📊 Sync ID: ${syncLogId}, Type: ${syncOperation.syncType}, Connection: ${connection.id}`);
+  console.log(`🎯 FOCUS: ONLY Webinars → Registrants → Participants`);
   
   const startTime = Date.now();
   let heartbeatInterval: number | null = null;
@@ -50,26 +51,38 @@ export async function processBackgroundSync(supabase: any, syncOperation: any, c
       sync_stage: 'processing_webinars'
     });
     
-    console.log(`\n🎯 STEP 2: SEQUENTIAL WEBINAR PROCESSING`);
-    console.log(`📋 Processing ${webinars.length} webinars sequentially (1 by 1)`);
+    console.log(`\n🎯 STEP 2: SIMPLIFIED SEQUENTIAL PROCESSING`);
+    console.log(`📋 Processing ${webinars.length} webinars one by one (SIMPLIFIED)`);
     
-    // Step 2: Process each webinar sequentially
-    const processor = new SequentialWebinarProcessor(client, supabase, syncLogId, connection.id);
+    // Step 2: Process each webinar sequentially - SIMPLIFIED
+    const processor = new SimplifiedWebinarProcessor(client, supabase, syncLogId, connection.id);
     let processedCount = 0;
     let errorCount = 0;
+    let registrantDataCount = 0;
     let participantDataCount = 0;
     const errors: string[] = [];
     
     for (let i = 0; i < webinars.length; i++) {
       const webinarData = webinars[i];
       
+      console.log(`\n🔄 ========================================`);
+      console.log(`🔄 PROCESSING WEBINAR ${i + 1} of ${webinars.length}`);
+      console.log(`🔄 Webinar ID: ${webinarData.id}`);
+      console.log(`🔄 Title: ${webinarData.topic || 'Unknown Title'}`);
+      console.log(`🔄 ========================================`);
+      
       try {
-        await processor.processWebinar(webinarData, i, webinars.length);
+        const result = await processor.processWebinar(webinarData, i, webinars.length);
         processedCount++;
         
-        // Check if this webinar had participant data
-        if (await this.webinarHasParticipantData(supabase, webinarData.id, connection.id)) {
+        if (result.registrantCount > 0) {
+          registrantDataCount++;
+          console.log(`✅ Webinar ${i + 1}: ${result.registrantCount} registrants saved`);
+        }
+        
+        if (result.participantCount > 0) {
           participantDataCount++;
+          console.log(`✅ Webinar ${i + 1}: ${result.participantCount} participants saved`);
         }
         
         // Update progress
@@ -98,20 +111,25 @@ export async function processBackgroundSync(supabase: any, syncOperation: any, c
       sync_status: 'completed',
       processed_items: processedCount,
       failed_items: errorCount,
-      error_details: errors.length > 0 ? { errors, webinarsWithParticipantData: participantDataCount } : null,
+      error_details: errors.length > 0 ? { 
+        errors, 
+        webinarsWithRegistrantData: registrantDataCount,
+        webinarsWithParticipantData: participantDataCount 
+      } : null,
       completed_at: new Date().toISOString(),
       duration_seconds: Math.round(duration / 1000)
     });
     
-    console.log(`\n=== ENHANCED SEQUENTIAL SYNC COMPLETED SUCCESSFULLY ===`);
+    console.log(`\n✅ === SIMPLIFIED SEQUENTIAL SYNC COMPLETED ===`);
     console.log(`⏱️ Duration: ${Math.round(duration / 1000)}s`);
     console.log(`✅ Processed: ${processedCount}/${webinars.length} webinars`);
     console.log(`❌ Errors: ${errorCount}`);
+    console.log(`📝 Webinars with registrant data: ${registrantDataCount}`);
     console.log(`👥 Webinars with participant data: ${participantDataCount}`);
     console.log(`📊 Total webinars: ${webinars.length}`);
     
   } catch (error) {
-    console.error(`=== ENHANCED SEQUENTIAL SYNC FAILED ===`);
+    console.error(`=== SIMPLIFIED SEQUENTIAL SYNC FAILED ===`);
     console.error('💥 Sync error details:', error);
     
     const duration = Date.now() - startTime;
@@ -144,24 +162,4 @@ export async function processBackgroundSync(supabase: any, syncOperation: any, c
       console.log('💓 Heartbeat cleared');
     }
   }
-}
-
-/**
- * Check if a webinar has participant data in the database
- */
-async function webinarHasParticipantData(supabase: any, zoomWebinarId: string, connectionId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('zoom_participants')
-    .select('id', { count: 'exact', head: true })
-    .eq('webinar_id', (
-      await supabase
-        .from('zoom_webinars')
-        .select('id')
-        .eq('connection_id', connectionId)
-        .eq('webinar_id', zoomWebinarId)
-        .single()
-    ).data?.id);
-    
-  if (error) return false;
-  return (data || 0) > 0;
 }
