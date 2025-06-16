@@ -108,7 +108,7 @@ export const UserSettings = () => {
               </p>
             </div>
             <Select
-              value={settings.theme_preference}
+              value={settings.theme_preference || "system"}
               onValueChange={(value) => handleSelectChange('theme_preference', value)}
               disabled={isUpdating}
             >
@@ -138,7 +138,7 @@ export const UserSettings = () => {
               </p>
             </div>
             <Select
-              value={settings.timezone}
+              value={settings.timezone || "UTC"}
               onValueChange={(value) => handleSelectChange('timezone', value)}
               disabled={isUpdating}
             >
