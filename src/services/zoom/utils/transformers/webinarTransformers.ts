@@ -1,12 +1,14 @@
 
 import { ZoomWebinar, ZoomRegistrant } from '@/types/zoom';
+import { WebinarStatusDetector } from '../WebinarStatusDetector';
+import { WebinarStatus } from '@/types/zoom/enums';
 
 /**
  * Data transformation utilities for webinars and registrants
  */
 export class WebinarTransformers {
   /**
-   * Transform Zoom API webinar to database format with comprehensive field mapping
+   * Transform Zoom API webinar to database format with enhanced status detection
    */
   static transformWebinarForDatabase(
     apiWebinar: any,
@@ -14,6 +16,19 @@ export class WebinarTransformers {
   ): Omit<ZoomWebinar, 'id' | 'created_at' | 'updated_at'> {
     // Extract settings for better field mapping
     const settings = apiWebinar.settings || {};
+    
+    // Calculate smart status using enhanced detection
+    const detectedStatus = WebinarStatusDetector.calculateSmartStatus({
+      id: apiWebinar.id?.toString() || apiWebinar.webinar_id?.toString(),
+      start_time: apiWebinar.start_time,
+      duration: apiWebinar.duration,
+      status: apiWebinar.status,
+      created_at: apiWebinar.created_at,
+      occurrences: apiWebinar.occurrences,
+      type: apiWebinar.type
+    });
+
+    console.log(`Transformed webinar ${apiWebinar.id} status: ${apiWebinar.status} -> ${detectedStatus}`);
     
     return {
       connection_id: connectionId,
@@ -24,7 +39,7 @@ export class WebinarTransformers {
       topic: apiWebinar.topic,
       agenda: apiWebinar.agenda || null,
       type: apiWebinar.type || 5,
-      status: apiWebinar.status || 'available',
+      status: detectedStatus, // Use enhanced status detection
       start_time: apiWebinar.start_time || null,
       duration: apiWebinar.duration || null,
       timezone: apiWebinar.timezone || null,
@@ -86,7 +101,6 @@ export class WebinarTransformers {
       phone: apiRegistrant.phone || null,
       comments: apiRegistrant.comments || null,
       custom_questions: apiRegistrant.custom_questions || null,
-      // Handle null/undefined registration_time by letting database default apply
       registration_time: apiRegistrant.registration_time || apiRegistrant.create_time || null,
       source_id: apiRegistrant.source_id || null,
       tracking_source: apiRegistrant.tracking_source || null,
@@ -102,7 +116,6 @@ export class WebinarTransformers {
       industry: apiRegistrant.industry || null,
       org: apiRegistrant.org || null,
       language: apiRegistrant.language || null,
-      // New fields from API alignment
       join_url: apiRegistrant.join_url || null,
       create_time: apiRegistrant.create_time || apiRegistrant.registration_time || null,
     };
