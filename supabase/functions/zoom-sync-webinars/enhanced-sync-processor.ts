@@ -1,4 +1,3 @@
-
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 
@@ -80,7 +79,7 @@ export async function processComprehensiveSync(
         // Skip participants, polls, and Q&A for now to focus on webinar + registrants
         console.log(`Skipping participants, polls, and Q&A for progressive build - focusing on registrants`);
         
-        // Process webinar and registrant data
+        // Process webinar and registrant data with metrics calculation
         console.log(`Syncing webinar and registrant data for webinar ${webinar.id}...`);
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'saving_webinar_and_registrants', null);
         
@@ -92,6 +91,11 @@ export async function processComprehensiveSync(
         );
         
         console.log(`Successfully synced webinar ${webinar.id} to database with ID: ${webinarDbId}`);
+        
+        // Calculate and update webinar metrics
+        console.log(`Calculating metrics for webinar ${webinar.id}...`);
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'calculating_metrics', null);
+        await updateWebinarMetrics(supabase, webinarDbId, registrants);
         
         console.log(`Data collected for webinar ${webinar.id}:`, {
           registrants: registrants.length,
@@ -110,7 +114,7 @@ export async function processComprehensiveSync(
           Math.round((processedCount / totalWebinars) * 90) + 10
         );
         
-        console.log(`Successfully processed webinar ${webinar.id} with webinar details and registrants`);
+        console.log(`Successfully processed webinar ${webinar.id} with metrics calculated`);
         
       } catch (webinarError) {
         console.error(`Error processing webinar ${webinar.id}:`, webinarError);
@@ -129,7 +133,7 @@ export async function processComprehensiveSync(
       stage_progress_percentage: 100
     });
     
-    console.log(`Progressive sync completed focusing on webinars and registrants. Successfully processed ${successCount}/${totalWebinars} webinars.`);
+    console.log(`Progressive sync completed with metrics calculation. Successfully processed ${successCount}/${totalWebinars} webinars.`);
     
   } catch (error) {
     console.error('Progressive sync failed:', error);
@@ -138,7 +142,7 @@ export async function processComprehensiveSync(
 }
 
 /**
- * Sync webinar and registrants data (progressive approach - table by table)
+ * Sync webinar and registrants data with metrics calculation
  */
 async function syncWebinarAndRegistrants(
   supabase: any,
@@ -218,6 +222,68 @@ async function syncWebinarAndRegistrants(
 }
 
 /**
+ * Update webinar metrics after syncing all data
+ */
+async function updateWebinarMetrics(
+  supabase: any,
+  webinarDbId: string,
+  registrants: any[]
+): Promise<void> {
+  console.log(`Calculating metrics for webinar ${webinarDbId}`);
+  
+  try {
+    // Calculate metrics from available data (registrants for now)
+    const totalRegistrants = registrants?.length || 0;
+    
+    // For now, we'll use registrants who have attended (have join_time) as attendees
+    // This is a simplification until we get actual participant data
+    const attendees = registrants?.filter(r => r.join_time) || [];
+    const totalAttendees = attendees.length;
+    
+    // Calculate total minutes and average duration from registrant attendance data
+    let totalMinutes = 0;
+    let avgAttendanceDuration = 0;
+    
+    if (attendees.length > 0) {
+      totalMinutes = attendees.reduce((sum, attendee) => {
+        return sum + (attendee.duration || 0);
+      }, 0);
+      avgAttendanceDuration = Math.round(totalMinutes / attendees.length);
+    }
+    
+    console.log(`Calculated metrics:`, {
+      totalRegistrants,
+      totalAttendees,
+      totalMinutes,
+      avgAttendanceDuration
+    });
+
+    // Update webinar with calculated metrics
+    const { error: updateError } = await supabase
+      .from('zoom_webinars')
+      .update({
+        total_registrants: totalRegistrants,
+        total_attendees: totalAttendees,
+        total_minutes: totalMinutes,
+        avg_attendance_duration: avgAttendanceDuration,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', webinarDbId);
+
+    if (updateError) {
+      console.error('Failed to update webinar metrics:', updateError);
+      throw new Error(`Failed to update webinar metrics: ${updateError.message}`);
+    }
+    
+    console.log(`Successfully updated metrics for webinar ${webinarDbId}`);
+  } catch (error) {
+    console.error('Error calculating webinar metrics:', error);
+    // Don't throw here - metrics calculation failure shouldn't stop the entire sync
+    console.log(`Continuing sync despite metrics calculation error for webinar ${webinarDbId}`);
+  }
+}
+
+/**
  * Transform Zoom API webinar to database format (same as before)
  */
 function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any {
@@ -263,10 +329,10 @@ function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any
     max_registrants: settings.registrants_restrict_number || null,
     max_attendees: null,
     occurrence_id: apiWebinar.occurrences?.[0]?.occurrence_id || apiWebinar.occurrence_id || null,
-    total_registrants: null,
-    total_attendees: null,
-    total_minutes: null,
-    avg_attendance_duration: null,
+    total_registrants: null, // Will be calculated later
+    total_attendees: null, // Will be calculated later
+    total_minutes: null, // Will be calculated later
+    avg_attendance_duration: null, // Will be calculated later
     synced_at: new Date().toISOString(),
     
     // Enhanced field mapping for missing data
