@@ -1,3 +1,4 @@
+
 export async function validateZoomConnection(connection: any): Promise<boolean> {
   console.log(`Validating Zoom connection: ${connection.id}`);
   
@@ -299,7 +300,47 @@ class ZoomAPIClient {
   }
 
   async getWebinar(webinarId: string): Promise<any> {
+    console.log(`Fetching detailed webinar info for: ${webinarId}`);
     return await this.makeRequest(`/webinars/${webinarId}`);
+  }
+
+  async getWebinarStatus(webinarId: string): Promise<string> {
+    console.log(`Fetching current status for webinar: ${webinarId}`);
+    try {
+      const webinar = await this.getWebinar(webinarId);
+      const status = this.normalizeWebinarStatus(webinar.status);
+      console.log(`Webinar ${webinarId} current status: ${status}`);
+      return status;
+    } catch (error) {
+      console.error(`Failed to get status for webinar ${webinarId}:`, error);
+      // If we can't get the status, return a reasonable default based on timing
+      return 'unavailable';
+    }
+  }
+
+  private normalizeWebinarStatus(zoomStatus: string): string {
+    // Map Zoom API status values to our database enum values
+    switch (zoomStatus?.toLowerCase()) {
+      case 'available':
+      case 'waiting':
+        return 'available';
+      case 'started':
+      case 'live':
+        return 'started';
+      case 'ended':
+      case 'finished':
+        return 'ended';
+      case 'aborted':
+      case 'cancelled':
+        return 'aborted';
+      case 'deleted':
+        return 'deleted';
+      case 'unavailable':
+        return 'unavailable';
+      default:
+        console.log(`Unknown status '${zoomStatus}', defaulting to 'unavailable'`);
+        return 'unavailable';
+    }
   }
 
   async listWebinars(options: { from?: Date } = {}): Promise<any[]> {
