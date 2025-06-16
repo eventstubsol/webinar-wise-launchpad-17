@@ -1,3 +1,4 @@
+
 /**
  * Enhanced token encryption service with improved error handling
  * and fallback mechanisms for different environments
@@ -17,18 +18,10 @@ export class TokenEncryptionService {
   }
 
   /**
-   * Get encryption salt from environment with fallback
+   * Get encryption salt - use consistent hardcoded salt that matches edge functions
    */
   private static getEncryptionSalt(): string {
-    // Vite exposes env variables through import.meta.env
-    const salt = import.meta.env.VITE_ENCRYPTION_SALT;
-    
-    if (salt) {
-      return salt;
-    }
-    
-    // Default fallback salt (not ideal for production but prevents crashes)
-    console.warn('No encryption salt found in environment, using default');
+    // Use the same salt as edge functions for consistency
     return 'webinar-wise-default-salt-change-in-production';
   }
 
@@ -90,8 +83,19 @@ export class TokenEncryptionService {
    * Decrypt token securely with recovery mechanisms
    */
   static async decryptToken(encryptedToken: string, userId: string): Promise<string> {
-    // Check if this is a simple base64 encoded token (fallback)
-    if (!this.isSupported() || this.isBase64Fallback(encryptedToken)) {
+    // First, try to detect if this is a simple base64 encoded token
+    if (this.isSimpleBase64Token(encryptedToken)) {
+      try {
+        const decoded = atob(encryptedToken);
+        console.log('Detected simple base64 token, decoding directly');
+        return decoded;
+      } catch (error) {
+        console.error('Failed to decode simple base64 token:', error);
+        throw new Error('Invalid token format');
+      }
+    }
+
+    if (!this.isSupported()) {
       try {
         return atob(encryptedToken);
       } catch (error) {
@@ -125,7 +129,9 @@ export class TokenEncryptionService {
       
       // Try fallback decryption methods
       try {
-        return atob(encryptedToken);
+        const decoded = atob(encryptedToken);
+        console.log('Fallback: decoded token using base64');
+        return decoded;
       } catch (fallbackError) {
         console.error('All decryption methods failed:', fallbackError);
         throw new Error('Failed to decrypt token - token may be corrupted');
@@ -134,16 +140,28 @@ export class TokenEncryptionService {
   }
 
   /**
-   * Check if token is using base64 fallback format
+   * Check if token is a simple base64 encoded string (not encrypted)
    */
-  private static isBase64Fallback(encryptedToken: string): boolean {
+  private static isSimpleBase64Token(encryptedToken: string): boolean {
     try {
       const decoded = atob(encryptedToken);
-      // If it decodes to something that looks like a token (no binary data)
-      return decoded.length > 0 && !/[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(decoded);
+      // If it decodes to something that looks like a JWT or regular token
+      // (contains readable characters and is reasonably long)
+      if (decoded.length > 20 && !this.containsBinaryData(decoded)) {
+        return true;
+      }
+      return false;
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Check if string contains binary data
+   */
+  private static containsBinaryData(str: string): boolean {
+    // Check for non-printable characters that would indicate binary data
+    return /[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(str);
   }
 
   /**

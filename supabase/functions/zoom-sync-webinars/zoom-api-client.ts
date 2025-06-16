@@ -211,116 +211,157 @@ class ZoomAPIClient {
     }
   }
 
+  private validateAndSanitizeToken(token: string): string {
+    if (!token || typeof token !== 'string') {
+      throw new Error('Invalid token: token must be a non-empty string');
+    }
+    
+    // Remove any potential invalid characters for HTTP headers
+    const sanitized = token.trim().replace(/[\r\n\t]/g, '');
+    
+    // Basic validation - tokens should be reasonably long and not contain control characters
+    if (sanitized.length < 10) {
+      throw new Error('Invalid token: token too short');
+    }
+    
+    // Check for invalid header characters
+    if (/[\x00-\x1F\x7F-\xFF]/.test(sanitized)) {
+      console.error('Token contains invalid characters:', sanitized.substring(0, 20) + '...');
+      throw new Error('Invalid token: contains invalid characters');
+    }
+    
+    return sanitized;
+  }
+
   private async makeRequest(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
     const url = `${this.baseURL}${endpoint}`;
     
-    let requestHeaders = {
-      'Authorization': `Bearer ${this.accessToken}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
-    
-    console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`, {
-      url: url,
-      hasAuthHeader: !!requestHeaders.Authorization,
-      authHeaderLength: requestHeaders.Authorization?.length,
-      tokenPrefixUsed: this.accessToken.substring(0, 10) + '...'
-    });
-    
-    // Check if token needs refresh (only for OAuth connections)
-    if (this.isOAuth) {
-      const expiresAt = new Date(this.connection.token_expires_at);
-      const updatedAt = this.connection.updated_at ? new Date(this.connection.updated_at) : new Date(0);
-      const now = new Date();
-      const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-      const tokenAgeMinutes = (now.getTime() - updatedAt.getTime()) / (60 * 1000);
+    try {
+      // Validate and sanitize the access token before using it
+      const sanitizedToken = this.validateAndSanitizeToken(this.accessToken);
+      
+      let requestHeaders = {
+        'Authorization': `Bearer ${sanitizedToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers,
+      };
+      
+      console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`, {
+        url: url,
+        hasAuthHeader: !!requestHeaders.Authorization,
+        authHeaderLength: requestHeaders.Authorization?.length,
+        tokenPrefixUsed: sanitizedToken.substring(0, 10) + '...'
+      });
+      
+      // Check if token needs refresh (only for OAuth connections)
+      if (this.isOAuth) {
+        const expiresAt = new Date(this.connection.token_expires_at);
+        const updatedAt = this.connection.updated_at ? new Date(this.connection.updated_at) : new Date(0);
+        const now = new Date();
+        const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+        const tokenAgeMinutes = (now.getTime() - updatedAt.getTime()) / (60 * 1000);
 
-      const needsRefreshByExpiry = now.getTime() >= (expiresAt.getTime() - bufferTime);
-      const needsRefreshByAge = tokenAgeMinutes > 50;
+        const needsRefreshByExpiry = now.getTime() >= (expiresAt.getTime() - bufferTime);
+        const needsRefreshByAge = tokenAgeMinutes > 50;
 
-      console.log('Token validity check:', {
-          expiresAt: expiresAt.toISOString(),
-          updatedAt: updatedAt.toISOString(),
-          now: now.toISOString(),
-          tokenAgeMinutes: tokenAgeMinutes.toFixed(2),
-          needsRefreshByExpiry,
-          needsRefreshByAge
+        console.log('Token validity check:', {
+            expiresAt: expiresAt.toISOString(),
+            updatedAt: updatedAt.toISOString(),
+            now: now.toISOString(),
+            tokenAgeMinutes: tokenAgeMinutes.toFixed(2),
+            needsRefreshByExpiry,
+            needsRefreshByAge
+        });
+
+        if ((needsRefreshByExpiry || needsRefreshByAge) && retryCount === 0) {
+          const reason = needsRefreshByExpiry ? 'token expired/expiring' : 'token is old (>50 minutes)';
+          console.log(`Forcing OAuth token refresh: ${reason}`);
+          try {
+            await this.refreshTokens();
+            // Re-validate and sanitize the new token
+            const newSanitizedToken = this.validateAndSanitizeToken(this.accessToken);
+            requestHeaders = {
+                ...requestHeaders,
+                'Authorization': `Bearer ${newSanitizedToken}`,
+            };
+            console.log('Headers updated with new token.');
+          } catch (refreshError) {
+            console.error('Pre-emptive OAuth token refresh failed:', refreshError);
+            const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
+            (authError as any).status = 401;
+            (authError as any).isAuthError = true;
+            throw authError;
+          }
+        }
+      }
+      
+      const response = await fetch(url, {
+        ...options,
+        headers: requestHeaders,
       });
 
-      if ((needsRefreshByExpiry || needsRefreshByAge) && retryCount === 0) {
-        const reason = needsRefreshByExpiry ? 'token expired/expiring' : 'token is old (>50 minutes)';
-        console.log(`Forcing OAuth token refresh: ${reason}`);
-        try {
-          await this.refreshTokens();
-          // Re-create headers with the new token
-          requestHeaders = {
-              ...requestHeaders,
-              'Authorization': `Bearer ${this.accessToken}`,
-          };
-          console.log('Headers updated with new token.');
-        } catch (refreshError) {
-          console.error('Pre-emptive OAuth token refresh failed:', refreshError);
-          const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
-          (authError as any).status = 401;
-          (authError as any).isAuthError = true;
-          throw authError;
+      console.log(`Zoom API response: ${response.status} for ${endpoint}`);
+      console.log('Zoom API response details:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      if (!response.ok) {
+        if (response.status === 401 && retryCount < 1) {
+          console.log(`Received 401 for ${endpoint}. Attempting token refresh.`);
+          try {
+            await this.refreshTokens();
+            // Retry the request with the new token
+            return await this.makeRequest(endpoint, options, retryCount + 1);
+          } catch (refreshError) {
+            console.error(`Token refresh flow failed for ${endpoint}:`, refreshError.message);
+            // If refresh fails, throw a specific auth error
+            const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
+            (authError as any).status = 401;
+            (authError as any).isAuthError = true;
+            throw authError;
+          }
         }
+
+        const errorText = await response.text();
+        console.error(`Zoom API error (${response.status}) for ${endpoint}:`, errorText);
+        
+        const error = new Error(`Zoom API request failed: ${response.status} ${response.statusText}`);
+        (error as any).status = response.status;
+        
+        if (response.status === 401) {
+          (error as any).isAuthError = true;
+        }
+        
+        try {
+          (error as any).body = JSON.parse(errorText);
+        } catch {
+          (error as any).body = { message: errorText };
+        }
+        
+        throw error;
       }
-    }
-    
-    const response = await fetch(url, {
-      ...options,
-      headers: requestHeaders,
-    });
 
-    console.log(`Zoom API response: ${response.status} for ${endpoint}`);
-    console.log('Zoom API response details:', {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries())
-    });
-
-    if (!response.ok) {
-      if (response.status === 401 && retryCount < 1) {
-        console.log(`Received 401 for ${endpoint}. Attempting token refresh.`);
+      // Handle cases where response might be empty
+      const responseText = await response.text();
+      const result = responseText ? JSON.parse(responseText) : {};
+      console.log(`Zoom API success for ${endpoint}:`, Object.keys(result));
+      return result;
+    } catch (error) {
+      // If it's a token validation error, try to refresh and retry once
+      if (error.message.includes('Invalid token') && retryCount === 0) {
+        console.log('Token validation failed, attempting refresh...');
         try {
           await this.refreshTokens();
-          // Retry the request with the new token
           return await this.makeRequest(endpoint, options, retryCount + 1);
         } catch (refreshError) {
-          console.error(`Token refresh flow failed for ${endpoint}:`, refreshError.message);
-          // If refresh fails, throw a specific auth error
-          const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
-          (authError as any).status = 401;
-          (authError as any).isAuthError = true;
-          throw authError;
+          console.error('Token refresh after validation failure failed:', refreshError);
+          throw error; // Throw original validation error
         }
       }
-
-      const errorText = await response.text();
-      console.error(`Zoom API error (${response.status}) for ${endpoint}:`, errorText);
-      
-      const error = new Error(`Zoom API request failed: ${response.status} ${response.statusText}`);
-      (error as any).status = response.status;
-      
-      if (response.status === 401) {
-        (error as any).isAuthError = true;
-      }
-      
-      try {
-        (error as any).body = JSON.parse(errorText);
-      } catch {
-        (error as any).body = { message: errorText };
-      }
-      
       throw error;
     }
-
-    // Handle cases where response might be empty
-    const responseText = await response.text();
-    const result = responseText ? JSON.parse(responseText) : {};
-    console.log(`Zoom API success for ${endpoint}:`, Object.keys(result));
-    return result;
   }
 
   async getWebinar(webinarId: string): Promise<any> {

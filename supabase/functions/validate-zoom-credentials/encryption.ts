@@ -1,5 +1,5 @@
 
-const ENCRYPTION_SALT = Deno.env.get('ENCRYPTION_SALT') || 'default-salt-change-in-production';
+const ENCRYPTION_SALT = Deno.env.get('ENCRYPTION_SALT') || 'webinar-wise-default-salt-change-in-production';
 
 export class SimpleTokenEncryption {
   static async encryptToken(token: string, userId: string): Promise<string> {
@@ -24,7 +24,7 @@ export class SimpleTokenEncryption {
     } catch (error) {
       console.error('AES-GCM encryption failed:', error.message, 'Using base64 fallback');
       // Fallback to simple base64 encoding
-      return btoa(token + ':' + userId);
+      return btoa(token);
     }
   }
 
@@ -52,9 +52,8 @@ export class SimpleTokenEncryption {
       try {
         console.log('Attempting base64 decoding fallback...');
         const decoded = atob(encryptedToken);
-        const [token] = decoded.split(':');
         console.log('Successfully decoded token using base64 fallback.');
-        return token;
+        return decoded;
       } catch (fallbackError) {
         console.error('All decryption methods failed:', fallbackError.message);
         throw new Error('Token decryption failed');

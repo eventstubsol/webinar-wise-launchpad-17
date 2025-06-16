@@ -23,17 +23,23 @@ export class TokenMigrationService {
 
       // Check if any tokens fail to decrypt
       for (const connection of connections) {
-        const accessTokenValid = await TokenUtils.validateTokenDecryption(
-          connection.access_token, 
-          userId
-        );
-        const refreshTokenValid = await TokenUtils.validateTokenDecryption(
-          connection.refresh_token, 
-          userId
-        );
+        try {
+          const accessTokenValid = await TokenUtils.validateTokenDecryption(
+            connection.access_token, 
+            userId
+          );
+          const refreshTokenValid = await TokenUtils.validateTokenDecryption(
+            connection.refresh_token, 
+            userId
+          );
 
-        if (!accessTokenValid || !refreshTokenValid) {
-          console.log('Migration needed for connection:', connection.id);
+          if (!accessTokenValid || !refreshTokenValid) {
+            console.log('Migration needed for connection:', connection.id);
+            return true;
+          }
+        } catch (error) {
+          // If validation throws an error, migration is likely needed
+          console.log('Token validation error, migration needed:', error.message);
           return true;
         }
       }
@@ -88,6 +94,7 @@ export class TokenMigrationService {
     } catch (error) {
       console.error('Auto-migration failed:', error);
       // Don't throw - this is a background operation
+      // Instead, just log the error and continue
     }
   }
 }
