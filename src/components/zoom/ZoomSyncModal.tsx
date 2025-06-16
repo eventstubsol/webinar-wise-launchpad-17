@@ -30,7 +30,7 @@ export const ZoomSyncModal: React.FC<ZoomSyncModalProps> = ({
     setCurrentOperation('Starting sync...');
     
     try {
-      await startSync('full');
+      await startSync('initial');
       setStep('success');
       setTimeout(() => {
         onOpenChange(false);
