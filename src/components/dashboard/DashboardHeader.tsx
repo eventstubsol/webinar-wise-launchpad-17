@@ -19,7 +19,7 @@ import { ZoomSyncModal } from '@/components/zoom/ZoomSyncModal';
 export function DashboardHeader() {
   const { user, profile } = useAuth();
   const { connection, tokenStatus, isLoading } = useZoomConnection();
-  const { startSync, isSyncing } = useZoomSync(connection);
+  const { isSyncing } = useZoomSync(connection);
   const { toast } = useToast();
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
@@ -119,7 +119,7 @@ export function DashboardHeader() {
     }
   };
 
-  const handleButtonClick = () => {
+  const handleConnectSyncClick = () => {
     if (tokenStatus === TokenStatus.VALID) {
       setShowSyncModal(true);
     } else {
@@ -127,13 +127,13 @@ export function DashboardHeader() {
     }
   };
 
-  const handleSyncClick = () => {
-    if (!isSyncing) {
-      startSync('incremental');
-    }
+  const getButtonText = () => {
+    if (isSyncing) return 'Syncing...';
+    if (tokenStatus === TokenStatus.VALID) return 'Sync';
+    return 'Connect';
   };
-  
-  const isSyncButtonDisabled = isSyncing || isLoading || tokenStatus === TokenStatus.NO_CONNECTION || tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED;
+
+  const isButtonDisabled = isLoading || isSyncing || tokenStatus === TokenStatus.ACCESS_EXPIRED;
 
   return (
     <>
@@ -165,13 +165,13 @@ export function DashboardHeader() {
             </div>
             
             <Button
-              onClick={handleSyncClick}
-              disabled={isSyncButtonDisabled}
+              onClick={handleConnectSyncClick}
+              disabled={isButtonDisabled}
               size="sm"
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'Syncing...' : 'Sync'}
+              {getButtonText()}
             </Button>
           </div>
 
