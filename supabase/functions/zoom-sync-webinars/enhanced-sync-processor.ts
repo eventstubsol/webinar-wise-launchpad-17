@@ -142,7 +142,7 @@ export async function processComprehensiveSync(
 }
 
 /**
- * Sync webinar and registrants data with metrics calculation
+ * Sync webinar and registrants data with metrics calculation and new field support
  */
 async function syncWebinarAndRegistrants(
   supabase: any,
@@ -359,14 +359,16 @@ function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any
 }
 
 /**
- * Transform Zoom API registrant to database format
+ * Transform Zoom API registrant to database format with new fields support
  */
 function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string): any {
   console.log(`Transforming registrant:`, {
     id: apiRegistrant.id,
     email: apiRegistrant.email,
     firstName: apiRegistrant.first_name,
-    lastName: apiRegistrant.last_name
+    lastName: apiRegistrant.last_name,
+    hasJoinUrl: !!apiRegistrant.join_url,
+    hasCreateTime: !!apiRegistrant.create_time
   });
   
   return {
@@ -398,6 +400,9 @@ function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string)
     industry: apiRegistrant.industry || null,
     org: apiRegistrant.org || null,
     language: apiRegistrant.language || null,
+    // New fields from API alignment
+    join_url: apiRegistrant.join_url || null,
+    create_time: apiRegistrant.create_time || apiRegistrant.registration_time || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };

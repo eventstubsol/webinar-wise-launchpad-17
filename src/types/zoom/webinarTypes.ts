@@ -1,4 +1,3 @@
-
 /**
  * Database types for Zoom webinars and related data
  */
@@ -88,6 +87,9 @@ export interface ZoomRegistrant {
   industry?: string | null;
   org?: string | null;
   language?: string | null;
+  // New fields added from Zoom API alignment
+  join_url?: string | null;
+  create_time?: string | null;
 }
 
 /** Recording files and metadata */

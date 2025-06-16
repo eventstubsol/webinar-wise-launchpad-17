@@ -66,7 +66,7 @@ export class WebinarTransformers {
   }
 
   /**
-   * Transform Zoom API registrant to database format
+   * Transform Zoom API registrant to database format with new fields
    */
   static transformRegistrant(
     apiRegistrant: any,
@@ -101,6 +101,9 @@ export class WebinarTransformers {
       industry: apiRegistrant.industry || null,
       org: apiRegistrant.org || null,
       language: apiRegistrant.language || null,
+      // New fields from API alignment
+      join_url: apiRegistrant.join_url || null,
+      create_time: apiRegistrant.create_time || apiRegistrant.registration_time || null,
     };
   }
 }

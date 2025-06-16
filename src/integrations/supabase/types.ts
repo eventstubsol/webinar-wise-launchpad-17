@@ -5015,6 +5015,7 @@ export type Database = {
           city: string | null
           comments: string | null
           country: string | null
+          create_time: string | null
           created_at: string | null
           custom_questions: Json | null
           duration: number | null
@@ -5023,6 +5024,7 @@ export type Database = {
           industry: string | null
           job_title: string | null
           join_time: string | null
+          join_url: string | null
           language: string | null
           last_name: string | null
           leave_time: string | null
@@ -5048,6 +5050,7 @@ export type Database = {
           city?: string | null
           comments?: string | null
           country?: string | null
+          create_time?: string | null
           created_at?: string | null
           custom_questions?: Json | null
           duration?: number | null
@@ -5056,6 +5059,7 @@ export type Database = {
           industry?: string | null
           job_title?: string | null
           join_time?: string | null
+          join_url?: string | null
           language?: string | null
           last_name?: string | null
           leave_time?: string | null
@@ -5081,6 +5085,7 @@ export type Database = {
           city?: string | null
           comments?: string | null
           country?: string | null
+          create_time?: string | null
           created_at?: string | null
           custom_questions?: Json | null
           duration?: number | null
@@ -5089,6 +5094,7 @@ export type Database = {
           industry?: string | null
           job_title?: string | null
           join_time?: string | null
+          join_url?: string | null
           language?: string | null
           last_name?: string | null
           leave_time?: string | null
