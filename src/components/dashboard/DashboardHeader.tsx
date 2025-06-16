@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -81,13 +82,6 @@ export function DashboardHeader() {
           variant: 'default' as const,
           className: 'text-green-700 bg-green-100 border-green-300'
         };
-      case TokenStatus.ACCESS_EXPIRED:
-        return {
-          icon: RefreshCw,
-          label: 'Refreshing...',
-          variant: 'destructive' as const,
-          className: 'text-yellow-600 bg-yellow-100 border-yellow-300 animate-pulse'
-        };
       case TokenStatus.REFRESH_EXPIRED:
       case TokenStatus.INVALID:
         return { 
@@ -133,7 +127,7 @@ export function DashboardHeader() {
     return 'Connect';
   };
 
-  const isButtonDisabled = isLoading || isSyncing || tokenStatus === TokenStatus.ACCESS_EXPIRED;
+  const isButtonDisabled = isLoading || isSyncing;
 
   return (
     <>
@@ -156,7 +150,7 @@ export function DashboardHeader() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
               <Badge className={`flex items-center gap-1 ${status.className}`}>
-                <StatusIcon className={`w-3 h-3 ${isLoading || tokenStatus === TokenStatus.ACCESS_EXPIRED ? 'animate-spin' : ''}`} />
+                <StatusIcon className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
                 Zoom {status.label}
               </Badge>
               <span className="text-sm text-gray-500">
