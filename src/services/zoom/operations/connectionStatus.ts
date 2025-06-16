@@ -29,10 +29,34 @@ export class ConnectionStatusOperations {
         return null; // No primary connection found
       }
 
-      // Check if tokens are corrupted and need cleanup
+      // Enhanced token validation - check for corrupted tokens
       try {
         const decryptedAccessToken = await TokenUtils.decryptToken(data.access_token, data.user_id);
         const decryptedRefreshToken = await TokenUtils.decryptToken(data.refresh_token, data.user_id);
+
+        // Validate that decrypted tokens don't contain binary data
+        if (this.containsBinaryData(decryptedAccessToken) || this.containsBinaryData(decryptedRefreshToken)) {
+          console.warn('Detected corrupted tokens with binary data, cleaning up connection:', data.id);
+          
+          // Force delete the corrupted connection
+          try {
+            await supabase
+              .from('zoom_connections')
+              .delete()
+              .eq('id', data.id);
+            
+            console.log('Corrupted connection deleted successfully');
+            toast({
+              title: "Connection Reset",
+              description: "Detected corrupted connection data. Please reconnect your Zoom account.",
+              variant: "destructive",
+            });
+          } catch (deleteError) {
+            console.error('Failed to delete corrupted connection:', deleteError);
+          }
+          
+          return null; // Return null to indicate no valid connection
+        }
 
         return {
           ...data,
@@ -44,7 +68,7 @@ export class ConnectionStatusOperations {
         if (error instanceof TokenDecryptionError || error instanceof Error) {
           console.warn('Token decryption failed, cleaning up corrupted connection:', data.id);
           
-          // Silently delete the corrupted connection instead of showing errors
+          // Force delete the corrupted connection
           try {
             await supabase
               .from('zoom_connections')
@@ -52,6 +76,11 @@ export class ConnectionStatusOperations {
               .eq('id', data.id);
             
             console.log('Corrupted connection deleted successfully');
+            toast({
+              title: "Connection Reset",
+              description: "Unable to decrypt connection tokens. Please reconnect your Zoom account.",
+              variant: "destructive",
+            });
           } catch (deleteError) {
             console.error('Failed to delete corrupted connection:', deleteError);
           }
@@ -64,6 +93,14 @@ export class ConnectionStatusOperations {
       console.error('Unexpected error getting primary connection:', error);
       return null;
     }
+  }
+
+  /**
+   * Check if string contains binary data that would be invalid in HTTP headers
+   */
+  private static containsBinaryData(str: string): boolean {
+    // Check for non-printable characters that would indicate binary data
+    return /[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(str);
   }
 
   /**

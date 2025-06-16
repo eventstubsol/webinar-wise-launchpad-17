@@ -60,6 +60,12 @@ export async function createZoomAPIClient(connection: any, supabase: any) {
         prefix: accessToken.substring(0, 10) + '...'
     });
     
+    // Enhanced validation: Check for binary data in decrypted token
+    if (containsBinaryData(accessToken)) {
+      console.error('Access token contains binary data after decryption, token is corrupted');
+      throw new Error('Corrupted access token detected - contains binary data');
+    }
+    
     if (!isServerToServer) {
       console.log('Attempting to decrypt refresh token...');
       refreshToken = await SimpleTokenEncryption.decryptToken(connection.refresh_token, connection.user_id);
@@ -68,6 +74,12 @@ export async function createZoomAPIClient(connection: any, supabase: any) {
         length: refreshToken.length,
         prefix: refreshToken.substring(0, 10) + '...'
       });
+      
+      // Enhanced validation: Check for binary data in decrypted refresh token
+      if (containsBinaryData(refreshToken)) {
+        console.error('Refresh token contains binary data after decryption, token is corrupted');
+        throw new Error('Corrupted refresh token detected - contains binary data');
+      }
     }
     console.log('Tokens processed for API client.');
   } catch (error) {
@@ -79,6 +91,12 @@ export async function createZoomAPIClient(connection: any, supabase: any) {
   }
 
   return new ZoomAPIClient(connection, supabase, accessToken, refreshToken, !isServerToServer);
+}
+
+// Helper function to detect binary data
+function containsBinaryData(str: string): boolean {
+  // Check for non-printable characters that would indicate binary data
+  return /[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(str);
 }
 
 class ZoomAPIClient {
@@ -224,7 +242,7 @@ class ZoomAPIClient {
     }
     
     // Enhanced validation for binary/encrypted data that shouldn't be in headers
-    if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\xFF]/.test(sanitized)) {
+    if (containsBinaryData(sanitized)) {
       console.error('Token contains binary/encrypted data, this should not happen with proper decryption');
       console.error('Token sample:', sanitized.substring(0, 50) + '...');
       throw new Error('Invalid token: contains binary data - token may be corrupted or not properly decrypted');
