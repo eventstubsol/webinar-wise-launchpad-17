@@ -6,7 +6,7 @@ import { ZoomParticipant } from '@/types/zoom';
  */
 export class ParticipantTransformers {
   /**
-   * Transform Zoom API participant to database format
+   * Transform Zoom API participant to database format with all API fields
    */
   static transformParticipant(
     apiParticipant: any,
@@ -17,11 +17,11 @@ export class ParticipantTransformers {
     return {
       webinar_id: webinarId,
       participant_id: apiParticipant.id || apiParticipant.participant_id,
-      registrant_id: null, // This would need to be linked separately
+      registrant_id: apiParticipant.registrant_id || null,
       participant_name: apiParticipant.name || apiParticipant.participant_name,
       participant_email: apiParticipant.user_email || apiParticipant.participant_email || null,
       participant_user_id: apiParticipant.user_id || null,
-      join_time: apiParticipant.join_time,
+      join_time: apiParticipant.join_time || null,
       leave_time: apiParticipant.leave_time || null,
       duration: apiParticipant.duration || null,
       attentiveness_score: apiParticipant.attentiveness_score || null,
@@ -38,6 +38,11 @@ export class ParticipantTransformers {
       network_type: details.network_type || null,
       version: details.version || null,
       customer_key: apiParticipant.customer_key || null,
+      
+      // New fields from Zoom API alignment
+      failover: apiParticipant.failover || false,
+      status: apiParticipant.status || null,
+      internal_user: apiParticipant.internal_user || false,
     };
   }
 

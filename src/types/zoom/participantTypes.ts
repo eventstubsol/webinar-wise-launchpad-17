@@ -29,6 +29,15 @@ export interface ZoomParticipant {
   network_type: string | null;
   version: string | null;
   customer_key: string | null;
+  
+  // New fields aligned with Zoom API
+  failover: boolean | null;
+  status: 'in_meeting' | 'in_waiting_room' | null;
+  internal_user: boolean | null;
+  
   created_at: string | null;
   updated_at: string | null;
 }
+
+/** Participant status enum values from Zoom API */
+export type ParticipantStatus = 'in_meeting' | 'in_waiting_room';
