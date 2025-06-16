@@ -1,3 +1,4 @@
+import { EnhancedStatusDetector } from './enhanced-status-detector.ts';
 
 export async function validateZoomConnection(connection: any): Promise<boolean> {
   console.log(`Validating Zoom connection: ${connection.id}`);
@@ -304,43 +305,35 @@ class ZoomAPIClient {
     return await this.makeRequest(`/webinars/${webinarId}`);
   }
 
-  async getWebinarStatus(webinarId: string): Promise<string> {
-    console.log(`Fetching current status for webinar: ${webinarId}`);
+  async getWebinarStatus(webinarId: string, webinarData?: any): Promise<string> {
+    console.log(`Determining status for webinar: ${webinarId}`);
+    
+    let apiStatus: string | undefined;
+    
     try {
-      const webinar = await this.getWebinar(webinarId);
-      const status = this.normalizeWebinarStatus(webinar.status);
-      console.log(`Webinar ${webinarId} current status: ${status}`);
-      return status;
+      // Try to get fresh webinar data if not provided
+      if (!webinarData) {
+        webinarData = await this.getWebinar(webinarId);
+      }
+      
+      // Extract status from API response
+      apiStatus = webinarData?.status;
+      
+      console.log(`Raw API status for webinar ${webinarId}: ${apiStatus}`);
     } catch (error) {
-      console.error(`Failed to get status for webinar ${webinarId}:`, error);
-      // If we can't get the status, return a reasonable default based on timing
-      return 'unavailable';
+      console.log(`Failed to get API status for webinar ${webinarId}:`, error.message);
     }
-  }
-
-  private normalizeWebinarStatus(zoomStatus: string): string {
-    // Map Zoom API status values to our database enum values
-    switch (zoomStatus?.toLowerCase()) {
-      case 'available':
-      case 'waiting':
-        return 'available';
-      case 'started':
-      case 'live':
-        return 'started';
-      case 'ended':
-      case 'finished':
-        return 'ended';
-      case 'aborted':
-      case 'cancelled':
-        return 'aborted';
-      case 'deleted':
-        return 'deleted';
-      case 'unavailable':
-        return 'unavailable';
-      default:
-        console.log(`Unknown status '${zoomStatus}', defaulting to 'unavailable'`);
-        return 'unavailable';
-    }
+    
+    // Use enhanced status detection
+    const statusResult = EnhancedStatusDetector.determineWebinarStatus(webinarData, apiStatus);
+    
+    console.log(`Enhanced status detection for webinar ${webinarId}:`, {
+      status: statusResult.status,
+      confidence: statusResult.confidence,
+      source: statusResult.source
+    });
+    
+    return statusResult.status;
   }
 
   async listWebinars(options: { from?: Date } = {}): Promise<any[]> {

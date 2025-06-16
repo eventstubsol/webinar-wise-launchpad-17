@@ -88,12 +88,58 @@ export class WebinarStatusService {
     const webinarStart = new Date(startTime);
     const webinarEnd = new Date(webinarStart.getTime() + (duration * 60 * 1000));
 
-    if (now < webinarStart) {
+    // Add buffer times for more accurate predictions
+    const startBuffer = 15 * 60 * 1000; // 15 minutes
+    const endBuffer = 30 * 60 * 1000; // 30 minutes
+
+    if (now < new Date(webinarStart.getTime() - startBuffer)) {
       return 'available'; // Future webinar
-    } else if (now >= webinarStart && now <= webinarEnd) {
-      return 'started'; // Should be live
+    } else if (now >= webinarStart && now <= new Date(webinarEnd.getTime() + endBuffer)) {
+      if (now <= webinarEnd) {
+        return 'started'; // Currently happening
+      } else {
+        return 'ended'; // Recently ended
+      }
     } else {
-      return 'ended'; // Should be completed
+      return 'ended'; // Past webinar
     }
+  }
+
+  /**
+   * Enhanced status mapping for better user understanding
+   */
+  static getEnhancedStatusLabel(status: string | null, startTime?: string, duration?: number): string {
+    if (!status) return 'Unknown';
+
+    const baseLabel = this.getStatusDisplay(status).label;
+
+    // Add context based on timing if available
+    if (startTime && duration && status === 'available') {
+      const webinarStart = new Date(startTime);
+      const now = new Date();
+      const hoursUntil = Math.round((webinarStart.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+      if (hoursUntil < 1) {
+        return 'Starting Soon';
+      } else if (hoursUntil < 24) {
+        return `Starting in ${hoursUntil}h`;
+      } else {
+        return 'Scheduled';
+      }
+    }
+
+    if (status === 'ended' && startTime) {
+      const webinarStart = new Date(startTime);
+      const now = new Date();
+      const hoursAgo = Math.round((now.getTime() - webinarStart.getTime()) / (1000 * 60 * 60));
+
+      if (hoursAgo < 2) {
+        return 'Just Ended';
+      } else {
+        return 'Completed';
+      }
+    }
+
+    return baseLabel;
   }
 }

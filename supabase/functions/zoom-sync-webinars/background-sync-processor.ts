@@ -1,5 +1,6 @@
 import { createZoomAPIClient } from './zoom-api-client.ts';
 import { updateSyncLog, updateSyncStage, saveWebinarToDatabase } from './database-operations.ts';
+import { EnhancedStatusDetector } from './enhanced-status-detector.ts';
 
 export async function processBackgroundSync(supabase: any, syncOperation: any, connection: any, syncLogId: string) {
   console.log(`=== Background Sync Processor Start ===`);
@@ -106,45 +107,28 @@ export async function processBackgroundSync(supabase: any, syncOperation: any, c
         console.log(`Processing webinar ${processedCount + 1}/${uniqueWebinars.length}: ${webinarData.topic} (${webinarData.id})`);
         
         // Enhanced status detection logic
-        let currentStatus = webinarData.status;
-        const webinarStartTime = new Date(webinarData.start_time);
-        const webinarEndTime = new Date(webinarStartTime.getTime() + (webinarData.duration * 60 * 1000));
-        const currentTime = new Date();
+        let finalStatus: string;
         
-        // Determine accurate status based on timing and API response
-        if (currentTime < webinarStartTime) {
-          // Future webinar
-          currentStatus = 'available';
-        } else if (currentTime >= webinarStartTime && currentTime <= webinarEndTime) {
-          // Currently happening
-          try {
-            const liveStatus = await client.getWebinarStatus(webinarData.id);
-            currentStatus = liveStatus || 'started';
-          } catch (statusError) {
-            console.log(`Could not get live status for ${webinarData.id}, defaulting to 'started'`);
-            currentStatus = 'started';
-          }
-        } else {
-          // Past webinar
-          try {
-            const finalStatus = await client.getWebinarStatus(webinarData.id);
-            currentStatus = finalStatus || 'ended';
-          } catch (statusError) {
-            console.log(`Could not get final status for ${webinarData.id}, defaulting to 'ended'`);
-            currentStatus = 'ended';
-          }
+        try {
+          // Use enhanced status detection with the webinar data
+          finalStatus = await client.getWebinarStatus(webinarData.id, webinarData);
+        } catch (statusError) {
+          console.log(`Status detection failed for ${webinarData.id}, using fallback:`, statusError.message);
+          // Fallback to enhanced status detector without API call
+          const statusResult = EnhancedStatusDetector.determineWebinarStatus(webinarData);
+          finalStatus = statusResult.status;
         }
         
         // Update webinar data with accurate status
         const webinarWithStatus = {
           ...webinarData,
-          status: currentStatus
+          status: finalStatus
         };
         
         await saveWebinarToDatabase(supabase, webinarWithStatus, connection.id);
         processedCount++;
         
-        console.log(`✓ Processed webinar: ${webinarData.topic} with status: ${currentStatus}`);
+        console.log(`✓ Processed webinar: ${webinarData.topic} with status: ${finalStatus}`);
         
         // Update progress
         await updateSyncLog(supabase, syncLogId, {
