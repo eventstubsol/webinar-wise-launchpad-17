@@ -1,4 +1,3 @@
-import { SimpleTokenEncryption } from './encryption.ts';
 
 export async function validateZoomConnection(connection: any): Promise<boolean> {
   console.log(`Validating Zoom connection: ${connection.id}`);
@@ -6,6 +5,12 @@ export async function validateZoomConnection(connection: any): Promise<boolean> 
   try {
     if (!connection.access_token) {
       console.error('No access token found in connection');
+      return false;
+    }
+
+    // Check if token is valid string
+    if (typeof connection.access_token !== 'string' || connection.access_token.length < 10) {
+      console.error('Invalid access token format');
       return false;
     }
 
@@ -39,64 +44,17 @@ export async function validateZoomConnection(connection: any): Promise<boolean> 
 
 export async function createZoomAPIClient(connection: any, supabase: any) {
   console.log(`Creating Zoom API client for connection: ${connection.id}`);
-  console.log('Received connection object in createZoomAPIClient:', {
-      id: connection.id,
-      user_id: connection.user_id,
-      has_access_token: !!connection.access_token,
-      has_refresh_token: !!connection.refresh_token
-  });
   
-  let accessToken;
-  let refreshToken;
   const isServerToServer = !connection.refresh_token || connection.refresh_token.includes('SERVER_TO_SERVER_NOT_APPLICABLE');
   console.log(`Connection type determined as: ${isServerToServer ? 'Server-to-Server' : 'OAuth'}`);
   
-  try {
-    console.log('Attempting to decrypt access token...');
-    accessToken = await SimpleTokenEncryption.decryptToken(connection.access_token, connection.user_id);
-    console.log('Access token decryption result:', {
-        success: true,
-        length: accessToken.length,
-        prefix: accessToken.substring(0, 10) + '...'
-    });
-    
-    // Enhanced validation: Check for binary data in decrypted token
-    if (containsBinaryData(accessToken)) {
-      console.error('Access token contains binary data after decryption, token is corrupted');
-      throw new Error('Corrupted access token detected - contains binary data');
-    }
-    
-    if (!isServerToServer) {
-      console.log('Attempting to decrypt refresh token...');
-      refreshToken = await SimpleTokenEncryption.decryptToken(connection.refresh_token, connection.user_id);
-      console.log('Refresh token decryption result:', {
-        success: true,
-        length: refreshToken.length,
-        prefix: refreshToken.substring(0, 10) + '...'
-      });
-      
-      // Enhanced validation: Check for binary data in decrypted refresh token
-      if (containsBinaryData(refreshToken)) {
-        console.error('Refresh token contains binary data after decryption, token is corrupted');
-        throw new Error('Corrupted refresh token detected - contains binary data');
-      }
-    }
-    console.log('Tokens processed for API client.');
-  } catch (error) {
-    console.log('Token decryption failed, assuming plain text tokens:', error.message);
-    accessToken = connection.access_token;
-    if (!isServerToServer) {
-      refreshToken = connection.refresh_token;
-    }
-  }
-
+  // Use tokens directly (no decryption needed)
+  const accessToken = connection.access_token;
+  const refreshToken = isServerToServer ? undefined : connection.refresh_token;
+  
+  console.log('Using plain text tokens for API client.');
+  
   return new ZoomAPIClient(connection, supabase, accessToken, refreshToken, !isServerToServer);
-}
-
-// Helper function to detect binary data
-function containsBinaryData(str: string): boolean {
-  // Check for non-printable characters that would indicate binary data
-  return /[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(str);
 }
 
 class ZoomAPIClient {
@@ -119,11 +77,9 @@ class ZoomAPIClient {
     console.log(`Attempting to refresh tokens for connection: ${this.connection.id}`);
     
     if (!this.isOAuth) {
-      // For Server-to-Server, generate a new token using client credentials
       console.log('Refreshing Server-to-Server token using client credentials flow');
       return await this.refreshServerToServerToken();
     } else {
-      // For OAuth, use the existing refresh token flow
       console.log('Refreshing OAuth token using refresh token flow');
       return await this.refreshOAuthToken();
     }
@@ -131,7 +87,6 @@ class ZoomAPIClient {
 
   private async refreshServerToServerToken() {
     try {
-      // Get the credentials from the zoom_credentials table
       const { data: credentials, error: credError } = await this.supabase
         .from('zoom_credentials')
         .select('client_id, client_secret, account_id')
@@ -167,14 +122,13 @@ class ZoomAPIClient {
       const tokenData = await tokenResponse.json();
       this.accessToken = tokenData.access_token;
 
-      // Update the connection with the new token
-      const encryptedToken = await SimpleTokenEncryption.encryptToken(tokenData.access_token, this.connection.user_id);
+      // Update the connection with the new token (plain text)
       const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
 
       const { error: updateError } = await this.supabase
         .from('zoom_connections')
         .update({
-          access_token: encryptedToken,
+          access_token: tokenData.access_token,
           token_expires_at: newExpiresAt,
           updated_at: new Date().toISOString()
         })
@@ -209,18 +163,10 @@ class ZoomAPIClient {
         throw new Error('OAuth token refresh failed - invalid response.');
       }
 
-      // Update our local connection data
       this.connection = data.connection;
+      this.accessToken = data.connection.access_token;
       
-      // Decrypt the new tokens
-      try {
-        console.log('Attempting to decrypt new access token...');
-        this.accessToken = await SimpleTokenEncryption.decryptToken(data.connection.access_token, this.connection.user_id);
-        console.log(`OAuth tokens refreshed successfully for connection: ${this.connection.id}`);
-      } catch (decryptError) {
-        console.log('Using plain text token from refresh response');
-        this.accessToken = data.connection.access_token;
-      }
+      console.log(`OAuth tokens refreshed successfully for connection: ${this.connection.id}`);
       
     } catch (error) {
       console.error(`OAuth token refresh failed for connection ${this.connection.id}:`, error);
@@ -233,19 +179,10 @@ class ZoomAPIClient {
       throw new Error('Invalid token: token must be a non-empty string');
     }
     
-    // Remove any potential invalid characters for HTTP headers
-    const sanitized = token.trim().replace(/[\r\n\t]/g, '');
+    const sanitized = token.trim();
     
-    // Basic validation - tokens should be reasonably long and not contain control characters
     if (sanitized.length < 10) {
       throw new Error('Invalid token: token too short');
-    }
-    
-    // Enhanced validation for binary/encrypted data that shouldn't be in headers
-    if (containsBinaryData(sanitized)) {
-      console.error('Token contains binary/encrypted data, this should not happen with proper decryption');
-      console.error('Token sample:', sanitized.substring(0, 50) + '...');
-      throw new Error('Invalid token: contains binary data - token may be corrupted or not properly decrypted');
     }
     
     return sanitized;
@@ -255,7 +192,6 @@ class ZoomAPIClient {
     const url = `${this.baseURL}${endpoint}`;
     
     try {
-      // Validate and sanitize the access token before using it
       const sanitizedToken = this.validateAndSanitizeToken(this.accessToken);
       
       let requestHeaders = {
@@ -264,39 +200,18 @@ class ZoomAPIClient {
         ...options.headers,
       };
       
-      console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`, {
-        url: url,
-        hasAuthHeader: !!requestHeaders.Authorization,
-        authHeaderLength: requestHeaders.Authorization?.length,
-        tokenPrefixUsed: sanitizedToken.substring(0, 10) + '...'
-      });
+      console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`);
       
       // Check if token needs refresh (only for OAuth connections)
       if (this.isOAuth) {
         const expiresAt = new Date(this.connection.token_expires_at);
-        const updatedAt = this.connection.updated_at ? new Date(this.connection.updated_at) : new Date(0);
         const now = new Date();
         const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-        const tokenAgeMinutes = (now.getTime() - updatedAt.getTime()) / (60 * 1000);
 
-        const needsRefreshByExpiry = now.getTime() >= (expiresAt.getTime() - bufferTime);
-        const needsRefreshByAge = tokenAgeMinutes > 50;
-
-        console.log('Token validity check:', {
-            expiresAt: expiresAt.toISOString(),
-            updatedAt: updatedAt.toISOString(),
-            now: now.toISOString(),
-            tokenAgeMinutes: tokenAgeMinutes.toFixed(2),
-            needsRefreshByExpiry,
-            needsRefreshByAge
-        });
-
-        if ((needsRefreshByExpiry || needsRefreshByAge) && retryCount === 0) {
-          const reason = needsRefreshByExpiry ? 'token expired/expiring' : 'token is old (>50 minutes)';
-          console.log(`Forcing OAuth token refresh: ${reason}`);
+        if (now.getTime() >= (expiresAt.getTime() - bufferTime) && retryCount === 0) {
+          console.log(`Forcing OAuth token refresh: token expired/expiring`);
           try {
             await this.refreshTokens();
-            // Re-validate and sanitize the new token
             const newSanitizedToken = this.validateAndSanitizeToken(this.accessToken);
             requestHeaders = {
                 ...requestHeaders,
@@ -319,22 +234,15 @@ class ZoomAPIClient {
       });
 
       console.log(`Zoom API response: ${response.status} for ${endpoint}`);
-      console.log('Zoom API response details:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries())
-      });
 
       if (!response.ok) {
         if (response.status === 401 && retryCount < 1) {
           console.log(`Received 401 for ${endpoint}. Attempting token refresh.`);
           try {
             await this.refreshTokens();
-            // Retry the request with the new token
             return await this.makeRequest(endpoint, options, retryCount + 1);
           } catch (refreshError) {
             console.error(`Token refresh flow failed for ${endpoint}:`, refreshError.message);
-            // If refresh fails, throw a specific auth error
             const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
             (authError as any).status = 401;
             (authError as any).isAuthError = true;
@@ -361,13 +269,11 @@ class ZoomAPIClient {
         throw error;
       }
 
-      // Handle cases where response might be empty
       const responseText = await response.text();
       const result = responseText ? JSON.parse(responseText) : {};
       console.log(`Zoom API success for ${endpoint}:`, Object.keys(result));
       return result;
     } catch (error) {
-      // If it's a token validation error, try to refresh and retry once
       if (error.message.includes('Invalid token') && retryCount === 0) {
         console.log('Token validation failed, attempting refresh...');
         try {
@@ -375,7 +281,7 @@ class ZoomAPIClient {
           return await this.makeRequest(endpoint, options, retryCount + 1);
         } catch (refreshError) {
           console.error('Token refresh after validation failure failed:', refreshError);
-          throw error; // Throw original validation error
+          throw error;
         }
       }
       throw error;

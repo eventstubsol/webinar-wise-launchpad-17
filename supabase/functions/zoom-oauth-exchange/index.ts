@@ -1,105 +1,158 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { OAuthRequest, TokenResponse, ZoomUser, ConnectionData } from './types.ts';
-import { SimpleTokenEncryption } from './encryption.ts';
-import { RequestValidator } from './validation.ts';
-import { ZoomApiService } from './zoom-api.ts';
-import { DatabaseService } from './database.ts';
-import { ResponseUtils } from './response-utils.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return ResponseUtils.createCorsResponse();
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Validate environment
-    const envError = RequestValidator.validateEnvironment();
-    if (envError) {
-      console.error('Environment validation failed:', envError);
-      return ResponseUtils.createErrorResponse(envError.message, 500);
+    const { code, state, redirectUri } = await req.json();
+
+    if (!code) {
+      return new Response(
+        JSON.stringify({ error: 'Authorization code is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Parse and validate request
-    const request: OAuthRequest = await req.json();
-    console.log('OAuth exchange request received', { 
-      code: request.code?.substring(0, 10) + '...', 
-      state: request.state 
-    });
-
-    const requestError = RequestValidator.validateOAuthRequest(request);
-    if (requestError) {
-      return ResponseUtils.createErrorResponse(requestError, 400);
-    }
-
-    // Initialize database service and validate user
-    const dbService = new DatabaseService();
-    const authHeader = req.headers.get('Authorization');
+    // Initialize Supabase clients
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
     
-    let user;
-    try {
-      user = await dbService.validateUser(authHeader);
-    } catch (error) {
-      return ResponseUtils.createErrorResponse(error.message, 401);
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! },
+        },
+      }
+    );
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'User not authenticated' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const serviceClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Get user's Zoom credentials for OAuth
+    const { data: credentials } = await serviceClient
+      .from('zoom_credentials')
+      .select('client_id, client_secret')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .single();
+
+    if (!credentials) {
+      return new Response(
+        JSON.stringify({ error: 'No active Zoom credentials found' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Exchange code for tokens
-    const redirectUri = Deno.env.get('ZOOM_REDIRECT_URI') || request.redirectUri;
-    if (!redirectUri) {
-      return ResponseUtils.createErrorResponse('Redirect URI is not configured.', 500);
+    const tokenResponse = await fetch('https://zoom.us/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${btoa(`${credentials.client_id}:${credentials.client_secret}`)}`,
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: redirectUri || Deno.env.get('ZOOM_REDIRECT_URI') || '',
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      console.error('Token exchange failed:', errorText);
+      return new Response(
+        JSON.stringify({ error: 'Failed to exchange authorization code' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
-    
-    let tokenData: TokenResponse;
-    try {
-      tokenData = await ZoomApiService.exchangeCodeForTokens(request.code, redirectUri);
-      console.log('Token exchange successful');
-    } catch (error) {
-      return ResponseUtils.createErrorResponse(error.message, 400);
-    }
+
+    const tokenData = await tokenResponse.json();
 
     // Get user info from Zoom
-    let zoomUser: ZoomUser;
-    try {
-      zoomUser = await ZoomApiService.getUserInfo(tokenData.access_token);
-      console.log('Got Zoom user info:', { email: zoomUser.email, id: zoomUser.id });
-    } catch (error) {
-      return ResponseUtils.createErrorResponse(error.message, 400);
+    const userResponse = await fetch('https://api.zoom.us/v2/users/me', {
+      headers: { 'Authorization': `Bearer ${tokenData.access_token}` },
+    });
+
+    if (!userResponse.ok) {
+      const errorText = await userResponse.text();
+      console.error('Failed to get user info:', errorText);
+      return new Response(
+        JSON.stringify({ error: 'Failed to get user information' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Encrypt tokens and prepare connection data
+    const zoomUser = await userResponse.json();
     const tokenExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
-    
-    // FIX: Use a consistent key for encryption (user.id only) to match decryption logic.
-    const userKey = user.id;
 
-    const encryptedAccessToken = await SimpleTokenEncryption.encryptToken(tokenData.access_token, userKey);
-    const encryptedRefreshToken = await SimpleTokenEncryption.encryptToken(tokenData.refresh_token, userKey);
-
-    const connectionData: ConnectionData = {
+    // Store connection with plain text tokens
+    const connectionData = {
       user_id: user.id,
       zoom_user_id: zoomUser.id,
       zoom_account_id: zoomUser.account_id || zoomUser.id,
       zoom_email: zoomUser.email,
       zoom_account_type: zoomUser.type === 2 ? 'Licensed' : 'Basic',
-      access_token: encryptedAccessToken,
-      refresh_token: encryptedRefreshToken,
+      access_token: tokenData.access_token, // Plain text
+      refresh_token: tokenData.refresh_token, // Plain text
       token_expires_at: tokenExpiresAt,
       scopes: tokenData.scope.split(' '),
       connection_status: 'active',
       is_primary: true,
     };
 
-    // Upsert connection data in the database
-    const connection = await dbService.upsertConnection(connectionData);
-    console.log('Connection data stored successfully for user:', user.id);
+    // Delete existing connections and insert new one
+    await serviceClient
+      .from('zoom_connections')
+      .delete()
+      .eq('user_id', user.id);
 
-    return ResponseUtils.createSuccessResponse({
-      message: "Zoom account connected successfully",
-      connection,
-    });
+    const { data: connection, error: insertError } = await serviceClient
+      .from('zoom_connections')
+      .insert(connectionData)
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('Failed to insert connection:', insertError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to save connection' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Zoom account connected successfully (no encryption)",
+        connection,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
 
   } catch (error) {
     console.error('OAuth exchange function error:', error);
-    return ResponseUtils.createErrorResponse(error.message, 500);
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 });

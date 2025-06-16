@@ -1,7 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { SimpleTokenEncryption } from './encryption.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,13 +8,11 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Initialize Supabase client with user's auth context
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -26,7 +23,6 @@ serve(async (req) => {
       }
     );
 
-    // Get current user
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
       console.error('User authentication error:', userError);
@@ -36,7 +32,6 @@ serve(async (req) => {
       );
     }
 
-    // Get user's active Zoom credentials
     const { data: credentials, error: credentialsError } = await supabaseClient
       .from('zoom_credentials')
       .select('*')
@@ -54,7 +49,6 @@ serve(async (req) => {
 
     console.log('Validating credentials for user:', user.id, 'account:', credentials.account_id);
 
-    // Use service role for database operations
     const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -68,7 +62,6 @@ serve(async (req) => {
 
     if (deleteError) {
       console.error('Error cleaning up existing connections:', deleteError);
-      // Continue anyway, as this might just mean no existing connections
     }
 
     // Request Server-to-Server OAuth token from Zoom
@@ -117,19 +110,15 @@ serve(async (req) => {
     }
     const accountData = await userTestResponse.json();
 
-    // Encrypt the actual Server-to-Server access token using proper encryption
-    const encryptedAccessToken = await SimpleTokenEncryption.encryptToken(tokenData.access_token, user.id);
-    const encryptedRefreshToken = await SimpleTokenEncryption.encryptToken('SERVER_TO_SERVER_NOT_APPLICABLE', user.id);
-
-    // Prepare connection data for Server-to-Server
+    // Store tokens as plain text (no encryption)
     const connectionData = {
       user_id: user.id,
       zoom_user_id: accountData.id,
       zoom_account_id: accountData.account_id || accountData.id,
       zoom_email: accountData.email,
       zoom_account_type: accountData.plan_type || (accountData.type === 1 ? 'Basic' : 'Licensed'),
-      access_token: encryptedAccessToken,
-      refresh_token: encryptedRefreshToken,
+      access_token: tokenData.access_token, // Plain text
+      refresh_token: 'SERVER_TO_SERVER_NOT_APPLICABLE', // Plain text
       token_expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
       scopes: tokenData.scope?.split(' ') || ['webinar:read:admin', 'user:read:admin'],
       connection_status: 'active',
@@ -158,7 +147,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Zoom credentials validated successfully with Server-to-Server OAuth',
+        message: 'Zoom credentials validated successfully with Server-to-Server OAuth (no encryption)',
         connection: connection,
         accountInfo: {
           id: accountData.id,

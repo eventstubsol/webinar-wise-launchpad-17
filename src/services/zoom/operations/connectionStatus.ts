@@ -1,14 +1,15 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection, ConnectionStatus } from '@/types/zoom';
 import { toast } from '@/hooks/use-toast';
-import { TokenUtils, TokenDecryptionError } from '../utils/tokenUtils';
+import { TokenUtils } from '../utils/tokenUtils';
 
 /**
- * Connection status management operations with improved error handling
+ * Connection status management operations - no encryption, plain text tokens
  */
 export class ConnectionStatusOperations {
   /**
-   * Get the primary connection for a user with enhanced error handling
+   * Get the primary connection for a user - simplified for plain text tokens
    */
   static async getPrimaryConnection(userId: string): Promise<ZoomConnection | null> {
     try {
@@ -26,103 +27,34 @@ export class ConnectionStatusOperations {
       }
 
       if (!data) {
-        return null; // No primary connection found
+        return null;
       }
 
-      // Enhanced token validation - check for corrupted tokens
-      try {
-        const decryptedAccessToken = await TokenUtils.decryptToken(data.access_token, data.user_id);
-        const decryptedRefreshToken = await TokenUtils.decryptToken(data.refresh_token, data.user_id);
-
-        // Validate that decrypted tokens don't contain binary data
-        if (this.containsBinaryData(decryptedAccessToken) || this.containsBinaryData(decryptedRefreshToken)) {
-          console.warn('Detected corrupted tokens with binary data, cleaning up connection:', data.id);
-          
-          // Force delete the corrupted connection
-          try {
-            await supabase
-              .from('zoom_connections')
-              .delete()
-              .eq('id', data.id);
-            
-            console.log('Corrupted connection deleted successfully');
-            toast({
-              title: "Connection Reset",
-              description: "Detected corrupted connection data. Please reconnect your Zoom account.",
-              variant: "destructive",
-            });
-          } catch (deleteError) {
-            console.error('Failed to delete corrupted connection:', deleteError);
-          }
-          
-          return null; // Return null to indicate no valid connection
-        }
-
-        return {
-          ...data,
-          access_token: decryptedAccessToken,
-          refresh_token: decryptedRefreshToken,
-          connection_status: data.connection_status as ConnectionStatus,
-        } as ZoomConnection;
-      } catch (error) {
-        if (error instanceof TokenDecryptionError || error instanceof Error) {
-          console.warn('Token decryption failed, cleaning up corrupted connection:', data.id);
-          
-          // Force delete the corrupted connection
-          try {
-            await supabase
-              .from('zoom_connections')
-              .delete()
-              .eq('id', data.id);
-            
-            console.log('Corrupted connection deleted successfully');
-            toast({
-              title: "Connection Reset",
-              description: "Unable to decrypt connection tokens. Please reconnect your Zoom account.",
-              variant: "destructive",
-            });
-          } catch (deleteError) {
-            console.error('Failed to delete corrupted connection:', deleteError);
-          }
-          
-          return null; // Return null to indicate no valid connection
-        }
-        throw error;
+      // Validate tokens are not corrupted
+      if (!TokenUtils.isValidToken(data.access_token) || !TokenUtils.isValidToken(data.refresh_token)) {
+        console.warn('Invalid tokens detected, cleaning up connection:', data.id);
+        
+        await supabase
+          .from('zoom_connections')
+          .delete()
+          .eq('id', data.id);
+        
+        toast({
+          title: "Connection Reset",
+          description: "Invalid connection tokens detected. Please reconnect your Zoom account.",
+          variant: "destructive",
+        });
+        
+        return null;
       }
+
+      return {
+        ...data,
+        connection_status: data.connection_status as ConnectionStatus,
+      } as ZoomConnection;
     } catch (error) {
       console.error('Unexpected error getting primary connection:', error);
       return null;
-    }
-  }
-
-  /**
-   * Check if string contains binary data that would be invalid in HTTP headers
-   */
-  private static containsBinaryData(str: string): boolean {
-    // Check for non-printable characters that would indicate binary data
-    return /[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(str);
-  }
-
-  /**
-   * Clean up all connections for a user (for fresh start)
-   */
-  static async cleanupUserConnections(userId: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('zoom_connections')
-        .delete()
-        .eq('user_id', userId);
-
-      if (error) {
-        console.error('Failed to cleanup user connections:', error);
-        return false;
-      }
-
-      console.log('All connections cleaned up for user:', userId);
-      return true;
-    } catch (error) {
-      console.error('Unexpected error cleaning up connections:', error);
-      return false;
     }
   }
 
@@ -153,27 +85,12 @@ export class ConnectionStatusOperations {
 
       if (setPrimaryError) {
         console.error('Failed to set primary connection:', setPrimaryError);
-        toast({
-          title: "Error",
-          description: "Failed to set as primary connection.",
-          variant: "destructive",
-        });
         return false;
       }
-
-      toast({
-        title: "Success",
-        description: "Primary connection updated successfully.",
-      });
 
       return true;
     } catch (error) {
       console.error('Unexpected error setting primary connection:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update primary connection. Please try again.",
-        variant: "destructive",
-      });
       return false;
     }
   }
@@ -208,7 +125,6 @@ export class ConnectionStatusOperations {
    */
   static async checkConnectionStatus(connection: ZoomConnection): Promise<ConnectionStatus> {
     try {
-      // Check if token is expired first
       if (TokenUtils.isTokenExpired(connection.token_expires_at)) {
         const refreshedConnection = await this.refreshToken(connection);
         if (refreshedConnection) return 'active' as ConnectionStatus;
@@ -217,8 +133,6 @@ export class ConnectionStatusOperations {
         return 'expired' as ConnectionStatus;
       }
 
-      // In a real implementation, you would make a test API call to Zoom here
-      // For now, we'll assume active connections are healthy
       if (connection.connection_status === 'active') {
         return 'active' as ConnectionStatus;
       }

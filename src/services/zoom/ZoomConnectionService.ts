@@ -1,13 +1,12 @@
+
 import { ConnectionCrud } from './operations/connectionCrud';
 import { ConnectionStatusOperations } from './operations/connectionStatus';
 import { TokenUtils } from './utils/tokenUtils';
-import { TokenMigrationService } from './security/TokenMigrationService';
 import { zoomSyncOrchestrator } from './sync/ZoomSyncOrchestrator';
 import { ZoomConnection, ZoomConnectionInsert, ZoomConnectionUpdate, ConnectionStatus } from '@/types/zoom';
 
 /**
- * Main service for managing Zoom connections
- * This service acts as a facade for all Zoom connection operations
+ * Main service for managing Zoom connections - simplified for plain text tokens
  */
 export class ZoomConnectionService {
   // CRUD Operations
@@ -22,24 +21,12 @@ export class ZoomConnectionService {
   static updateConnectionStatus = ConnectionStatusOperations.updateConnectionStatus;
   static checkConnectionStatus = ConnectionStatusOperations.checkConnectionStatus;
   static refreshToken = ConnectionStatusOperations.refreshToken;
+  static getPrimaryConnection = ConnectionStatusOperations.getPrimaryConnection;
 
-  // Enhanced getPrimaryConnection with migration check
-  static async getPrimaryConnection(userId: string): Promise<ZoomConnection | null> {
-    // Check and perform migration if needed
-    await TokenMigrationService.autoMigrateIfNeeded(userId);
-    
-    return await ConnectionStatusOperations.getPrimaryConnection(userId);
-  }
-
-  // Token Utilities
+  // Token Utilities (simplified)
   static isTokenExpired = TokenUtils.isTokenExpired;
-  static encryptToken = TokenUtils.encryptToken;
-  static decryptToken = TokenUtils.decryptToken;
-  static validateTokenDecryption = TokenUtils.validateTokenDecryption;
-
-  // Migration utilities
-  static checkMigrationNeeded = TokenMigrationService.checkMigrationNeeded;
-  static migrateUserTokens = TokenMigrationService.migrateUserTokens;
+  static getTokenStatus = TokenUtils.getTokenStatus;
+  static isValidToken = TokenUtils.isValidToken;
 
   // Sync Operations
   static async startInitialSync(connectionId: string, options?: { batchSize?: number }) {
@@ -64,5 +51,23 @@ export class ZoomConnectionService {
 
   static async getSyncStatus() {
     return await zoomSyncOrchestrator.getSyncStatus();
+  }
+
+  // Clear all connections (for migration)
+  static async clearAllConnections(userId: string): Promise<boolean> {
+    try {
+      const { data, error } = await import('@/integrations/supabase/client').then(m => m.supabase)
+        .functions.invoke('clear-zoom-connections');
+
+      if (error) {
+        console.error('Failed to clear connections:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error clearing connections:', error);
+      return false;
+    }
   }
 }
