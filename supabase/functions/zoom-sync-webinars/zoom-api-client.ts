@@ -1,398 +1,116 @@
-import { EnhancedStatusDetector } from './enhanced-status-detector.ts';
-
-export async function validateZoomConnection(connection: any): Promise<boolean> {
-  console.log(`Validating Zoom connection: ${connection.id}`);
-  
-  try {
-    if (!connection.access_token) {
-      console.error('No access token found in connection');
-      return false;
-    }
-
-    if (typeof connection.access_token !== 'string' || connection.access_token.length < 10) {
-      console.error('Invalid access token format');
-      return false;
-    }
-
-    const isServerToServer = !connection.refresh_token || connection.refresh_token.includes('SERVER_TO_SERVER_NOT_APPLICABLE');
-    
-    if (isServerToServer) {
-      console.log('Connection is Server-to-Server type, validation successful');
-      return true;
-    }
-
-    const expiresAt = new Date(connection.token_expires_at);
-    const now = new Date();
-    const bufferTime = 5 * 60 * 1000;
-
-    console.log(`Token expires at: ${expiresAt.toISOString()}, Current time: ${now.toISOString()}`);
-
-    if (now.getTime() >= (expiresAt.getTime() - bufferTime)) {
-      console.log('OAuth access token has expired or will expire soon, will need refresh');
-      return true;
-    }
-
-    console.log('Connection validation successful - token is valid');
-    return true;
-  } catch (error) {
-    console.error('Error validating Zoom connection:', error);
-    return false;
-  }
-}
 
 export async function createZoomAPIClient(connection: any, supabase: any) {
-  console.log(`Creating Zoom API client for connection: ${connection.id}`);
+  console.log('🔌 Creating Zoom API client for connection:', connection.id);
   
-  const isServerToServer = !connection.refresh_token || connection.refresh_token.includes('SERVER_TO_SERVER_NOT_APPLICABLE');
-  console.log(`Connection type determined as: ${isServerToServer ? 'Server-to-Server' : 'OAuth'}`);
-  
-  const accessToken = connection.access_token;
-  const refreshToken = isServerToServer ? undefined : connection.refresh_token;
-  
-  console.log('Using plain text tokens for API client.');
-  
-  return new ZoomAPIClient(connection, supabase, accessToken, refreshToken, !isServerToServer);
-}
-
-class ZoomAPIClient {
-  private connection: any;
-  private supabase: any;
-  private accessToken: string;
-  private refreshTokenValue: string | undefined;
-  private isOAuth: boolean;
-  private baseURL = 'https://api.zoom.us/v2';
-
-  constructor(connection: any, supabase: any, accessToken: string, refreshToken: string | undefined, isOAuth: boolean) {
-    this.connection = connection;
-    this.supabase = supabase;
-    this.accessToken = accessToken;
-    this.refreshTokenValue = refreshToken;
-    this.isOAuth = isOAuth;
+  // Get access token using Server-to-Server OAuth
+  const credentials = connection.zoom_credentials;
+  if (!credentials) {
+    throw new Error('No Zoom credentials found for connection');
   }
 
-  private async refreshTokens() {
-    console.log(`Attempting to refresh tokens for connection: ${this.connection.id}`);
-    
-    if (!this.isOAuth) {
-      console.log('Refreshing Server-to-Server token using client credentials flow');
-      return await this.refreshServerToServerToken();
-    } else {
-      console.log('Refreshing OAuth token using refresh token flow');
-      return await this.refreshOAuthToken();
-    }
+  const tokenResponse = await fetch('https://zoom.us/oauth/token', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${btoa(`${credentials.client_id}:${credentials.client_secret}`)}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: `grant_type=account_credentials&account_id=${credentials.account_id}`
+  });
+
+  if (!tokenResponse.ok) {
+    const errorText = await tokenResponse.text();
+    console.error('❌ Failed to get access token:', errorText);
+    throw new Error(`Failed to authenticate with Zoom: ${errorText}`);
   }
 
-  private async refreshServerToServerToken() {
-    try {
-      const { data: credentials, error: credError } = await this.supabase
-        .from('zoom_credentials')
-        .select('client_id, client_secret, account_id')
-        .eq('user_id', this.connection.user_id)
-        .eq('is_active', true)
-        .single();
+  const tokenData = await tokenResponse.json();
+  console.log('✅ Access token obtained, scopes:', tokenData.scope);
 
-      if (credError || !credentials) {
-        console.error('No active credentials found for Server-to-Server refresh');
-        throw new Error('No active Zoom credentials found for token refresh');
-      }
+  return {
+    accessToken: tokenData.access_token,
+    scopes: tokenData.scope,
 
-      const tokenRequestBody = new URLSearchParams({
-        grant_type: 'account_credentials',
-        account_id: credentials.account_id
-      });
-
-      const tokenResponse = await fetch('https://zoom.us/oauth/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${credentials.client_id}:${credentials.client_secret}`)}`,
-        },
-        body: tokenRequestBody,
-      });
-
-      if (!tokenResponse.ok) {
-        const errorText = await tokenResponse.text();
-        console.error('Server-to-Server token refresh failed:', tokenResponse.status, errorText);
-        throw new Error('Failed to refresh Server-to-Server token');
-      }
-
-      const tokenData = await tokenResponse.json();
-      this.accessToken = tokenData.access_token;
-
-      const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
-
-      const { error: updateError } = await this.supabase
-        .from('zoom_connections')
-        .update({
-          access_token: tokenData.access_token,
-          token_expires_at: newExpiresAt,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', this.connection.id);
-
-      if (updateError) {
-        console.error('Failed to update connection with new token:', updateError);
-        throw new Error('Failed to save refreshed token');
-      }
-
-      console.log(`Server-to-Server token refreshed successfully for connection: ${this.connection.id}`);
+    async fetchWebinars(pageSize = 100, pageNumber = 1, type = 'past') {
+      console.log(`🌐 Fetching ${type} webinars - Page ${pageNumber}, Size ${pageSize}`);
       
-    } catch (error) {
-      console.error(`Server-to-Server token refresh failed for connection ${this.connection.id}:`, error);
-      throw error;
-    }
-  }
-
-  private async refreshOAuthToken() {
-    try {
-      const { data, error } = await this.supabase.functions.invoke('zoom-token-refresh', {
-        body: { connectionId: this.connection.id }
-      });
-
-      if (error) {
-        console.error(`OAuth token refresh invocation failed for connection ${this.connection.id}:`, error);
-        throw new Error('OAuth token refresh failed. Please re-authenticate.');
-      }
-
-      if (!data?.connection) {
-        console.error('OAuth token refresh response missing connection data');
-        throw new Error('OAuth token refresh failed - invalid response.');
-      }
-
-      this.connection = data.connection;
-      this.accessToken = data.connection.access_token;
-      
-      console.log(`OAuth tokens refreshed successfully for connection: ${this.connection.id}`);
-      
-    } catch (error) {
-      console.error(`OAuth token refresh failed for connection ${this.connection.id}:`, error);
-      throw error;
-    }
-  }
-
-  private validateAndSanitizeToken(token: string): string {
-    if (!token || typeof token !== 'string') {
-      throw new Error('Invalid token: token must be a non-empty string');
-    }
-    
-    const sanitized = token.trim();
-    
-    if (sanitized.length < 10) {
-      throw new Error('Invalid token: token too short');
-    }
-    
-    return sanitized;
-  }
-
-  private async makeRequest(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
-    const url = `${this.baseURL}${endpoint}`;
-    
-    try {
-      const sanitizedToken = this.validateAndSanitizeToken(this.accessToken);
-      
-      let requestHeaders = {
-        'Authorization': `Bearer ${sanitizedToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      };
-      
-      console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`);
-      
-      if (this.isOAuth) {
-        const expiresAt = new Date(this.connection.token_expires_at);
-        const now = new Date();
-        const bufferTime = 5 * 60 * 1000;
-
-        if (now.getTime() >= (expiresAt.getTime() - bufferTime) && retryCount === 0) {
-          console.log(`Forcing OAuth token refresh: token expired/expiring`);
-          try {
-            await this.refreshTokens();
-            const newSanitizedToken = this.validateAndSanitizeToken(this.accessToken);
-            requestHeaders = {
-                ...requestHeaders,
-                'Authorization': `Bearer ${newSanitizedToken}`,
-            };
-            console.log('Headers updated with new token.');
-          } catch (refreshError) {
-            console.error('Pre-emptive OAuth token refresh failed:', refreshError);
-            const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
-            (authError as any).status = 401;
-            (authError as any).isAuthError = true;
-            throw authError;
-          }
-        }
-      }
+      const url = `https://api.zoom.us/v2/users/me/webinars?page_size=${pageSize}&page_number=${pageNumber}&type=${type}`;
       
       const response = await fetch(url, {
-        ...options,
-        headers: requestHeaders,
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json'
+        }
       });
-
-      console.log(`Zoom API response: ${response.status} for ${endpoint}`);
 
       if (!response.ok) {
-        if (response.status === 401 && retryCount < 1) {
-          console.log(`Received 401 for ${endpoint}. Attempting token refresh.`);
-          try {
-            await this.refreshTokens();
-            return await this.makeRequest(endpoint, options, retryCount + 1);
-          } catch (refreshError) {
-            console.error(`Token refresh flow failed for ${endpoint}:`, refreshError.message);
-            const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
-            (authError as any).status = 401;
-            (authError as any).isAuthError = true;
-            throw authError;
-          }
-        }
-
         const errorText = await response.text();
-        console.error(`Zoom API error (${response.status}) for ${endpoint}:`, errorText);
-        
-        const error = new Error(`Zoom API request failed: ${response.status} ${response.statusText}`);
-        (error as any).status = response.status;
-        
-        if (response.status === 401) {
-          (error as any).isAuthError = true;
-        }
-        
-        try {
-          (error as any).body = JSON.parse(errorText);
-        } catch {
-          (error as any).body = { message: errorText };
-        }
-        
-        throw error;
+        console.error(`❌ Failed to fetch webinars (${type}):`, errorText);
+        throw new Error(`Zoom API error fetching webinars: ${response.status} ${errorText}`);
       }
 
-      const responseText = await response.text();
-      const result = responseText ? JSON.parse(responseText) : {};
-      console.log(`Zoom API success for ${endpoint}:`, Object.keys(result));
-      return result;
-    } catch (error) {
-      if (error.message.includes('Invalid token') && retryCount === 0) {
-        console.log('Token validation failed, attempting refresh...');
-        try {
-          await this.refreshTokens();
-          return await this.makeRequest(endpoint, options, retryCount + 1);
-        } catch (refreshError) {
-          console.error('Token refresh after validation failure failed:', refreshError);
-          throw error;
-        }
-      }
-      throw error;
-    }
-  }
+      const data = await response.json();
+      console.log(`✅ Fetched ${data.webinars?.length || 0} ${type} webinars from page ${pageNumber}`);
+      return data;
+    },
 
-  async listWebinarsWithRange(options: { from?: Date; to?: Date; type?: string } = {}): Promise<any[]> {
-    const { from, to, type = 'past' } = options;
-    let endpoint = `/users/me/webinars?page_size=300&type=${type}`;
-    
-    if (from) {
-      endpoint += `&from=${from.toISOString().split('T')[0]}`;
-    }
-    if (to) {
-      endpoint += `&to=${to.toISOString().split('T')[0]}`;
-    }
-
-    console.log(`Fetching ${type} webinars with endpoint: ${endpoint}`);
-
-    const response = await this.makeRequest(endpoint);
-    return response.webinars || [];
-  }
-
-  async getWebinar(webinarId: string): Promise<any> {
-    console.log(`Fetching detailed webinar info for: ${webinarId}`);
-    return await this.makeRequest(`/webinars/${webinarId}`);
-  }
-
-  async getWebinarStatus(webinarId: string, webinarData?: any): Promise<string> {
-    console.log(`Determining status for webinar: ${webinarId}`);
-    
-    let apiStatus: string | undefined;
-    
-    try {
-      // Try to get fresh webinar data if not provided
-      if (!webinarData) {
-        webinarData = await this.getWebinar(webinarId);
-      }
+    async fetchRegistrants(webinarId: string, pageSize = 100, status = 'approved') {
+      console.log(`🌐 Fetching registrants for webinar ${webinarId}`);
       
-      // Extract status from API response
-      apiStatus = webinarData?.status;
+      const url = `https://api.zoom.us/v2/webinars/${webinarId}/registrants?page_size=${pageSize}&status=${status}`;
       
-      console.log(`Raw API status for webinar ${webinarId}: ${apiStatus}`);
-    } catch (error) {
-      console.log(`Failed to get API status for webinar ${webinarId}:`, error.message);
-    }
-    
-    // Use enhanced status detection
-    const statusResult = EnhancedStatusDetector.determineWebinarStatus(webinarData, apiStatus);
-    
-    console.log(`Enhanced status detection for webinar ${webinarId}:`, {
-      status: statusResult.status,
-      confidence: statusResult.confidence,
-      source: statusResult.source
-    });
-    
-    return statusResult.status;
-  }
-
-  async listWebinars(options: { from?: Date } = {}): Promise<any[]> {
-    let endpoint = '/users/me/webinars?page_size=300';
-    
-    if (options.from) {
-      endpoint += `&from=${options.from.toISOString()}`;
-    }
-
-    const response = await this.makeRequest(endpoint);
-    return response.webinars || [];
-  }
-
-  async getWebinarRegistrants(webinarId: string): Promise<any[]> {
-    try {
-      const response = await this.makeRequest(`/webinars/${webinarId}/registrants?page_size=300`);
-      return response.registrants || [];
-    } catch (error) {
-      console.log(`No registrants for webinar ${webinarId}:`, error.message);
-      return [];
-    }
-  }
-
-  async getWebinarParticipants(webinarId: string): Promise<any[]> {
-    try {
-      const response = await this.makeRequest(`/report/webinars/${webinarId}/participants?page_size=300`);
-      return response.participants || [];
-    } catch (error) {
-      console.error(`Participant API error for webinar ${webinarId}:`, {
-        status: error.status,
-        message: error.message,
-        body: error.body
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json'
+        }
       });
-      
-      if (error.message?.includes('does not contain scopes')) {
-        throw new Error(`Missing required scope 'report:read:list_webinar_participants:admin' for participant data. Please update your Zoom app scopes.`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ Failed to fetch registrants for webinar ${webinarId}:`, response.status, errorText);
+        
+        // Don't throw for 404 - webinar might not require registration
+        if (response.status === 404) {
+          console.log(`ℹ️ Webinar ${webinarId} does not require registration or not found`);
+          return { registrants: [], total_records: 0 };
+        }
+        
+        throw new Error(`Zoom API error fetching registrants: ${response.status} ${errorText}`);
       }
+
+      const data = await response.json();
+      console.log(`✅ Fetched ${data.registrants?.length || 0} registrants for webinar ${webinarId}`);
+      return data;
+    },
+
+    async fetchParticipants(webinarId: string, pageSize = 100) {
+      console.log(`🌐 Fetching participants for webinar ${webinarId}`);
       
-      throw error;
-    }
-  }
+      const url = `https://api.zoom.us/v2/report/webinars/${webinarId}/participants?page_size=${pageSize}`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-  async getWebinarPolls(webinarId: string): Promise<any[]> {
-    try {
-      const response = await this.makeRequest(`/report/webinars/${webinarId}/polls`);
-      return response.questions || [];
-    } catch (error) {
-      console.log(`No polls for webinar ${webinarId}:`, error.message);
-      return [];
-    }
-  }
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ Failed to fetch participants for webinar ${webinarId}:`, response.status, errorText);
+        
+        // Don't throw for 404 - webinar might not have occurred or no participants
+        if (response.status === 404) {
+          console.log(`ℹ️ No participant data available for webinar ${webinarId} (webinar not occurred or no attendees)`);
+          return { participants: [], total_records: 0 };
+        }
+        
+        throw new Error(`Zoom API error fetching participants: ${response.status} ${errorText}`);
+      }
 
-  async getWebinarQA(webinarId: string): Promise<any[]> {
-    try {
-      const response = await this.makeRequest(`/report/webinars/${webinarId}/qa`);
-      return response.questions || [];
-    } catch (error) {
-      console.log(`No Q&A for webinar ${webinarId}:`, error.message);
-      return [];
+      const data = await response.json();
+      console.log(`✅ Fetched ${data.participants?.length || 0} participants for webinar ${webinarId}`);
+      return data;
     }
-  }
+  };
 }
