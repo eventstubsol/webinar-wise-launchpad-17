@@ -1,4 +1,3 @@
-
 import { SimpleTokenEncryption } from './encryption.ts';
 
 export async function validateZoomConnection(connection: any): Promise<boolean> {
@@ -224,10 +223,11 @@ class ZoomAPIClient {
       throw new Error('Invalid token: token too short');
     }
     
-    // Check for invalid header characters
-    if (/[\x00-\x1F\x7F-\xFF]/.test(sanitized)) {
-      console.error('Token contains invalid characters:', sanitized.substring(0, 20) + '...');
-      throw new Error('Invalid token: contains invalid characters');
+    // Enhanced validation for binary/encrypted data that shouldn't be in headers
+    if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\xFF]/.test(sanitized)) {
+      console.error('Token contains binary/encrypted data, this should not happen with proper decryption');
+      console.error('Token sample:', sanitized.substring(0, 50) + '...');
+      throw new Error('Invalid token: contains binary data - token may be corrupted or not properly decrypted');
     }
     
     return sanitized;

@@ -18,6 +18,7 @@ export const useZoomConnection = () => {
       if (!user?.id) return null;
       
       try {
+        // Get connection directly without migration check to avoid error loops
         return await ZoomConnectionService.getPrimaryConnection(user.id);
       } catch (error) {
         console.error('Error fetching zoom connection:', error);

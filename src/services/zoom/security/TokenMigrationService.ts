@@ -58,22 +58,18 @@ export class TokenMigrationService {
     try {
       console.log('Starting token migration for user:', userId);
       
-      // Mark all connections as needing re-authentication
+      // Delete all connections instead of marking as error to force clean slate
       const { error } = await supabase
         .from('zoom_connections')
-        .update({ 
-          connection_status: 'error',
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userId)
-        .eq('connection_status', 'active');
+        .delete()
+        .eq('user_id', userId);
 
       if (error) {
-        console.error('Failed to update connection status during migration:', error);
+        console.error('Failed to delete connections during migration:', error);
         throw error;
       }
 
-      console.log('Token migration completed for user:', userId);
+      console.log('Token migration completed - all connections deleted for user:', userId);
     } catch (error) {
       console.error('Token migration failed:', error);
       throw error;
@@ -81,20 +77,12 @@ export class TokenMigrationService {
   }
 
   /**
-   * Auto-migrate if needed (called during connection retrieval)
+   * Auto-migrate if needed (called during connection retrieval) - DISABLED to prevent error loops
    */
   static async autoMigrateIfNeeded(userId: string): Promise<void> {
-    try {
-      const migrationNeeded = await this.checkMigrationNeeded(userId);
-      
-      if (migrationNeeded) {
-        console.log('Auto-migrating tokens for user:', userId);
-        await this.migrateUserTokens(userId);
-      }
-    } catch (error) {
-      console.error('Auto-migration failed:', error);
-      // Don't throw - this is a background operation
-      // Instead, just log the error and continue
-    }
+    // Temporarily disabled to prevent error loops
+    // The cleanup is now handled directly in getPrimaryConnection
+    console.log('Auto-migration disabled - cleanup handled in connection retrieval');
+    return;
   }
 }

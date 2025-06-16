@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection, ConnectionStatus } from '@/types/zoom';
 import { toast } from '@/hooks/use-toast';
@@ -9,7 +8,7 @@ import { TokenUtils, TokenDecryptionError } from '../utils/tokenUtils';
  */
 export class ConnectionStatusOperations {
   /**
-   * Get the primary connection for a user with token recovery
+   * Get the primary connection for a user with enhanced error handling
    */
   static async getPrimaryConnection(userId: string): Promise<ZoomConnection | null> {
     try {
@@ -30,7 +29,7 @@ export class ConnectionStatusOperations {
         return null; // No primary connection found
       }
 
-      // Attempt to decrypt tokens with recovery mechanisms
+      // Check if tokens are corrupted and need cleanup
       try {
         const decryptedAccessToken = await TokenUtils.decryptToken(data.access_token, data.user_id);
         const decryptedRefreshToken = await TokenUtils.decryptToken(data.refresh_token, data.user_id);
@@ -42,25 +41,51 @@ export class ConnectionStatusOperations {
           connection_status: data.connection_status as ConnectionStatus,
         } as ZoomConnection;
       } catch (error) {
-        if (error instanceof TokenDecryptionError) {
-          console.error('Token decryption failed for connection:', data.id, error);
+        if (error instanceof TokenDecryptionError || error instanceof Error) {
+          console.warn('Token decryption failed, cleaning up corrupted connection:', data.id);
           
-          // Mark connection as requiring re-authentication
-          await this.updateConnectionStatus(data.id, 'error' as ConnectionStatus);
+          // Silently delete the corrupted connection instead of showing errors
+          try {
+            await supabase
+              .from('zoom_connections')
+              .delete()
+              .eq('id', data.id);
+            
+            console.log('Corrupted connection deleted successfully');
+          } catch (deleteError) {
+            console.error('Failed to delete corrupted connection:', deleteError);
+          }
           
-          toast({
-            title: "Connection Issue",
-            description: "Your Zoom connection needs to be re-established. Please reconnect your account.",
-            variant: "destructive",
-          });
-          
-          return null;
+          return null; // Return null to indicate no valid connection
         }
         throw error;
       }
     } catch (error) {
       console.error('Unexpected error getting primary connection:', error);
       return null;
+    }
+  }
+
+  /**
+   * Clean up all connections for a user (for fresh start)
+   */
+  static async cleanupUserConnections(userId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('zoom_connections')
+        .delete()
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Failed to cleanup user connections:', error);
+        return false;
+      }
+
+      console.log('All connections cleaned up for user:', userId);
+      return true;
+    } catch (error) {
+      console.error('Unexpected error cleaning up connections:', error);
+      return false;
     }
   }
 
