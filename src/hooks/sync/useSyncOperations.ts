@@ -91,7 +91,9 @@ export const useSyncOperations = (connectionId: string) => {
     }
 
     try {
-      await SyncRecoveryService.retryFailedSync(connectionId, syncType);
+      // Convert SyncType enum to string literal type expected by SyncRecoveryService
+      const syncTypeString = syncType === SyncType.INITIAL ? 'initial' : 'incremental';
+      await SyncRecoveryService.retryFailedSync(connectionId, syncTypeString);
       
       toast({
         title: "Sync Retry Started",
