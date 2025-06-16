@@ -2,7 +2,7 @@
 import React from 'react';
 import { Loader2, Wifi, WifiOff, RefreshCw, AlertTriangle } from 'lucide-react';
 import { ZoomConnection } from '@/types/zoom';
-import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
+import { TokenUtils, TokenStatus } from '@/services/zoom/utils/tokenUtils';
 
 interface ZoomButtonContentProps {
   isLoading: boolean;
@@ -34,13 +34,23 @@ export const ZoomButtonContent: React.FC<ZoomButtonContentProps> = ({
   }
 
   if (connection) {
-    const isExpired = ZoomConnectionService.isTokenExpired(connection.token_expires_at);
+    const tokenStatus = TokenUtils.getTokenStatus(connection);
+    const isServerToServer = TokenUtils.isServerToServerConnection(connection);
     
-    if (isExpired) {
+    if (tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED) {
       return (
         <>
           <AlertTriangle className="w-4 h-4" />
           Reconnect Zoom
+        </>
+      );
+    }
+    
+    if (tokenStatus === TokenStatus.ACCESS_EXPIRED) {
+      return (
+        <>
+          <AlertTriangle className="w-4 h-4" />
+          {isServerToServer ? "Refresh Credentials" : "Reconnect Zoom"}
         </>
       );
     }

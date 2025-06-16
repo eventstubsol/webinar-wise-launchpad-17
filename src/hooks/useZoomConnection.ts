@@ -1,4 +1,3 @@
-
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
@@ -29,7 +28,8 @@ export const useZoomConnection = () => {
       if (query.state.error) {
         return false;
       }
-      return query.state.data ? 60000 : 30000;
+      // Refetch more frequently if we have a connection to keep status updated
+      return query.state.data ? 30000 : 60000;
     },
     retry: (failureCount, error) => {
       if (failureCount >= 2) {
@@ -38,7 +38,7 @@ export const useZoomConnection = () => {
       return true;
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-    staleTime: 30000,
+    staleTime: 10000, // Reduced stale time for more responsive status updates
     gcTime: 5 * 60 * 1000,
   });
 

@@ -10,7 +10,7 @@ export enum TokenStatus {
 }
 
 /**
- * Simplified token utilities - no encryption, plain text tokens only
+ * Token utilities with proper Server-to-Server OAuth support
  */
 export class TokenUtils {
   /**
@@ -27,7 +27,17 @@ export class TokenUtils {
   }
 
   /**
-   * Get the status of a connection's token
+   * Check if this is a Server-to-Server connection
+   */
+  static isServerToServerConnection(connection: ZoomConnection): boolean {
+    return connection.connection_type === 'server_to_server' ||
+           connection.zoom_account_type === 'Server-to-Server' ||
+           (connection.access_token && connection.access_token.includes('SERVER_TO_SERVER')) ||
+           (connection.client_id && connection.client_secret && connection.account_id);
+  }
+
+  /**
+   * Get the status of a connection's token with proper Server-to-Server handling
    */
   static getTokenStatus(connection: ZoomConnection | null): TokenStatus {
     if (!connection) {
@@ -38,6 +48,27 @@ export class TokenUtils {
       return TokenStatus.INVALID;
     }
 
+    // For Server-to-Server connections, we have different validation logic
+    if (this.isServerToServerConnection(connection)) {
+      // Server-to-Server requires client credentials, not traditional tokens
+      if (!connection.client_id || !connection.client_secret || !connection.account_id) {
+        return TokenStatus.INVALID;
+      }
+
+      // If we have an access token and it's not expired, we're good
+      if (connection.access_token && !this.isTokenExpired(connection.token_expires_at)) {
+        return TokenStatus.VALID;
+      }
+
+      // If token is expired but we have credentials, we can refresh (return as valid since we can auto-refresh)
+      if (this.isTokenExpired(connection.token_expires_at)) {
+        return TokenStatus.ACCESS_EXPIRED;
+      }
+
+      return TokenStatus.VALID;
+    }
+
+    // Traditional OAuth flow validation
     if (!connection.access_token || !connection.refresh_token) {
       return TokenStatus.INVALID;
     }
@@ -65,5 +96,26 @@ export class TokenUtils {
    */
   static isServerToServerToken(token: string): boolean {
     return token.includes('SERVER_TO_SERVER_');
+  }
+
+  /**
+   * Check if connection needs token refresh
+   */
+  static needsTokenRefresh(connection: ZoomConnection): boolean {
+    const status = this.getTokenStatus(connection);
+    return status === TokenStatus.ACCESS_EXPIRED;
+  }
+
+  /**
+   * Check if connection can be refreshed
+   */
+  static canRefreshToken(connection: ZoomConnection): boolean {
+    if (this.isServerToServerConnection(connection)) {
+      // Server-to-Server can always refresh with client credentials
+      return !!(connection.client_id && connection.client_secret && connection.account_id);
+    }
+    
+    // Traditional OAuth needs valid refresh token
+    return !!(connection.refresh_token && connection.connection_status !== 'expired');
   }
 }

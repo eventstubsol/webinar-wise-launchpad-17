@@ -6,7 +6,7 @@ import { TokenUtils } from '../utils/tokenUtils';
 import { ConnectionCleanup } from '../utils/connectionCleanup';
 
 /**
- * Connection status management operations - no encryption, plain text tokens
+ * Connection status management operations with proper Server-to-Server support
  */
 export class ConnectionStatusOperations {
   /**
@@ -34,22 +34,43 @@ export class ConnectionStatusOperations {
         return null;
       }
 
-      // Validate tokens are plain text and valid
-      if (!TokenUtils.isValidToken(data.access_token) || !TokenUtils.isValidToken(data.refresh_token)) {
-        console.warn('Invalid tokens detected, cleaning up connection:', data.id);
-        
-        await supabase
-          .from('zoom_connections')
-          .delete()
-          .eq('id', data.id);
-        
-        toast({
-          title: "Connection Reset",
-          description: "Invalid connection tokens detected. Please reconnect your Zoom account.",
-          variant: "destructive",
-        });
-        
-        return null;
+      // Validate connection based on type
+      if (TokenUtils.isServerToServerConnection(data)) {
+        // For Server-to-Server, validate credentials
+        if (!data.client_id || !data.client_secret || !data.account_id) {
+          console.warn('Invalid Server-to-Server credentials, cleaning up connection:', data.id);
+          
+          await supabase
+            .from('zoom_connections')
+            .delete()
+            .eq('id', data.id);
+          
+          toast({
+            title: "Connection Reset",
+            description: "Invalid Server-to-Server credentials detected. Please reconnect your Zoom account.",
+            variant: "destructive",
+          });
+          
+          return null;
+        }
+      } else {
+        // For OAuth, validate tokens
+        if (!TokenUtils.isValidToken(data.access_token) || !TokenUtils.isValidToken(data.refresh_token)) {
+          console.warn('Invalid OAuth tokens detected, cleaning up connection:', data.id);
+          
+          await supabase
+            .from('zoom_connections')
+            .delete()
+            .eq('id', data.id);
+          
+          toast({
+            title: "Connection Reset",
+            description: "Invalid connection tokens detected. Please reconnect your Zoom account.",
+            variant: "destructive",
+          });
+          
+          return null;
+        }
       }
 
       return {
@@ -129,9 +150,12 @@ export class ConnectionStatusOperations {
    */
   static async checkConnectionStatus(connection: ZoomConnection): Promise<ConnectionStatus> {
     try {
-      if (TokenUtils.isTokenExpired(connection.token_expires_at)) {
-        const refreshedConnection = await this.refreshToken(connection);
-        if (refreshedConnection) return 'active' as ConnectionStatus;
+      // Check if token needs refresh
+      if (TokenUtils.needsTokenRefresh(connection)) {
+        if (TokenUtils.canRefreshToken(connection)) {
+          const refreshedConnection = await this.refreshToken(connection);
+          if (refreshedConnection) return 'active' as ConnectionStatus;
+        }
 
         await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
         return 'expired' as ConnectionStatus;
@@ -150,36 +174,57 @@ export class ConnectionStatusOperations {
   }
 
   /**
-   * Refresh an expired access token using the refresh token
+   * Refresh an expired access token with proper Server-to-Server support
    */
   static async refreshToken(connection: ZoomConnection): Promise<ZoomConnection | null> {
     try {
-      toast({
-        title: "Refreshing Connection",
-        description: "Your Zoom connection is being refreshed...",
-      });
+      console.log('Starting token refresh for connection:', connection.id, 'type:', connection.connection_type);
 
-      const { data, error } = await supabase.functions.invoke('zoom-token-refresh', {
-        body: { connectionId: connection.id },
-      });
+      // Don't show refreshing toast for Server-to-Server as it's usually fast
+      if (!TokenUtils.isServerToServerConnection(connection)) {
+        toast({
+          title: "Refreshing Connection",
+          description: "Your Zoom connection is being refreshed...",
+        });
+      }
+
+      let functionName = 'zoom-token-refresh';
+      let body = { connectionId: connection.id };
+
+      // For Server-to-Server connections, use the validation function which handles S2S properly
+      if (TokenUtils.isServerToServerConnection(connection)) {
+        functionName = 'validate-zoom-credentials';
+        body = {}; // The function will use the user's stored credentials
+      }
+
+      const { data, error } = await supabase.functions.invoke(functionName, { body });
 
       if (error) {
         throw new Error(error.message || 'Unknown error during token refresh.');
       }
       
-      toast({
-        title: "Connection Refreshed",
-        description: "Your Zoom token has been successfully refreshed.",
-      });
+      // Only show success toast for OAuth connections
+      if (!TokenUtils.isServerToServerConnection(connection)) {
+        toast({
+          title: "Connection Refreshed",
+          description: "Your Zoom token has been successfully refreshed.",
+        });
+      }
 
       return data.connection;
     } catch (error) {
       console.error('Error refreshing token:', error);
+      
+      const errorMessage = TokenUtils.isServerToServerConnection(connection) 
+        ? "Could not refresh your Server-to-Server connection. Please check your credentials in settings."
+        : "Could not refresh your Zoom connection. Please re-authenticate in settings.";
+      
       toast({
         title: "Refresh Failed",
-        description: "Could not refresh your Zoom connection. Please re-authenticate in settings.",
+        description: errorMessage,
         variant: "destructive",
       });
+      
       await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
       return null;
     }

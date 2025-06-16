@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle, AlertTriangle, XCircle, Info } from 'lucide-react';
 import { ZoomConnection } from '@/types/zoom';
 import { ZoomCredentials } from '@/types/zoomCredentials';
+import { TokenUtils, TokenStatus } from '@/services/zoom/utils/tokenUtils';
 
 interface ZoomButtonStatusProps {
   connection: ZoomConnection | null;
@@ -49,15 +50,33 @@ export const ZoomButtonStatus: React.FC<ZoomButtonStatusProps> = ({
     );
   }
 
-  if (connection && connection.access_token?.length < 50) {
-    return (
-      <Alert variant="destructive">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>
-          Your current connection has an invalid token. Click "Validate Connection" to fix this.
-        </AlertDescription>
-      </Alert>
-    );
+  if (connection) {
+    const tokenStatus = TokenUtils.getTokenStatus(connection);
+    const isServerToServer = TokenUtils.isServerToServerConnection(connection);
+    
+    if (tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED) {
+      return (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Your {isServerToServer ? 'Server-to-Server credentials are invalid' : 'connection has expired'}. 
+            Click "{isServerToServer ? 'Validate Connection' : 'Reconnect Zoom'}" to fix this.
+          </AlertDescription>
+        </Alert>
+      );
+    }
+    
+    if (tokenStatus === TokenStatus.ACCESS_EXPIRED) {
+      return (
+        <Alert className="bg-yellow-50 border-yellow-200">
+          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-800">
+            Your {isServerToServer ? 'access token needs refresh' : 'connection needs to be renewed'}. 
+            Click to {isServerToServer ? 'refresh' : 'reconnect'}.
+          </AlertDescription>
+        </Alert>
+      );
+    }
   }
 
   return null;
