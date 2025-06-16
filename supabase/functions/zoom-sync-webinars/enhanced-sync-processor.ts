@@ -1,6 +1,5 @@
 
 import { saveWebinarToDatabase } from './database-operations.ts';
-import { ComprehensiveBatchOperations } from '../../../src/services/zoom/operations/crud/ComprehensiveBatchOperations.ts';
 import { SyncOperation } from './types.ts';
 
 export async function processComprehensiveSync(
@@ -109,9 +108,12 @@ export async function processComprehensiveSync(
           console.log(`No Q&A data available for webinar ${webinar.id}`);
         }
         
-        // Use comprehensive batch operations to sync all data
+        // Process all data using embedded comprehensive operations
         console.log(`Syncing comprehensive data for webinar ${webinar.id}...`);
-        await ComprehensiveBatchOperations.syncCompleteWebinarData(
+        await zoomApi.updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'saving_comprehensive_data', null);
+        
+        const webinarDbId = await syncCompleteWebinarData(
+          supabase,
           webinarDetails, // Use detailed webinar data with all fields
           registrants,
           participants,
@@ -119,6 +121,13 @@ export async function processComprehensiveSync(
           qnaData,
           connection.id
         );
+        
+        console.log(`Data collected for webinar ${webinar.id}:`, {
+          registrants: registrants.length,
+          participants: participants.length,
+          polls: polls.length,
+          qa: qnaData.length
+        });
         
         processedCount++;
         await zoomApi.updateSyncStage(
@@ -153,4 +162,140 @@ export async function processComprehensiveSync(
     console.error('Enhanced comprehensive sync failed:', error);
     throw error;
   }
+}
+
+/**
+ * Complete webinar data sync with all related data and metrics calculation
+ * This is embedded in the edge function to avoid import issues
+ */
+async function syncCompleteWebinarData(
+  supabase: any,
+  webinarData: any,
+  registrants: any[],
+  participants: any[],
+  polls: any[],
+  qnaData: any[],
+  connectionId: string
+): Promise<string> {
+  console.log(`Starting comprehensive sync for webinar ${webinarData.id}`);
+  
+  try {
+    // Transform webinar data for database
+    const transformedWebinar = transformWebinarForDatabase(webinarData, connectionId);
+    
+    // Enhanced field mapping to capture all available Zoom API data
+    const enhancedWebinar = {
+      ...transformedWebinar,
+      // Ensure status is properly mapped from API
+      status: webinarData.status || 'available',
+      
+      // Map settings fields that were previously missing
+      approval_type: webinarData.settings?.approval_type || null,
+      registration_type: webinarData.settings?.registration_type || null,
+      
+      // New fields from schema update
+      start_url: webinarData.start_url || null,
+      encrypted_passcode: webinarData.encrypted_passcode || webinarData.encrypted_password || null,
+      creation_source: webinarData.creation_source || null,
+      is_simulive: webinarData.is_simulive || false,
+      record_file_id: webinarData.record_file_id || null,
+      transition_to_live: webinarData.transition_to_live || false,
+      webinar_created_at: webinarData.created_at || null,
+      
+      // Enhanced password field mapping
+      password: webinarData.password || null,
+      h323_password: webinarData.h323_password || webinarData.h323_passcode || null,
+      pstn_password: webinarData.pstn_password || null,
+      encrypted_password: webinarData.encrypted_password || webinarData.encrypted_passcode || null,
+      
+      // Comprehensive settings and metadata
+      settings: webinarData.settings ? JSON.stringify(webinarData.settings) : null,
+      tracking_fields: webinarData.tracking_fields ? JSON.stringify(webinarData.tracking_fields) : null,
+      recurrence: webinarData.recurrence ? JSON.stringify(webinarData.recurrence) : null,
+      occurrences: webinarData.occurrences ? JSON.stringify(webinarData.occurrences) : null,
+      
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('zoom_webinars')
+      .upsert(
+        enhancedWebinar,
+        {
+          onConflict: 'connection_id,webinar_id',
+          ignoreDuplicates: false
+        }
+      )
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Failed to upsert enhanced webinar:', error);
+      throw new Error(`Failed to upsert webinar: ${error.message}`);
+    }
+
+    console.log(`Enhanced webinar upserted with comprehensive data mapping: ${data.id}`);
+    return data.id;
+  } catch (error) {
+    console.error(`Error in comprehensive webinar sync for ${webinarData.id}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Transform Zoom API webinar to database format with comprehensive field mapping
+ * Embedded function to avoid import issues
+ */
+function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any {
+  // Extract settings for better field mapping
+  const settings = apiWebinar.settings || {};
+  
+  return {
+    connection_id: connectionId,
+    webinar_id: apiWebinar.id?.toString() || apiWebinar.webinar_id?.toString(),
+    webinar_uuid: apiWebinar.uuid,
+    host_id: apiWebinar.host_id,
+    host_email: apiWebinar.host_email || null,
+    topic: apiWebinar.topic,
+    agenda: apiWebinar.agenda || null,
+    type: apiWebinar.type || 5,
+    status: apiWebinar.status || 'available',
+    start_time: apiWebinar.start_time || null,
+    duration: apiWebinar.duration || null,
+    timezone: apiWebinar.timezone || null,
+    registration_required: !!apiWebinar.registration_url,
+    registration_type: settings.registration_type || null,
+    registration_url: apiWebinar.registration_url || null,
+    join_url: apiWebinar.join_url || null,
+    approval_type: settings.approval_type || null,
+    alternative_hosts: settings.alternative_hosts ? 
+      settings.alternative_hosts.split(',').map((h: string) => h.trim()) : null,
+    max_registrants: settings.registrants_restrict_number || null,
+    max_attendees: null,
+    occurrence_id: apiWebinar.occurrences?.[0]?.occurrence_id || apiWebinar.occurrence_id || null,
+    total_registrants: null,
+    total_attendees: null,
+    total_minutes: null,
+    avg_attendance_duration: null,
+    synced_at: new Date().toISOString(),
+    
+    // Enhanced field mapping for missing data
+    password: apiWebinar.password || null,
+    h323_password: apiWebinar.h323_password || apiWebinar.h323_passcode || null,
+    pstn_password: apiWebinar.pstn_password || null,
+    encrypted_password: apiWebinar.encrypted_password || apiWebinar.encrypted_passcode || null,
+    settings: settings,
+    tracking_fields: apiWebinar.tracking_fields || null,
+    recurrence: apiWebinar.recurrence || null,
+    occurrences: apiWebinar.occurrences || null,
+    
+    // New fields from Zoom API schema
+    start_url: apiWebinar.start_url || null,
+    encrypted_passcode: apiWebinar.encrypted_passcode || apiWebinar.encrypted_password || null,
+    creation_source: apiWebinar.creation_source || null,
+    is_simulive: apiWebinar.is_simulive || false,
+    record_file_id: apiWebinar.record_file_id || null,
+    transition_to_live: apiWebinar.transition_to_live || false,
+    webinar_created_at: apiWebinar.created_at || null,
+  };
 }
