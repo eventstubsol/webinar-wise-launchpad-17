@@ -2,18 +2,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { CORS_HEADERS, SYNC_PRIORITIES, SyncOperation } from './types.ts';
-import { validateRequest } from './validation.ts';
+import { validateRequestEnhanced } from './enhanced-validation.ts';
 import { createSyncLog } from './database-operations.ts';
-import { processSequentialSync } from './sync-processor.ts';
+import { processBackgroundSync } from './background-sync-processor.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: CORS_HEADERS });
   }
 
-  console.log('=== SYNC FUNCTION START ===');
+  console.log('=== ENHANCED SYNC FUNCTION START ===');
   console.log(`Request received: ${new Date().toISOString()}`);
-  console.log('Request headers:', Object.fromEntries(req.headers.entries()));
   console.log('Environment check:', {
     hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
     hasServiceKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
@@ -25,17 +24,16 @@ serve(async (req) => {
   const startTime = Date.now();
 
   try {
-    // Create Supabase client without passing the user's auth token in global config
-    // Instead, we'll validate the token manually in the validation step
+    // Create Supabase client with service role key
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    console.log('Supabase client created, validating request...');
-    const { user, connection, requestBody } = await validateRequest(req, supabase);
+    console.log('Supabase client created, starting enhanced validation...');
+    const { user, connection, requestBody } = await validateRequestEnhanced(req, supabase);
     const validationTime = Date.now();
-    console.log(`Request validated successfully in ${validationTime - startTime}ms`);
+    console.log(`Enhanced validation completed in ${validationTime - startTime}ms`);
 
     console.log('Creating sync log...');
     const syncLogId = await createSyncLog(supabase, requestBody.connectionId, requestBody.syncType, requestBody.webinarId);
@@ -53,27 +51,37 @@ serve(async (req) => {
       createdAt: new Date()
     };
     
-    console.log('Starting background sync process...');
-    queueMicrotask(() => processSequentialSync(supabase, syncOperation, connection, syncLogId));
+    console.log('Starting background sync process with EdgeRuntime.waitUntil...');
+    
+    // Use EdgeRuntime.waitUntil to ensure sync continues even if connection drops
+    EdgeRuntime.waitUntil(
+      processBackgroundSync(supabase, syncOperation, connection, syncLogId)
+        .catch(error => {
+          console.error('Background sync failed:', error);
+          // Background sync errors are already handled in processBackgroundSync
+        })
+    );
 
-    console.log(`=== Sync Request Successful (Total time: ${Date.now() - startTime}ms) ===`);
+    console.log(`=== Enhanced Sync Request Successful (Total time: ${Date.now() - startTime}ms) ===`);
     return new Response(
       JSON.stringify({
         success: true,
         syncId: syncLogId,
         status: 'started',
-        message: `Sequential ${requestBody.syncType} sync initiated successfully.`,
+        message: `Enhanced background ${requestBody.syncType} sync initiated successfully.`,
+        backgroundProcessing: true,
         debug: {
           connectionId: requestBody.connectionId,
           userId: user.id,
-          syncType: requestBody.syncType
+          syncType: requestBody.syncType,
+          processingMethod: 'background'
         }
       }),
       { status: 202, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('=== Sync Function Error ===');
+    console.error('=== Enhanced Sync Function Error ===');
     console.error(`Error occurred after ${Date.now() - startTime}ms`);
     console.error('Error details:', error);
     console.error('Error stack:', error.stack);
