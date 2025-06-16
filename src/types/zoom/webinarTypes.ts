@@ -1,3 +1,4 @@
+
 /**
  * Database types for Zoom webinars and related data
  */
@@ -44,6 +45,14 @@ export interface ZoomWebinar {
   tracking_fields?: Record<string, any>[] | null;
   recurrence?: Record<string, any> | null;
   occurrences?: Record<string, any>[] | null;
+  // New fields based on Zoom API schema
+  start_url?: string | null;
+  encrypted_passcode?: string | null;
+  creation_source?: string | null;
+  is_simulive?: boolean | null;
+  record_file_id?: string | null;
+  transition_to_live?: boolean | null;
+  webinar_created_at?: string | null;
 }
 
 /** Webinar registrant information */

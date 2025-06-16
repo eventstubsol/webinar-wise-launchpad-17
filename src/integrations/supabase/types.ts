@@ -5381,12 +5381,15 @@ export type Database = {
           avg_attendance_duration: number | null
           connection_id: string
           created_at: string | null
+          creation_source: string | null
           duration: number | null
+          encrypted_passcode: string | null
           encrypted_password: string | null
           h323_password: string | null
           host_email: string | null
           host_id: string
           id: string
+          is_simulive: boolean | null
           join_url: string | null
           max_attendees: number | null
           max_registrants: number | null
@@ -5394,12 +5397,14 @@ export type Database = {
           occurrences: Json | null
           password: string | null
           pstn_password: string | null
+          record_file_id: string | null
           recurrence: Json | null
           registration_required: boolean | null
           registration_type: number | null
           registration_url: string | null
           settings: Json | null
           start_time: string | null
+          start_url: string | null
           status: string | null
           synced_at: string | null
           timezone: string | null
@@ -5408,8 +5413,10 @@ export type Database = {
           total_minutes: number | null
           total_registrants: number | null
           tracking_fields: Json | null
+          transition_to_live: boolean | null
           type: number
           updated_at: string | null
+          webinar_created_at: string | null
           webinar_id: string
           webinar_uuid: string
         }
@@ -5420,12 +5427,15 @@ export type Database = {
           avg_attendance_duration?: number | null
           connection_id: string
           created_at?: string | null
+          creation_source?: string | null
           duration?: number | null
+          encrypted_passcode?: string | null
           encrypted_password?: string | null
           h323_password?: string | null
           host_email?: string | null
           host_id: string
           id?: string
+          is_simulive?: boolean | null
           join_url?: string | null
           max_attendees?: number | null
           max_registrants?: number | null
@@ -5433,12 +5443,14 @@ export type Database = {
           occurrences?: Json | null
           password?: string | null
           pstn_password?: string | null
+          record_file_id?: string | null
           recurrence?: Json | null
           registration_required?: boolean | null
           registration_type?: number | null
           registration_url?: string | null
           settings?: Json | null
           start_time?: string | null
+          start_url?: string | null
           status?: string | null
           synced_at?: string | null
           timezone?: string | null
@@ -5447,8 +5459,10 @@ export type Database = {
           total_minutes?: number | null
           total_registrants?: number | null
           tracking_fields?: Json | null
+          transition_to_live?: boolean | null
           type: number
           updated_at?: string | null
+          webinar_created_at?: string | null
           webinar_id: string
           webinar_uuid: string
         }
@@ -5459,12 +5473,15 @@ export type Database = {
           avg_attendance_duration?: number | null
           connection_id?: string
           created_at?: string | null
+          creation_source?: string | null
           duration?: number | null
+          encrypted_passcode?: string | null
           encrypted_password?: string | null
           h323_password?: string | null
           host_email?: string | null
           host_id?: string
           id?: string
+          is_simulive?: boolean | null
           join_url?: string | null
           max_attendees?: number | null
           max_registrants?: number | null
@@ -5472,12 +5489,14 @@ export type Database = {
           occurrences?: Json | null
           password?: string | null
           pstn_password?: string | null
+          record_file_id?: string | null
           recurrence?: Json | null
           registration_required?: boolean | null
           registration_type?: number | null
           registration_url?: string | null
           settings?: Json | null
           start_time?: string | null
+          start_url?: string | null
           status?: string | null
           synced_at?: string | null
           timezone?: string | null
@@ -5486,8 +5505,10 @@ export type Database = {
           total_minutes?: number | null
           total_registrants?: number | null
           tracking_fields?: Json | null
+          transition_to_live?: boolean | null
           type?: number
           updated_at?: string | null
+          webinar_created_at?: string | null
           webinar_id?: string
           webinar_uuid?: string
         }
