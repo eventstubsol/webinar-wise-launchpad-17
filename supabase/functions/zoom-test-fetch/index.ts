@@ -7,6 +7,68 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Simple token encryption/decryption service (copied from zoom-sync-webinars)
+const IV_LENGTH = 16;
+const ENCRYPTION_KEY = Deno.env.get('ENCRYPTION_SALT') || 'default-salt-is-not-secure-change-me';
+
+class SimpleTokenEncryption {
+  private static async getKey(salt: string): Promise<CryptoKey> {
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(ENCRYPTION_KEY),
+      { name: "HKDF" },
+      false,
+      ["deriveKey"]
+    );
+    return crypto.subtle.deriveKey(
+      {
+        name: "HKDF",
+        salt: new TextEncoder().encode(salt),
+        info: new TextEncoder().encode("ZoomTokenEncryption"),
+        hash: "SHA-256",
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      true,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  static async decryptToken(encryptedToken: string, salt: string): Promise<string> {
+    // 1. Try to decrypt using AES-GCM
+    try {
+        console.log('Attempting AES-GCM decryption...');
+        const key = await this.getKey(salt);
+        const data = new Uint8Array(atob(encryptedToken).split('').map(c => c.charCodeAt(0)));
+        const iv = data.slice(0, IV_LENGTH);
+        const encrypted = data.slice(IV_LENGTH);
+
+        const decrypted = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv },
+            key,
+            encrypted
+        );
+        
+        console.log('Successfully decrypted token using AES-GCM.');
+        return new TextDecoder().decode(decrypted);
+    } catch(e) {
+        console.log(`AES-GCM decryption failed: ${e.message}. Attempting fallbacks.`);
+        
+        // 2. Fallback for tokens that might be just base64 encoded
+        try {
+            console.log('Attempting base64 decoding fallback...');
+            const decoded = atob(encryptedToken);
+            console.log('Successfully decoded token using base64 fallback.');
+            return decoded;
+        } catch (e2) {
+            console.log(`Base64 decoding failed: ${e2.message}. Assuming plain text token.`);
+            // 3. If base64 decoding fails, it might be a plain token
+            return encryptedToken;
+        }
+    }
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -104,7 +166,8 @@ serve(async (req) => {
       id: primaryConnection.id,
       status: primaryConnection.connection_status,
       hasAccessToken: !!primaryConnection.access_token,
-      tokenExpiresAt: primaryConnection.token_expires_at
+      tokenExpiresAt: primaryConnection.token_expires_at,
+      accessTokenLength: primaryConnection.access_token?.length
     });
 
     // Check token expiration
@@ -135,14 +198,47 @@ serve(async (req) => {
       );
     }
 
-    // Try to make a simple Zoom API call
-    console.log('Attempting Zoom API call...');
+    // Decrypt the token before making API call
+    console.log('Attempting to decrypt access token...');
+    let decryptedToken;
     try {
-      // For now, we'll just attempt to decrypt the token and make a basic call
-      // Note: We'll use the raw token first to test the API call pattern
+      decryptedToken = await SimpleTokenEncryption.decryptToken(
+        primaryConnection.access_token, 
+        primaryConnection.user_id
+      );
+      console.log('Token decryption result:', {
+        originalLength: primaryConnection.access_token?.length,
+        decryptedLength: decryptedToken?.length,
+        decryptedPrefix: decryptedToken?.substring(0, 20) + '...'
+      });
+    } catch (decryptError) {
+      console.error('Token decryption failed:', decryptError);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          status: 'token_error',
+          message: 'Failed to decrypt Zoom access token',
+          data: {
+            connection: {
+              id: primaryConnection.id,
+              status: primaryConnection.connection_status
+            },
+            decryptionError: decryptError.message
+          }
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    // Try to make a simple Zoom API call with the decrypted token
+    console.log('Attempting Zoom API call with decrypted token...');
+    try {
       const zoomResponse = await fetch('https://api.zoom.us/v2/users/me', {
         headers: {
-          'Authorization': `Bearer ${primaryConnection.access_token}`,
+          'Authorization': `Bearer ${decryptedToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -151,7 +247,7 @@ serve(async (req) => {
 
       if (zoomResponse.ok) {
         const zoomData = await zoomResponse.json();
-        console.log('Zoom API call successful');
+        console.log('Zoom API call successful, user data received');
         
         return new Response(
           JSON.stringify({
@@ -204,6 +300,10 @@ serve(async (req) => {
                 success: false,
                 responseStatus: zoomResponse.status,
                 errorMessage: errorText
+              },
+              tokenInfo: {
+                wasDecrypted: true,
+                tokenLength: decryptedToken?.length
               }
             }
           }),
