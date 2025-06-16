@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
 import { ZoomConnection } from '@/types/zoom';
+import { TokenUtils, TokenStatus } from '@/services/zoom/utils/tokenUtils';
 import { useZoomValidation } from '@/hooks/useZoomValidation';
 import { useZoomDisconnect } from '@/hooks/useZoomDisconnect';
 import { ZoomButtonContent } from './ZoomButtonContent';
@@ -47,8 +48,9 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
 
   const getButtonVariant = () => {
     if (connection) {
-      const isExpired = ZoomConnectionService.isTokenExpired(connection.token_expires_at);
-      return isExpired ? 'destructive' : 'secondary';
+      const tokenStatus = TokenUtils.getTokenStatus(connection);
+      // Use centralized token status instead of direct expiration check
+      return tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED ? 'destructive' : 'secondary';
     }
     return variant;
   };
@@ -73,8 +75,9 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
     }
 
     if (connection) {
-      const isExpired = ZoomConnectionService.isTokenExpired(connection.token_expires_at);
-      if (isExpired) {
+      const tokenStatus = TokenUtils.getTokenStatus(connection);
+      // Use centralized token status logic instead of direct expiration check
+      if (tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED) {
         startValidation();
       } else {
         handleDisconnect(connection);

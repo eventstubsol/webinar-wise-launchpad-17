@@ -1,3 +1,4 @@
+
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
@@ -44,7 +45,9 @@ export const useZoomConnection = () => {
 
   const tokenStatus = connection ? TokenUtils.getTokenStatus(connection) : TokenStatus.NO_CONNECTION;
   const isTokenValid = tokenStatus === TokenStatus.VALID;
-  const isConnected = tokenStatus === TokenStatus.VALID || tokenStatus === TokenStatus.ACCESS_EXPIRED;
+  // For Server-to-Server connections, we now only return VALID or INVALID (no ACCESS_EXPIRED)
+  // So we can simplify the connected logic
+  const isConnected = tokenStatus === TokenStatus.VALID;
   const isExpired = tokenStatus === TokenStatus.REFRESH_EXPIRED || tokenStatus === TokenStatus.INVALID;
 
   return {

@@ -1,13 +1,15 @@
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Wifi, WifiOff, RefreshCw, Settings, AlertCircle } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
+import { TokenUtils, TokenStatus } from '@/services/zoom/utils/tokenUtils';
 import { ZoomConnectButton } from '@/components/zoom/ZoomConnectButton';
 
 export function ZoomConnectionCard() {
-  const { connection, isLoading, isConnected, isExpired } = useZoomConnection();
+  const { connection, isLoading, tokenStatus } = useZoomConnection();
 
   const getStatusInfo = () => {
     if (isLoading) {
@@ -19,16 +21,17 @@ export function ZoomConnectionCard() {
       };
     }
     
-    if (isExpired) {
+    // Use centralized token status logic
+    if (tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED) {
       return {
         icon: AlertCircle,
-        label: 'Connection Expired',
+        label: 'Connection Invalid',
         variant: 'destructive' as const,
         color: 'text-red-600'
       };
     }
     
-    if (isConnected) {
+    if (tokenStatus === TokenStatus.VALID) {
       return {
         icon: Wifi,
         label: 'Connected',
@@ -47,6 +50,8 @@ export function ZoomConnectionCard() {
 
   const status = getStatusInfo();
   const StatusIcon = status.icon;
+  const isConnected = tokenStatus === TokenStatus.VALID;
+  const isExpired = tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED;
 
   return (
     <Card>
@@ -88,7 +93,7 @@ export function ZoomConnectionCard() {
           <div className="space-y-4">
             <p className="text-gray-600 text-sm">
               {isExpired 
-                ? 'Your Zoom connection has expired. Please reconnect to continue syncing webinar data.'
+                ? 'Your Zoom connection has invalid credentials. Please reconfigure to continue syncing webinar data.'
                 : 'Connect your Zoom account to start analyzing your webinar data and unlock powerful insights.'
               }
             </p>

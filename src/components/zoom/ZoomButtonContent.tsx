@@ -37,20 +37,23 @@ export const ZoomButtonContent: React.FC<ZoomButtonContentProps> = ({
     const tokenStatus = TokenUtils.getTokenStatus(connection);
     const isServerToServer = TokenUtils.isServerToServerConnection(connection);
     
+    // With our updated logic, Server-to-Server connections only return VALID or INVALID
+    // No more ACCESS_EXPIRED for them since they auto-refresh silently
     if (tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED) {
       return (
         <>
           <AlertTriangle className="w-4 h-4" />
-          Reconnect Zoom
+          {isServerToServer ? "Fix Connection" : "Reconnect Zoom"}
         </>
       );
     }
     
+    // For OAuth connections, we might still see ACCESS_EXPIRED (but this shouldn't happen for S2S)
     if (tokenStatus === TokenStatus.ACCESS_EXPIRED) {
       return (
         <>
           <AlertTriangle className="w-4 h-4" />
-          {isServerToServer ? "Refresh Credentials" : "Reconnect Zoom"}
+          Reconnect Zoom
         </>
       );
     }
