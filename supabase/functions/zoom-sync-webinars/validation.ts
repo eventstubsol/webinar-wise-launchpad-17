@@ -5,24 +5,51 @@ import { SimpleTokenEncryption } from './encryption.ts';
 export async function validateRequest(req: Request, supabase: any) {
   console.log('Starting request validation...');
   
-  // Auth validation
+  // Auth validation - improved token extraction
   const authHeader = req.headers.get('Authorization');
+  console.log('Auth header present:', !!authHeader);
+  console.log('Auth header format:', authHeader ? 'Bearer format: ' + authHeader.startsWith('Bearer ') : 'No auth header');
+  
   if (!authHeader?.startsWith('Bearer ')) {
     console.error('Missing or invalid authorization header');
     throw { status: 401, message: 'Missing or invalid authorization header' };
   }
   
   const token = authHeader.replace('Bearer ', '');
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-  if (authError || !user) {
-    console.error('Invalid authentication token:', authError);
-    throw { status: 401, message: 'Invalid authentication token' };
+  console.log('Extracted token length:', token.length);
+  console.log('Token starts with:', token.substring(0, 20) + '...');
+  
+  try {
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError) {
+      console.error('Auth error details:', authError);
+      throw { status: 401, message: 'Invalid authentication token', details: authError };
+    }
+    
+    if (!user) {
+      console.error('No user found with token');
+      throw { status: 401, message: 'Invalid authentication token - no user found' };
+    }
+    
+    console.log(`User authenticated successfully: ${user.id}`);
+  } catch (error) {
+    console.error('Authentication validation failed:', error);
+    if (error.status) {
+      throw error;
+    }
+    throw { status: 401, message: 'Authentication validation failed', details: error };
   }
-  console.log(`User authenticated: ${user.id}`);
 
   // Body validation
-  const requestBody: SyncRequest = await req.json();
-  console.log('Request body:', requestBody);
+  let requestBody: SyncRequest;
+  try {
+    requestBody = await req.json();
+    console.log('Request body parsed successfully:', requestBody);
+  } catch (parseError) {
+    console.error('Failed to parse request body:', parseError);
+    throw { status: 400, message: 'Invalid request body format' };
+  }
   
   if (!requestBody.connectionId || !requestBody.syncType) {
     console.error('Missing required fields in request body');
@@ -32,6 +59,13 @@ export async function validateRequest(req: Request, supabase: any) {
   if (requestBody.syncType === 'single' && !requestBody.webinarId) {
     console.error('Missing webinarId for single webinar sync');
     throw { status: 400, message: 'webinarId is required for single webinar sync' };
+  }
+  
+  // Re-authenticate to get user for connection validation
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) {
+    console.error('Re-authentication failed for connection validation');
+    throw { status: 401, message: 'Authentication failed during validation' };
   }
   
   // Connection validation with detailed logging
@@ -57,7 +91,13 @@ export async function validateRequest(req: Request, supabase: any) {
   console.log(`Connection found: ${connection.id}, status: ${connection.connection_status}`);
   console.log('Raw connection data from DB:', connection);
   
-  const decryptedToken = await SimpleTokenEncryption.decryptToken(connection.access_token, connection.user_id);
+  let decryptedToken;
+  try {
+    decryptedToken = await SimpleTokenEncryption.decryptToken(connection.access_token, connection.user_id);
+  } catch (decryptError) {
+    console.error('Token decryption failed:', decryptError);
+    throw { status: 500, message: 'Failed to decrypt connection token' };
+  }
   
   console.log('Detailed token info from DB:', {
     id: connection.id,

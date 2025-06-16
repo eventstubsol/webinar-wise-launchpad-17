@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,6 +60,17 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
     try {
       console.log('Invoking zoom-sync-webinars function...');
+      
+      // Get the current session to ensure we have a valid token
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session?.access_token) {
+        console.error('Failed to get current session:', sessionError);
+        throw new Error('Authentication session not available. Please refresh the page and try again.');
+      }
+      
+      console.log('Session retrieved, access token length:', session.access_token.length);
+      
       const { data, error } = await supabase.functions.invoke('zoom-sync-webinars', {
         body: {
           connectionId: connection.id,

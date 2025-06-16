@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { CORS_HEADERS, SYNC_PRIORITIES, SyncOperation } from './types.ts';
@@ -24,10 +25,11 @@ serve(async (req) => {
   const startTime = Date.now();
 
   try {
+    // Create Supabase client without passing the user's auth token in global config
+    // Instead, we'll validate the token manually in the validation step
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
     console.log('Supabase client created, validating request...');
@@ -84,7 +86,7 @@ serve(async (req) => {
       details: error.details || null
     };
     
-    if (error.isAuthError) {
+    if (error.isAuthError || status === 401) {
       responseBody.isAuthError = true;
     }
     
