@@ -4642,12 +4642,10 @@ export type Database = {
           device: string | null
           domain: string | null
           duration: number | null
-          failover: boolean | null
           harddisk_id: string | null
           id: string
-          internal_user: boolean | null
           ip_address: unknown | null
-          join_time: string | null
+          join_time: string
           leave_time: string | null
           location: string | null
           mac_addr: string | null
@@ -4663,7 +4661,6 @@ export type Database = {
           registrant_id: string | null
           share_application_duration: number | null
           share_desktop_duration: number | null
-          status: Database["public"]["Enums"]["participant_status"] | null
           updated_at: string | null
           version: string | null
           webinar_id: string
@@ -4680,12 +4677,10 @@ export type Database = {
           device?: string | null
           domain?: string | null
           duration?: number | null
-          failover?: boolean | null
           harddisk_id?: string | null
           id?: string
-          internal_user?: boolean | null
           ip_address?: unknown | null
-          join_time?: string | null
+          join_time: string
           leave_time?: string | null
           location?: string | null
           mac_addr?: string | null
@@ -4701,7 +4696,6 @@ export type Database = {
           registrant_id?: string | null
           share_application_duration?: number | null
           share_desktop_duration?: number | null
-          status?: Database["public"]["Enums"]["participant_status"] | null
           updated_at?: string | null
           version?: string | null
           webinar_id: string
@@ -4718,12 +4712,10 @@ export type Database = {
           device?: string | null
           domain?: string | null
           duration?: number | null
-          failover?: boolean | null
           harddisk_id?: string | null
           id?: string
-          internal_user?: boolean | null
           ip_address?: unknown | null
-          join_time?: string | null
+          join_time?: string
           leave_time?: string | null
           location?: string | null
           mac_addr?: string | null
@@ -4739,7 +4731,6 @@ export type Database = {
           registrant_id?: string | null
           share_application_duration?: number | null
           share_desktop_duration?: number | null
-          status?: Database["public"]["Enums"]["participant_status"] | null
           updated_at?: string | null
           version?: string | null
           webinar_id?: string
@@ -5631,7 +5622,6 @@ export type Database = {
         | "retrying"
       content_type: "transcript" | "slides" | "chat" | "audio" | "video"
       metric_data_type: "number" | "percentage" | "duration" | "count" | "ratio"
-      participant_status: "in_meeting" | "in_waiting_room"
       prediction_type:
         | "dropout_risk"
         | "engagement_score"
@@ -5821,7 +5811,6 @@ export const Constants = {
       ],
       content_type: ["transcript", "slides", "chat", "audio", "video"],
       metric_data_type: ["number", "percentage", "duration", "count", "ratio"],
-      participant_status: ["in_meeting", "in_waiting_room"],
       prediction_type: [
         "dropout_risk",
         "engagement_score",
