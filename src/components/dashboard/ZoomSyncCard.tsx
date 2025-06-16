@@ -1,15 +1,19 @@
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Database, Calendar, Users, Clock, AlertTriangle, Settings } from 'lucide-react';
+import { Database, Calendar, Users, Clock, AlertTriangle, Settings, Wrench } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { ZoomDiagnostic } from '@/components/zoom/ZoomDiagnostic';
+import { useState } from 'react';
 
 export function ZoomSyncCard() {
   const { connection, isConnected, isExpired } = useZoomConnection();
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
 
   // Get sync statistics
   const { data: syncStats } = useQuery({
@@ -116,6 +120,10 @@ export function ZoomSyncCard() {
     );
   }
 
+  if (showDiagnostic) {
+    return <ZoomDiagnostic />;
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -180,11 +188,21 @@ export function ZoomSyncCard() {
           </div>
         )}
 
-        <div className="pt-2 border-t">
-          <Button asChild variant="outline" size="sm">
+        <div className="pt-2 border-t space-y-2">
+          <Button asChild variant="outline" size="sm" className="w-full">
             <Link to="/sync-center">
               Go to Sync Center
             </Link>
+          </Button>
+          
+          <Button 
+            onClick={() => setShowDiagnostic(true)} 
+            variant="outline" 
+            size="sm" 
+            className="w-full"
+          >
+            <Wrench className="w-4 h-4 mr-2" />
+            Run Diagnostic
           </Button>
         </div>
 
