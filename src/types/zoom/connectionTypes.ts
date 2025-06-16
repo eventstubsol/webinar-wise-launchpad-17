@@ -26,6 +26,12 @@ export interface ZoomConnection {
   next_sync_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+  
+  // Server-to-Server OAuth fields
+  connection_type?: string | null;
+  client_id?: string | null;
+  client_secret?: string | null;
+  account_id?: string | null;
 }
 
 /** Token refresh audit log */

@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection, ConnectionStatus } from '@/types/zoom';
 import { toast } from '@/hooks/use-toast';
@@ -34,16 +33,22 @@ export class ConnectionStatusOperations {
         return null;
       }
 
+      // Cast the connection_status to the proper enum type
+      const connection = {
+        ...data,
+        connection_status: data.connection_status as ConnectionStatus,
+      } as ZoomConnection;
+
       // Validate connection based on type
-      if (TokenUtils.isServerToServerConnection(data)) {
+      if (TokenUtils.isServerToServerConnection(connection)) {
         // For Server-to-Server, validate credentials
-        if (!data.client_id || !data.client_secret || !data.account_id) {
-          console.warn('Invalid Server-to-Server credentials, cleaning up connection:', data.id);
+        if (!connection.client_id || !connection.client_secret || !connection.account_id) {
+          console.warn('Invalid Server-to-Server credentials, cleaning up connection:', connection.id);
           
           await supabase
             .from('zoom_connections')
             .delete()
-            .eq('id', data.id);
+            .eq('id', connection.id);
           
           toast({
             title: "Connection Reset",
@@ -55,13 +60,13 @@ export class ConnectionStatusOperations {
         }
       } else {
         // For OAuth, validate tokens
-        if (!TokenUtils.isValidToken(data.access_token) || !TokenUtils.isValidToken(data.refresh_token)) {
-          console.warn('Invalid OAuth tokens detected, cleaning up connection:', data.id);
+        if (!TokenUtils.isValidToken(connection.access_token) || !TokenUtils.isValidToken(connection.refresh_token)) {
+          console.warn('Invalid OAuth tokens detected, cleaning up connection:', connection.id);
           
           await supabase
             .from('zoom_connections')
             .delete()
-            .eq('id', data.id);
+            .eq('id', connection.id);
           
           toast({
             title: "Connection Reset",
@@ -73,10 +78,7 @@ export class ConnectionStatusOperations {
         }
       }
 
-      return {
-        ...data,
-        connection_status: data.connection_status as ConnectionStatus,
-      } as ZoomConnection;
+      return connection;
     } catch (error) {
       console.error('Unexpected error getting primary connection:', error);
       return null;
@@ -194,7 +196,7 @@ export class ConnectionStatusOperations {
       // For Server-to-Server connections, use the validation function which handles S2S properly
       if (TokenUtils.isServerToServerConnection(connection)) {
         functionName = 'validate-zoom-credentials';
-        body = {}; // The function will use the user's stored credentials
+        body = { connectionId: connection.id }; // Include connectionId for Server-to-Server validation
       }
 
       const { data, error } = await supabase.functions.invoke(functionName, { body });
