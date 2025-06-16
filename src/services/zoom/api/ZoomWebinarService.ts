@@ -18,7 +18,23 @@ export class ZoomWebinarService {
     options: any = {},
     onProgress?: (progress: any) => void
   ) {
+    // For initial sync, use the extended range method by default
+    if (!options.from && !options.to) {
+      return ZoomWebinarDataService.listWebinarsWithExtendedRange(userId, options, onProgress);
+    }
+    
     return ZoomWebinarDataService.listWebinars(userId, options, onProgress);
+  }
+
+  /**
+   * List webinars with extended 90-day range (past + upcoming)
+   */
+  static async listWebinarsWithExtendedRange(
+    userId: string,
+    options: { dayRange?: number; pageSize?: number } = {},
+    onProgress?: (progress: any) => void
+  ) {
+    return ZoomWebinarDataService.listWebinarsWithExtendedRange(userId, options, onProgress);
   }
 
   /**
@@ -57,7 +73,7 @@ export class ZoomWebinarService {
   }
 
   /**
-   * Batch operation: Sync all webinars for a user
+   * Batch operation: Sync all webinars for a user with extended range
    */
   static async syncAllWebinars(
     userId: string,

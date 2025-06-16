@@ -52,6 +52,7 @@ interface ListWebinarsOptions {
   to?: Date;
   type?: 'past' | 'upcoming' | 'live';
   pageSize?: number;
+  dayRange?: number; // New option for configurable range
 }
 
 /**
@@ -68,6 +69,89 @@ interface SyncProgress {
  * Service for fetching webinar data from Zoom API
  */
 export class ZoomWebinarDataService {
+  /**
+   * List webinars with extended range support (past + upcoming)
+   */
+  static async listWebinarsWithExtendedRange(
+    userId: string,
+    options: { dayRange?: number; pageSize?: number } = {},
+    onProgress?: (progress: SyncProgress) => void
+  ): Promise<ZoomWebinarApiResponse[]> {
+    const { dayRange = 90, pageSize = 100 } = options;
+    
+    const now = new Date();
+    const pastDate = new Date(now.getTime() - (dayRange * 24 * 60 * 60 * 1000));
+    const futureDate = new Date(now.getTime() + (dayRange * 24 * 60 * 60 * 1000));
+
+    try {
+      // Fetch past webinars
+      if (onProgress) {
+        onProgress({
+          total: 2,
+          processed: 0,
+          failed: 0,
+          current: 'Fetching past webinars...'
+        });
+      }
+
+      const pastWebinars = await this.listWebinars(userId, {
+        from: pastDate,
+        to: now,
+        type: 'past',
+        pageSize
+      });
+
+      // Fetch upcoming webinars
+      if (onProgress) {
+        onProgress({
+          total: 2,
+          processed: 1,
+          failed: 0,
+          current: 'Fetching upcoming webinars...'
+        });
+      }
+
+      const upcomingWebinars = await this.listWebinars(userId, {
+        from: now,
+        to: futureDate,
+        type: 'upcoming',
+        pageSize
+      });
+
+      // Merge and deduplicate webinars
+      const allWebinars = [...pastWebinars, ...upcomingWebinars];
+      const uniqueWebinars = this.deduplicateWebinars(allWebinars);
+
+      if (onProgress) {
+        onProgress({
+          total: 2,
+          processed: 2,
+          failed: 0,
+          current: `Found ${uniqueWebinars.length} total webinars`
+        });
+      }
+
+      return uniqueWebinars;
+    } catch (error) {
+      console.error('Error fetching extended range webinars:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Deduplicate webinars by ID
+   */
+  private static deduplicateWebinars(webinars: ZoomWebinarApiResponse[]): ZoomWebinarApiResponse[] {
+    const seen = new Set<string>();
+    return webinars.filter(webinar => {
+      if (seen.has(webinar.id)) {
+        return false;
+      }
+      seen.add(webinar.id);
+      return true;
+    });
+  }
+
   /**
    * List webinars with automatic pagination and date filtering
    */
@@ -119,7 +203,7 @@ export class ZoomWebinarDataService {
             total: response.data.total_records,
             processed: allWebinars.length,
             failed: 0,
-            current: `Page ${currentPage} of ${page_count}`
+            current: `Page ${currentPage} of ${page_count} (${type})`
           });
         }
 
@@ -149,9 +233,6 @@ export class ZoomWebinarDataService {
     return null;
   }
 
-  /**
-   * Get webinar registrants with pagination support
-   */
   static async getWebinarRegistrants(
     webinarId: string,
     options: { pageSize?: number; status?: 'pending' | 'approved' | 'denied' } = {}
@@ -187,9 +268,6 @@ export class ZoomWebinarDataService {
     return allRegistrants;
   }
 
-  /**
-   * Get webinar participants with engagement metrics
-   */
   static async getWebinarParticipants(
     webinarId: string,
     options: { pageSize?: number } = {}
@@ -236,9 +314,6 @@ export class ZoomWebinarDataService {
     return allParticipants;
   }
 
-  /**
-   * Get webinar polls
-   */
   static async getWebinarPolls(webinarId: string) {
     const response = await zoomApiClient.get(
       `/webinars/${webinarId}/polls`
@@ -252,9 +327,6 @@ export class ZoomWebinarDataService {
     return null;
   }
 
-  /**
-   * Get webinar Q&A
-   */
   static async getWebinarQA(webinarId: string) {
     const response = await zoomApiClient.get(
       `/report/webinars/${webinarId}/qa`
@@ -268,9 +340,6 @@ export class ZoomWebinarDataService {
     return null;
   }
 
-  /**
-   * Calculate engagement score for a participant
-   */
   private static calculateEngagementScore(participant: any): number {
     let score = 0;
     

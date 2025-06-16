@@ -1,12 +1,12 @@
 
-import { ZoomWebinarService } from '../../api/ZoomWebinarService';
+import { ZoomWebinarDataService } from '../../api/ZoomWebinarDataService';
 import { ZoomConnectionService } from '../../ZoomConnectionService';
 import { SyncOperation } from '../types';
 import { EnhancedSyncProgressTracker } from '../EnhancedSyncProgressTracker';
 import { processWebinarSequentially } from './WebinarSyncProcessor';
 
 /**
- * Execute initial sync with sequential processing
+ * Execute initial sync with sequential processing and extended 90-day range
  */
 export async function executeInitialSync(
   operation: SyncOperation,
@@ -16,9 +16,22 @@ export async function executeInitialSync(
 ): Promise<void> {
   await progressTracker.updateSyncStage(syncLogId, null, 'fetching_webinar_list', 5);
     
-  const webinars = await ZoomWebinarService.listWebinars(
+  // Use extended range method for comprehensive sync (90 days past + 90 days future)
+  const webinars = await ZoomWebinarDataService.listWebinarsWithExtendedRange(
     operation.connectionId,
-    { pageSize: 100 }
+    { 
+      dayRange: 90,
+      pageSize: 100 
+    },
+    (progress) => {
+      // Update progress for webinar fetching phase
+      progressTracker.updateProgress(syncLogId, {
+        total: progress.total,
+        processed: progress.processed,
+        failed: progress.failed,
+        current: progress.current
+      });
+    }
   );
 
   if (signal.aborted) throw new Error('Sync cancelled');
@@ -80,7 +93,7 @@ export async function executeInitialSync(
 }
 
 /**
- * Execute incremental sync with sequential processing
+ * Execute incremental sync with extended range for recent changes
  */
 export async function executeIncrementalSync(
   operation: SyncOperation,
@@ -95,11 +108,17 @@ export async function executeIncrementalSync(
 
   await progressTracker.updateSyncStage(syncLogId, null, 'fetching_recent_webinars', 5);
   
-  const webinars = await ZoomWebinarService.listWebinars(
+  // For incremental sync, use extended range to catch any changes in the past 30 days
+  // and upcoming 30 days from last sync
+  const dayRange = 30;
+  const fromDate = new Date(Math.min(lastSyncDate.getTime(), Date.now() - (dayRange * 24 * 60 * 60 * 1000)));
+  const toDate = new Date(Date.now() + (dayRange * 24 * 60 * 60 * 1000));
+
+  const webinars = await ZoomWebinarDataService.listWebinarsWithExtendedRange(
     operation.connectionId,
     { 
-      from: lastSyncDate,
-      pageSize: 50
+      dayRange: dayRange,
+      pageSize: 50 
     }
   );
 

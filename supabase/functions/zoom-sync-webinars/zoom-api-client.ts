@@ -1,4 +1,3 @@
-
 export async function validateZoomConnection(connection: any): Promise<boolean> {
   console.log(`Validating Zoom connection: ${connection.id}`);
   
@@ -286,6 +285,23 @@ class ZoomAPIClient {
       }
       throw error;
     }
+  }
+
+  async listWebinarsWithRange(options: { from?: Date; to?: Date; type?: string } = {}): Promise<any[]> {
+    const { from, to, type = 'past' } = options;
+    let endpoint = `/users/me/webinars?page_size=300&type=${type}`;
+    
+    if (from) {
+      endpoint += `&from=${from.toISOString().split('T')[0]}`;
+    }
+    if (to) {
+      endpoint += `&to=${to.toISOString().split('T')[0]}`;
+    }
+
+    console.log(`Fetching ${type} webinars with endpoint: ${endpoint}`);
+
+    const response = await this.makeRequest(endpoint);
+    return response.webinars || [];
   }
 
   async getWebinar(webinarId: string): Promise<any> {

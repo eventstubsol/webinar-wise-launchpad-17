@@ -35,13 +35,43 @@ export async function processSequentialSync(
         throw new Error(`Webinar ${syncOperation.webinarId} not found or inaccessible`);
       }
     } else {
-      // Fetch webinars based on sync type
-      const listOptions = syncOperation.syncType === 'incremental' ? {
-        from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days for incremental
-      } : {};
+      // Fetch webinars with extended 90-day range for both past and upcoming
+      const now = new Date();
+      const past90Days = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+      const future90Days = new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000));
 
-      webinars = await zoomClient.listWebinars(listOptions);
-      console.log(`Found ${webinars.length} webinars to sync`);
+      console.log(`Fetching webinars from ${past90Days.toISOString()} to ${future90Days.toISOString()}`);
+
+      // Fetch past webinars (90 days)
+      await updateSyncStage(supabase, syncLogId, null, 'fetching_past_webinars', 15);
+      const pastWebinars = await zoomClient.listWebinarsWithRange({
+        from: past90Days,
+        to: now,
+        type: 'past'
+      });
+      console.log(`Found ${pastWebinars.length} past webinars`);
+
+      // Fetch upcoming webinars (90 days)
+      await updateSyncStage(supabase, syncLogId, null, 'fetching_upcoming_webinars', 20);
+      const upcomingWebinars = await zoomClient.listWebinarsWithRange({
+        from: now,
+        to: future90Days,
+        type: 'upcoming'
+      });
+      console.log(`Found ${upcomingWebinars.length} upcoming webinars`);
+
+      // Merge and deduplicate
+      const allWebinars = [...pastWebinars, ...upcomingWebinars];
+      const uniqueWebinars = new Map();
+      
+      allWebinars.forEach(webinar => {
+        if (!uniqueWebinars.has(webinar.id)) {
+          uniqueWebinars.set(webinar.id, webinar);
+        }
+      });
+      
+      webinars = Array.from(uniqueWebinars.values());
+      console.log(`Total unique webinars after deduplication: ${webinars.length}`);
     }
 
     if (webinars.length === 0) {
