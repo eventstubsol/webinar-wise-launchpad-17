@@ -27,14 +27,13 @@ export const ZoomConnectionManager: React.FC<ZoomConnectionManagerProps> = ({
       return { status: 'none', label: 'Not Connected', color: 'bg-gray-500' };
     }
 
-    const isServerToServer = connection.connection_type === 'server_to_server';
     const hasCredentials = credentials?.client_id && credentials?.client_secret && credentials?.account_id;
     
-    if (isServerToServer && hasCredentials) {
+    if (hasCredentials) {
       return { status: 'valid', label: 'Server-to-Server Connected', color: 'bg-green-500' };
     }
     
-    if (connection.connection_type === 'oauth' && connection.access_token?.length < 50) {
+    if (connection.access_token?.length < 50) {
       return { status: 'invalid', label: 'Invalid OAuth Token', color: 'bg-red-500' };
     }
     
@@ -95,12 +94,12 @@ export const ZoomConnectionManager: React.FC<ZoomConnectionManagerProps> = ({
         {connection && (
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-gray-600">Connection Type</p>
-              <p className="font-medium capitalize">{connection.connection_type || 'Unknown'}</p>
+              <p className="text-gray-600">Connection Status</p>
+              <p className="font-medium">{connection.connection_status}</p>
             </div>
             <div>
-              <p className="text-gray-600">Status</p>
-              <p className="font-medium">{connection.connection_status}</p>
+              <p className="text-gray-600">Token Length</p>
+              <p className="font-medium">{connection.access_token?.length || 0} chars</p>
             </div>
             {connection.zoom_email && (
               <div className="col-span-2">

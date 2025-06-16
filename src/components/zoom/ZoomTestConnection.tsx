@@ -148,16 +148,16 @@ export const ZoomTestConnection: React.FC = () => {
         {/* Connection Info */}
         <div className="grid grid-cols-2 gap-4 text-sm p-3 bg-gray-50 rounded">
           <div>
-            <p className="text-gray-600">Connection Type</p>
-            <p className="font-medium">{connection?.connection_type || 'None'}</p>
+            <p className="text-gray-600">Connection Status</p>
+            <p className="font-medium">{connection?.connection_status || 'Not Connected'}</p>
           </div>
           <div>
             <p className="text-gray-600">Has Credentials</p>
             <p className="font-medium">{credentials ? 'Yes' : 'No'}</p>
           </div>
           <div>
-            <p className="text-gray-600">Connection Status</p>
-            <p className="font-medium">{connection?.connection_status || 'Not Connected'}</p>
+            <p className="text-gray-600">Zoom Account</p>
+            <p className="font-medium">{connection?.zoom_email || 'None'}</p>
           </div>
           <div>
             <p className="text-gray-600">Token Length</p>

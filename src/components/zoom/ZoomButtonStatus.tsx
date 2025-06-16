@@ -49,7 +49,7 @@ export const ZoomButtonStatus: React.FC<ZoomButtonStatusProps> = ({
     );
   }
 
-  if (connection?.connection_type === 'oauth' && connection.access_token?.length < 50) {
+  if (connection && connection.access_token?.length < 50) {
     return (
       <Alert variant="destructive">
         <AlertTriangle className="h-4 w-4" />
