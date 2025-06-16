@@ -4,6 +4,7 @@ import { ConnectionStatusOperations } from './operations/connectionStatus';
 import { TokenUtils } from './utils/tokenUtils';
 import { zoomSyncOrchestrator } from './sync/ZoomSyncOrchestrator';
 import { ZoomConnection, ZoomConnectionInsert, ZoomConnectionUpdate, ConnectionStatus } from '@/types/zoom';
+import { supabase } from '@/integrations/supabase/client';
 
 /**
  * Main service for managing Zoom connections - simplified for plain text tokens
@@ -56,8 +57,7 @@ export class ZoomConnectionService {
   // Clear all connections (for migration)
   static async clearAllConnections(userId: string): Promise<boolean> {
     try {
-      const { data, error } = await import('@/integrations/supabase/client').then(m => m.supabase)
-        .functions.invoke('clear-zoom-connections');
+      const { data, error } = await supabase.functions.invoke('clear-zoom-connections');
 
       if (error) {
         console.error('Failed to clear connections:', error);

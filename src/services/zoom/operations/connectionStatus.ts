@@ -30,7 +30,7 @@ export class ConnectionStatusOperations {
         return null;
       }
 
-      // Validate tokens are not corrupted
+      // Validate tokens are not corrupted - simple check for plain text tokens
       if (!TokenUtils.isValidToken(data.access_token) || !TokenUtils.isValidToken(data.refresh_token)) {
         console.warn('Invalid tokens detected, cleaning up connection:', data.id);
         
