@@ -1,5 +1,5 @@
 
-import { saveWebinarToDatabase } from './database-operations.ts';
+import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 
 export async function processComprehensiveSync(
@@ -17,7 +17,7 @@ export async function processComprehensiveSync(
     
     // Fetch webinars list with comprehensive data
     console.log('Fetching webinars list...');
-    await zoomApi.updateSyncStage(supabase, syncLogId, null, 'fetching_webinar_list', 10);
+    await updateSyncStage(supabase, syncLogId, null, 'fetching_webinar_list', 10);
     
     const webinarsResponse = await client.get('/users/me/webinars', {
       page_size: 300,
@@ -28,7 +28,7 @@ export async function processComprehensiveSync(
     console.log(`Found ${webinars.length} webinars to sync`);
     
     if (webinars.length === 0) {
-      await zoomApi.updateSyncLog(supabase, syncLogId, {
+      await updateSyncLog(supabase, syncLogId, {
         sync_status: 'completed',
         processed_items: 0,
         completed_at: new Date().toISOString(),
@@ -44,7 +44,7 @@ export async function processComprehensiveSync(
     // Process each webinar with comprehensive data extraction
     for (const webinar of webinars) {
       try {
-        await zoomApi.updateSyncStage(
+        await updateSyncStage(
           supabase, 
           syncLogId, 
           webinar.id?.toString(), 
@@ -55,7 +55,7 @@ export async function processComprehensiveSync(
         console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars})`);
         
         // Fetch detailed webinar information with all fields
-        await zoomApi.updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_details', null);
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_details', null);
         const webinarDetails = await client.get(`/webinars/${webinar.id}`);
         console.log(`Fetched webinar details for ${webinar.id}:`, {
           hasSettings: !!webinarDetails.settings,
@@ -66,7 +66,7 @@ export async function processComprehensiveSync(
         });
         
         // Fetch registrants
-        await zoomApi.updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'registrants', null);
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'registrants', null);
         const registrantsResponse = await client.get(`/webinars/${webinar.id}/registrants`, {
           page_size: 300
         });
@@ -74,7 +74,7 @@ export async function processComprehensiveSync(
         console.log(`Fetched ${registrants.length} registrants for webinar ${webinar.id}`);
         
         // Fetch participants/attendees
-        await zoomApi.updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'participants', null);
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'participants', null);
         let participants = [];
         try {
           const participantsResponse = await client.get(`/report/webinars/${webinar.id}/participants`, {
@@ -87,7 +87,7 @@ export async function processComprehensiveSync(
         }
         
         // Fetch polls
-        await zoomApi.updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'polls', null);
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'polls', null);
         let polls = [];
         try {
           const pollsResponse = await client.get(`/webinars/${webinar.id}/polls`);
@@ -98,7 +98,7 @@ export async function processComprehensiveSync(
         }
         
         // Fetch Q&A
-        await zoomApi.updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'qa', null);
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'qa', null);
         let qnaData = [];
         try {
           const qnaResponse = await client.get(`/report/webinars/${webinar.id}/qa`);
@@ -110,7 +110,7 @@ export async function processComprehensiveSync(
         
         // Process all data using embedded comprehensive operations
         console.log(`Syncing comprehensive data for webinar ${webinar.id}...`);
-        await zoomApi.updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'saving_comprehensive_data', null);
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'saving_comprehensive_data', null);
         
         const webinarDbId = await syncCompleteWebinarData(
           supabase,
@@ -130,7 +130,7 @@ export async function processComprehensiveSync(
         });
         
         processedCount++;
-        await zoomApi.updateSyncStage(
+        await updateSyncStage(
           supabase, 
           syncLogId, 
           webinar.id?.toString(), 
@@ -142,13 +142,13 @@ export async function processComprehensiveSync(
         
       } catch (webinarError) {
         console.error(`Error processing webinar ${webinar.id}:`, webinarError);
-        await zoomApi.updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_failed', null);
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_failed', null);
         // Continue with next webinar
       }
     }
     
     // Complete the sync
-    await zoomApi.updateSyncLog(supabase, syncLogId, {
+    await updateSyncLog(supabase, syncLogId, {
       sync_status: 'completed',
       processed_items: processedCount,
       completed_at: new Date().toISOString(),
