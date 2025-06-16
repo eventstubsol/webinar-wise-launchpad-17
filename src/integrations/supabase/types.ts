@@ -4473,8 +4473,12 @@ export type Database = {
       zoom_connections: {
         Row: {
           access_token: string
+          account_id: string | null
           auto_sync_enabled: boolean | null
+          client_id: string | null
+          client_secret: string | null
           connection_status: string
+          connection_type: string | null
           created_at: string | null
           id: string
           is_primary: boolean | null
@@ -4493,8 +4497,12 @@ export type Database = {
         }
         Insert: {
           access_token: string
+          account_id?: string | null
           auto_sync_enabled?: boolean | null
+          client_id?: string | null
+          client_secret?: string | null
           connection_status?: string
+          connection_type?: string | null
           created_at?: string | null
           id?: string
           is_primary?: boolean | null
@@ -4513,8 +4521,12 @@ export type Database = {
         }
         Update: {
           access_token?: string
+          account_id?: string | null
           auto_sync_enabled?: boolean | null
+          client_id?: string | null
+          client_secret?: string | null
           connection_status?: string
+          connection_type?: string | null
           created_at?: string | null
           id?: string
           is_primary?: boolean | null
@@ -5153,6 +5165,41 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zoom_server_tokens: {
+        Row: {
+          access_token: string
+          connection_id: string
+          created_at: string | null
+          expires_at: string
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          access_token: string
+          connection_id: string
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          access_token?: string
+          connection_id?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_server_tokens_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
             referencedColumns: ["id"]
           },
         ]

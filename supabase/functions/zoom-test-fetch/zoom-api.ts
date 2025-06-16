@@ -1,64 +1,86 @@
 
 import { SimpleTokenEncryption } from './encryption.ts';
 import { ZoomUserData, ApiTestResult } from './types.ts';
+import { ZoomServerToServerService } from './server-to-server-service.ts';
 
-export async function testZoomAPIConnection(connection: any): Promise<{
+export async function testZoomAPIConnection(connection: any, supabaseClient: any): Promise<{
   success: boolean;
   userData?: ZoomUserData;
   apiTest: ApiTestResult;
   tokenInfo?: any;
 }> {
-  console.log('=== Starting Token Decryption Process ===');
+  console.log('=== Starting Zoom API Connection Test ===');
   console.log('Connection info:', {
     id: connection.id,
+    connectionType: connection.connection_type,
     hasAccessToken: !!connection.access_token,
     tokenLength: connection.access_token?.length,
     connectionStatus: connection.connection_status
   });
   
-  let decryptedToken;
+  let accessToken: string;
   let tokenInfo = {
+    connectionType: connection.connection_type || 'oauth',
     wasDecrypted: false,
-    originalLength: connection.access_token?.length,
-    decryptedLength: 0,
+    wasGenerated: false,
+    originalLength: connection.access_token?.length || 0,
+    tokenLength: 0,
     tokenType: 'unknown',
     validationPassed: false
   };
-  
+
   try {
-    console.log('Attempting to decrypt access token...');
-    decryptedToken = await SimpleTokenEncryption.decryptToken(
-      connection.access_token, 
-      connection.user_id
-    );
-    
-    tokenInfo.wasDecrypted = true;
-    tokenInfo.decryptedLength = decryptedToken?.length || 0;
-    tokenInfo.validationPassed = true;
-    
-    // Determine token type
-    if (decryptedToken.includes('.')) {
-      tokenInfo.tokenType = 'JWT';
-    } else if (decryptedToken.startsWith('SERVER_TO_SERVER_')) {
+    // Check if this is a Server-to-Server connection
+    if (ZoomServerToServerService.isServerToServerConnection(connection)) {
+      console.log('Detected Server-to-Server connection');
       tokenInfo.tokenType = 'Server-to-Server';
+      
+      // Validate that we have the required credentials
+      const validation = ZoomServerToServerService.validateServerToServerConnection(connection);
+      if (!validation.valid) {
+        throw new Error(`Missing Server-to-Server credentials: ${validation.missing.join(', ')}`);
+      }
+
+      // Generate a fresh access token
+      accessToken = await ZoomServerToServerService.getValidAccessToken(supabaseClient, connection);
+      tokenInfo.wasGenerated = true;
+      tokenInfo.tokenLength = accessToken.length;
+      tokenInfo.validationPassed = true;
+      
+      console.log('Generated Server-to-Server access token successfully');
     } else {
-      tokenInfo.tokenType = 'Other';
+      console.log('Processing OAuth connection - attempting token decryption');
+      
+      // For OAuth connections, decrypt the stored token
+      try {
+        accessToken = await SimpleTokenEncryption.decryptToken(
+          connection.access_token, 
+          connection.user_id
+        );
+        
+        tokenInfo.wasDecrypted = true;
+        tokenInfo.tokenLength = accessToken?.length || 0;
+        tokenInfo.validationPassed = true;
+        
+        // Determine token type
+        if (accessToken.includes('.')) {
+          tokenInfo.tokenType = 'JWT';
+        } else {
+          tokenInfo.tokenType = 'OAuth';
+        }
+        
+        console.log('OAuth token decryption successful');
+      } catch (decryptError) {
+        console.error('OAuth token decryption failed:', decryptError);
+        throw new Error(`Failed to decrypt OAuth access token: ${decryptError.message}`);
+      }
     }
-    
-    console.log('Token decryption successful:', {
-      originalLength: tokenInfo.originalLength,
-      decryptedLength: tokenInfo.decryptedLength,
-      tokenType: tokenInfo.tokenType,
-      decryptedPrefix: decryptedToken?.substring(0, 20) + '...'
-    });
-    
-  } catch (decryptError) {
-    console.error('Token decryption failed:', decryptError);
-    tokenInfo.wasDecrypted = false;
+
+  } catch (tokenError) {
+    console.error('Token processing failed:', tokenError);
     throw {
       status: 'token_error',
-      message: 'Failed to decrypt Zoom access token',
-      decryptionError: decryptError.message,
+      message: tokenError.message,
       tokenInfo
     };
   }
@@ -77,7 +99,7 @@ export async function testZoomAPIConnection(connection: any): Promise<{
     try {
       const zoomResponse = await fetch(`https://api.zoom.us/v2${endpoint.path}`, {
         headers: {
-          'Authorization': `Bearer ${decryptedToken}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         }
       });

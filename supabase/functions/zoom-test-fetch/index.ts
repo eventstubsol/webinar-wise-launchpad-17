@@ -10,7 +10,8 @@ import {
   createTokenExpiredResponse,
   createConnectedResponse,
   createApiErrorResponse,
-  createNetworkErrorResponse
+  createNetworkErrorResponse,
+  createServerToServerErrorResponse
 } from './response-utils.ts';
 
 serve(async (req) => {
@@ -40,25 +41,31 @@ serve(async (req) => {
     const primaryConnection = getPrimaryConnection(connections);
     console.log('Using connection:', {
       id: primaryConnection.id,
+      connectionType: primaryConnection.connection_type,
       status: primaryConnection.connection_status,
       hasAccessToken: !!primaryConnection.access_token,
+      hasClientId: !!primaryConnection.client_id,
+      hasClientSecret: !!primaryConnection.client_secret,
+      hasAccountId: !!primaryConnection.account_id,
       tokenExpiresAt: primaryConnection.token_expires_at,
       accessTokenLength: primaryConnection.access_token?.length
     });
 
-    // Check token expiration
-    const now = new Date();
-    const expiresAt = new Date(primaryConnection.token_expires_at);
-    const isExpired = now >= expiresAt;
+    // For OAuth connections, check token expiration
+    if (primaryConnection.connection_type === 'oauth' && primaryConnection.token_expires_at) {
+      const now = new Date();
+      const expiresAt = new Date(primaryConnection.token_expires_at);
+      const isExpired = now >= expiresAt;
 
-    if (isExpired) {
-      console.log('Token is expired');
-      return createTokenExpiredResponse(primaryConnection);
+      if (isExpired) {
+        console.log('OAuth token is expired');
+        return createTokenExpiredResponse(primaryConnection);
+      }
     }
 
     // Test Zoom API connection with enhanced debugging
     try {
-      const apiResult = await testZoomAPIConnection(primaryConnection);
+      const apiResult = await testZoomAPIConnection(primaryConnection, supabaseClient);
       
       if (apiResult.success) {
         return createConnectedResponse(
@@ -71,16 +78,16 @@ serve(async (req) => {
         return createApiErrorResponse(
           primaryConnection,
           apiResult.apiTest,
-          apiResult.tokenInfo || { wasDecrypted: false }
+          apiResult.tokenInfo || { connectionType: 'unknown' }
         );
       }
     } catch (testError: any) {
       if (testError.status === 'token_error') {
-        return createErrorResponse(200, testError.message, {
-          connection: { id: primaryConnection.id, status: primaryConnection.connection_status },
-          decryptionError: testError.decryptionError,
-          tokenInfo: testError.tokenInfo
-        });
+        return createServerToServerErrorResponse(
+          primaryConnection,
+          testError.message,
+          testError.tokenInfo
+        );
       }
       
       return createNetworkErrorResponse(primaryConnection, {
