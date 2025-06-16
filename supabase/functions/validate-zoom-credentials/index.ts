@@ -1,17 +1,12 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { SimpleTokenEncryption } from './encryption.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-// Simple encryption for Server-to-Server tokens
-function encryptPlaceholderToken(token: string, userId: string): string {
-  const combined = token + ':' + userId;
-  return btoa(combined); // Simple base64 encoding for placeholders
-}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -122,6 +117,10 @@ serve(async (req) => {
     }
     const accountData = await userTestResponse.json();
 
+    // Encrypt the actual Server-to-Server access token using proper encryption
+    const encryptedAccessToken = await SimpleTokenEncryption.encryptToken(tokenData.access_token, user.id);
+    const encryptedRefreshToken = await SimpleTokenEncryption.encryptToken('SERVER_TO_SERVER_NOT_APPLICABLE', user.id);
+
     // Prepare connection data for Server-to-Server
     const connectionData = {
       user_id: user.id,
@@ -129,9 +128,9 @@ serve(async (req) => {
       zoom_account_id: accountData.account_id || accountData.id,
       zoom_email: accountData.email,
       zoom_account_type: accountData.plan_type || (accountData.type === 1 ? 'Basic' : 'Licensed'),
-      access_token: encryptPlaceholderToken('SERVER_TO_SERVER_VALIDATED', user.id),
-      refresh_token: encryptPlaceholderToken('SERVER_TO_SERVER_NOT_APPLICABLE', user.id),
-      token_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year
+      access_token: encryptedAccessToken,
+      refresh_token: encryptedRefreshToken,
+      token_expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
       scopes: tokenData.scope?.split(' ') || ['webinar:read:admin', 'user:read:admin'],
       connection_status: 'active',
       is_primary: true,
