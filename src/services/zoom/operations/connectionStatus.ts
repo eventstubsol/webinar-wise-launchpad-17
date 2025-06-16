@@ -1,8 +1,8 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection, ConnectionStatus } from '@/types/zoom';
 import { toast } from '@/hooks/use-toast';
 import { TokenUtils } from '../utils/tokenUtils';
+import { ConnectionCleanup } from '../utils/connectionCleanup';
 
 /**
  * Connection status management operations - no encryption, plain text tokens
@@ -13,6 +13,9 @@ export class ConnectionStatusOperations {
    */
   static async getPrimaryConnection(userId: string): Promise<ZoomConnection | null> {
     try {
+      // First, auto-cleanup any corrupted connections
+      await ConnectionCleanup.autoCleanupCorruptedConnections(userId);
+
       const { data, error } = await supabase
         .from('zoom_connections')
         .select('*')
@@ -30,7 +33,7 @@ export class ConnectionStatusOperations {
         return null;
       }
 
-      // Validate tokens are not corrupted - simple check for plain text tokens
+      // Validate tokens are plain text and valid
       if (!TokenUtils.isValidToken(data.access_token) || !TokenUtils.isValidToken(data.refresh_token)) {
         console.warn('Invalid tokens detected, cleaning up connection:', data.id);
         

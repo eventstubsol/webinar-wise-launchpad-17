@@ -3,11 +3,11 @@ import { ZoomConnectionInsert, ZoomConnectionUpdate } from '@/types/zoom';
 import { toast } from '@/hooks/use-toast';
 
 /**
- * Validation utilities for connection operations
+ * Validation utilities for connection data
  */
 export class ConnectionValidation {
   /**
-   * Validate connection data for creation
+   * Validate connection insert data
    */
   static validateInsertData(data: ZoomConnectionInsert): string | null {
     if (!data.user_id) {
@@ -18,44 +18,43 @@ export class ConnectionValidation {
       return 'Zoom user ID is required';
     }
     
-    if (!data.access_token) {
-      return 'Access token is required';
+    if (!data.access_token || data.access_token.length < 10) {
+      return 'Valid access token is required';
     }
     
-    if (!data.refresh_token) {
-      return 'Refresh token is required';
+    if (!data.refresh_token || data.refresh_token.length < 10) {
+      return 'Valid refresh token is required';
     }
     
     if (!data.token_expires_at) {
       return 'Token expiration time is required';
     }
-
+    
     return null;
   }
 
   /**
-   * Validate connection data for updates
+   * Validate connection update data
    */
   static validateUpdateData(data: ZoomConnectionUpdate): string | null {
-    // For updates, only validate non-empty values
-    if (data.access_token === '') {
-      return 'Access token cannot be empty';
+    if (data.access_token && data.access_token.length < 10) {
+      return 'Valid access token is required';
     }
     
-    if (data.refresh_token === '') {
-      return 'Refresh token cannot be empty';
+    if (data.refresh_token && data.refresh_token.length < 10) {
+      return 'Valid refresh token is required';
     }
-
+    
     return null;
   }
 
   /**
-   * Show validation error toast
+   * Show validation error to user
    */
-  static showValidationError(message: string): void {
+  static showValidationError(error: string): void {
     toast({
       title: "Validation Error",
-      description: message,
+      description: error,
       variant: "destructive",
     });
   }

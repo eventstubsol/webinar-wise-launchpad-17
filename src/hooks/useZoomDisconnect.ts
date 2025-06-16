@@ -1,6 +1,5 @@
 
-import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
 import { ZoomConnection } from '@/types/zoom';
@@ -8,47 +7,40 @@ import { ZoomConnection } from '@/types/zoom';
 export const useZoomDisconnect = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [isDisconnecting, setIsDisconnecting] = useState(false);
 
-  const handleDisconnect = async (connection: ZoomConnection) => {
-    if (!window.confirm('Are you sure you want to disconnect your Zoom account? This will stop all data syncing.')) {
-      return false;
-    }
-
-    setIsDisconnecting(true);
-    
-    try {
+  const disconnectMutation = useMutation({
+    mutationFn: async (connection: ZoomConnection) => {
       const success = await ZoomConnectionService.deleteConnection(connection.id);
-      
-      if (success) {
-        // Invalidate all related queries
-        queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
-        queryClient.invalidateQueries({ queryKey: ['zoom-credentials'] });
-        
-        toast({
-          title: "Disconnected",
-          description: "Your Zoom account has been disconnected successfully.",
-        });
-        
-        return true;
+      if (!success) {
+        throw new Error('Failed to disconnect Zoom account');
       }
+      return true;
+    },
+    onSuccess: () => {
+      // Invalidate and refetch connection data
+      queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
+      queryClient.invalidateQueries({ queryKey: ['zoom-credentials'] });
       
-      return false;
-    } catch (error) {
-      console.error('Error disconnecting:', error);
       toast({
-        title: "Error",
-        description: "Failed to disconnect Zoom account. Please try again.",
+        title: "Disconnected",
+        description: "Your Zoom account has been disconnected successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Disconnect Failed",
+        description: error.message,
         variant: "destructive",
       });
-      return false;
-    } finally {
-      setIsDisconnecting(false);
-    }
+    },
+  });
+
+  const handleDisconnect = (connection: ZoomConnection) => {
+    disconnectMutation.mutate(connection);
   };
 
   return {
     handleDisconnect,
-    isDisconnecting,
+    isDisconnecting: disconnectMutation.isPending,
   };
 };

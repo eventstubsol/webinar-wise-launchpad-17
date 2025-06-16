@@ -1,31 +1,27 @@
 
-import { ZoomConnection, ConnectionStatus } from '@/types/zoom';
+import { ZoomConnection } from '@/types/zoom';
 
 /**
- * Data transformation utilities for connections
+ * Data transformation utilities for connections - simplified for plain text tokens
  */
 export class ConnectionTransforms {
   /**
-   * Transform raw database data to ZoomConnection type
+   * Transform database result to ZoomConnection - no decryption needed
    */
-  static transformToZoomConnection(data: any): ZoomConnection {
+  static prepareSuccessResponse(data: any): ZoomConnection {
     return {
       ...data,
-      connection_status: data.connection_status as ConnectionStatus,
+      // Ensure all required fields are present
+      scopes: data.scopes || [],
+      auto_sync_enabled: data.auto_sync_enabled ?? true,
+      sync_frequency_hours: data.sync_frequency_hours ?? 24,
     } as ZoomConnection;
   }
 
   /**
-   * Transform multiple database records to ZoomConnection array
+   * Transform multiple database results to ZoomConnections
    */
-  static transformMultipleToZoomConnections(dataArray: any[]): ZoomConnection[] {
-    return dataArray.map(data => this.transformToZoomConnection(data));
-  }
-
-  /**
-   * Prepare success response with proper typing
-   */
-  static prepareSuccessResponse(data: any): ZoomConnection {
-    return this.transformToZoomConnection(data);
+  static transformMultipleToZoomConnections(connections: any[]): ZoomConnection[] {
+    return connections.map(conn => this.prepareSuccessResponse(conn));
   }
 }
