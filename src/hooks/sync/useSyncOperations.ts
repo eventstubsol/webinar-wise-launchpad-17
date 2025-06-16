@@ -4,14 +4,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { SyncType, SyncStatus, ZoomSyncLog } from '@/types/zoom';
-import { SyncRecoveryService } from '@/services/zoom/sync/SyncRecoveryService';
 import { SyncError } from './types';
 
 export const useSyncOperations = (connectionId: string) => {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Start sync operation with improved error handling
+  // Start sync operation
   const startSync = useCallback(async (type: SyncType, options?: { webinarId?: string }) => {
     if (!user || !connectionId) {
       toast({
@@ -23,20 +22,6 @@ export const useSyncOperations = (connectionId: string) => {
     }
 
     try {
-      // First, cleanup any stuck syncs
-      await SyncRecoveryService.cleanupStuckSyncs(connectionId);
-
-      // Check for active syncs
-      const hasActive = await SyncRecoveryService.hasActiveSyncs(connectionId);
-      if (hasActive) {
-        toast({
-          title: "Sync Already Running",
-          description: "Please wait for the current sync to complete before starting a new one.",
-          variant: "destructive",
-        });
-        return;
-      }
-
       const response = await supabase.functions.invoke('zoom-sync-webinars', {
         body: {
           connectionId,
@@ -46,19 +31,6 @@ export const useSyncOperations = (connectionId: string) => {
       });
 
       if (response.error) {
-        // Handle specific error types
-        if (response.error.message?.includes('409') || response.error.message?.includes('already in progress')) {
-          // Try to cleanup and retry once
-          await SyncRecoveryService.cleanupStuckSyncs(connectionId);
-          
-          toast({
-            title: "Sync Conflict Resolved",
-            description: "Cleaned up stuck sync. Please try again.",
-            variant: "default",
-          });
-          return;
-        }
-        
         throw new Error(response.error.message || 'Failed to start sync');
       }
 
@@ -79,78 +51,35 @@ export const useSyncOperations = (connectionId: string) => {
     }
   }, [user, connectionId, toast]);
 
-  // Retry failed sync
-  const retryFailedSync = useCallback(async (syncType: SyncType = SyncType.INCREMENTAL) => {
-    if (!user || !connectionId) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to retry sync operations.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      // Convert SyncType enum to string literal type expected by SyncRecoveryService
-      const syncTypeString = syncType === SyncType.INITIAL ? 'initial' : 'incremental';
-      await SyncRecoveryService.retryFailedSync(connectionId, syncTypeString);
-      
-      toast({
-        title: "Sync Retry Started",
-        description: "The failed sync operation has been retried.",
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to retry sync';
-      
-      toast({
-        title: "Retry Failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      
-      throw new Error(errorMessage);
-    }
-  }, [user, connectionId, toast]);
-
-  // Cancel sync operation with improved handling
+  // Cancel sync operation
   const cancelSync = useCallback(async (currentSync: ZoomSyncLog | null) => {
     if (!currentSync) return;
 
     try {
-      // Try to cancel via the recovery service
-      await SyncRecoveryService.cancelActiveSync(connectionId);
+      // Update sync status to cancelled
+      const { error } = await supabase
+        .from('zoom_sync_logs')
+        .update({
+          sync_status: SyncStatus.CANCELLED,
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', currentSync.id);
+
+      if (error) throw error;
 
       toast({
         title: "Sync Cancelled",
         description: "The sync operation has been cancelled.",
       });
     } catch (error) {
-      // Fallback to direct database update
-      try {
-        const { error: dbError } = await supabase
-          .from('zoom_sync_logs')
-          .update({
-            sync_status: SyncStatus.CANCELLED,
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', currentSync.id);
-
-        if (dbError) throw dbError;
-
-        toast({
-          title: "Sync Cancelled",
-          description: "The sync operation has been cancelled.",
-        });
-      } catch (dbError) {
-        toast({
-          title: "Failed to Cancel",
-          description: dbError instanceof Error ? dbError.message : "Unknown error occurred",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Failed to Cancel",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive",
+      });
     }
-  }, [connectionId, toast]);
+  }, [toast]);
 
   // Transform sync log to history entry
   const transformToHistoryEntry = useCallback((syncLog: ZoomSyncLog) => {
@@ -172,7 +101,6 @@ export const useSyncOperations = (connectionId: string) => {
 
   return {
     startSync,
-    retryFailedSync,
     cancelSync,
     transformToHistoryEntry,
   };

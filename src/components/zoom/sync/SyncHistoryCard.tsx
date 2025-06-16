@@ -48,7 +48,7 @@ export const SyncHistoryCard: React.FC<SyncHistoryCardProps> = ({
                 <span className="capitalize">{entry.type}</span>
               </div>
               <div className="text-right text-muted-foreground">
-                <div>{entry.itemsProcessed} items</div>
+                <div>{entry.processedItems} items</div>
                 <div>{formatDistanceToNow(new Date(entry.startedAt), { addSuffix: true })}</div>
               </div>
             </div>

@@ -14,7 +14,7 @@ export interface SyncHistoryEntry {
   startedAt: string;
   completedAt?: string;
   totalItems: number;
-  itemsProcessed: number; // Changed from processedItems to itemsProcessed
+  processedItems: number;
   duration?: number;
 }
 

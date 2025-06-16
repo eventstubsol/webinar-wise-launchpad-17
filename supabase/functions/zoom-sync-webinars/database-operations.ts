@@ -38,9 +38,6 @@ export async function updateSyncStage(supabase: any, syncLogId: string, webinarI
 }
 
 export async function saveWebinarToDatabase(supabase: any, webinarData: any, connectionId: string): Promise<void> {
-  // Normalize the status using the same logic as the API client
-  const normalizedStatus = normalizeWebinarStatus(webinarData.status);
-  
   const webinarInsert = {
     connection_id: connectionId,
     webinar_id: webinarData.id.toString(),
@@ -51,7 +48,7 @@ export async function saveWebinarToDatabase(supabase: any, webinarData: any, con
     timezone: webinarData.timezone,
     host_id: webinarData.host_id,
     host_email: webinarData.host_email,
-    status: normalizedStatus, // Use normalized status
+    status: webinarData.status,
     agenda: webinarData.agenda,
     type: webinarData.type,
     settings: webinarData.settings,
@@ -65,32 +62,5 @@ export async function saveWebinarToDatabase(supabase: any, webinarData: any, con
   if (error) {
     console.error(`Error saving webinar ${webinarData.id}:`, error);
     throw error;
-  }
-  
-  console.log(`Saved webinar ${webinarData.id} with status: ${normalizedStatus}`);
-}
-
-function normalizeWebinarStatus(zoomStatus: string): string {
-  // Map Zoom API status values to our database enum values
-  switch (zoomStatus?.toLowerCase()) {
-    case 'available':
-    case 'waiting':
-      return 'available';
-    case 'started':
-    case 'live':
-      return 'started';
-    case 'ended':
-    case 'finished':
-      return 'ended';
-    case 'aborted':
-    case 'cancelled':
-      return 'aborted';
-    case 'deleted':
-      return 'deleted';
-    case 'unavailable':
-      return 'unavailable';
-    default:
-      console.log(`Unknown status '${zoomStatus}', defaulting to 'unavailable'`);
-      return 'unavailable';
   }
 }

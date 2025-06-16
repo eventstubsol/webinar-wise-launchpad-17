@@ -60,18 +60,6 @@ export const useSyncProgress = (connectionId: string): UseSyncProgressReturn => 
     setIsConnected(connected);
   }, []);
 
-  // Transform sync log to history entry with correct property names
-  const transformSyncLogToHistory = useCallback((syncLog: ZoomSyncLog): SyncHistoryEntry => ({
-    id: syncLog.id,
-    type: syncLog.sync_type,
-    status: syncLog.sync_status,
-    startedAt: syncLog.started_at || syncLog.created_at,
-    completedAt: syncLog.completed_at || undefined,
-    totalItems: syncLog.total_items || 0,
-    itemsProcessed: syncLog.processed_items || 0, // Use itemsProcessed to match interface
-    duration: syncLog.duration_seconds || undefined,
-  }), []);
-
   // Set up subscription
   const { loadSyncHistory } = useSyncSubscription({
     connectionId,
@@ -80,7 +68,7 @@ export const useSyncProgress = (connectionId: string): UseSyncProgressReturn => 
     onError: handleError,
     onConnectionChange: handleConnectionChange,
     updateProgressHistory,
-    transformToHistoryEntry: transformSyncLogToHistory,
+    transformToHistoryEntry,
   });
 
   // Wrapped start sync with loading state

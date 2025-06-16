@@ -1,165 +1,38 @@
 
-import { createZoomAPIClient } from './zoom-api-client.ts';
-import { updateSyncLog, updateSyncStage, saveWebinarToDatabase } from './database-operations.ts';
+import { createSyncLog, updateSyncLog, updateSyncStage } from './database-operations.ts';
+import { validateZoomConnection, createZoomAPIClient } from './zoom-api-client.ts';
+import { processComprehensiveSync } from './enhanced-sync-processor.ts';
+import { SyncOperation, SYNC_PRIORITIES } from './types.ts';
 
-export async function processSequentialSync(supabase: any, syncOperation: any, connection: any, syncLogId: string) {
-  console.log(`=== Starting Sequential Sync Process ===`);
-  console.log(`Sync ID: ${syncLogId}, Type: ${syncOperation.syncType}, Connection: ${connection.id}`);
+export async function processSequentialSync(
+  supabase: any,
+  syncOperation: SyncOperation,
+  connection: any,
+  syncLogId: string
+): Promise<void> {
+  console.log(`Starting comprehensive sequential sync operation: ${syncOperation.id}`);
   
   try {
-    const client = await createZoomAPIClient(connection, supabase);
-    
-    await updateSyncStage(supabase, syncLogId, null, 'fetching_webinars', 0);
-    
-    let webinars: any[] = [];
-    const now = new Date();
-    
-    if (syncOperation.syncType === 'initial') {
-      console.log('Performing initial sync - fetching both past and upcoming webinars');
-      
-      // For initial sync, get both past and upcoming webinars
-      const pastDate = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000)); // 90 days ago
-      const futureDate = new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000)); // 90 days future
-      
-      const [pastWebinars, upcomingWebinars] = await Promise.all([
-        client.listWebinarsWithRange({
-          from: pastDate,
-          to: now,
-          type: 'past'
-        }),
-        client.listWebinarsWithRange({
-          from: now,
-          to: futureDate,
-          type: 'upcoming'
-        })
-      ]);
-      
-      webinars = [...pastWebinars, ...upcomingWebinars];
-      console.log(`Initial sync found: ${pastWebinars.length} past + ${upcomingWebinars.length} upcoming = ${webinars.length} total webinars`);
-    } else {
-      console.log('Performing incremental sync - fetching recent webinars');
-      
-      // For incremental sync, get recent past and upcoming webinars
-      const recentDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000)); // 7 days ago
-      const futureDate = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000)); // 30 days future
-      
-      const [recentWebinars, upcomingWebinars] = await Promise.all([
-        client.listWebinarsWithRange({
-          from: recentDate,
-          to: now,
-          type: 'past'
-        }),
-        client.listWebinarsWithRange({
-          from: now,
-          to: futureDate,
-          type: 'upcoming'
-        })
-      ]);
-      
-      webinars = [...recentWebinars, ...upcomingWebinars];
-      console.log(`Incremental sync found: ${recentWebinars.length} recent + ${upcomingWebinars.length} upcoming = ${webinars.length} total webinars`);
-    }
-    
-    // Remove duplicates by webinar ID
-    const uniqueWebinars = webinars.reduce((acc, webinar) => {
-      if (!acc.find(w => w.id === webinar.id)) {
-        acc.push(webinar);
-      }
-      return acc;
-    }, []);
-    
-    console.log(`After deduplication: ${uniqueWebinars.length} unique webinars`);
-    
-    await updateSyncLog(supabase, syncLogId, {
-      total_items: uniqueWebinars.length,
-      sync_stage: 'processing_webinars'
-    });
-    
-    let processedCount = 0;
-    let errorCount = 0;
-    const errors: string[] = [];
-    
-    for (const webinarData of uniqueWebinars) {
-      try {
-        await updateSyncStage(supabase, syncLogId, webinarData.id, 'processing_webinar', 
-          Math.round((processedCount / uniqueWebinars.length) * 100));
-        
-        console.log(`Processing webinar ${processedCount + 1}/${uniqueWebinars.length}: ${webinarData.topic} (${webinarData.id})`);
-        
-        // Get current status for accurate mapping
-        let currentStatus = webinarData.status;
-        
-        // For past webinars that might not have accurate status in list response,
-        // fetch individual webinar details to get current status
-        const webinarStartTime = new Date(webinarData.start_time);
-        const webinarEndTime = new Date(webinarStartTime.getTime() + (webinarData.duration * 60 * 1000));
-        
-        if (webinarStartTime < now && webinarEndTime < now) {
-          // This is a past webinar - fetch current status
-          try {
-            console.log(`Fetching current status for past webinar: ${webinarData.id}`);
-            currentStatus = await client.getWebinarStatus(webinarData.id);
-            console.log(`Updated status for ${webinarData.id}: ${currentStatus}`);
-          } catch (statusError) {
-            console.log(`Could not fetch status for ${webinarData.id}, using list response status: ${webinarData.status}`);
-            currentStatus = webinarData.status;
-          }
-        }
-        
-        // Update webinar data with correct status
-        const webinarWithStatus = {
-          ...webinarData,
-          status: currentStatus
-        };
-        
-        await saveWebinarToDatabase(supabase, webinarWithStatus, connection.id);
-        processedCount++;
-        
-        console.log(`✓ Processed webinar: ${webinarData.topic} with status: ${currentStatus}`);
-        
-      } catch (error) {
-        console.error(`Error processing webinar ${webinarData.id}:`, error);
-        errorCount++;
-        errors.push(`Webinar ${webinarData.id}: ${error.message}`);
-      }
-    }
-    
-    await updateSyncStage(supabase, syncLogId, null, 'completed', 100);
-    
-    await updateSyncLog(supabase, syncLogId, {
-      sync_status: 'completed',
-      processed_items: processedCount,
-      error_count: errorCount,
-      error_details: errors.length > 0 ? { errors } : null,
-      completed_at: new Date().toISOString()
-    });
-    
-    console.log(`=== Sync Completed Successfully ===`);
-    console.log(`Processed: ${processedCount}, Errors: ${errorCount}, Total: ${uniqueWebinars.length}`);
-    
+    await updateSyncStage(supabase, syncLogId, null, 'initializing', 0);
+
+    // Use the new comprehensive sync processor
+    await processComprehensiveSync(supabase, syncOperation, connection, syncLogId);
+
+    console.log(`Comprehensive sync completed successfully: ${syncOperation.id}`);
+
   } catch (error) {
-    console.error(`=== Sync Failed ===`);
-    console.error('Sync error details:', error);
+    console.error('Comprehensive sync operation failed:', error);
     
-    const errorDetails = {
-      message: error.message,
-      status: error.status,
-      isAuthError: error.isAuthError || false,
-      stack: error.stack
-    };
-    
-    // Ensure sync status is properly updated on failure
-    try {
-      await updateSyncLog(supabase, syncLogId, {
-        sync_status: 'failed',
-        error_message: error.message,
-        error_details: errorDetails,
-        completed_at: new Date().toISOString()
-      });
-    } catch (updateError) {
-      console.error('Failed to update sync log on error:', updateError);
-    }
-    
-    throw error;
+    const isAuthError = !!error.isAuthError;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    await updateSyncLog(supabase, syncLogId, {
+      sync_status: 'failed',
+      error_message: errorMessage,
+      error_details: { isAuthError },
+      completed_at: new Date().toISOString(),
+      sync_stage: 'failed',
+      stage_progress_percentage: 0
+    });
   }
 }

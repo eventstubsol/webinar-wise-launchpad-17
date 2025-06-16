@@ -11,14 +11,12 @@ export enum ConnectionStatus {
   ERROR = 'error'
 }
 
-/** Webinar status values - updated to match Zoom API responses */
+/** Webinar status values */
 export enum WebinarStatus {
-  AVAILABLE = 'available',     // Scheduled/waiting to start
-  UNAVAILABLE = 'unavailable', // Not accessible
-  STARTED = 'started',         // Currently live
-  ENDED = 'ended',            // Completed
-  ABORTED = 'aborted',        // Cancelled/aborted
-  DELETED = 'deleted'         // Deleted from Zoom
+  SCHEDULED = 'scheduled',
+  STARTED = 'started',
+  FINISHED = 'finished',
+  CANCELLED = 'cancelled'
 }
 
 /** Sync operation types */
