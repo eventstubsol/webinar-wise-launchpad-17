@@ -23,16 +23,23 @@ export const ZoomConnectionManager: React.FC<ZoomConnectionManagerProps> = ({
   const [isFixing, setIsFixing] = useState(false);
 
   const getConnectionStatus = () => {
-    if (!connection) {
-      return { status: 'none', label: 'Not Connected', color: 'bg-gray-500' };
-    }
-
+    // If we have Server-to-Server credentials, that's the preferred connection type
     const hasCredentials = credentials?.client_id && credentials?.client_secret && credentials?.account_id;
     
     if (hasCredentials) {
-      return { status: 'valid', label: 'Server-to-Server Connected', color: 'bg-green-500' };
+      // Check if the existing connection is valid for Server-to-Server
+      if (connection && connection.access_token?.length > 50) {
+        return { status: 'valid', label: 'Server-to-Server Connected', color: 'bg-green-500' };
+      } else {
+        return { status: 'needs_validation', label: 'Needs Validation', color: 'bg-yellow-500' };
+      }
     }
     
+    if (!connection) {
+      return { status: 'none', label: 'Not Connected', color: 'bg-gray-500' };
+    }
+    
+    // Check for invalid OAuth token
     if (connection.access_token?.length < 50) {
       return { status: 'invalid', label: 'Invalid OAuth Token', color: 'bg-red-500' };
     }
@@ -56,15 +63,21 @@ export const ZoomConnectionManager: React.FC<ZoomConnectionManagerProps> = ({
       // Delete the invalid connection if it exists
       if (connection) {
         await ZoomConnectionService.deleteConnection(connection.id);
+        toast({
+          title: "Invalid Connection Removed",
+          description: "The invalid OAuth connection has been deleted.",
+        });
       }
 
+      // Trigger refetch to clear the connection state
+      await refetch();
+      
       toast({
-        title: "Connection Reset",
-        description: "Invalid connection removed. Please validate your credentials to create a new connection.",
+        title: "Ready for Validation",
+        description: "Please click 'Validate Connection' to create a new Server-to-Server connection.",
       });
 
-      // Trigger refetch and reconfigure
-      await refetch();
+      // Trigger reconfigure to show the validation button
       onReconfigure?.();
     } catch (error) {
       console.error('Error fixing connection:', error);
@@ -110,12 +123,23 @@ export const ZoomConnectionManager: React.FC<ZoomConnectionManagerProps> = ({
           </div>
         )}
 
+        {/* Status-specific alerts */}
         {connectionStatus.status === 'invalid' && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Your Zoom connection has an invalid token. This typically happens when the connection 
-              was created incorrectly. Click "Fix Connection" to reset and reconfigure.
+              Your Zoom connection has an invalid token (likely corrupted OAuth data). 
+              Click "Fix Connection" to remove it and enable Server-to-Server validation.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {connectionStatus.status === 'needs_validation' && (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Server-to-Server credentials are configured but not validated. 
+              Use the "Configure" button to validate your connection.
             </AlertDescription>
           </Alert>
         )}

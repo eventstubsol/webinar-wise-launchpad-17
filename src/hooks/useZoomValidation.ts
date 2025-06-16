@@ -4,6 +4,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useZoomCredentials } from '@/hooks/useZoomCredentials';
+import { useZoomConnection } from '@/hooks/useZoomConnection';
+import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
 import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection } from '@/types/zoom';
 
@@ -18,6 +20,7 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
   const queryClient = useQueryClient();
   const [isValidating, setIsValidating] = useState(false);
   const { credentials } = useZoomCredentials();
+  const { connection } = useZoomConnection();
   const [validationResult, setValidationResult] = useState<any>(null);
 
   const validateCredentialsMutation = useMutation({
@@ -30,7 +33,16 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
         throw new Error('Zoom credentials not configured');
       }
 
-      // Use Supabase client to call the edge function with proper URL
+      // If there's an existing invalid connection, delete it first
+      if (connection && connection.access_token?.length < 50) {
+        console.log('Deleting invalid connection before validation...');
+        await ZoomConnectionService.deleteConnection(connection.id);
+        
+        // Wait a moment for the deletion to be processed
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      // Use Supabase client to call the edge function
       const { data, error } = await supabase.functions.invoke('validate-zoom-credentials', {
         body: {},
       });
@@ -55,7 +67,7 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
       
       toast({
         title: "Success!",
-        description: "Your Zoom credentials have been validated and connection established.",
+        description: "Your Zoom credentials have been validated and Server-to-Server connection established.",
       });
       
       if (result.connection) {

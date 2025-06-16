@@ -7,10 +7,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Simple encryption for Server-to-Server tokens (placeholder values)
+// Simple encryption for Server-to-Server tokens
 function encryptPlaceholderToken(token: string, userId: string): string {
-  // For Server-to-Server OAuth, we store encrypted placeholders
-  // This ensures the frontend decryption doesn't fail
   const combined = token + ':' + userId;
   return btoa(combined); // Simple base64 encoding for placeholders
 }
@@ -61,6 +59,31 @@ serve(async (req) => {
 
     console.log('Validating credentials for user:', user.id, 'account:', credentials.account_id);
 
+    // Use service role for database operations
+    const serviceClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // First, clean up any existing invalid connections for this user
+    const { data: existingConnections } = await serviceClient
+      .from('zoom_connections')
+      .select('id, access_token')
+      .eq('user_id', user.id);
+
+    if (existingConnections) {
+      for (const conn of existingConnections) {
+        // Delete connections with invalid tokens (< 50 chars indicates corrupted OAuth)
+        if (conn.access_token && conn.access_token.length < 50) {
+          console.log('Deleting invalid connection:', conn.id);
+          await serviceClient
+            .from('zoom_connections')
+            .delete()
+            .eq('id', conn.id);
+        }
+      }
+    }
+
     // Request Server-to-Server OAuth token from Zoom
     const tokenRequestBody = new URLSearchParams({
       grant_type: 'account_credentials',
@@ -107,7 +130,7 @@ serve(async (req) => {
     }
     const accountData = await userTestResponse.json();
 
-    // Prepare connection data using validated info
+    // Prepare connection data for Server-to-Server
     const connectionData = {
       user_id: user.id,
       zoom_user_id: accountData.id,
@@ -117,38 +140,37 @@ serve(async (req) => {
       access_token: encryptPlaceholderToken('SERVER_TO_SERVER_VALIDATED', user.id),
       refresh_token: encryptPlaceholderToken('SERVER_TO_SERVER_NOT_APPLICABLE', user.id),
       token_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year
-      scopes: tokenData.scope?.split(' ') || [],
+      scopes: tokenData.scope?.split(' ') || ['webinar:read:admin', 'user:read:admin'],
       connection_status: 'active',
       is_primary: true,
       auto_sync_enabled: true,
       sync_frequency_hours: 24,
     };
-
-    // Use service role for database operations
-    const serviceClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
     
-    // Upsert connection data
+    // Upsert connection data (will replace any existing connection for this user/account)
     const { data: connection, error: upsertError } = await serviceClient
       .from('zoom_connections')
-      .upsert(connectionData, { onConflict: 'user_id, zoom_account_id' })
+      .upsert(connectionData, { 
+        onConflict: 'user_id',
+        ignoreDuplicates: false 
+      })
       .select()
       .single();
 
     if (upsertError) {
       console.error('Failed to upsert connection:', upsertError);
       return new Response(
-        JSON.stringify({ error: 'Failed to save connection to database' }),
+        JSON.stringify({ error: 'Failed to save connection to database', details: upsertError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    console.log('Server-to-Server connection created successfully for user:', user.id);
+
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Zoom credentials validated successfully',
+        message: 'Zoom credentials validated successfully with Server-to-Server OAuth',
         connection: connection,
         accountInfo: {
           id: accountData.id,
