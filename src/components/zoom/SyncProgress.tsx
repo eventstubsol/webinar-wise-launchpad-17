@@ -12,7 +12,7 @@ import { ZoomSyncLog, SyncStatus, SyncType } from '@/types/zoom';
 
 interface SyncProgressProps {
   onClose?: () => void;
-  autoCloseDelay?: number; // Auto-close delay in milliseconds after completion
+  autoCloseDelay?: number;
 }
 
 interface ActiveSync {
@@ -24,6 +24,7 @@ interface ActiveSync {
   resourceType?: string;
   errorMessage?: string;
   startedAt: string;
+  isTimedOut?: boolean;
 }
 
 export const SyncProgress: React.FC<SyncProgressProps> = ({ 
@@ -42,9 +43,21 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
     return Math.min(100, Math.round((sync.processedItems / sync.totalItems) * 100));
   }, []);
 
+  // Check if sync is timed out (older than 10 minutes)
+  const checkSyncTimeout = useCallback((sync: ActiveSync): boolean => {
+    const startTime = new Date(sync.startedAt).getTime();
+    const now = Date.now();
+    const tenMinutes = 10 * 60 * 1000;
+    return now - startTime > tenMinutes;
+  }, []);
+
   // Generate user-friendly status message
   const getStatusMessage = useCallback((sync: ActiveSync): string => {
     const { syncType, status, processedItems, totalItems, resourceType } = sync;
+    
+    if (sync.isTimedOut) {
+      return 'Sync appears to have timed out. You can safely retry.';
+    }
     
     if (status === SyncStatus.FAILED) {
       return `Sync failed: ${sync.errorMessage || 'Unknown error'}`;
@@ -110,7 +123,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
     setTimeout(() => {
       setActiveSync(null);
       onClose?.();
-    }, 300); // Allow for fade-out animation
+    }, 300);
   }, [onClose]);
 
   // Auto-close on successful completion
@@ -170,6 +183,14 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
                 resourceType: syncLog.resource_type || undefined,
                 errorMessage: syncLog.error_message || undefined,
                 startedAt: syncLog.started_at,
+                isTimedOut: checkSyncTimeout({
+                  id: syncLog.id,
+                  syncType: syncLog.sync_type,
+                  status: syncLog.sync_status,
+                  totalItems: syncLog.total_items || 0,
+                  processedItems: syncLog.processed_items || 0,
+                  startedAt: syncLog.started_at
+                })
               };
               
               setActiveSync(newActiveSync);
@@ -197,7 +218,6 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
               syncLog.sync_status === SyncStatus.CANCELLED ||
               (syncLog.sync_status === SyncStatus.COMPLETED && !syncLog.error_message)
             )) {
-              // Don't immediately hide on completion, let auto-close handle it
               if (syncLog.sync_status === SyncStatus.CANCELLED) {
                 setIsVisible(false);
                 setTimeout(() => setActiveSync(null), 300);
@@ -231,7 +251,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
         channelRef.current = null;
       }
     };
-  }, [connection?.id, toast]);
+  }, [connection?.id, toast, checkSyncTimeout]);
 
   // Don't render if no active sync
   if (!activeSync || !isVisible) {
@@ -241,7 +261,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
   const progressPercentage = getProgressPercentage(activeSync);
   const statusMessage = getStatusMessage(activeSync);
   const syncTypeDisplay = getSyncTypeDisplay(activeSync.syncType);
-  const isError = activeSync.status === SyncStatus.FAILED;
+  const isError = activeSync.status === SyncStatus.FAILED || activeSync.isTimedOut;
   const isCompleted = activeSync.status === SyncStatus.COMPLETED;
   const isInProgress = activeSync.status === SyncStatus.IN_PROGRESS || activeSync.status === SyncStatus.STARTED;
 
@@ -272,7 +292,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
 
           <div className="space-y-3">
             {/* Progress Bar */}
-            {isInProgress && (
+            {isInProgress && !activeSync.isTimedOut && (
               <div className="space-y-2">
                 <Progress value={progressPercentage} className="h-2" />
                 <div className="flex justify-between text-xs text-muted-foreground">
