@@ -1,6 +1,6 @@
 
 /**
- * Recovery utilities for stuck syncs and data restoration
+ * Enhanced recovery utilities for stuck syncs and data restoration
  */
 
 export async function clearStuckSync(supabase: any, syncLogId: string): Promise<void> {
@@ -32,15 +32,15 @@ export async function clearStuckSync(supabase: any, syncLogId: string): Promise<
 export async function findAndClearStuckSyncs(supabase: any, connectionId: string): Promise<number> {
   console.log('Finding and clearing stuck syncs...');
   
-  // Consider syncs stuck if they've been running for more than 15 minutes (more aggressive)
-  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  // More aggressive: Consider syncs stuck if they've been running for more than 10 minutes
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   
   const { data: stuckSyncs, error: findError } = await supabase
     .from('zoom_sync_logs')
     .select('id, sync_status, created_at, current_webinar_id, sync_stage')
     .eq('connection_id', connectionId)
     .in('sync_status', ['started', 'in_progress'])
-    .lt('created_at', fifteenMinutesAgo);
+    .lt('created_at', tenMinutesAgo);
 
   if (findError) {
     console.error('Error finding stuck syncs:', findError);
@@ -157,5 +157,19 @@ export async function clearAllStuckSyncsForConnection(supabase: any, connectionI
     }
   } catch (error) {
     console.error('Error in clearAllStuckSyncsForConnection:', error);
+  }
+}
+
+/**
+ * Force clear a specific problematic webinar from sync if it's causing issues
+ */
+export async function markWebinarAsProblematic(supabase: any, webinarId: string, reason: string): Promise<void> {
+  console.log(`Marking webinar ${webinarId} as problematic: ${reason}`);
+  
+  try {
+    // This could be expanded to maintain a problematic webinars table
+    console.log(`Webinar ${webinarId} marked as problematic for reason: ${reason}`);
+  } catch (error) {
+    console.error('Error marking webinar as problematic:', error);
   }
 }

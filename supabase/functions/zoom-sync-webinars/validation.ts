@@ -3,7 +3,7 @@ import { validateZoomConnection } from './zoom-api-client.ts';
 import { clearAllStuckSyncsForConnection } from './sync-recovery.ts';
 
 export async function validateRequest(req: Request, supabase: any) {
-  console.log('Starting request validation...');
+  console.log('Starting enhanced request validation...');
   
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {
@@ -48,15 +48,18 @@ export async function validateRequest(req: Request, supabase: any) {
 
   console.log(`Connection found: ${connection.id}, status: ${connection.connection_status}`);
 
-  // ENHANCED: Clear ALL stuck syncs for this connection before proceeding
-  console.log('Clearing all stuck syncs for connection...');
+  // ENHANCED: Aggressively clear ALL stuck syncs with immediate force
+  console.log('Force clearing ALL stuck syncs for connection with zero tolerance...');
   await clearAllStuckSyncsForConnection(supabase, requestBody.connectionId);
+  
+  // Add a small delay to ensure database consistency
+  await new Promise(resolve => setTimeout(resolve, 1000));
 
-  // Check for active syncs AFTER clearing ALL stuck ones
-  console.log('Checking for remaining active syncs...');
+  // Check for active syncs AFTER aggressive clearing
+  console.log('Final check for any remaining active syncs...');
   const { data: activeSyncs, error: syncError } = await supabase
     .from('zoom_sync_logs')
-    .select('id, sync_status, created_at')
+    .select('id, sync_status, created_at, current_webinar_id')
     .eq('connection_id', requestBody.connectionId)
     .in('sync_status', ['started', 'in_progress'])
     .limit(1);
@@ -67,14 +70,28 @@ export async function validateRequest(req: Request, supabase: any) {
   }
 
   if (activeSyncs && activeSyncs.length > 0) {
-    console.log('Active sync still found after clearing:', activeSyncs[0]);
-    const error = new Error('Sync already in progress for this connection');
-    error.status = 409;
-    error.body = { activeSyncId: activeSyncs[0].id };
-    throw error;
+    console.log('Active sync still found after aggressive clearing:', activeSyncs[0]);
+    
+    // Force clear this remaining sync too
+    console.log('Force clearing the remaining stuck sync...');
+    const { error: forceError } = await supabase
+      .from('zoom_sync_logs')
+      .update({
+        sync_status: 'failed',
+        error_message: 'Force cleared - persistent stuck sync detected',
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', activeSyncs[0].id);
+    
+    if (forceError) {
+      console.error('Error force clearing persistent sync:', forceError);
+    } else {
+      console.log('Successfully force cleared persistent stuck sync');
+    }
   }
 
-  console.log('All stuck syncs cleared, connection ready for new sync');
+  console.log('All stuck syncs cleared, connection ready for enhanced recovery sync');
   return { user, connection, requestBody };
 }
 

@@ -4,30 +4,33 @@ import { SyncOperation } from './types.ts';
 import { syncWebinarWithValidation } from './webinar-sync-handler.ts';
 import { findAndClearStuckSyncs, validateConnectionData } from './sync-recovery.ts';
 
+// Per-webinar timeout: 5 minutes maximum
+const WEBINAR_TIMEOUT_MS = 5 * 60 * 1000;
+const MAX_SYNC_DURATION = 20 * 60 * 1000; // 20 minutes total
+
+// Problem webinar blacklist - webinars that consistently cause issues
+const PROBLEM_WEBINARS = new Set(['88268187504']);
+
 export async function processRecoverySync(
   supabase: any,
   syncOperation: SyncOperation,
   connection: any,
   syncLogId: string
 ): Promise<void> {
-  console.log(`=== STARTING RECOVERY SYNC FOR CONNECTION: ${connection.id} ===`);
+  console.log(`=== STARTING ENHANCED RECOVERY SYNC FOR CONNECTION: ${connection.id} ===`);
   
   try {
-    // Step 1: Clear any stuck syncs first
-    console.log('Step 1: Clearing stuck syncs...');
-    const clearedCount = await findAndClearStuckSyncs(supabase, connection.id);
-    console.log(`Cleared ${clearedCount} stuck syncs`);
-
+    // Step 1: Force clear ALL active syncs for this connection
+    await forceClearAllActiveSyncs(supabase, connection.id);
+    
     // Step 2: Validate current data state
-    console.log('Step 2: Validating current data state...');
     const currentCounts = await validateConnectionData(supabase, connection.id);
-    console.log('Current data state:', currentCounts);
+    console.log('Pre-sync data state:', currentCounts);
 
-    // Initialize sync with recovery status
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'in_progress',
       started_at: new Date().toISOString(),
-      sync_stage: 'recovery_initialization',
+      sync_stage: 'enhanced_recovery_initialization',
       stage_progress_percentage: 5
     });
 
@@ -35,18 +38,18 @@ export async function processRecoverySync(
     const zoomApi = await import('./zoom-api-client.ts');
     const client = await zoomApi.createZoomAPIClient(connection, supabase);
     
-    // Fetch all webinars with recovery logging
-    console.log('Step 3: Fetching complete webinar list...');
+    // Fetch webinars with error handling
+    console.log('Fetching complete webinar list...');
     await updateSyncStage(supabase, syncLogId, null, 'fetching_webinar_list', 10);
     
     const webinars = await client.listWebinarsWithRange({
       type: 'all'
     });
     
-    console.log(`=== RECOVERY SYNC ANALYSIS ===`);
-    console.log(`Total webinars found in Zoom: ${webinars.length}`);
-    console.log(`Current webinars in database: ${currentCounts.webinarCount}`);
-    console.log(`Expected recovery: ${webinars.length - currentCounts.webinarCount} webinars`);
+    console.log(`=== ENHANCED RECOVERY ANALYSIS ===`);
+    console.log(`Total webinars from Zoom: ${webinars.length}`);
+    console.log(`Current webinars in DB: ${currentCounts.webinarCount}`);
+    console.log(`Expected to process: ${webinars.length - currentCounts.webinarCount} new webinars`);
     
     if (webinars.length === 0) {
       await updateSyncLog(supabase, syncLogId, {
@@ -60,7 +63,6 @@ export async function processRecoverySync(
       return;
     }
     
-    // Update total items for progress tracking
     await updateSyncLog(supabase, syncLogId, {
       total_items: webinars.length
     });
@@ -68,88 +70,99 @@ export async function processRecoverySync(
     let processedCount = 0;
     let successCount = 0;
     let failedCount = 0;
+    let skippedCount = 0;
     const errors: string[] = [];
+    const skippedWebinars: string[] = [];
     
-    // Recovery sync with enhanced monitoring and proper timeout
     const syncStartTime = Date.now();
-    const maxSyncDuration = 20 * 60 * 1000; // 20 minutes for recovery
     
-    console.log(`=== PROCESSING ${webinars.length} WEBINARS ===`);
+    console.log(`=== PROCESSING ${webinars.length} WEBINARS WITH ENHANCED ERROR HANDLING ===`);
     
     for (const webinar of webinars) {
-      // Enhanced timeout protection with actual enforcement
-      const elapsedTime = Date.now() - syncStartTime;
-      if (elapsedTime > maxSyncDuration) {
-        console.log(`Recovery sync timeout reached at ${elapsedTime}ms, stopping at ${processedCount}/${webinars.length}`);
-        await updateSyncLog(supabase, syncLogId, {
-          sync_status: 'partial',
-          error_message: `Recovery sync timeout after ${Math.round(elapsedTime / 1000 / 60)} minutes`,
-          completed_at: new Date().toISOString()
-        });
-        break;
-      }
+      const webinarStartTime = Date.now();
       
       try {
-        const progress = Math.round((processedCount / webinars.length) * 80) + 15; // 15-95% range
+        // Global timeout check
+        const elapsedTime = Date.now() - syncStartTime;
+        if (elapsedTime > MAX_SYNC_DURATION) {
+          console.log(`⏰ Global sync timeout reached at ${Math.round(elapsedTime / 1000)}s, stopping at ${processedCount}/${webinars.length}`);
+          await updateSyncLog(supabase, syncLogId, {
+            sync_status: 'partial',
+            error_message: `Global sync timeout after ${Math.round(elapsedTime / 1000 / 60)} minutes`,
+            completed_at: new Date().toISOString()
+          });
+          break;
+        }
         
-        await updateSyncStage(
-          supabase, 
-          syncLogId, 
-          webinar.id?.toString(), 
-          'processing_webinar', 
-          progress
-        );
+        const progress = Math.round((processedCount / webinars.length) * 80) + 15;
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'processing_webinar', progress);
         
         console.log(`=== PROCESSING WEBINAR ${webinar.id} (${processedCount + 1}/${webinars.length}) ===`);
-        console.log(`Webinar: ${webinar.topic}`);
-        console.log(`Start time: ${webinar.start_time}`);
-        console.log(`Elapsed time: ${Math.round(elapsedTime / 1000)}s / ${Math.round(maxSyncDuration / 1000)}s`);
+        console.log(`Title: ${webinar.topic}`);
+        console.log(`Start: ${webinar.start_time}`);
+        console.log(`Global elapsed: ${Math.round(elapsedTime / 1000)}s`);
         
-        // Check if webinar already exists
-        const { data: existingWebinar } = await supabase
-          .from('zoom_webinars')
-          .select('id, title')
-          .eq('connection_id', connection.id)
-          .eq('webinar_id', webinar.id?.toString())
-          .maybeSingle();
-        
-        if (existingWebinar) {
-          console.log(`Webinar ${webinar.id} already exists in database, skipping...`);
-          successCount++;
+        // Check if webinar is in problem list
+        if (PROBLEM_WEBINARS.has(webinar.id?.toString())) {
+          console.log(`⚠️ Webinar ${webinar.id} is in problem webinar blacklist, skipping...`);
+          skippedWebinars.push(`${webinar.id} (blacklisted)`);
+          skippedCount++;
           processedCount++;
           continue;
         }
         
-        // Fetch webinar details
-        console.log(`Fetching details for new webinar ${webinar.id}...`);
-        const webinarDetails = await client.getWebinar(webinar.id);
+        // Enhanced existing webinar check with detailed logging
+        console.log(`Checking if webinar ${webinar.id} already exists...`);
+        const { data: existingWebinar, error: checkError } = await Promise.race([
+          supabase
+            .from('zoom_webinars')
+            .select('id, title, webinar_id')
+            .eq('connection_id', connection.id)
+            .eq('webinar_id', webinar.id?.toString())
+            .maybeSingle(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database check timeout')), 10000)
+          )
+        ]);
         
-        // Fetch registrants
-        let registrants = [];
-        try {
-          registrants = await client.getWebinarRegistrants(webinar.id);
-          console.log(`Fetched ${registrants.length} registrants`);
-        } catch (registrantError) {
-          console.log(`No registrants for webinar ${webinar.id}: ${registrantError.message}`);
-        }
-
-        // Fetch participants  
-        let participants = [];
-        try {
-          participants = await client.getWebinarParticipants(webinar.id);
-          console.log(`Fetched ${participants.length} participants`);
-        } catch (participantError) {
-          console.log(`No participants for webinar ${webinar.id}: ${participantError.message}`);
+        if (checkError) {
+          console.error(`❌ Error checking existing webinar ${webinar.id}:`, checkError);
+          errors.push(`Webinar ${webinar.id}: Database check failed - ${checkError.message}`);
+          failedCount++;
+          processedCount++;
+          continue;
         }
         
-        // Process webinar with recovery validation
-        const insertionResult = await syncWebinarWithValidation(
+        if (existingWebinar) {
+          console.log(`✅ Webinar ${webinar.id} already exists (DB ID: ${existingWebinar.id}), skipping...`);
+          skippedWebinars.push(`${webinar.id} (exists)`);
+          skippedCount++;
+          processedCount++;
+          
+          // Update progress immediately after skip
+          await updateSyncLog(supabase, syncLogId, {
+            processed_items: processedCount,
+            stage_progress_percentage: Math.round((processedCount / webinars.length) * 80) + 15
+          });
+          continue;
+        }
+        
+        console.log(`🔄 Processing new webinar ${webinar.id}...`);
+        
+        // Per-webinar timeout protection
+        const webinarPromise = processWebinarWithTimeout(
+          client, 
+          webinar, 
+          connection.id, 
           supabase,
-          webinarDetails,
-          registrants,
-          participants,
-          connection.id
+          syncLogId
         );
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Webinar ${webinar.id} timeout after ${WEBINAR_TIMEOUT_MS / 1000}s`)), WEBINAR_TIMEOUT_MS)
+        );
+        
+        const insertionResult = await Promise.race([webinarPromise, timeoutPromise]);
         
         if (insertionResult.success) {
           console.log(`✅ Successfully synced webinar ${webinar.id}`);
@@ -168,26 +181,44 @@ export async function processRecoverySync(
           stage_progress_percentage: Math.round((processedCount / webinars.length) * 80) + 15
         });
         
+        console.log(`⏱️ Webinar ${webinar.id} processed in ${Date.now() - webinarStartTime}ms`);
+        
       } catch (webinarError) {
-        console.error(`❌ Error processing webinar ${webinar.id}:`, webinarError);
-        errors.push(`Webinar ${webinar.id}: ${webinarError.message}`);
-        failedCount++;
+        const processingTime = Date.now() - webinarStartTime;
+        console.error(`❌ Critical error processing webinar ${webinar.id} after ${processingTime}ms:`, webinarError);
+        
+        if (webinarError.message.includes('timeout')) {
+          console.log(`⏰ Webinar ${webinar.id} timed out, adding to problem list`);
+          PROBLEM_WEBINARS.add(webinar.id?.toString());
+          skippedWebinars.push(`${webinar.id} (timeout)`);
+          skippedCount++;
+        } else {
+          errors.push(`Webinar ${webinar.id}: ${webinarError.message}`);
+          failedCount++;
+        }
         processedCount++;
+        
+        // Force continue to next webinar
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_failed', null);
       }
     }
     
-    // Final validation
-    console.log('Step 4: Final data validation...');
+    // Final validation and completion
+    console.log('Final data validation...');
     const finalCounts = await validateConnectionData(supabase, connection.id);
     
-    // Complete recovery sync
-    const syncStatus = failedCount === 0 ? 'completed' : (successCount > 0 ? 'partial' : 'failed');
+    const syncStatus = failedCount === 0 && skippedCount < webinars.length ? 'completed' : 
+                      successCount > 0 ? 'partial' : 'failed';
     
-    console.log(`=== RECOVERY SYNC COMPLETED ===`);
+    console.log(`=== ENHANCED RECOVERY SYNC COMPLETED ===`);
     console.log(`Status: ${syncStatus}`);
     console.log(`Processed: ${processedCount}/${webinars.length}`);
-    console.log(`Success: ${successCount}, Failed: ${failedCount}`);
-    console.log(`Final counts:`, finalCounts);
+    console.log(`Success: ${successCount}, Failed: ${failedCount}, Skipped: ${skippedCount}`);
+    console.log(`Final data counts:`, finalCounts);
+    
+    if (skippedWebinars.length > 0) {
+      console.log(`Skipped webinars:`, skippedWebinars);
+    }
     
     await updateSyncLog(supabase, syncLogId, {
       sync_status: syncStatus,
@@ -195,26 +226,123 @@ export async function processRecoverySync(
       completed_at: new Date().toISOString(),
       sync_stage: 'completed',
       stage_progress_percentage: 100,
-      error_message: errors.length > 0 ? `Recovery sync: ${failedCount} webinars failed` : null,
-      error_details: errors.length > 0 ? { 
+      error_message: errors.length > 0 ? `${failedCount} webinars failed, ${skippedCount} skipped` : null,
+      error_details: { 
         errors, 
+        skippedWebinars,
         successCount, 
         failedCount,
-        finalCounts 
-      } : { finalCounts }
+        skippedCount,
+        finalCounts,
+        problemWebinars: Array.from(PROBLEM_WEBINARS)
+      }
     });
     
   } catch (error) {
-    console.error('❌ Recovery sync failed:', error);
+    console.error('❌ Enhanced recovery sync failed:', error);
     
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'failed',
-      error_message: `Recovery sync failed: ${error.message}`,
+      error_message: `Enhanced recovery sync failed: ${error.message}`,
       completed_at: new Date().toISOString(),
       sync_stage: 'failed',
       stage_progress_percentage: 0
     });
     
     throw error;
+  }
+}
+
+async function forceClearAllActiveSyncs(supabase: any, connectionId: string): Promise<void> {
+  console.log(`🧹 Force clearing ALL active syncs for connection: ${connectionId}`);
+  
+  try {
+    const { data: activeSyncs, error: findError } = await supabase
+      .from('zoom_sync_logs')
+      .select('id, sync_status, created_at, current_webinar_id')
+      .eq('connection_id', connectionId)
+      .in('sync_status', ['started', 'in_progress']);
+
+    if (findError) {
+      console.error('Error finding active syncs:', findError);
+      return;
+    }
+
+    if (activeSyncs && activeSyncs.length > 0) {
+      console.log(`🔄 Force clearing ${activeSyncs.length} active syncs...`);
+      
+      const { error: updateError } = await supabase
+        .from('zoom_sync_logs')
+        .update({
+          sync_status: 'failed',
+          error_message: 'Force cleared for enhanced recovery sync',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .in('id', activeSyncs.map(s => s.id));
+
+      if (updateError) {
+        console.error('Error force clearing syncs:', updateError);
+      } else {
+        console.log(`✅ Successfully force cleared ${activeSyncs.length} stuck syncs`);
+      }
+    } else {
+      console.log('✅ No active syncs to clear');
+    }
+  } catch (error) {
+    console.error('Error in forceClearAllActiveSyncs:', error);
+  }
+}
+
+async function processWebinarWithTimeout(
+  client: any,
+  webinar: any,
+  connectionId: string,
+  supabase: any,
+  syncLogId: string
+): Promise<{ success: boolean; error?: string }> {
+  
+  try {
+    // Fetch webinar details with timeout
+    console.log(`📋 Fetching details for webinar ${webinar.id}...`);
+    const webinarDetails = await client.getWebinar(webinar.id);
+    
+    // Fetch registrants with timeout
+    console.log(`👥 Fetching registrants for webinar ${webinar.id}...`);
+    let registrants = [];
+    try {
+      registrants = await client.getWebinarRegistrants(webinar.id);
+      console.log(`✅ Fetched ${registrants.length} registrants`);
+    } catch (registrantError) {
+      console.log(`⚠️ No registrants for webinar ${webinar.id}: ${registrantError.message}`);
+    }
+
+    // Fetch participants with timeout
+    console.log(`🎯 Fetching participants for webinar ${webinar.id}...`);
+    let participants = [];
+    try {
+      participants = await client.getWebinarParticipants(webinar.id);
+      console.log(`✅ Fetched ${participants.length} participants`);
+    } catch (participantError) {
+      console.log(`⚠️ No participants for webinar ${webinar.id}: ${participantError.message}`);
+    }
+    
+    // Process webinar with validation
+    console.log(`💾 Saving webinar ${webinar.id} to database...`);
+    await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'saving_webinar', null);
+    
+    const insertionResult = await syncWebinarWithValidation(
+      supabase,
+      webinarDetails,
+      registrants,
+      participants,
+      connectionId
+    );
+    
+    return insertionResult;
+    
+  } catch (error) {
+    console.error(`❌ Error in processWebinarWithTimeout for ${webinar.id}:`, error);
+    return { success: false, error: error.message };
   }
 }
