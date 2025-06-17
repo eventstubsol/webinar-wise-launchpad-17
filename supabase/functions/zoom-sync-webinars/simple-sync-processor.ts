@@ -38,13 +38,14 @@ export async function processSimpleWebinarSync(
     let processedCount = 0;
     let successCount = 0;
     let totalRegistrantsSynced = 0;
+    let totalParticipantsSynced = 0;
     const totalWebinars = webinars.length;
     
-    // Process each webinar - basic info + registrants
+    // Process each webinar - basic info + registrants + participants
     for (const webinar of webinars) {
       try {
-        // Update progress for webinar processing (20-60%)
-        const webinarProgress = 20 + Math.round(((processedCount) / totalWebinars) * 40);
+        // Update progress for webinar processing (20-40%)
+        const webinarProgress = 20 + Math.round(((processedCount) / totalWebinars) * 20);
         await updateSyncStage(
           supabase, 
           syncLogId, 
@@ -61,8 +62,8 @@ export async function processSimpleWebinarSync(
         // Store webinar data and get database ID
         const webinarDbId = await syncBasicWebinarData(supabase, webinarDetails, connection.id);
         
-        // Sync registrants for this webinar (60-90% progress range)
-        const registrantProgress = 60 + Math.round(((processedCount) / totalWebinars) * 30);
+        // Sync registrants for this webinar (40-70% progress range)
+        const registrantProgress = 40 + Math.round(((processedCount) / totalWebinars) * 30);
         await updateSyncStage(
           supabase, 
           syncLogId, 
@@ -78,6 +79,25 @@ export async function processSimpleWebinarSync(
         } catch (registrantError) {
           console.error(`Error syncing registrants for webinar ${webinar.id}:`, registrantError);
           // Continue with next webinar even if registrants fail
+        }
+        
+        // Sync participants for this webinar (70-90% progress range)
+        const participantProgress = 70 + Math.round(((processedCount) / totalWebinars) * 20);
+        await updateSyncStage(
+          supabase, 
+          syncLogId, 
+          webinar.id?.toString(), 
+          'syncing_participants', 
+          participantProgress
+        );
+        
+        try {
+          const participantCount = await syncWebinarParticipants(supabase, client, webinar.id, webinarDbId);
+          totalParticipantsSynced += participantCount;
+          console.log(`Successfully synced ${participantCount} participants for webinar ${webinar.id}`);
+        } catch (participantError) {
+          console.error(`Error syncing participants for webinar ${webinar.id}:`, participantError);
+          // Continue with next webinar even if participants fail
         }
         
         console.log(`Successfully processed webinar ${webinar.id}`);
@@ -103,12 +123,117 @@ export async function processSimpleWebinarSync(
       stage_progress_percentage: 100
     });
     
-    console.log(`Simple webinar sync completed. Successfully processed ${successCount}/${totalWebinars} webinars and ${totalRegistrantsSynced} total registrants.`);
+    console.log(`Simple webinar sync completed. Successfully processed ${successCount}/${totalWebinars} webinars, ${totalRegistrantsSynced} registrants, and ${totalParticipantsSynced} participants.`);
     
   } catch (error) {
     console.error('Simple webinar sync failed:', error);
     throw error;
   }
+}
+
+/**
+ * Sync participants for a specific webinar
+ */
+async function syncWebinarParticipants(
+  supabase: any,
+  client: any,
+  webinarId: string,
+  webinarDbId: string
+): Promise<number> {
+  console.log(`Syncing participants for webinar ${webinarId}`);
+  
+  try {
+    // Fetch participants from Zoom API
+    const participants = await client.getWebinarParticipants(webinarId);
+    
+    if (!participants || participants.length === 0) {
+      console.log(`No participants found for webinar ${webinarId}`);
+      return 0;
+    }
+    
+    console.log(`Found ${participants.length} participants for webinar ${webinarId}`);
+    
+    // Transform participant data to match database schema
+    const transformedParticipants = participants.map(participant => {
+      const transformed = transformParticipantForDatabase(participant, webinarDbId);
+      return {
+        ...transformed,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    });
+    
+    // Upsert participants to database
+    const { error } = await supabase
+      .from('zoom_participants')
+      .upsert(
+        transformedParticipants,
+        {
+          onConflict: 'webinar_id,participant_id',
+          ignoreDuplicates: false
+        }
+      );
+
+    if (error) {
+      console.error('Failed to upsert participants:', error);
+      throw new Error(`Failed to upsert participants: ${error.message}`);
+    }
+
+    console.log(`Successfully synced ${participants.length} participants for webinar ${webinarId}`);
+    return participants.length;
+    
+  } catch (error) {
+    console.error(`Error syncing participants for webinar ${webinarId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Transform Zoom API participant to database format
+ */
+function transformParticipantForDatabase(apiParticipant: any, webinarDbId: string): any {
+  // Map Zoom API status to database participant_status enum
+  let participantStatus = 'in_meeting'; // Default status
+  
+  // If participant has join_time but no leave_time, they might still be in meeting
+  // If they have both join_time and leave_time, they were in meeting and left
+  // For simplicity in this sync, we'll mark all as 'in_meeting' since they participated
+  if (apiParticipant.status) {
+    const statusMap: { [key: string]: string } = {
+      'in_meeting': 'in_meeting',
+      'in_waiting_room': 'in_waiting_room',
+      'left': 'in_meeting', // They were in meeting but left
+      'joined': 'in_meeting'
+    };
+    participantStatus = statusMap[apiParticipant.status.toLowerCase()] || 'in_meeting';
+  }
+
+  return {
+    webinar_id: webinarDbId,
+    participant_id: apiParticipant.id || apiParticipant.participant_id,
+    registrant_id: apiParticipant.registrant_id || null,
+    participant_name: apiParticipant.name || apiParticipant.participant_name || null,
+    participant_email: apiParticipant.user_email || apiParticipant.participant_email || apiParticipant.email || null,
+    participant_user_id: apiParticipant.user_id || null,
+    join_time: apiParticipant.join_time || null,
+    leave_time: apiParticipant.leave_time || null,
+    duration: apiParticipant.duration || null,
+    attentiveness_score: apiParticipant.attentiveness_score || null,
+    camera_on_duration: apiParticipant.camera_on_duration || null,
+    share_application_duration: apiParticipant.share_application_duration || null,
+    share_desktop_duration: apiParticipant.share_desktop_duration || null,
+    posted_chat: apiParticipant.posted_chat || false,
+    raised_hand: apiParticipant.raised_hand || false,
+    answered_polling: apiParticipant.answered_polling || false,
+    asked_question: apiParticipant.asked_question || false,
+    device: apiParticipant.device || null,
+    ip_address: apiParticipant.ip_address ? String(apiParticipant.ip_address) : null,
+    location: apiParticipant.location || null,
+    network_type: apiParticipant.network_type || null,
+    version: apiParticipant.version || null,
+    customer_key: apiParticipant.customer_key || null,
+    participant_status: participantStatus
+  };
 }
 
 /**
