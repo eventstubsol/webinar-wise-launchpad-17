@@ -45,13 +45,13 @@ export async function validateRequest(req: Request, supabase: any) {
     }
   }
 
-  // Get and validate connection
+  // Get and validate connection - using correct column name 'connection_status'
   const { data: connection, error: connectionError } = await supabase
     .from('zoom_connections')
     .select('*')
     .eq('id', requestBody.connectionId)
     .eq('user_id', user.id)
-    .eq('status', 'active')
+    .eq('connection_status', 'active')
     .single();
 
   if (connectionError || !connection) {
