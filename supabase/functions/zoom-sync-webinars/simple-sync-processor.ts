@@ -1,4 +1,3 @@
-
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 
@@ -38,17 +37,20 @@ export async function processSimpleWebinarSync(
     
     let processedCount = 0;
     let successCount = 0;
+    let totalRegistrantsSynced = 0;
     const totalWebinars = webinars.length;
     
-    // Process each webinar - just basic info
+    // Process each webinar - basic info + registrants
     for (const webinar of webinars) {
       try {
+        // Update progress for webinar processing (20-60%)
+        const webinarProgress = 20 + Math.round(((processedCount) / totalWebinars) * 40);
         await updateSyncStage(
           supabase, 
           syncLogId, 
           webinar.id?.toString(), 
           'processing_webinar', 
-          Math.round(((processedCount + 1) / totalWebinars) * 80) + 20
+          webinarProgress
         );
         
         console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars})`);
@@ -56,8 +58,27 @@ export async function processSimpleWebinarSync(
         // Get basic webinar details
         const webinarDetails = await client.getWebinar(webinar.id);
         
-        // Store webinar data
-        await syncBasicWebinarData(supabase, webinarDetails, connection.id);
+        // Store webinar data and get database ID
+        const webinarDbId = await syncBasicWebinarData(supabase, webinarDetails, connection.id);
+        
+        // Sync registrants for this webinar (60-90% progress range)
+        const registrantProgress = 60 + Math.round(((processedCount) / totalWebinars) * 30);
+        await updateSyncStage(
+          supabase, 
+          syncLogId, 
+          webinar.id?.toString(), 
+          'syncing_registrants', 
+          registrantProgress
+        );
+        
+        try {
+          const registrantCount = await syncWebinarRegistrants(supabase, client, webinar.id, webinarDbId);
+          totalRegistrantsSynced += registrantCount;
+          console.log(`Successfully synced ${registrantCount} registrants for webinar ${webinar.id}`);
+        } catch (registrantError) {
+          console.error(`Error syncing registrants for webinar ${webinar.id}:`, registrantError);
+          // Continue with next webinar even if registrants fail
+        }
         
         console.log(`Successfully processed webinar ${webinar.id}`);
         
@@ -71,7 +92,9 @@ export async function processSimpleWebinarSync(
       }
     }
     
-    // Complete the sync
+    // Complete the sync (90-100%)
+    await updateSyncStage(supabase, syncLogId, null, 'completing', 95);
+    
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'completed',
       processed_items: processedCount,
@@ -80,12 +103,119 @@ export async function processSimpleWebinarSync(
       stage_progress_percentage: 100
     });
     
-    console.log(`Simple webinar sync completed. Successfully processed ${successCount}/${totalWebinars} webinars.`);
+    console.log(`Simple webinar sync completed. Successfully processed ${successCount}/${totalWebinars} webinars and ${totalRegistrantsSynced} total registrants.`);
     
   } catch (error) {
     console.error('Simple webinar sync failed:', error);
     throw error;
   }
+}
+
+/**
+ * Sync registrants for a specific webinar
+ */
+async function syncWebinarRegistrants(
+  supabase: any,
+  client: any,
+  webinarId: string,
+  webinarDbId: string
+): Promise<number> {
+  console.log(`Syncing registrants for webinar ${webinarId}`);
+  
+  try {
+    // Fetch registrants from Zoom API
+    const registrants = await client.getWebinarRegistrants(webinarId);
+    
+    if (!registrants || registrants.length === 0) {
+      console.log(`No registrants found for webinar ${webinarId}`);
+      return 0;
+    }
+    
+    console.log(`Found ${registrants.length} registrants for webinar ${webinarId}`);
+    
+    // Transform registrant data to match database schema
+    const transformedRegistrants = registrants.map(registrant => {
+      const transformed = transformRegistrantForDatabase(registrant, webinarDbId);
+      return {
+        ...transformed,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    });
+    
+    // Upsert registrants to database
+    const { error } = await supabase
+      .from('zoom_registrants')
+      .upsert(
+        transformedRegistrants,
+        {
+          onConflict: 'webinar_id,registrant_id',
+          ignoreDuplicates: false
+        }
+      );
+
+    if (error) {
+      console.error('Failed to upsert registrants:', error);
+      throw new Error(`Failed to upsert registrants: ${error.message}`);
+    }
+
+    console.log(`Successfully synced ${registrants.length} registrants for webinar ${webinarId}`);
+    return registrants.length;
+    
+  } catch (error) {
+    console.error(`Error syncing registrants for webinar ${webinarId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Transform Zoom API registrant to database format
+ */
+function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string): any {
+  // Normalize status value
+  let normalizedStatus = 'approved';
+  if (apiRegistrant.status) {
+    const statusMap: { [key: string]: string } = {
+      'approved': 'approved',
+      'pending': 'pending',
+      'denied': 'denied',
+      'cancelled': 'cancelled'
+    };
+    normalizedStatus = statusMap[apiRegistrant.status.toLowerCase()] || 'approved';
+  }
+
+  return {
+    webinar_id: webinarDbId,
+    registrant_id: apiRegistrant.id || apiRegistrant.registrant_id,
+    registrant_email: apiRegistrant.email,
+    first_name: apiRegistrant.first_name || null,
+    last_name: apiRegistrant.last_name || null,
+    address: apiRegistrant.address || null,
+    city: apiRegistrant.city || null,
+    state: apiRegistrant.state || null,
+    zip: apiRegistrant.zip || null,
+    country: apiRegistrant.country || null,
+    phone: apiRegistrant.phone || null,
+    industry: apiRegistrant.industry || null,
+    org: apiRegistrant.org || null,
+    job_title: apiRegistrant.job_title || null,
+    purchasing_time_frame: apiRegistrant.purchasing_time_frame || null,
+    role_in_purchase_process: apiRegistrant.role_in_purchase_process || null,
+    no_of_employees: apiRegistrant.no_of_employees || null,
+    comments: apiRegistrant.comments || null,
+    custom_questions: apiRegistrant.custom_questions || null,
+    registration_time: apiRegistrant.registration_time || new Date().toISOString(),
+    source_id: apiRegistrant.source_id || null,
+    tracking_source: apiRegistrant.tracking_source || null,
+    status: normalizedStatus,
+    join_url: apiRegistrant.join_url || null,
+    create_time: apiRegistrant.create_time || null,
+    language: apiRegistrant.language || null,
+    join_time: null, // Will be updated from participant data if available
+    leave_time: null,
+    duration: null,
+    attended: false // Will be updated from participant data if available
+  };
 }
 
 /**
