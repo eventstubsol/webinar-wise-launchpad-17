@@ -9,24 +9,9 @@ export class ConnectionManager {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
   private reconnectTimeout: NodeJS.Timeout | null = null;
-  private healthCheckInterval: NodeJS.Timeout | null = null;
 
   constructor() {
-    // Temporarily disable automatic health checking to prevent infinite recursion
-    // this.setupConnectionMonitoring();
-  }
-
-  private setupConnectionMonitoring() {
-    // Monitor connection status through subscription callbacks
-    this.healthCheckInterval = setInterval(() => {
-      this.checkConnectionHealth();
-    }, 30000); // Check every 30 seconds
-  }
-
-  private checkConnectionHealth() {
-    // Simplified health check without creating test channels to prevent recursion
-    // Just check if we have active channels as a proxy for connection health
-    this.isConnected = this.channels.size > 0;
+    // Removed automatic health checking to prevent infinite recursion
   }
 
   private handleReconnection() {
@@ -51,7 +36,7 @@ export class ConnectionManager {
     
     const currentSubscriptions = Array.from(this.subscriptions.values());
     
-    // Clean up existing channels
+    // Clean up existing channels first
     this.channels.forEach(channel => {
       try {
         supabase.removeChannel(channel);
@@ -78,6 +63,12 @@ export class ConnectionManager {
   ): string {
     const id = subscriptionId || `${channelName}-${Date.now()}-${Math.random()}`;
 
+    // Check if we already have this subscription
+    if (this.subscriptions.has(id)) {
+      console.warn(`Subscription ${id} already exists, returning existing ID`);
+      return id;
+    }
+
     this.subscriptions.set(id, {
       id,
       channel: channelName,
@@ -85,31 +76,41 @@ export class ConnectionManager {
     });
 
     try {
-      if (!this.channels.has(channelName)) {
-        const channel = supabase.channel(channelName);
+      // Check if channel already exists and is subscribed
+      let channel = this.channels.get(channelName);
+      
+      if (!channel) {
+        // Create new channel only if it doesn't exist
+        channel = supabase.channel(channelName);
         this.channels.set(channelName, channel);
-      }
+        
+        // Set up channel subscriptions
+        this.setupChannelSubscriptions(channel, channelName, callback);
 
-      const channel = this.channels.get(channelName);
-      this.setupChannelSubscriptions(channel, channelName, callback);
-
-      channel.subscribe((status: string) => {
-        if (status === 'SUBSCRIBED') {
-          console.log(`Successfully subscribed to ${channelName}`);
-          this.isConnected = true;
-          this.reconnectAttempts = 0;
-          if (this.reconnectTimeout) {
-            clearTimeout(this.reconnectTimeout);
-            this.reconnectTimeout = null;
+        // Subscribe to the channel only once
+        channel.subscribe((status: string) => {
+          console.log(`Channel ${channelName} status:`, status);
+          if (status === 'SUBSCRIBED') {
+            console.log(`Successfully subscribed to ${channelName}`);
+            this.isConnected = true;
+            this.reconnectAttempts = 0;
+            if (this.reconnectTimeout) {
+              clearTimeout(this.reconnectTimeout);
+              this.reconnectTimeout = null;
+            }
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error(`Failed to subscribe to ${channelName}`);
+            this.isConnected = false;
+            this.handleReconnection();
           }
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error(`Failed to subscribe to ${channelName}`);
-          this.isConnected = false;
-          this.handleReconnection();
-        }
-      });
+        });
+      } else {
+        // Channel exists, just add the callback to existing subscriptions
+        console.log(`Channel ${channelName} already exists, reusing it`);
+      }
     } catch (error) {
       console.error('Error setting up subscription:', error);
+      this.subscriptions.delete(id);
     }
 
     return id;
@@ -122,6 +123,8 @@ export class ConnectionManager {
       this.setupProcessingSubscription(channel, callback);
     } else if (channelName.startsWith('webinar-')) {
       this.setupWebinarSubscription(channel, callback);
+    } else if (channelName.startsWith('sync-')) {
+      this.setupSyncSubscription(channel, callback);
     } else {
       this.setupGenericSubscription(channel, callback);
     }
@@ -201,6 +204,24 @@ export class ConnectionManager {
     });
   }
 
+  private setupSyncSubscription(channel: any, callback: (message: WebSocketMessage) => void) {
+    channel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'zoom_sync_logs',
+      },
+      (payload: any) => {
+        callback({
+          type: 'sync_update',
+          data: payload,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    );
+  }
+
   private setupGenericSubscription(channel: any, callback: (message: WebSocketMessage) => void) {
     channel.on('broadcast', { event: '*' }, (payload: any) => {
       callback({
@@ -217,6 +238,7 @@ export class ConnectionManager {
 
     this.subscriptions.delete(subscriptionId);
 
+    // Check if any other subscriptions are using this channel
     const channelStillInUse = Array.from(this.subscriptions.values())
       .some(sub => sub.channel === subscription.channel);
 
@@ -226,6 +248,7 @@ export class ConnectionManager {
         try {
           supabase.removeChannel(channel);
           this.channels.delete(subscription.channel);
+          console.log(`Removed unused channel: ${subscription.channel}`);
         } catch (error) {
           console.warn('Error removing channel during unsubscribe:', error);
         }
@@ -264,11 +287,6 @@ export class ConnectionManager {
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
-    }
-
-    if (this.healthCheckInterval) {
-      clearTimeout(this.healthCheckInterval);
-      this.healthCheckInterval = null;
     }
 
     this.channels.forEach(channel => {

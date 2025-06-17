@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useToast } from '@/hooks/use-toast';
@@ -34,6 +34,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
   const { toast } = useToast();
   const [activeSync, setActiveSync] = useState<ActiveSync | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const channelRef = useRef<any>(null);
 
   // Calculate progress percentage
   const getProgressPercentage = useCallback((sync: ActiveSync): number => {
@@ -76,6 +77,8 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
         return 'Manual Sync';
       case SyncType.WEBHOOK:
         return 'Webhook Sync';
+      case SyncType.PARTICIPANTS_ONLY:
+        return 'Participants Sync';
       default:
         return 'Sync';
     }
@@ -86,14 +89,11 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
     if (!activeSync) return;
     
     try {
-      // Trigger a new manual sync - this would need to be implemented
-      // based on your sync service architecture
       toast({
         title: "Retry requested",
         description: "Starting a new sync operation...",
       });
       
-      // For now, just close the component
       handleClose();
     } catch (error) {
       toast({
@@ -124,15 +124,25 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
     }
   }, [activeSync?.status, autoCloseDelay, handleClose]);
 
-  // Set up real-time subscription
+  // Set up real-time subscription with proper cleanup
   useEffect(() => {
     if (!connection?.id) return;
 
-    let channel: any = null;
+    // Clean up existing channel if it exists
+    if (channelRef.current) {
+      try {
+        supabase.removeChannel(channelRef.current);
+      } catch (error) {
+        console.warn('Error removing existing channel:', error);
+      }
+      channelRef.current = null;
+    }
 
     const setupSubscription = () => {
-      channel = supabase
-        .channel('sync-progress')
+      const channelName = `sync-progress-${connection.id}`;
+      channelRef.current = supabase.channel(channelName);
+
+      channelRef.current
         .on(
           'postgres_changes',
           {
@@ -141,7 +151,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
             table: 'zoom_sync_logs',
             filter: `connection_id=eq.${connection.id}`,
           },
-          (payload) => {
+          (payload: any) => {
             const syncLog = payload.new as ZoomSyncLog;
             
             // Only show active syncs (not completed/failed unless there's an error)
@@ -212,8 +222,13 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
     setupSubscription();
 
     return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
+      if (channelRef.current) {
+        try {
+          supabase.removeChannel(channelRef.current);
+        } catch (error) {
+          console.warn('Error removing channel on cleanup:', error);
+        }
+        channelRef.current = null;
       }
     };
   }, [connection?.id, toast]);
