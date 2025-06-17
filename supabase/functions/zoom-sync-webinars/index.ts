@@ -4,17 +4,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { CORS_HEADERS, SYNC_PRIORITIES, SyncOperation } from './types.ts';
 import { validateRequest } from './validation.ts';
 import { createSyncLog } from './database-operations.ts';
-import { processSequentialSync } from './sync-processor.ts';
-import { processRecoverySync } from './enhanced-recovery-processor.ts';
+import { processSimpleWebinarSync } from './simple-webinar-processor.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: CORS_HEADERS });
   }
 
-  console.log('=== SYNC FUNCTION START ===');
+  console.log('=== SIMPLIFIED SYNC FUNCTION START ===');
   console.log(`Request received: ${new Date().toISOString()}`);
-  console.log('Request headers:', Object.fromEntries(req.headers.entries()));
   console.log('Environment check:', {
     hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
     hasServiceKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
@@ -53,36 +51,31 @@ serve(async (req) => {
       createdAt: new Date()
     };
     
-    console.log('Starting background sync process...');
+    console.log('Starting simplified webinar-only sync process...');
     
-    // Use recovery sync for initial syncs or when requested
-    if (requestBody.syncType === 'initial' || requestBody.recovery === true) {
-      console.log('Using recovery sync processor...');
-      queueMicrotask(() => processRecoverySync(supabase, syncOperation, connection, syncLogId));
-    } else {
-      console.log('Using standard sync processor...');
-      queueMicrotask(() => processSequentialSync(supabase, syncOperation, connection, syncLogId));
-    }
+    // Always use simplified processor
+    console.log('Using simplified webinar-only processor...');
+    queueMicrotask(() => processSimpleWebinarSync(supabase, syncOperation, connection, syncLogId));
 
-    console.log(`=== Sync Request Successful (Total time: ${Date.now() - startTime}ms) ===`);
+    console.log(`=== Simplified Sync Request Successful (Total time: ${Date.now() - startTime}ms) ===`);
     return new Response(
       JSON.stringify({
         success: true,
         syncId: syncLogId,
         status: 'started',
-        message: `${requestBody.syncType === 'initial' || requestBody.recovery === true ? 'Recovery' : 'Sequential'} ${requestBody.syncType} sync initiated successfully.`,
+        message: `Simplified webinar-only ${requestBody.syncType} sync initiated successfully.`,
         debug: {
           connectionId: requestBody.connectionId,
           userId: user.id,
           syncType: requestBody.syncType,
-          processorType: requestBody.syncType === 'initial' || requestBody.recovery === true ? 'recovery' : 'standard'
+          processorType: 'simplified_webinar_only'
         }
       }),
       { status: 202, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('=== Sync Function Error ===');
+    console.error('=== Simplified Sync Function Error ===');
     console.error(`Error occurred after ${Date.now() - startTime}ms`);
     console.error('Error details:', error);
     console.error('Error stack:', error.stack);
