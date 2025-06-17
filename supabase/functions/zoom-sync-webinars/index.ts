@@ -1,9 +1,11 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { CORS_HEADERS, SYNC_PRIORITIES, SyncOperation } from './types.ts';
 import { validateRequest } from './validation.ts';
 import { createSyncLog } from './database-operations.ts';
 import { processSequentialSync } from './sync-processor.ts';
+import { processRecoverySync } from './enhanced-recovery-processor.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -52,7 +54,15 @@ serve(async (req) => {
     };
     
     console.log('Starting background sync process...');
-    queueMicrotask(() => processSequentialSync(supabase, syncOperation, connection, syncLogId));
+    
+    // Use recovery sync for initial syncs or when requested
+    if (requestBody.syncType === 'initial' || requestBody.recovery === true) {
+      console.log('Using recovery sync processor...');
+      queueMicrotask(() => processRecoverySync(supabase, syncOperation, connection, syncLogId));
+    } else {
+      console.log('Using standard sync processor...');
+      queueMicrotask(() => processSequentialSync(supabase, syncOperation, connection, syncLogId));
+    }
 
     console.log(`=== Sync Request Successful (Total time: ${Date.now() - startTime}ms) ===`);
     return new Response(
@@ -60,11 +70,12 @@ serve(async (req) => {
         success: true,
         syncId: syncLogId,
         status: 'started',
-        message: `Sequential ${requestBody.syncType} sync initiated successfully.`,
+        message: `${requestBody.syncType === 'initial' || requestBody.recovery === true ? 'Recovery' : 'Sequential'} ${requestBody.syncType} sync initiated successfully.`,
         debug: {
           connectionId: requestBody.connectionId,
           userId: user.id,
-          syncType: requestBody.syncType
+          syncType: requestBody.syncType,
+          processorType: requestBody.syncType === 'initial' || requestBody.recovery === true ? 'recovery' : 'standard'
         }
       }),
       { status: 202, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }

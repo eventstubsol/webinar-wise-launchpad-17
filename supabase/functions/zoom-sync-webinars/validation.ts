@@ -1,3 +1,4 @@
+import { validateZoomConnection } from './zoom-api-client.ts';
 
 export async function validateRequest(req: Request, supabase: any) {
   console.log('Starting request validation...');
@@ -45,15 +46,15 @@ export async function validateRequest(req: Request, supabase: any) {
 
   console.log(`Connection found: ${connection.id}, status: ${connection.connection_status}`);
 
-  // FIXED: Clear any stuck syncs for this connection before proceeding
-  console.log('Checking for stuck syncs...');
-  await clearStuckSyncs(supabase, requestBody.connectionId);
+  // ENHANCED: More aggressive stuck sync clearing for recovery
+  console.log('Checking for stuck syncs with enhanced recovery...');
+  await clearStuckSyncsEnhanced(supabase, requestBody.connectionId);
 
   // Check for active syncs AFTER clearing stuck ones
   console.log('Checking for active syncs...');
   const { data: activeSyncs, error: syncError } = await supabase
     .from('zoom_sync_logs')
-    .select('id, sync_status')
+    .select('id, sync_status, created_at')
     .eq('connection_id', requestBody.connectionId)
     .in('sync_status', ['started', 'in_progress'])
     .limit(1);
@@ -74,19 +75,19 @@ export async function validateRequest(req: Request, supabase: any) {
   return { user, connection, requestBody };
 }
 
-// ADDED: Function to clear stuck syncs
-async function clearStuckSyncs(supabase: any, connectionId: string) {
-  console.log('Clearing any stuck syncs...');
+// ENHANCED: More aggressive stuck sync clearing
+async function clearStuckSyncsEnhanced(supabase: any, connectionId: string) {
+  console.log('Enhanced stuck sync clearing...');
   
-  // Consider syncs stuck if they've been running for more than 30 minutes
-  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  // Consider syncs stuck if they've been running for more than 20 minutes (more aggressive)
+  const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
   
   const { data: stuckSyncs, error: findError } = await supabase
     .from('zoom_sync_logs')
-    .select('id, sync_status, created_at')
+    .select('id, sync_status, created_at, current_webinar_id, sync_stage')
     .eq('connection_id', connectionId)
     .in('sync_status', ['started', 'in_progress'])
-    .lt('created_at', thirtyMinutesAgo);
+    .lt('created_at', twentyMinutesAgo);
 
   if (findError) {
     console.error('Error finding stuck syncs:', findError);
@@ -94,13 +95,17 @@ async function clearStuckSyncs(supabase: any, connectionId: string) {
   }
 
   if (stuckSyncs && stuckSyncs.length > 0) {
-    console.log(`Found ${stuckSyncs.length} stuck syncs, clearing them...`);
+    console.log(`Found ${stuckSyncs.length} stuck syncs, clearing them aggressively...`);
+    
+    for (const sync of stuckSyncs) {
+      console.log(`Clearing stuck sync ${sync.id} (stage: ${sync.sync_stage}, created: ${sync.created_at})`);
+    }
     
     const { error: updateError } = await supabase
       .from('zoom_sync_logs')
       .update({
         sync_status: 'failed',
-        error_message: 'Sync timed out - cleared by system',
+        error_message: 'Sync timed out - cleared by enhanced recovery system',
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -109,7 +114,7 @@ async function clearStuckSyncs(supabase: any, connectionId: string) {
     if (updateError) {
       console.error('Error clearing stuck syncs:', updateError);
     } else {
-      console.log(`Successfully cleared ${stuckSyncs.length} stuck syncs`);
+      console.log(`Successfully cleared ${stuckSyncs.length} stuck syncs with enhanced recovery`);
     }
   } else {
     console.log('No stuck syncs found');
