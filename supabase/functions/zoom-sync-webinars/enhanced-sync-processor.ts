@@ -1,4 +1,3 @@
-
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 import { WebinarStatusDetector } from './webinar-status-detector.ts';
@@ -69,6 +68,16 @@ export async function processComprehensiveSync(
         } catch (registrantError) {
           console.log(`No registrants data available for webinar ${webinar.id}: ${registrantError.message}`);
         }
+
+        // Fetch participants with proper error handling
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'participants', null);
+        let participants = [];
+        try {
+          participants = await client.getWebinarParticipants(webinar.id);
+          console.log(`Fetched ${participants.length} participants for webinar ${webinar.id}`);
+        } catch (participantError) {
+          console.log(`No participants data available for webinar ${webinar.id}: ${participantError.message}`);
+        }
         
         // Process webinar data with enhanced validation
         console.log(`Syncing webinar data for webinar ${webinar.id}...`);
@@ -78,6 +87,7 @@ export async function processComprehensiveSync(
           supabase,
           webinarDetails,
           registrants,
+          participants,
           connection.id
         );
         
@@ -136,6 +146,7 @@ async function syncWebinarWithValidation(
   supabase: any,
   webinarData: any,
   registrants: any[],
+  participants: any[],
   connectionId: string
 ): Promise<{ success: boolean; error?: string; webinarId?: string }> {
   console.log(`Starting validated webinar sync for webinar ${webinarData.id}`);
@@ -201,8 +212,35 @@ async function syncWebinarWithValidation(
       }
     }
 
+    // Process participants if available
+    if (participants && participants.length > 0) {
+      console.log(`Processing ${participants.length} participants for webinar ${webinarData.id}`);
+      
+      const transformedParticipants = participants.map(participant => 
+        transformParticipantForDatabase(participant, webinarRecord.id)
+      );
+      
+      const { error: participantsError } = await supabase
+        .from('zoom_participants')
+        .upsert(
+          transformedParticipants,
+          {
+            onConflict: 'webinar_id,participant_id',
+            ignoreDuplicates: false
+          }
+        );
+
+      if (participantsError) {
+        console.error('Participants insertion failed:', participantsError);
+        // Don't fail the entire operation for participant errors
+        console.log(`Continuing despite participants error for webinar ${webinarData.id}`);
+      } else {
+        console.log(`Successfully inserted ${transformedParticipants.length} participants`);
+      }
+    }
+
     // Update webinar metrics
-    await updateWebinarMetrics(supabase, webinarRecord.id, registrants || []);
+    await updateWebinarMetrics(supabase, webinarRecord.id, registrants || [], participants || []);
 
     return { 
       success: true, 
@@ -324,24 +362,67 @@ function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string)
 }
 
 /**
+ * Transform participant data for database insertion
+ */
+function transformParticipantForDatabase(apiParticipant: any, webinarDbId: string): any {
+  const details = apiParticipant.details?.[0] || {};
+  
+  return {
+    webinar_id: webinarDbId,
+    participant_id: apiParticipant.id || apiParticipant.participant_id || apiParticipant.user_id,
+    registrant_id: null, // This would need to be linked separately
+    participant_name: apiParticipant.name || apiParticipant.participant_name || apiParticipant.user_name,
+    participant_email: apiParticipant.user_email || apiParticipant.participant_email || apiParticipant.email || null,
+    participant_user_id: apiParticipant.user_id || null,
+    join_time: apiParticipant.join_time,
+    leave_time: apiParticipant.leave_time || null,
+    duration: apiParticipant.duration || null,
+    attentiveness_score: apiParticipant.attentiveness_score || null,
+    camera_on_duration: details.camera_on_duration || null,
+    share_application_duration: details.share_application_duration || null,
+    share_desktop_duration: details.share_desktop_duration || null,
+    posted_chat: apiParticipant.posted_chat || false,
+    raised_hand: apiParticipant.raised_hand || false,
+    answered_polling: apiParticipant.answered_polling || false,
+    asked_question: apiParticipant.asked_question || false,
+    device: details.device || null,
+    ip_address: details.ip_address || null,
+    location: details.location || null,
+    network_type: details.network_type || null,
+    version: details.version || null,
+    customer_key: apiParticipant.customer_key || null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
+/**
  * Update webinar metrics after syncing
  */
 async function updateWebinarMetrics(
   supabase: any,
   webinarDbId: string,
-  registrants: any[]
+  registrants: any[],
+  participants: any[]
 ): Promise<void> {
   console.log(`Calculating metrics for webinar ${webinarDbId}`);
   
   try {
     const totalRegistrants = registrants?.length || 0;
     const attendees = registrants?.filter(r => r.join_time) || [];
-    const totalAttendees = attendees.length;
+    const totalAttendees = participants?.length || attendees.length;
     
     let totalMinutes = 0;
     let avgAttendanceDuration = 0;
     
-    if (attendees.length > 0) {
+    if (participants && participants.length > 0) {
+      // Use participant data for more accurate metrics
+      totalMinutes = participants.reduce((sum, participant) => {
+        return sum + (participant.duration || 0);
+      }, 0);
+      avgAttendanceDuration = Math.round(totalMinutes / participants.length);
+    } else if (attendees.length > 0) {
+      // Fallback to registrant data
       totalMinutes = attendees.reduce((sum, attendee) => {
         return sum + (attendee.duration || 0);
       }, 0);
