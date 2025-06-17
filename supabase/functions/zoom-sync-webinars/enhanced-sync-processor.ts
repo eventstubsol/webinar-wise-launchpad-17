@@ -1,3 +1,4 @@
+
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 import { WebinarStatusDetector } from './webinar-status-detector.ts';
@@ -168,18 +169,18 @@ async function syncWebinarWithValidation(
       startTime: transformedWebinar.start_time
     });
 
-    // Attempt to insert webinar with detailed error catching
+    // Use proper upsert to prevent data deletion
     const { data: webinarRecord, error: webinarError } = await supabase
       .from('zoom_webinars')
       .upsert(
         transformedWebinar,
         {
           onConflict: 'connection_id,webinar_id',
-          ignoreDuplicates: false
+          ignoreDuplicates: true  // FIXED: Prevent deletion of existing data
         }
       )
       .select('id')
-      .single();
+      .maybeSingle();
 
     if (webinarError) {
       console.error('Webinar insertion failed:', webinarError);
@@ -189,14 +190,38 @@ async function syncWebinarWithValidation(
       };
     }
 
-    console.log(`Webinar inserted successfully with ID: ${webinarRecord.id}`);
+    let webinarDbId = webinarRecord?.id;
+    
+    // If no record returned due to ignoreDuplicates, fetch the existing one
+    if (!webinarDbId) {
+      const { data: existingWebinar, error: fetchError } = await supabase
+        .from('zoom_webinars')
+        .select('id')
+        .eq('connection_id', connectionId)
+        .eq('webinar_id', webinarData.id?.toString() || webinarData.webinar_id?.toString())
+        .maybeSingle();
+        
+      if (fetchError) {
+        console.error('Failed to fetch existing webinar:', fetchError);
+        return { success: false, error: `Failed to fetch existing webinar: ${fetchError.message}` };
+      }
+      
+      if (!existingWebinar) {
+        console.error('No webinar record found after upsert');
+        return { success: false, error: 'No webinar record found after upsert' };
+      }
+      
+      webinarDbId = existingWebinar.id;
+    }
+
+    console.log(`Webinar processed successfully with ID: ${webinarDbId}`);
     
     // Process registrants if available
     if (registrants && registrants.length > 0) {
       console.log(`Processing ${registrants.length} registrants for webinar ${webinarData.id}`);
       
       const transformedRegistrants = registrants.map(registrant => 
-        transformRegistrantForDatabase(registrant, webinarRecord.id)
+        transformRegistrantForDatabase(registrant, webinarDbId)
       );
       
       const { error: registrantsError } = await supabase
@@ -205,58 +230,98 @@ async function syncWebinarWithValidation(
           transformedRegistrants,
           {
             onConflict: 'webinar_id,registrant_id',
-            ignoreDuplicates: false
+            ignoreDuplicates: true  // FIXED: Prevent deletion of existing data
           }
         );
 
       if (registrantsError) {
         console.error('Registrants insertion failed:', registrantsError);
-        // Don't fail the entire operation for registrant errors
         console.log(`Continuing despite registrants error for webinar ${webinarData.id}`);
       } else {
-        console.log(`Successfully inserted ${transformedRegistrants.length} registrants`);
+        console.log(`Successfully processed ${transformedRegistrants.length} registrants`);
       }
     }
 
-    // Process participants if available with enhanced logging
+    // Process participants with enhanced validation and error handling
     if (participants && participants.length > 0) {
       console.log(`Processing ${participants.length} participants for webinar ${webinarData.id}`);
       console.log(`First participant structure:`, JSON.stringify(participants[0], null, 2));
       
-      const transformedParticipants = participants.map(participant => 
-        transformParticipantForDatabase(participant, webinarRecord.id)
-      );
+      const transformedParticipants = participants.map(participant => {
+        try {
+          return transformParticipantForDatabase(participant, webinarDbId);
+        } catch (transformError) {
+          console.error(`Failed to transform participant:`, transformError, participant);
+          return null;
+        }
+      }).filter(Boolean); // Remove any null transformations
       
-      console.log(`First transformed participant:`, JSON.stringify(transformedParticipants[0], null, 2));
-      
-      const { error: participantsError } = await supabase
-        .from('zoom_participants')
-        .upsert(
-          transformedParticipants,
-          {
-            onConflict: 'webinar_id,participant_id',
-            ignoreDuplicates: false
-          }
-        );
+      if (transformedParticipants.length > 0) {
+        console.log(`First transformed participant:`, JSON.stringify(transformedParticipants[0], null, 2));
+        
+        // Process participants in smaller batches to avoid constraint violations
+        const batchSize = 50;
+        let successfulInserts = 0;
+        
+        for (let i = 0; i < transformedParticipants.length; i += batchSize) {
+          const batch = transformedParticipants.slice(i, i + batchSize);
+          
+          try {
+            const { error: participantsError, data: insertedParticipants } = await supabase
+              .from('zoom_participants')
+              .upsert(
+                batch,
+                {
+                  onConflict: 'webinar_id,participant_id',
+                  ignoreDuplicates: true  // FIXED: Prevent deletion of existing data
+                }
+              )
+              .select('id');
 
-      if (participantsError) {
-        console.error('Participants insertion failed:', participantsError);
-        console.error('Participants error details:', JSON.stringify(participantsError, null, 2));
-        // Don't fail the entire operation for participant errors
-        console.log(`Continuing despite participants error for webinar ${webinarData.id}`);
+            if (participantsError) {
+              console.error(`Participants batch ${i}-${i + batch.length} insertion failed:`, participantsError);
+              console.error('Batch data sample:', JSON.stringify(batch[0], null, 2));
+              
+              // Try individual inserts to identify problematic records
+              for (const participant of batch) {
+                try {
+                  await supabase
+                    .from('zoom_participants')
+                    .upsert(
+                      participant,
+                      {
+                        onConflict: 'webinar_id,participant_id',
+                        ignoreDuplicates: true
+                      }
+                    );
+                  successfulInserts++;
+                } catch (individualError) {
+                  console.error(`Failed to insert individual participant:`, individualError, participant);
+                }
+              }
+            } else {
+              successfulInserts += batch.length;
+              console.log(`Successfully processed batch ${i}-${i + batch.length} participants`);
+            }
+          } catch (batchError) {
+            console.error(`Batch processing error:`, batchError);
+          }
+        }
+        
+        console.log(`Successfully inserted ${successfulInserts} out of ${transformedParticipants.length} participants`);
       } else {
-        console.log(`Successfully inserted ${transformedParticipants.length} participants`);
+        console.log(`No valid participants to process for webinar ${webinarData.id}`);
       }
     } else {
       console.log(`No participants data to process for webinar ${webinarData.id}`);
     }
 
     // Update webinar metrics
-    await updateWebinarMetrics(supabase, webinarRecord.id, registrants || [], participants || []);
+    await updateWebinarMetrics(supabase, webinarDbId, registrants || [], participants || []);
 
     return { 
       success: true, 
-      webinarId: webinarRecord.id 
+      webinarId: webinarDbId 
     };
     
   } catch (error) {
@@ -374,19 +439,43 @@ function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string)
 }
 
 /**
- * Transform participant data for database insertion
+ * Transform participant data for database insertion with enhanced validation
  */
 function transformParticipantForDatabase(apiParticipant: any, webinarDbId: string): any {
   const details = apiParticipant.details?.[0] || {};
   
+  // Validate required fields
+  if (!webinarDbId) {
+    throw new Error('webinarDbId is required for participant transformation');
+  }
+  
+  // Generate a unique participant_id if missing
+  const participantId = apiParticipant.id || 
+                       apiParticipant.participant_id || 
+                       apiParticipant.user_id || 
+                       `participant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Handle IP address conversion safely
+  let ipAddress = null;
+  if (details.ip_address) {
+    // Convert to string to avoid inet type issues
+    ipAddress = details.ip_address.toString();
+  }
+  
   return {
     webinar_id: webinarDbId,
-    participant_id: apiParticipant.id || apiParticipant.participant_id || apiParticipant.user_id,
+    participant_id: participantId,
     registrant_id: null, // This would need to be linked separately
-    participant_name: apiParticipant.name || apiParticipant.participant_name || apiParticipant.user_name,
-    participant_email: apiParticipant.user_email || apiParticipant.participant_email || apiParticipant.email || null,
+    participant_name: apiParticipant.name || 
+                     apiParticipant.participant_name || 
+                     apiParticipant.user_name || 
+                     'Unknown Participant',
+    participant_email: apiParticipant.user_email || 
+                      apiParticipant.participant_email || 
+                      apiParticipant.email || 
+                      null,
     participant_user_id: apiParticipant.user_id || null,
-    join_time: apiParticipant.join_time,
+    join_time: apiParticipant.join_time || null,
     leave_time: apiParticipant.leave_time || null,
     duration: apiParticipant.duration || null,
     attentiveness_score: apiParticipant.attentiveness_score || null,
@@ -398,7 +487,7 @@ function transformParticipantForDatabase(apiParticipant: any, webinarDbId: strin
     answered_polling: apiParticipant.answered_polling || false,
     asked_question: apiParticipant.asked_question || false,
     device: details.device || null,
-    ip_address: details.ip_address || null,
+    ip_address: ipAddress,
     location: details.location || null,
     network_type: details.network_type || null,
     version: details.version || null,

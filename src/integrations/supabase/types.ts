@@ -4646,7 +4646,7 @@ export type Database = {
           harddisk_id: string | null
           id: string
           internal_user: boolean | null
-          ip_address: unknown | null
+          ip_address: string | null
           join_time: string | null
           leave_time: string | null
           location: string | null
@@ -4684,7 +4684,7 @@ export type Database = {
           harddisk_id?: string | null
           id?: string
           internal_user?: boolean | null
-          ip_address?: unknown | null
+          ip_address?: string | null
           join_time?: string | null
           leave_time?: string | null
           location?: string | null
@@ -4722,7 +4722,7 @@ export type Database = {
           harddisk_id?: string | null
           id?: string
           internal_user?: boolean | null
-          ip_address?: unknown | null
+          ip_address?: string | null
           join_time?: string | null
           leave_time?: string | null
           location?: string | null

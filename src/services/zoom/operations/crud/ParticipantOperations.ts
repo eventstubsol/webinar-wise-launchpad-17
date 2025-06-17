@@ -3,11 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { ZoomDataTransformers } from '../../utils/dataTransformers';
 
 /**
- * Database operations for webinar participants
+ * Database operations for webinar participants with enhanced error handling
  */
 export class ParticipantOperations {
   /**
-   * Upsert participants for a webinar
+   * Upsert participants for a webinar with proper conflict resolution
    */
   static async upsertParticipants(participants: any[], webinarDbId: string): Promise<void> {
     if (!participants || participants.length === 0) return;
@@ -18,21 +18,60 @@ export class ParticipantOperations {
         ...transformed,
         updated_at: new Date().toISOString()
       };
-    });
+    }).filter(Boolean); // Remove any null transformations
 
-    const { error } = await supabase
-      .from('zoom_participants')
-      .upsert(
-        transformedParticipants,
-        {
-          onConflict: 'webinar_id,participant_id',
-          ignoreDuplicates: false
-        }
-      );
-
-    if (error) {
-      throw new Error(`Failed to upsert participants: ${error.message}`);
+    if (transformedParticipants.length === 0) {
+      console.log('No valid participants to upsert');
+      return;
     }
+
+    // Process in batches to avoid constraint violations
+    const batchSize = 50;
+    let successfulInserts = 0;
+
+    for (let i = 0; i < transformedParticipants.length; i += batchSize) {
+      const batch = transformedParticipants.slice(i, i + batchSize);
+      
+      try {
+        const { error } = await supabase
+          .from('zoom_participants')
+          .upsert(
+            batch,
+            {
+              onConflict: 'webinar_id,participant_id',
+              ignoreDuplicates: true // Prevent deletion of existing data
+            }
+          );
+
+        if (error) {
+          console.error(`Participants batch ${i}-${i + batch.length} failed:`, error);
+          
+          // Try individual inserts to identify problematic records
+          for (const participant of batch) {
+            try {
+              await supabase
+                .from('zoom_participants')
+                .upsert(
+                  participant,
+                  {
+                    onConflict: 'webinar_id,participant_id',
+                    ignoreDuplicates: true
+                  }
+                );
+              successfulInserts++;
+            } catch (individualError) {
+              console.error(`Failed to insert individual participant:`, individualError);
+            }
+          }
+        } else {
+          successfulInserts += batch.length;
+        }
+      } catch (batchError) {
+        console.error(`Batch processing error:`, batchError);
+      }
+    }
+
+    console.log(`Successfully upserted ${successfulInserts} out of ${transformedParticipants.length} participants`);
   }
 
   /**

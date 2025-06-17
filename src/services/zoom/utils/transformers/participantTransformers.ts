@@ -2,43 +2,73 @@
 import { ZoomParticipant } from '@/types/zoom';
 
 /**
- * Data transformation utilities for participants and engagement
+ * Data transformation utilities for participants and engagement with enhanced validation
  */
 export class ParticipantTransformers {
   /**
-   * Transform Zoom API participant to database format
+   * Transform Zoom API participant to database format with enhanced validation
    */
   static transformParticipant(
     apiParticipant: any,
     webinarId: string
-  ): Omit<ZoomParticipant, 'id' | 'created_at' | 'updated_at'> {
-    const details = apiParticipant.details?.[0] || {};
-    
-    return {
-      webinar_id: webinarId,
-      participant_id: apiParticipant.id || apiParticipant.participant_id,
-      registrant_id: null, // This would need to be linked separately
-      participant_name: apiParticipant.name || apiParticipant.participant_name,
-      participant_email: apiParticipant.user_email || apiParticipant.participant_email || null,
-      participant_user_id: apiParticipant.user_id || null,
-      join_time: apiParticipant.join_time,
-      leave_time: apiParticipant.leave_time || null,
-      duration: apiParticipant.duration || null,
-      attentiveness_score: apiParticipant.attentiveness_score || null,
-      camera_on_duration: details.camera_on_duration || null,
-      share_application_duration: details.share_application_duration || null,
-      share_desktop_duration: details.share_desktop_duration || null,
-      posted_chat: apiParticipant.posted_chat || false,
-      raised_hand: apiParticipant.raised_hand || false,
-      answered_polling: apiParticipant.answered_polling || false,
-      asked_question: apiParticipant.asked_question || false,
-      device: details.device || null,
-      ip_address: details.ip_address || null,
-      location: details.location || null,
-      network_type: details.network_type || null,
-      version: details.version || null,
-      customer_key: apiParticipant.customer_key || null,
-    };
+  ): Omit<ZoomParticipant, 'id' | 'created_at' | 'updated_at'> | null {
+    try {
+      const details = apiParticipant.details?.[0] || {};
+      
+      // Validate required fields
+      if (!webinarId) {
+        console.error('webinarId is required for participant transformation');
+        return null;
+      }
+      
+      // Generate a unique participant_id if missing
+      const participantId = apiParticipant.id || 
+                           apiParticipant.participant_id || 
+                           apiParticipant.user_id || 
+                           `participant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Handle IP address conversion safely
+      let ipAddress = null;
+      if (details.ip_address) {
+        // Convert to string to avoid inet type issues
+        ipAddress = details.ip_address.toString();
+      }
+      
+      return {
+        webinar_id: webinarId,
+        participant_id: participantId,
+        registrant_id: null, // This would need to be linked separately
+        participant_name: apiParticipant.name || 
+                         apiParticipant.participant_name || 
+                         apiParticipant.user_name || 
+                         'Unknown Participant',
+        participant_email: apiParticipant.user_email || 
+                          apiParticipant.participant_email || 
+                          apiParticipant.email || 
+                          null,
+        participant_user_id: apiParticipant.user_id || null,
+        join_time: apiParticipant.join_time || null,
+        leave_time: apiParticipant.leave_time || null,
+        duration: apiParticipant.duration || null,
+        attentiveness_score: apiParticipant.attentiveness_score || null,
+        camera_on_duration: details.camera_on_duration || null,
+        share_application_duration: details.share_application_duration || null,
+        share_desktop_duration: details.share_desktop_duration || null,
+        posted_chat: apiParticipant.posted_chat || false,
+        raised_hand: apiParticipant.raised_hand || false,
+        answered_polling: apiParticipant.answered_polling || false,
+        asked_question: apiParticipant.asked_question || false,
+        device: details.device || null,
+        ip_address: ipAddress,
+        location: details.location || null,
+        network_type: details.network_type || null,
+        version: details.version || null,
+        customer_key: apiParticipant.customer_key || null,
+      };
+    } catch (error) {
+      console.error('Error transforming participant:', error, apiParticipant);
+      return null;
+    }
   }
 
   /**
