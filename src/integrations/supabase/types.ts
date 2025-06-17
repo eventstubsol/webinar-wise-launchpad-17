@@ -5410,6 +5410,11 @@ export type Database = {
           max_registrants: number | null
           occurrence_id: string | null
           occurrences: Json | null
+          participant_sync_attempted_at: string | null
+          participant_sync_error: string | null
+          participant_sync_status:
+            | Database["public"]["Enums"]["participant_sync_status"]
+            | null
           password: string | null
           pstn_password: string | null
           record_file_id: string | null
@@ -5456,6 +5461,11 @@ export type Database = {
           max_registrants?: number | null
           occurrence_id?: string | null
           occurrences?: Json | null
+          participant_sync_attempted_at?: string | null
+          participant_sync_error?: string | null
+          participant_sync_status?:
+            | Database["public"]["Enums"]["participant_sync_status"]
+            | null
           password?: string | null
           pstn_password?: string | null
           record_file_id?: string | null
@@ -5502,6 +5512,11 @@ export type Database = {
           max_registrants?: number | null
           occurrence_id?: string | null
           occurrences?: Json | null
+          participant_sync_attempted_at?: string | null
+          participant_sync_error?: string | null
+          participant_sync_status?:
+            | Database["public"]["Enums"]["participant_sync_status"]
+            | null
           password?: string | null
           pstn_password?: string | null
           record_file_id?: string | null
@@ -5636,6 +5651,12 @@ export type Database = {
       content_type: "transcript" | "slides" | "chat" | "audio" | "video"
       metric_data_type: "number" | "percentage" | "duration" | "count" | "ratio"
       participant_status: "in_meeting" | "in_waiting_room"
+      participant_sync_status:
+        | "not_applicable"
+        | "pending"
+        | "synced"
+        | "failed"
+        | "no_participants"
       prediction_type:
         | "dropout_risk"
         | "engagement_score"
@@ -5826,6 +5847,13 @@ export const Constants = {
       content_type: ["transcript", "slides", "chat", "audio", "video"],
       metric_data_type: ["number", "percentage", "duration", "count", "ratio"],
       participant_status: ["in_meeting", "in_waiting_room"],
+      participant_sync_status: [
+        "not_applicable",
+        "pending",
+        "synced",
+        "failed",
+        "no_participants",
+      ],
       prediction_type: [
         "dropout_risk",
         "engagement_score",

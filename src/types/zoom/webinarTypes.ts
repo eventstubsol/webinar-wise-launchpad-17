@@ -1,57 +1,46 @@
+
 /**
- * Database types for Zoom webinars and related data
+ * Database types for Zoom webinar data and related entities
  */
 
-import { WebinarStatus, RegistrantStatus, RecordingType, RecordingStatus } from './enums';
-import { CustomQuestion } from './jsonTypes';
+import { WebinarStatus, WebinarType, ApprovalType } from './enums';
+import { WebinarSettings, RegistrantInfo, RecordingInfo, PanelistInfo, ChatMessageInfo, TrackingInfo } from './jsonTypes';
 
-/** Webinar metadata and configuration */
+/** Core webinar entity from Zoom API */
 export interface ZoomWebinar {
   id: string;
   connection_id: string;
   webinar_id: string;
-  webinar_uuid: string;
-  host_id: string;
+  webinar_uuid: string | null;
+  host_id: string | null;
   host_email: string | null;
   topic: string;
   agenda: string | null;
-  type: number;
+  type: WebinarType | null;
   status: WebinarStatus | null;
   start_time: string | null;
   duration: number | null;
   timezone: string | null;
   registration_required: boolean | null;
-  registration_type: number | null;
   registration_url: string | null;
   join_url: string | null;
-  approval_type: number | null;
-  alternative_hosts: string[] | null;
+  password: string | null;
+  approval_type: ApprovalType | null;
   max_registrants: number | null;
-  max_attendees: number | null;
-  occurrence_id: string | null;
-  total_registrants: number | null;
-  total_attendees: number | null;
-  total_minutes: number | null;
-  avg_attendance_duration: number | null;
+  attendees_count: number | null;
+  registrants_count: number | null;
+  settings: WebinarSettings | null;
+  recurrence: any | null; // JSON type
+  occurrences: any | null; // JSON type
+  tracking_fields: TrackingInfo | null;
+  panelists: PanelistInfo[] | null;
   synced_at: string | null;
   created_at: string | null;
   updated_at: string | null;
-  password?: string | null;
-  h323_password?: string | null;
-  pstn_password?: string | null;
-  encrypted_password?: string | null;
-  settings?: Record<string, any> | null;
-  tracking_fields?: Record<string, any>[] | null;
-  recurrence?: Record<string, any> | null;
-  occurrences?: Record<string, any>[] | null;
-  // New fields based on Zoom API schema
-  start_url?: string | null;
-  encrypted_passcode?: string | null;
-  creation_source?: string | null;
-  is_simulive?: boolean | null;
-  record_file_id?: string | null;
-  transition_to_live?: boolean | null;
-  webinar_created_at?: string | null;
+  // New participant sync tracking fields
+  participant_sync_status: 'not_applicable' | 'pending' | 'synced' | 'failed' | 'no_participants' | null;
+  participant_sync_attempted_at: string | null;
+  participant_sync_error: string | null;
 }
 
 /** Webinar registrant information */
@@ -59,90 +48,81 @@ export interface ZoomRegistrant {
   id: string;
   webinar_id: string;
   registrant_id: string;
-  registrant_email: string;
+  registrant_uuid: string | null;
+  email: string;
   first_name: string | null;
   last_name: string | null;
   address: string | null;
   city: string | null;
-  state: string | null;
-  zip: string | null;
   country: string | null;
+  zip: string | null;
+  state: string | null;
   phone: string | null;
+  industry: string | null;
+  org: string | null;
+  job_title: string | null;
+  purchasing_time_frame: string | null;
+  role_in_purchase_process: string | null;
+  no_of_employees: string | null;
   comments: string | null;
-  custom_questions: CustomQuestion[] | null;
-  registration_time: string;
-  source_id: string | null;
-  tracking_source: string | null;
-  status: RegistrantStatus | null;
-  join_time: string | null;
-  leave_time: string | null;
-  duration: number | null;
-  attended: boolean | null;
+  status: string | null;
+  create_time: string | null;
+  join_url: string | null;
+  custom_questions: RegistrantInfo | null;
   created_at: string | null;
   updated_at: string | null;
-  job_title?: string | null;
-  purchasing_time_frame?: string | null;
-  role_in_purchase_process?: string | null;
-  no_of_employees?: string | null;
-  industry?: string | null;
-  org?: string | null;
-  language?: string | null;
-  // New fields added from Zoom API alignment
-  join_url?: string | null;
-  create_time?: string | null;
 }
 
-/** Recording files and metadata */
+/** Webinar recording information */
 export interface ZoomRecording {
   id: string;
   webinar_id: string;
   recording_id: string;
-  recording_uuid: string;
-  recording_type: RecordingType | null;
-  recording_start: string;
-  recording_end: string;
-  file_type: string | null;
-  file_size: number | null;
-  play_url: string | null;
-  download_url: string | null;
+  recording_uuid: string | null;
+  account_id: string | null;
+  host_id: string | null;
+  topic: string | null;
+  type: string | null;
+  start_time: string | null;
+  duration: number | null;
+  share_url: string | null;
+  total_size: number | null;
+  recording_count: number | null;
+  recording_files: RecordingInfo[] | null;
   password: string | null;
-  status: RecordingStatus | null;
-  total_views: number | null;
-  total_downloads: number | null;
-  expires_at: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
 
-/** Panelist information for a webinar */
+/** Webinar panelist information */
 export interface ZoomPanelist {
   id: string;
   webinar_id: string;
-  panelist_id?: string;
-  panelist_email?: string;
-  name?: string;
-  join_url?: string;
-  created_at: string;
+  panelist_id: string;
+  name: string | null;
+  email: string | null;
+  join_url: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
-/** Chat message from a webinar */
+/** Webinar chat message */
 export interface ZoomChatMessage {
   id: string;
   webinar_id: string;
-  sender_name?: string;
-  sender_email?: string;
-  message?: string;
-  sent_at?: string;
-  created_at: string;
+  message_id: string;
+  sender: string | null;
+  message: string | null;
+  timestamp: string | null;
+  message_type: string | null;
+  created_at: string | null;
 }
 
-/** Tracking source information for a webinar */
+/** Webinar tracking information */
 export interface ZoomWebinarTracking {
   id: string;
   webinar_id: string;
-  source_name?: string;
-  tracking_url?: string;
-  visitor_count?: number;
-  registration_count?: number;
-  created_at: string;
+  tracking_field: string;
+  tracking_value: string | null;
+  created_at: string | null;
 }

@@ -1,5 +1,5 @@
 
-import { updateSyncLog, updateSyncStage } from './database-operations.ts';
+import { updateSyncLog, updateSyncStage, updateWebinarParticipantSyncStatus, determineParticipantSyncStatus } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 import { syncWebinarParticipants } from './processors/participant-processor.ts';
 
@@ -64,7 +64,10 @@ export async function processSimpleWebinarSync(
         // Get detailed webinar data
         const webinarDetails = await client.getWebinar(webinar.id);
         
-        // Store webinar data in database
+        // Determine initial participant sync status
+        const initialParticipantSyncStatus = await determineParticipantSyncStatus(webinarDetails);
+        
+        // Store webinar data in database with initial participant sync status
         const { data: webinarRecord, error: webinarError } = await supabase
           .from('zoom_webinars')
           .upsert(
@@ -86,6 +89,7 @@ export async function processSimpleWebinarSync(
               join_url: webinarDetails.join_url,
               approval_type: webinarDetails.settings?.approval_type,
               max_registrants: webinarDetails.settings?.registrants_restrict_number,
+              participant_sync_status: initialParticipantSyncStatus,
               synced_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             },
@@ -103,7 +107,7 @@ export async function processSimpleWebinarSync(
           continue;
         }
 
-        // Sync participants with eligibility check
+        // Sync participants with eligibility check and status tracking
         try {
           await updateSyncStage(
             supabase, 

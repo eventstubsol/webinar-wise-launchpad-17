@@ -1,5 +1,5 @@
 
-import { updateSyncStage } from '../database-operations.ts';
+import { updateSyncStage, updateWebinarParticipantSyncStatus } from '../database-operations.ts';
 import { isWebinarEligibleForParticipantSync } from './participant-eligibility.ts';
 import { transformParticipantForDatabase } from './participant-transformer.ts';
 import { saveParticipantsToDatabase } from './participant-database.ts';
@@ -29,12 +29,18 @@ export async function syncWebinarParticipants(
       console.log(`  - Webinar data provided: ${!!webinarData}`);
     }
 
+    // Update status to indicate sync attempt is starting
+    await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'pending');
+
     // Check if webinar is eligible for participant sync
     if (webinarData) {
       const eligibility = isWebinarEligibleForParticipantSync(webinarData, debugMode);
       
       if (!eligibility.eligible) {
         console.log(`SKIPPING participant sync for webinar ${webinarId}: ${eligibility.reason}`);
+        
+        // Update status to not_applicable for ineligible webinars
+        await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'not_applicable', eligibility.reason);
         
         if (debugMode) {
           console.log(`DEBUG: Webinar eligibility check failed:`);
@@ -63,6 +69,9 @@ export async function syncWebinarParticipants(
     
     if (!participants || participants.length === 0) {
       console.log(`ENHANCED: No participants found for webinar ${webinarId} (${participants ? 'empty array' : 'null/undefined result'})`);
+      
+      // Update status to no_participants for webinars with no participants
+      await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'no_participants', 'No participants found in API response');
       
       if (debugMode) {
         console.log(`DEBUG: Participants result type: ${typeof participants}`);
@@ -115,11 +124,16 @@ export async function syncWebinarParticipants(
     const saveResult = await saveParticipantsToDatabase(supabase, transformedParticipants, webinarId, debugMode);
     
     if (!saveResult.success) {
+      // Update status to failed if database save fails
+      await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'failed', `Failed to save participants: ${saveResult.error?.message}`);
       throw new Error(`Failed to upsert participants: ${saveResult.error?.message}`);
     }
 
     const insertTime = Date.now() - startTime - fetchTime - transformTime;
     const totalTime = Date.now() - startTime;
+
+    // Update status to synced on successful completion
+    await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'synced');
 
     // Enhanced success logging
     console.log(`ENHANCED: Participant sync completed successfully for webinar ${webinarId}:`);
@@ -140,6 +154,10 @@ export async function syncWebinarParticipants(
     
   } catch (error) {
     const totalTime = Date.now() - startTime;
+    
+    // Update status to failed on any error
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'failed', errorMessage);
     
     console.error(`ENHANCED: Participant sync failed for webinar ${webinarId}:`);
     console.error(`  - Error type: ${error.constructor.name}`);

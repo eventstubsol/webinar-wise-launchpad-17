@@ -64,3 +64,63 @@ export async function saveWebinarToDatabase(supabase: any, webinarData: any, con
     throw error;
   }
 }
+
+// New helper functions for participant sync status management
+export async function updateWebinarParticipantSyncStatus(
+  supabase: any, 
+  webinarDbId: string, 
+  status: 'not_applicable' | 'pending' | 'synced' | 'failed' | 'no_participants',
+  errorMessage?: string
+): Promise<void> {
+  const updates: any = {
+    participant_sync_status: status,
+    participant_sync_attempted_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  if (errorMessage) {
+    updates.participant_sync_error = errorMessage;
+  } else {
+    updates.participant_sync_error = null;
+  }
+
+  const { error } = await supabase
+    .from('zoom_webinars')
+    .update(updates)
+    .eq('id', webinarDbId);
+
+  if (error) {
+    console.error(`Failed to update participant sync status for webinar ${webinarDbId}:`, error);
+  } else {
+    console.log(`Updated webinar ${webinarDbId} participant sync status to: ${status}`);
+  }
+}
+
+export async function determineParticipantSyncStatus(webinarData: any): Promise<'not_applicable' | 'pending'> {
+  // Determine initial status based on webinar eligibility
+  if (!webinarData.start_time) {
+    return 'not_applicable';
+  }
+
+  const startTime = new Date(webinarData.start_time);
+  const now = new Date();
+  const fiveMinutesAgo = new Date(now.getTime() - (5 * 60 * 1000));
+
+  // Future webinars are not applicable
+  if (startTime > now) {
+    return 'not_applicable';
+  }
+
+  // Very recent webinars might not have participant data ready
+  if (startTime > fiveMinutesAgo) {
+    return 'not_applicable';
+  }
+
+  // Check if webinar has valid status for participant sync
+  const validStatuses = ['ended', 'finished', 'available'];
+  if (!validStatuses.includes(webinarData.status?.toLowerCase())) {
+    return 'not_applicable';
+  }
+
+  return 'pending';
+}

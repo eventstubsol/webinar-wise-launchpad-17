@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Database, Calendar, Users, Clock, AlertTriangle, Settings } from 'lucide-react';
+import { Database, Calendar, Users, Clock, AlertTriangle, Settings, CheckCircle, XCircle } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,17 +12,17 @@ import { Button } from '@/components/ui/button';
 export function ZoomSyncCard() {
   const { connection, isConnected, isExpired } = useZoomConnection();
 
-  // Get sync statistics
+  // Get sync statistics including participant sync status
   const { data: syncStats } = useQuery({
     queryKey: ['zoom-sync-stats', connection?.id],
     queryFn: async () => {
       if (!connection?.id) return null;
 
       try {
-        const [webinarsResult, syncLogsResult] = await Promise.all([
+        const [webinarsResult, syncLogsResult, participantStatsResult] = await Promise.all([
           supabase
             .from('zoom_webinars')
-            .select('id, synced_at', { count: 'exact' })
+            .select('id, synced_at, participant_sync_status', { count: 'exact' })
             .eq('connection_id', connection.id),
           supabase
             .from('zoom_sync_logs')
@@ -29,8 +30,19 @@ export function ZoomSyncCard() {
             .eq('connection_id', connection.id)
             .order('created_at', { ascending: false })
             .limit(1)
-            .maybeSingle()
+            .maybeSingle(),
+          supabase
+            .from('zoom_webinars')
+            .select('participant_sync_status', { count: 'exact' })
+            .eq('connection_id', connection.id)
         ]);
+
+        // Calculate participant sync statistics
+        const participantSyncStats = participantStatsResult.data?.reduce((acc: any, webinar: any) => {
+          const status = webinar.participant_sync_status || 'pending';
+          acc[status] = (acc[status] || 0) + 1;
+          return acc;
+        }, {}) || {};
 
         return {
           totalWebinars: webinarsResult.count || 0,
@@ -38,6 +50,7 @@ export function ZoomSyncCard() {
           lastSyncStatus: syncLogsResult.data?.sync_status,
           lastSyncError: syncLogsResult.data?.error_message,
           lastSyncErrorDetails: syncLogsResult.data?.error_details,
+          participantSyncStats: participantSyncStats,
         };
       } catch (error) {
         console.error('Error fetching sync stats:', error);
@@ -47,6 +60,7 @@ export function ZoomSyncCard() {
           lastSyncStatus: null,
           lastSyncError: null,
           lastSyncErrorDetails: null,
+          participantSyncStats: {},
         };
       }
     },
@@ -87,6 +101,23 @@ export function ZoomSyncCard() {
         return <Badge variant="default">Syncing</Badge>;
       default:
         return <Badge variant="outline">Not Synced</Badge>;
+    }
+  };
+
+  const getParticipantSyncStatusIcon = (status: string, count: number) => {
+    switch (status) {
+      case 'synced':
+        return <CheckCircle className="h-3 w-3 text-green-500" />;
+      case 'failed':
+        return <XCircle className="h-3 w-3 text-red-500" />;
+      case 'no_participants':
+        return <Users className="h-3 w-3 text-gray-400" />;
+      case 'pending':
+        return <Clock className="h-3 w-3 text-yellow-500" />;
+      case 'not_applicable':
+        return <Calendar className="h-3 w-3 text-gray-400" />;
+      default:
+        return <Clock className="h-3 w-3 text-gray-400" />;
     }
   };
 
@@ -148,6 +179,24 @@ export function ZoomSyncCard() {
             </div>
           </div>
         </div>
+
+        {/* Participant Sync Status Summary */}
+        {syncStats?.participantSyncStats && Object.keys(syncStats.participantSyncStats).length > 0 && (
+          <div className="border-t pt-4">
+            <p className="text-sm font-medium mb-2">Participant Sync Status</p>
+            <div className="space-y-1">
+              {Object.entries(syncStats.participantSyncStats).map(([status, count]) => (
+                <div key={status} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    {getParticipantSyncStatusIcon(status, count as number)}
+                    <span className="capitalize">{status.replace('_', ' ')}</span>
+                  </div>
+                  <span className="font-medium">{count as number}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Show authentication error prominently */}
         {isAuthError && (
