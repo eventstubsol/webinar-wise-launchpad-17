@@ -8,7 +8,8 @@ export async function processEnhancedWebinarSync(
   connection: any,
   syncLogId: string
 ): Promise<void> {
-  console.log(`Starting enhanced webinar sync for connection: ${connection.id}`);
+  const debugMode = syncOperation.options?.debug || false;
+  console.log(`Starting enhanced webinar sync for connection: ${connection.id}${debugMode ? ' (DEBUG MODE)' : ''}`);
   
   try {
     // Initialize Zoom API client
@@ -108,7 +109,15 @@ export async function processEnhancedWebinarSync(
         );
         
         try {
-          participantCount = await syncWebinarParticipantsEnhanced(supabase, client, webinar.id, webinarDbId);
+          // Import enhanced participant processor
+          const participantProcessor = await import('./processors/participant-processor.ts');
+          participantCount = await participantProcessor.syncWebinarParticipants(
+            supabase, 
+            client, 
+            webinar.id, 
+            webinarDbId,
+            debugMode // Pass debug mode to participant processor
+          );
           totalParticipantsSynced += participantCount;
           console.log(`Successfully synced ${participantCount} participants for webinar ${webinar.id}`);
           

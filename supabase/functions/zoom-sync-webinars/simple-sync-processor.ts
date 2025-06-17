@@ -11,7 +11,8 @@ export async function processSimpleWebinarSync(
   connection: any,
   syncLogId: string
 ): Promise<void> {
-  console.log(`Starting simple webinar-only sync for connection: ${connection.id}`);
+  const debugMode = syncOperation.options?.debug || false;
+  console.log(`Starting simple webinar-only sync for connection: ${connection.id}${debugMode ? ' (DEBUG MODE)' : ''}`);
   
   try {
     // Initialize Zoom API client
@@ -108,7 +109,13 @@ export async function processSimpleWebinarSync(
         );
         
         try {
-          const participantCount = await syncWebinarParticipants(supabase, client, webinar.id, webinarDbId);
+          const participantCount = await syncWebinarParticipants(
+            supabase, 
+            client, 
+            webinar.id, 
+            webinarDbId,
+            debugMode // Pass debug mode to participant processor
+          );
           totalParticipantsSynced += participantCount;
           console.log(`Successfully synced ${participantCount} participants for webinar ${webinar.id}`);
           
