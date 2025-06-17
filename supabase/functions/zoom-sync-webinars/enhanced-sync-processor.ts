@@ -69,14 +69,20 @@ export async function processComprehensiveSync(
           console.log(`No registrants data available for webinar ${webinar.id}: ${registrantError.message}`);
         }
 
-        // Fetch participants with proper error handling
+        // Fetch participants with enhanced error handling and multiple endpoint strategy
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'participants', null);
         let participants = [];
         try {
+          console.log(`Attempting to fetch participants for webinar ${webinar.id} using enhanced strategy`);
           participants = await client.getWebinarParticipants(webinar.id);
-          console.log(`Fetched ${participants.length} participants for webinar ${webinar.id}`);
+          console.log(`Successfully fetched ${participants.length} participants for webinar ${webinar.id}`);
+          
+          if (participants.length > 0) {
+            console.log(`Sample participant data structure:`, JSON.stringify(participants[0], null, 2));
+          }
         } catch (participantError) {
-          console.log(`No participants data available for webinar ${webinar.id}: ${participantError.message}`);
+          console.error(`Failed to fetch participants for webinar ${webinar.id}:`, participantError.message);
+          console.log(`Continuing sync without participants data for webinar ${webinar.id}`);
         }
         
         // Process webinar data with enhanced validation
@@ -212,13 +218,16 @@ async function syncWebinarWithValidation(
       }
     }
 
-    // Process participants if available
+    // Process participants if available with enhanced logging
     if (participants && participants.length > 0) {
       console.log(`Processing ${participants.length} participants for webinar ${webinarData.id}`);
+      console.log(`First participant structure:`, JSON.stringify(participants[0], null, 2));
       
       const transformedParticipants = participants.map(participant => 
         transformParticipantForDatabase(participant, webinarRecord.id)
       );
+      
+      console.log(`First transformed participant:`, JSON.stringify(transformedParticipants[0], null, 2));
       
       const { error: participantsError } = await supabase
         .from('zoom_participants')
@@ -232,11 +241,14 @@ async function syncWebinarWithValidation(
 
       if (participantsError) {
         console.error('Participants insertion failed:', participantsError);
+        console.error('Participants error details:', JSON.stringify(participantsError, null, 2));
         // Don't fail the entire operation for participant errors
         console.log(`Continuing despite participants error for webinar ${webinarData.id}`);
       } else {
         console.log(`Successfully inserted ${transformedParticipants.length} participants`);
       }
+    } else {
+      console.log(`No participants data to process for webinar ${webinarData.id}`);
     }
 
     // Update webinar metrics
