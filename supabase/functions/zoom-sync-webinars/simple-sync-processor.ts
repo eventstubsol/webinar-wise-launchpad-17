@@ -29,6 +29,10 @@ import {
   createSyncNotes 
 } from './processors/sync-status-manager.ts';
 
+// NEW: Import registrant sync functionality
+import { syncWebinarRegistrants } from './processors/registrant-processor.ts';
+import { checkRegistrantEligibility } from './processors/registrant-eligibility.ts';
+
 export async function processSimpleWebinarSync(
   supabase: any,
   syncOperation: SyncOperation,
@@ -36,9 +40,9 @@ export async function processSimpleWebinarSync(
   syncLogId: string
 ): Promise<void> {
   const debugMode = syncOperation.options?.debug || false;
-  console.log(`Starting enhanced simple webinar sync with comprehensive verification for connection: ${connection.id}${debugMode ? ' (DEBUG MODE)' : ''}`);
+  console.log(`Starting enhanced simple webinar sync with registrant support for connection: ${connection.id}${debugMode ? ' (DEBUG MODE)' : ''}`);
 
-  // Initialize enhanced tracking with verification capability
+  // Initialize enhanced tracking with registrant metrics
   let processedCount = 0;
   let successCount = 0;
   let skippedForParticipants = 0;
@@ -48,6 +52,11 @@ export async function processSimpleWebinarSync(
   let updateCount = 0;
   let preSync: SyncBaseline | null = null;
   let verificationResult: VerificationResult | null = null;
+  
+  // NEW: Registrant sync tracking
+  let skippedForRegistrants = 0;
+  let processedForRegistrants = 0;
+  let totalRegistrantsSynced = 0;
   
   // Initialize comprehensive validation summary
   const validationSummary: SyncValidationSummary = createValidationSummary();
@@ -82,7 +91,7 @@ export async function processSimpleWebinarSync(
       type: 'all'
     });
     
-    console.log(`Found ${webinars.length} webinars to sync with enhanced verification`);
+    console.log(`Found ${webinars.length} webinars to sync with enhanced verification and registrant support`);
     
     if (webinars.length === 0) {
       // Run verification even for empty sync
@@ -100,7 +109,8 @@ export async function processSimpleWebinarSync(
         sync_notes: JSON.stringify({
           verification_enabled: true,
           verification_result: verificationResult || 'baseline_unavailable',
-          empty_sync: true
+          empty_sync: true,
+          registrant_sync_enabled: true
         })
       });
       return;
@@ -110,10 +120,10 @@ export async function processSimpleWebinarSync(
     
     const totalWebinars = webinars.length;
     
-    // Process each webinar with enhanced validation
+    // Process each webinar with enhanced validation and registrant sync
     for (const webinar of webinars) {
       try {
-        const baseProgress = 20 + Math.round(((processedCount) / totalWebinars) * 60);
+        const baseProgress = 20 + Math.round(((processedCount) / totalWebinars) * 50); // Reduced to make room for registrant sync
         
         await updateSyncStage(
           supabase, 
@@ -123,7 +133,7 @@ export async function processSimpleWebinarSync(
           baseProgress
         );
         
-        console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars}) with enhanced validation`);
+        console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars}) with enhanced validation and registrant sync`);
         
         // ENHANCED DEBUG: Log original webinar data from list
         console.log(`📊 ORIGINAL LIST DATA for webinar ${webinar.id}:`);
@@ -249,7 +259,94 @@ export async function processSimpleWebinarSync(
           // Continue with next webinar even if participant sync fails
         }
 
-        // ENHANCED VALIDATION: Validate webinar data after sync
+        // NEW: Sync registrants with eligibility check and enhanced validation
+        let registrantResult = { skipped: true, reason: 'Not attempted', count: 0 };
+        try {
+          await updateSyncStage(
+            supabase, 
+            syncLogId, 
+            webinar.id?.toString(), 
+            'syncing_registrants', 
+            baseProgress + 15
+          );
+          
+          console.log(`🎯 REGISTRANT SYNC: Starting registrant sync for webinar ${webinar.id}`);
+          
+          // Check registrant eligibility
+          const registrantEligibility = checkRegistrantEligibility(webinarDataForParticipants);
+          
+          if (registrantEligibility.eligible) {
+            console.log(`✅ REGISTRANT ELIGIBLE: ${registrantEligibility.reason}`);
+            
+            try {
+              const registrantCount = await syncWebinarRegistrants(
+                supabase,
+                client,
+                webinar.id,
+                webinarDbId
+              );
+              
+              registrantResult = { 
+                skipped: false, 
+                reason: 'Successfully synced', 
+                count: registrantCount 
+              };
+              
+              processedForRegistrants++;
+              totalRegistrantsSynced += registrantCount;
+              
+              console.log(`✅ REGISTRANT SYNC SUCCESS: ${registrantCount} registrants synced for webinar ${webinar.id}`);
+              
+              // Update validation summary
+              if (registrantCount > 0) {
+                validationSummary.webinarsWithRegistrants++;
+              } else {
+                validationSummary.webinarsWithZeroRegistrants.push(webinar.id?.toString());
+              }
+              
+            } catch (registrantSyncError) {
+              console.error(`❌ REGISTRANT SYNC ERROR for webinar ${webinar.id}:`, registrantSyncError);
+              registrantResult = { 
+                skipped: true, 
+                reason: `Registrant sync error: ${registrantSyncError.message}`, 
+                count: 0 
+              };
+              
+              validationSummary.failedRegistrantSyncs.push(webinar.id?.toString());
+              validationSummary.validationErrors.push({
+                webinarId: webinar.id?.toString() || 'unknown',
+                type: 'registrant_sync_failed',
+                message: `Registrant sync failed: ${registrantSyncError.message}`,
+                severity: 'error'
+              });
+            }
+            
+          } else {
+            console.log(`❌ REGISTRANT NOT ELIGIBLE: ${registrantEligibility.reason}`);
+            registrantResult = { 
+              skipped: true, 
+              reason: registrantEligibility.reason, 
+              count: 0 
+            };
+            skippedForRegistrants++;
+            
+            // Add to zero registrants list if registration was expected
+            if (registrantEligibility.debugInfo.registrationRequired) {
+              validationSummary.webinarsWithZeroRegistrants.push(webinar.id?.toString());
+            }
+          }
+          
+        } catch (registrantError) {
+          console.error(`Error in registrant sync process for webinar ${webinar.id}:`, registrantError);
+          registrantResult = { 
+            skipped: true, 
+            reason: `Registrant process error: ${registrantError.message}`, 
+            count: 0 
+          };
+          skippedForRegistrants++;
+        }
+
+        // ENHANCED VALIDATION: Validate webinar data after sync (including registrant data)
         validateWebinarData(webinarDataForParticipants, participantResult, validationSummary);
         
         successCount++;
@@ -304,7 +401,7 @@ export async function processSimpleWebinarSync(
     console.log(validationReport);
     console.log(verificationReport);
     
-    // Enhanced completion logging with verification summary
+    // Enhanced completion logging with verification summary and registrant metrics
     logSyncCompletion(
       totalWebinars,
       successCount,
@@ -316,10 +413,15 @@ export async function processSimpleWebinarSync(
       totalParticipantsSynced,
       finalStatus,
       validationSummary,
-      verificationResult
+      verificationResult,
+      {
+        processedForRegistrants,
+        skippedForRegistrants, 
+        totalRegistrantsSynced
+      }
     );
     
-    // Enhanced sync log with comprehensive verification data
+    // Enhanced sync log with comprehensive verification data and registrant metrics
     await updateSyncLog(supabase, syncLogId, {
       sync_status: finalStatus,
       processed_items: processedCount,
@@ -335,12 +437,17 @@ export async function processSimpleWebinarSync(
         skippedForParticipants,
         validationSummary,
         verificationResult,
-        preSync
+        preSync,
+        {
+          processedForRegistrants,
+          skippedForRegistrants,
+          totalRegistrantsSynced
+        }
       ))
     });
     
-    console.log(`✅ Enhanced sync with verification completed. Status: ${finalStatus}`);
-    console.log(`📊 ${insertCount} new webinars inserted, ${updateCount} existing webinars updated (with data preservation), ${totalParticipantsSynced} participants synced.`);
+    console.log(`✅ Enhanced sync with verification and registrant support completed. Status: ${finalStatus}`);
+    console.log(`📊 ${insertCount} new webinars inserted, ${updateCount} existing webinars updated (with data preservation), ${totalParticipantsSynced} participants synced, ${totalRegistrantsSynced} registrants synced.`);
     
     if (finalStatus !== 'completed') {
       console.log(`⚠️ Sync completed with issues. Check verification and validation reports above for details.`);
@@ -354,7 +461,7 @@ export async function processSimpleWebinarSync(
     }
     
   } catch (error) {
-    console.error('Enhanced simple webinar sync with verification failed:', error);
+    console.error('Enhanced simple webinar sync with verification and registrant support failed:', error);
     
     // Add critical error to validation summary
     validationSummary.validationErrors.push({
@@ -379,7 +486,12 @@ export async function processSimpleWebinarSync(
         skippedForParticipants,
         validationSummary,
         verificationResult,
-        preSync
+        preSync,
+        {
+          processedForRegistrants: processedForRegistrants,
+          skippedForRegistrants: skippedForRegistrants,
+          totalRegistrantsSynced: totalRegistrantsSynced
+        }
       ))
     });
     

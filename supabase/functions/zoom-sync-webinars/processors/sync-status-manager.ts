@@ -35,9 +35,14 @@ export function logSyncCompletion(
   totalParticipantsSynced: number,
   finalStatus: string,
   validationSummary: SyncValidationSummary,
-  verificationResult?: VerificationResult | null
+  verificationResult?: VerificationResult | null,
+  registrantMetrics?: {
+    processedForRegistrants: number;
+    skippedForRegistrants: number;
+    totalRegistrantsSynced: number;
+  }
 ): void {
-  console.log(`\n🎉 Enhanced simple webinar sync completed with comprehensive verification:`);
+  console.log(`\n🎉 Enhanced simple webinar sync completed with comprehensive verification and registrant support:`);
   console.log(`  - Total webinars found: ${totalWebinars}`);
   console.log(`  - Webinars processed successfully: ${successCount}`);
   console.log(`  - Webinars failed: ${processedCount - successCount}`);
@@ -47,6 +52,14 @@ export function logSyncCompletion(
   console.log(`  - Webinars processed for participants: ${processedForParticipants}`);
   console.log(`  - Webinars skipped for participants: ${skippedForParticipants}`);
   console.log(`  - Total participants synced: ${totalParticipantsSynced}`);
+  
+  // NEW: Registrant metrics logging
+  if (registrantMetrics) {
+    console.log(`  - Webinars processed for registrants: ${registrantMetrics.processedForRegistrants}`);
+    console.log(`  - Webinars skipped for registrants: ${registrantMetrics.skippedForRegistrants}`);
+    console.log(`  - Total registrants synced: ${registrantMetrics.totalRegistrantsSynced}`);
+  }
+  
   console.log(`  - Final sync status: ${finalStatus}`);
   console.log(`  - Validation errors: ${validationSummary.validationErrors.length}`);
   console.log(`  - Validation warnings: ${validationSummary.validationWarnings.length}`);
@@ -64,7 +77,12 @@ export function createSyncNotes(
   skippedForParticipants: number,
   validationSummary: SyncValidationSummary,
   verificationResult?: VerificationResult | null,
-  preSync?: any
+  preSync?: any,
+  registrantMetrics?: {
+    processedForRegistrants: number;
+    skippedForRegistrants: number;
+    totalRegistrantsSynced: number;
+  }
 ): any {
   return {
     webinars_inserted: insertCount,
@@ -73,6 +91,14 @@ export function createSyncNotes(
     webinars_for_participants_processed: processedForParticipants,
     webinars_for_participants_skipped: skippedForParticipants,
     participant_sync_skip_reasons: 'Webinars not yet occurred or invalid status',
+    
+    // NEW: Registrant sync metrics
+    registrant_sync_enabled: true,
+    webinars_for_registrants_processed: registrantMetrics?.processedForRegistrants || 0,
+    webinars_for_registrants_skipped: registrantMetrics?.skippedForRegistrants || 0,
+    total_registrants_synced: registrantMetrics?.totalRegistrantsSynced || 0,
+    registrant_sync_skip_reasons: 'No registration required or webinar too recent',
+    
     verification_enabled: true,
     verification_baseline: preSync,
     verification_result: verificationResult,
