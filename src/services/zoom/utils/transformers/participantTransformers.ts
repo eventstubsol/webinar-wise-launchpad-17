@@ -27,11 +27,11 @@ export class ParticipantTransformers {
                            apiParticipant.user_id || 
                            `participant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      // Handle IP address conversion safely
-      let ipAddress = null;
+      // Handle IP address conversion safely - ensure it's a string or null
+      let ipAddress: string | null = null;
       if (details.ip_address) {
-        // Convert to string to avoid inet type issues
-        ipAddress = details.ip_address.toString();
+        // Convert to string to match the text column type
+        ipAddress = String(details.ip_address);
       }
       
       return {
@@ -59,7 +59,7 @@ export class ParticipantTransformers {
         answered_polling: apiParticipant.answered_polling || false,
         asked_question: apiParticipant.asked_question || false,
         device: details.device || null,
-        ip_address: ipAddress,
+        ip_address: ipAddress, // Now properly typed as string | null
         location: details.location || null,
         network_type: details.network_type || null,
         version: details.version || null,

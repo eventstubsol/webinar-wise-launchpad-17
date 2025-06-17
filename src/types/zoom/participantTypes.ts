@@ -24,7 +24,7 @@ export interface ZoomParticipant {
   answered_polling: boolean | null;
   asked_question: boolean | null;
   device: string | null;
-  ip_address: unknown | null;
+  ip_address: string | null; // Updated to string | null to match database schema
   location: string | null;
   network_type: string | null;
   version: string | null;
