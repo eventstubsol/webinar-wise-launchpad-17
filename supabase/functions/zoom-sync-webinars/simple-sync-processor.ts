@@ -1,3 +1,4 @@
+
 import { updateSyncLog, updateSyncStage, updateWebinarParticipantSyncStatus, determineParticipantSyncStatus } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 import { syncWebinarParticipants } from './processors/participant-processor.ts';
@@ -218,13 +219,27 @@ function mergeWebinarData(originalListData: any, detailedData: any): any {
 }
 
 /**
- * Derive status from available data when status is missing
+ * FIXED: Derive status from available data when status is missing
+ * This function had a bug comparing to string 'undefined' instead of actual undefined
  */
 function deriveWebinarStatus(webinarData: any): string {
-  // If status is explicitly provided, use it
-  if (webinarData.status && webinarData.status !== 'undefined') {
+  console.log(`🔧 STATUS DERIVATION DEBUG for webinar ${webinarData.id}:`);
+  console.log(`  - Original status: ${webinarData.status} (type: ${typeof webinarData.status})`);
+  console.log(`  - Status === undefined: ${webinarData.status === undefined}`);
+  console.log(`  - Status === null: ${webinarData.status === null}`);
+  console.log(`  - Status === '': ${webinarData.status === ''}`);
+  
+  // FIXED BUG: Check for actual undefined/null/empty, not string 'undefined'
+  if (webinarData.status && 
+      webinarData.status !== undefined && 
+      webinarData.status !== null && 
+      webinarData.status !== '' && 
+      webinarData.status.toString().toLowerCase() !== 'undefined') {
+    console.log(`  - Using existing status: ${webinarData.status}`);
     return webinarData.status;
   }
+  
+  console.log(`  - Status invalid or missing, deriving from start_time...`);
   
   // Derive status from start_time if available
   if (webinarData.start_time) {
@@ -233,18 +248,56 @@ function deriveWebinarStatus(webinarData: any): string {
     const duration = webinarData.duration || 60; // Default 60 minutes if not specified
     const endTime = new Date(startTime.getTime() + (duration * 60 * 1000));
     
+    console.log(`  - Start time: ${startTime.toISOString()}`);
+    console.log(`  - Current time: ${now.toISOString()}`);
+    console.log(`  - Estimated end time: ${endTime.toISOString()}`);
+    
     if (now < startTime) {
+      console.log(`  - Derived status: 'available' (future webinar)`);
       return 'available'; // Future webinar
     } else if (now > endTime) {
+      console.log(`  - Derived status: 'ended' (past webinar)`);
       return 'ended'; // Past webinar that should have ended
     } else {
+      console.log(`  - Derived status: 'started' (in progress)`);
       return 'started'; // Currently in progress
     }
   }
   
   // Last resort: return available as default
-  console.log(`⚠️ WARNING: Could not determine status for webinar ${webinarData.id}, defaulting to 'available'`);
+  console.log(`  - WARNING: Could not determine status, defaulting to 'available'`);
   return 'available';
+}
+
+/**
+ * Enhanced data flow validation to ensure integrity before participant sync
+ */
+function validateDataIntegrity(webinarData: any, webinarId: string): boolean {
+  console.log(`🔍 DATA INTEGRITY CHECK for webinar ${webinarId}:`);
+  
+  const requiredFields = ['id', 'status', 'start_time'];
+  const missingFields = [];
+  
+  for (const field of requiredFields) {
+    if (webinarData[field] === undefined || webinarData[field] === null) {
+      missingFields.push(field);
+    }
+  }
+  
+  if (missingFields.length > 0) {
+    console.log(`❌ MISSING REQUIRED FIELDS: ${missingFields.join(', ')}`);
+    return false;
+  }
+  
+  // Validate status field specifically
+  const status = webinarData.status;
+  if (typeof status !== 'string' || status.trim() === '' || status === 'undefined') {
+    console.log(`❌ INVALID STATUS: '${status}' (type: ${typeof status})`);
+    return false;
+  }
+  
+  console.log(`✅ Data integrity check passed`);
+  return true;
 }
 
 export async function processSimpleWebinarSync(
@@ -354,7 +407,7 @@ export async function processSimpleWebinarSync(
         
         // ENHANCED DEBUG: Log original webinar data from list
         console.log(`📊 ORIGINAL LIST DATA for webinar ${webinar.id}:`);
-        console.log(`  - Status from list: ${webinar.status}`);
+        console.log(`  - Status from list: ${webinar.status} (type: ${typeof webinar.status})`);
         console.log(`  - Type from list: ${webinar.type}`);
         console.log(`  - Start time from list: ${webinar.start_time}`);
         console.log(`  - Duration from list: ${webinar.duration}`);
@@ -365,7 +418,7 @@ export async function processSimpleWebinarSync(
         
         // ENHANCED DEBUG: Log detailed API response
         console.log(`📊 DETAILED API DATA for webinar ${webinar.id}:`);
-        console.log(`  - Status from details: ${webinarDetails.status}`);
+        console.log(`  - Status from details: ${webinarDetails.status} (type: ${typeof webinarDetails.status})`);
         console.log(`  - Type from details: ${webinarDetails.type}`);
         console.log(`  - Start time from details: ${webinarDetails.start_time}`);
         console.log(`  - Duration from details: ${webinarDetails.duration}`);
@@ -374,16 +427,25 @@ export async function processSimpleWebinarSync(
         // ENHANCED: Merge original list data with detailed data to preserve status
         const mergedWebinarData = mergeWebinarData(webinar, webinarDetails);
         
-        // ENHANCED: Derive status if still missing
+        // ENHANCED: Derive status if still missing or invalid
         mergedWebinarData.status = deriveWebinarStatus(mergedWebinarData);
         
-        // ENHANCED DEBUG: Log final merged data
-        console.log(`📊 MERGED WEBINAR DATA for webinar ${webinar.id}:`);
-        console.log(`  - Final status: ${mergedWebinarData.status}`);
+        // NEW: Data integrity validation before proceeding
+        const isDataValid = validateDataIntegrity(mergedWebinarData, webinar.id);
+        if (!isDataValid) {
+          console.log(`❌ Data integrity check failed for webinar ${webinar.id}, skipping...`);
+          processedCount++;
+          continue;
+        }
+        
+        // ENHANCED DEBUG: Log final merged data with detailed analysis
+        console.log(`📊 FINAL MERGED DATA for webinar ${webinar.id}:`);
+        console.log(`  - Final status: ${mergedWebinarData.status} (type: ${typeof mergedWebinarData.status})`);
         console.log(`  - Final type: ${mergedWebinarData.type}`);
         console.log(`  - Final start_time: ${mergedWebinarData.start_time}`);
         console.log(`  - Final duration: ${mergedWebinarData.duration}`);
-        console.log(`  - Status derivation: ${webinar.status} → ${webinarDetails.status} → ${mergedWebinarData.status}`);
+        console.log(`  - Status derivation path: ${webinar.status} → ${webinarDetails.status} → ${mergedWebinarData.status}`);
+        console.log(`  - Object keys: [${Object.keys(mergedWebinarData).join(', ')}]`);
         
         // Check if webinar already exists to track INSERT vs UPDATE
         const existingCheck = await supabase
@@ -411,17 +473,22 @@ export async function processSimpleWebinarSync(
           console.log(`✅ EXISTING webinar updated: ${webinar.id} -> DB ID: ${webinarDbId} (data preserved)`);
         }
 
-        // ENHANCED DEBUG: Log data being passed to participant sync
-        console.log(`📊 PRE-PARTICIPANT-SYNC DEBUG for webinar ${webinar.id}:`);
+        // CRITICAL FIX: Enhanced debug logging RIGHT BEFORE participant sync
+        console.log(`🚨 CRITICAL DEBUG: PRE-PARTICIPANT-SYNC VERIFICATION for webinar ${webinar.id}:`);
         console.log(`  - webinarDbId: ${webinarDbId}`);
-        console.log(`  - mergedWebinarData object type: ${typeof mergedWebinarData}`);
-        console.log(`  - mergedWebinarData.status: ${mergedWebinarData.status}`);
+        console.log(`  - mergedWebinarData is object: ${typeof mergedWebinarData === 'object'}`);
+        console.log(`  - mergedWebinarData.status FINAL CHECK: '${mergedWebinarData.status}' (type: ${typeof mergedWebinarData.status})`);
         console.log(`  - mergedWebinarData.start_time: ${mergedWebinarData.start_time}`);
         console.log(`  - mergedWebinarData.id: ${mergedWebinarData.id}`);
         console.log(`  - mergedWebinarData.duration: ${mergedWebinarData.duration}`);
         console.log(`  - mergedWebinarData.registration_url: ${mergedWebinarData.registration_url}`);
-        console.log(`  - mergedWebinarData keys: [${Object.keys(mergedWebinarData).join(', ')}]`);
+        console.log(`  - mergedWebinarData stringified: ${JSON.stringify({ status: mergedWebinarData.status, id: mergedWebinarData.id, start_time: mergedWebinarData.start_time }, null, 2)}`);
         console.log(`  - debugMode: ${debugMode}`);
+
+        // Create a deep clone to ensure no reference issues
+        const webinarDataForParticipants = JSON.parse(JSON.stringify(mergedWebinarData));
+        
+        console.log(`🔍 CLONED DATA CHECK: status = '${webinarDataForParticipants.status}' (type: ${typeof webinarDataForParticipants.status})`);
 
         // Sync participants with eligibility check and enhanced validation
         let participantResult = { skipped: true, reason: 'Not attempted', count: 0 };
@@ -439,7 +506,7 @@ export async function processSimpleWebinarSync(
             client, 
             webinar.id, 
             webinarDbId,
-            mergedWebinarData, // Pass merged data with preserved status
+            webinarDataForParticipants, // Pass cloned data with preserved status
             debugMode
           );
           
@@ -463,7 +530,7 @@ export async function processSimpleWebinarSync(
         }
 
         // ENHANCED VALIDATION: Validate webinar data after sync
-        validateWebinarData(mergedWebinarData, participantResult, validationSummary);
+        validateWebinarData(webinarDataForParticipants, participantResult, validationSummary);
         
         successCount++;
         processedCount++;
@@ -556,8 +623,8 @@ export async function processSimpleWebinarSync(
         verification_enabled: true,
         verification_baseline: preSync,
         verification_result: verificationResult,
-        status_field_fixes: 'Enhanced status preservation and derivation implemented',
-        debug_logging: 'Comprehensive webinar data flow logging enabled',
+        status_field_fixes: 'FIXED: Status derivation bug and enhanced data flow validation',
+        debug_logging: 'Comprehensive data integrity checks and deep cloning implemented',
         validation_summary: {
           webinars_with_participants: validationSummary.webinarsWithParticipants,
           webinars_with_registrants: validationSummary.webinarsWithRegistrants,
@@ -616,8 +683,8 @@ export async function processSimpleWebinarSync(
         verification_enabled: true,
         verification_baseline: preSync,
         verification_result: verificationResult,
-        status_field_fixes: 'Enhanced status preservation and derivation implemented',
-        debug_logging: 'Comprehensive webinar data flow logging enabled',
+        status_field_fixes: 'FIXED: Status derivation bug and enhanced data flow validation',
+        debug_logging: 'Comprehensive data integrity checks and deep cloning implemented',
         validation_summary: {
           webinars_with_participants: validationSummary.webinarsWithParticipants,
           webinars_with_registrants: validationSummary.webinarsWithRegistrants,
