@@ -1,3 +1,4 @@
+
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 import { syncWebinarWithValidation } from './webinar-sync-handler.ts';
@@ -119,12 +120,12 @@ export async function processRecoverySync(
           continue;
         }
         
-        // Enhanced existing webinar check with detailed logging
+        // Enhanced existing webinar check with correct column name (topic, not title)
         console.log(`Checking if webinar ${webinar.id} already exists...`);
         const { data: existingWebinar, error: checkError } = await Promise.race([
           supabase
             .from('zoom_webinars')
-            .select('id, title, webinar_id')
+            .select('id, topic, webinar_id')
             .eq('connection_id', connection.id)
             .eq('webinar_id', webinar.id?.toString())
             .maybeSingle(),
