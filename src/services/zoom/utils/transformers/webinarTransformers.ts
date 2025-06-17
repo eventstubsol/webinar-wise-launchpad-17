@@ -1,21 +1,17 @@
 
 import { ZoomWebinar, ZoomRegistrant } from '@/types/zoom';
-import { WebinarStatusDetector } from '../WebinarStatusDetector';
 
 /**
  * Data transformation utilities for webinars and registrants
  */
 export class WebinarTransformers {
   /**
-   * Transform Zoom API webinar to database format with enhanced status detection
+   * Transform Zoom API webinar to database format with comprehensive field mapping
    */
   static transformWebinarForDatabase(
     apiWebinar: any,
     connectionId: string
   ): Omit<ZoomWebinar, 'id' | 'created_at' | 'updated_at'> {
-    // Use enhanced status detection
-    const detectedStatus = WebinarStatusDetector.detectStatus(apiWebinar);
-    
     // Extract settings for better field mapping
     const settings = apiWebinar.settings || {};
     
@@ -28,7 +24,7 @@ export class WebinarTransformers {
       topic: apiWebinar.topic,
       agenda: apiWebinar.agenda || null,
       type: apiWebinar.type || 5,
-      status: detectedStatus as any,
+      status: apiWebinar.status || 'available',
       start_time: apiWebinar.start_time || null,
       duration: apiWebinar.duration || null,
       timezone: apiWebinar.timezone || null,
@@ -90,7 +86,8 @@ export class WebinarTransformers {
       phone: apiRegistrant.phone || null,
       comments: apiRegistrant.comments || null,
       custom_questions: apiRegistrant.custom_questions || null,
-      registration_time: apiRegistrant.registration_time || apiRegistrant.create_time || new Date().toISOString(),
+      // Handle null/undefined registration_time by letting database default apply
+      registration_time: apiRegistrant.registration_time || apiRegistrant.create_time || null,
       source_id: apiRegistrant.source_id || null,
       tracking_source: apiRegistrant.tracking_source || null,
       status: apiRegistrant.status || 'approved',

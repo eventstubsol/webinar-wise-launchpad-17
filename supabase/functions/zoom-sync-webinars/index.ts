@@ -1,18 +1,18 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { CORS_HEADERS, SYNC_PRIORITIES, SyncOperation } from './types.ts';
 import { validateRequest } from './validation.ts';
 import { createSyncLog } from './database-operations.ts';
-import { processSimpleWebinarSync } from './simple-webinar-processor.ts';
+import { processSequentialSync } from './sync-processor.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: CORS_HEADERS });
   }
 
-  console.log('=== SIMPLIFIED SYNC FUNCTION START ===');
+  console.log('=== SYNC FUNCTION START ===');
   console.log(`Request received: ${new Date().toISOString()}`);
+  console.log('Request headers:', Object.fromEntries(req.headers.entries()));
   console.log('Environment check:', {
     hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
     hasServiceKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
@@ -51,18 +51,8 @@ serve(async (req) => {
       createdAt: new Date()
     };
     
-    console.log('Determining sync processor based on sync type...');
-    
-    // Route to appropriate processor based on sync type
-    if (requestBody.syncType === 'registrants_only') {
-      console.log('Using registrant-focused processor...');
-      const { processRegistrantFocusedSync } = await import('./registrant-focused-processor.ts');
-      queueMicrotask(() => processRegistrantFocusedSync(supabase, syncOperation, connection, syncLogId));
-    } else {
-      // Use simplified processor for other sync types
-      console.log('Using simplified webinar-only processor...');
-      queueMicrotask(() => processSimpleWebinarSync(supabase, syncOperation, connection, syncLogId));
-    }
+    console.log('Starting background sync process...');
+    queueMicrotask(() => processSequentialSync(supabase, syncOperation, connection, syncLogId));
 
     console.log(`=== Sync Request Successful (Total time: ${Date.now() - startTime}ms) ===`);
     return new Response(
@@ -70,19 +60,18 @@ serve(async (req) => {
         success: true,
         syncId: syncLogId,
         status: 'started',
-        message: `${requestBody.syncType} sync initiated successfully.`,
+        message: `Sequential ${requestBody.syncType} sync initiated successfully.`,
         debug: {
           connectionId: requestBody.connectionId,
           userId: user.id,
-          syncType: requestBody.syncType,
-          processorType: requestBody.syncType === 'registrants_only' ? 'registrant_focused' : 'simplified_webinar_only'
+          syncType: requestBody.syncType
         }
       }),
       { status: 202, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('=== Simplified Sync Function Error ===');
+    console.error('=== Sync Function Error ===');
     console.error(`Error occurred after ${Date.now() - startTime}ms`);
     console.error('Error details:', error);
     console.error('Error stack:', error.stack);

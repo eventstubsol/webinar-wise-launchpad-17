@@ -1,39 +1,42 @@
 
-import { validateZoomConnection } from './zoom-api-client.ts';
-import { clearAllStuckSyncsForConnection } from './sync-recovery.ts';
+import { SyncRequest } from './types.ts';
+import { SimpleTokenEncryption } from './encryption.ts';
 
 export async function validateRequest(req: Request, supabase: any) {
-  console.log('Starting enhanced request validation...');
+  console.log('Starting request validation...');
   
+  // Auth validation
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader) {
-    const error = new Error('Missing authorization header');
-    error.isAuthError = true;
-    throw error;
+  if (!authHeader?.startsWith('Bearer ')) {
+    console.error('Missing or invalid authorization header');
+    throw { status: 401, message: 'Missing or invalid authorization header' };
   }
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser(
-    authHeader.replace('Bearer ', '')
-  );
-
-  if (userError || !user) {
-    console.error('Authentication failed:', userError);
-    const error = new Error('Invalid or expired token');
-    error.isAuthError = true;
-    throw error;
+  
+  const token = authHeader.replace('Bearer ', '');
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) {
+    console.error('Invalid authentication token:', authError);
+    throw { status: 401, message: 'Invalid authentication token' };
   }
-
   console.log(`User authenticated: ${user.id}`);
 
-  const requestBody = await req.json();
+  // Body validation
+  const requestBody: SyncRequest = await req.json();
   console.log('Request body:', requestBody);
-
+  
   if (!requestBody.connectionId || !requestBody.syncType) {
-    throw new Error('Missing required parameters: connectionId and syncType');
+    console.error('Missing required fields in request body');
+    throw { status: 400, message: 'Missing required fields: connectionId, syncType' };
   }
-
-  // Get the connection
+  
+  if (requestBody.syncType === 'single' && !requestBody.webinarId) {
+    console.error('Missing webinarId for single webinar sync');
+    throw { status: 400, message: 'webinarId is required for single webinar sync' };
+  }
+  
+  // Connection validation with detailed logging
   console.log(`Looking for connection: ${requestBody.connectionId} for user: ${user.id}`);
+  
   const { data: connection, error: connectionError } = await supabase
     .from('zoom_connections')
     .select('*')
@@ -41,138 +44,21 @@ export async function validateRequest(req: Request, supabase: any) {
     .eq('user_id', user.id)
     .single();
 
-  if (connectionError || !connection) {
-    console.error('Connection fetch error:', connectionError);
-    throw new Error('Connection not found or access denied');
+  if (connectionError) {
+    console.error('Connection query error:', connectionError);
+    throw { status: 404, message: 'Connection not found or access denied', details: connectionError };
   }
-
+  
+  if (!connection) {
+    console.error('No connection found for the given criteria');
+    throw { status: 404, message: 'Connection not found or access denied' };
+  }
+  
   console.log(`Connection found: ${connection.id}, status: ${connection.connection_status}`);
-
-  // ENHANCED: Aggressively clear ALL stuck syncs with immediate force
-  console.log('Force clearing ALL stuck syncs for connection with zero tolerance...');
-  await clearAllStuckSyncsForConnection(supabase, requestBody.connectionId);
+  console.log('Raw connection data from DB:', connection);
   
-  // Add a small delay to ensure database consistency
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  // Check for active syncs AFTER aggressive clearing
-  console.log('Final check for any remaining active syncs...');
-  const { data: activeSyncs, error: syncError } = await supabase
-    .from('zoom_sync_logs')
-    .select('id, sync_status, created_at, current_webinar_id')
-    .eq('connection_id', requestBody.connectionId)
-    .in('sync_status', ['started', 'in_progress'])
-    .limit(1);
-
-  if (syncError) {
-    console.error('Error checking active syncs:', syncError);
-    throw new Error('Failed to check sync status');
-  }
-
-  if (activeSyncs && activeSyncs.length > 0) {
-    console.log('Active sync still found after aggressive clearing:', activeSyncs[0]);
-    
-    // Force clear this remaining sync too
-    console.log('Force clearing the remaining stuck sync...');
-    const { error: forceError } = await supabase
-      .from('zoom_sync_logs')
-      .update({
-        sync_status: 'failed',
-        error_message: 'Force cleared - persistent stuck sync detected',
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', activeSyncs[0].id);
-    
-    if (forceError) {
-      console.error('Error force clearing persistent sync:', forceError);
-    } else {
-      console.log('Successfully force cleared persistent stuck sync');
-    }
-  }
-
-  console.log('All stuck syncs cleared, connection ready for enhanced recovery sync');
-  return { user, connection, requestBody };
-}
-
-export async function validateZoomConnection(connection: any): Promise<void> {
-  if (!connection.access_token) {
-    throw new Error('No access token available');
-  }
-
-  console.log('Raw connection data from DB:', {
-    id: connection.id,
-    user_id: connection.user_id,
-    zoom_user_id: connection.zoom_user_id,
-    zoom_email: connection.zoom_email,
-    zoom_account_id: connection.zoom_account_id,
-    zoom_account_type: connection.zoom_account_type,
-    access_token: connection.access_token,
-    refresh_token: connection.refresh_token,
-    token_expires_at: connection.token_expires_at,
-    scopes: connection.scopes,
-    connection_status: connection.connection_status,
-    is_primary: connection.is_primary,
-    auto_sync_enabled: connection.auto_sync_enabled,
-    sync_frequency_hours: connection.sync_frequency_hours,
-    last_sync_at: connection.last_sync_at,
-    next_sync_at: connection.next_sync_at,
-    created_at: connection.created_at,
-    updated_at: connection.updated_at,
-    connection_type: connection.connection_type,
-    client_id: connection.client_id,
-    client_secret: connection.client_secret,
-    account_id: connection.account_id
-  });
-
-  // Try to decrypt the access token using different methods
-  let decryptedToken = connection.access_token;
+  const decryptedToken = await SimpleTokenEncryption.decryptToken(connection.access_token, connection.user_id);
   
-  try {
-    console.log('Attempting AES-GCM decryption...');
-    // Try AES-GCM decryption first
-    const algorithm = { name: 'AES-GCM', iv: new Uint8Array(12) };
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(Deno.env.get('ENCRYPTION_SALT') || 'fallback-key'),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveKey']
-    );
-    
-    const key = await crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt: new TextEncoder().encode('zoom-token-salt'),
-        iterations: 100000,
-        hash: 'SHA-256'
-      },
-      keyMaterial,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['decrypt']
-    );
-    
-    const encryptedData = new Uint8Array(Buffer.from(connection.access_token, 'base64'));
-    const decryptedData = await crypto.subtle.decrypt(algorithm, key, encryptedData);
-    decryptedToken = new TextDecoder().decode(decryptedData);
-    
-    console.log('AES-GCM decryption successful');
-  } catch (aesError) {
-    console.log('AES-GCM decryption failed:', aesError.message, 'Attempting fallbacks.');
-    
-    try {
-      console.log('Attempting base64 decoding fallback...');
-      // Try base64 decoding
-      decryptedToken = atob(connection.access_token);
-      console.log('Base64 decoding successful');
-    } catch (base64Error) {
-      console.log('Base64 decoding failed:', base64Error.message, 'Assuming plain text token.');
-      // Assume it's already plaintext
-      decryptedToken = connection.access_token;
-    }
-  }
-
   console.log('Detailed token info from DB:', {
     id: connection.id,
     user_id: connection.user_id,
@@ -183,25 +69,46 @@ export async function validateZoomConnection(connection: any): Promise<void> {
     hasRefreshToken: !!connection.refresh_token,
     refreshTokenLength: connection.refresh_token?.length,
     expiresAt: connection.token_expires_at,
-    updatedAt: connection.updated_at
+    updatedAt: connection.updated_at,
   });
-
-  // Validate token expiration
-  if (connection.token_expires_at) {
-    const expiresAt = new Date(connection.token_expires_at);
-    const now = new Date();
-    const isExpired = now >= expiresAt;
-    const needsRefresh = (expiresAt.getTime() - now.getTime()) < (5 * 60 * 1000); // 5 minutes buffer
-
-    console.log(`Token expires at: ${connection.token_expires_at}, updated at: ${connection.updated_at}`);
-    console.log(`Token validation - expires: ${expiresAt.toISOString()}, now: ${now.toISOString()}`);
-    console.log(`Token is expired: ${isExpired}`);
-    console.log(`Token needs refresh (with buffer): ${needsRefresh}`);
-
-    if (isExpired) {
-      const error = new Error('Zoom token has expired');
-      error.isAuthError = true;
-      throw error;
-    }
+  console.log(`Token expires at: ${connection.token_expires_at}, updated at: ${connection.updated_at}`);
+  
+  if (connection.connection_status !== 'active') {
+    console.error(`Connection is not active: ${connection.connection_status}`);
+    throw { status: 400, message: `Connection is not active. Status: ${connection.connection_status}` };
   }
+
+  // Enhanced token validation
+  const expiresAt = new Date(connection.token_expires_at);
+  const now = new Date();
+  const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+  
+  console.log(`Token validation - expires: ${expiresAt.toISOString()}, now: ${now.toISOString()}`);
+  console.log(`Token is expired: ${now.getTime() >= expiresAt.getTime()}`);
+  console.log(`Token needs refresh (with buffer): ${now.getTime() >= (expiresAt.getTime() - bufferTime)}`);
+
+  // Check for active syncs
+  console.log('Checking for active syncs...');
+  const { data: activeSyncs, error: activeSyncError } = await supabase
+    .from('zoom_sync_logs')
+    .select('id, sync_status')
+    .eq('connection_id', requestBody.connectionId)
+    .in('sync_status', ['started', 'in_progress'])
+    .limit(1);
+
+  if (activeSyncError) {
+    console.error('Error checking active syncs:', activeSyncError);
+  }
+
+  if (activeSyncs && activeSyncs.length > 0) {
+    console.log('Active sync found:', activeSyncs[0]);
+    throw { 
+      status: 409, 
+      message: 'Sync already in progress for this connection', 
+      body: { activeSyncId: activeSyncs[0].id } 
+    };
+  }
+  
+  console.log('Validation completed successfully');
+  return { user, connection, requestBody };
 }

@@ -1,6 +1,5 @@
 
 import type { ZoomConnection } from '@/types/zoom';
-import { ConnectionStatus } from '@/types/zoom';
 
 export enum TokenStatus {
   VALID = 'VALID',
@@ -45,7 +44,7 @@ export class TokenUtils {
       return TokenStatus.NO_CONNECTION;
     }
     
-    if (connection.connection_status === ConnectionStatus.ERROR || connection.connection_status === ConnectionStatus.REVOKED) {
+    if (connection.connection_status === 'error' || connection.connection_status === 'revoked') {
       return TokenStatus.INVALID;
     }
 
@@ -66,7 +65,7 @@ export class TokenUtils {
       return TokenStatus.INVALID;
     }
     
-    if (connection.connection_status === ConnectionStatus.EXPIRED) {
+    if (connection.connection_status === 'expired') {
       return TokenStatus.REFRESH_EXPIRED;
     }
 
@@ -115,6 +114,6 @@ export class TokenUtils {
     }
     
     // Traditional OAuth needs valid refresh token
-    return !!(connection.refresh_token && connection.connection_status !== ConnectionStatus.EXPIRED);
+    return !!(connection.refresh_token && connection.connection_status !== 'expired');
   }
 }

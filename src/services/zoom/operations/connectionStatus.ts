@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection, ConnectionStatus } from '@/types/zoom';
 import { toast } from '@/hooks/use-toast';
@@ -22,7 +21,7 @@ export class ConnectionStatusOperations {
         .select('*')
         .eq('user_id', userId)
         .eq('is_primary', true)
-        .eq('connection_status', ConnectionStatus.ACTIVE)
+        .eq('connection_status', 'active')
         .maybeSingle();
 
       if (error) {
@@ -159,27 +158,27 @@ export class ConnectionStatusOperations {
           // For Server-to-Server connections, refresh silently without UI indication
           if (TokenUtils.isServerToServerConnection(connection)) {
             const refreshedConnection = await this.refreshTokenSilently(connection);
-            if (refreshedConnection) return ConnectionStatus.ACTIVE;
+            if (refreshedConnection) return 'active' as ConnectionStatus;
           } else {
             // For OAuth connections, use the regular refresh with UI feedback
             const refreshedConnection = await this.refreshToken(connection);
-            if (refreshedConnection) return ConnectionStatus.ACTIVE;
+            if (refreshedConnection) return 'active' as ConnectionStatus;
           }
         }
 
-        await this.updateConnectionStatus(connection.id, ConnectionStatus.EXPIRED);
-        return ConnectionStatus.EXPIRED;
+        await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
+        return 'expired' as ConnectionStatus;
       }
 
-      if (connection.connection_status === ConnectionStatus.ACTIVE) {
-        return ConnectionStatus.ACTIVE;
+      if (connection.connection_status === 'active') {
+        return 'active' as ConnectionStatus;
       }
 
       return connection.connection_status;
     } catch (error) {
       console.error('Error checking connection status:', error);
-      await this.updateConnectionStatus(connection.id, ConnectionStatus.ERROR);
-      return ConnectionStatus.ERROR;
+      await this.updateConnectionStatus(connection.id, 'error' as ConnectionStatus);
+      return 'error' as ConnectionStatus;
     }
   }
 
@@ -235,7 +234,7 @@ export class ConnectionStatusOperations {
         variant: "destructive",
       });
       
-      await this.updateConnectionStatus(connection.id, ConnectionStatus.EXPIRED);
+      await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
       return null;
     }
   }

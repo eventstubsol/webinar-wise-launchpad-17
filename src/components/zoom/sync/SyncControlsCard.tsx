@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { RefreshCw, Users } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { SyncType } from '@/types/zoom';
 
 interface SyncControlsCardProps {
@@ -34,15 +34,6 @@ export const SyncControlsCard: React.FC<SyncControlsCardProps> = ({
           className="w-full"
         >
           Full Sync
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onStartSync(SyncType.REGISTRANTS_ONLY)}
-          className="w-full"
-        >
-          <Users className="h-4 w-4 mr-2" />
-          Registrants Only
         </Button>
       </CardContent>
     </Card>
