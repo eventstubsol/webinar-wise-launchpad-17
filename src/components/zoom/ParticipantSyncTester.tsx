@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -96,7 +95,9 @@ export function ParticipantSyncTester() {
 
             if (syncLog?.sync_status === 'completed') {
               // Get detailed results from error_details.participantsOnlyReport
-              const report = syncLog.error_details?.participantsOnlyReport;
+              // Type the error_details as any to access the participantsOnlyReport property
+              const errorDetails = syncLog.error_details as any;
+              const report = errorDetails?.participantsOnlyReport;
               if (report?.results) {
                 setSyncResults(report.results);
               }
