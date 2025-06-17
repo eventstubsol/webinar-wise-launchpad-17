@@ -11,7 +11,7 @@ export class ParticipantTransformers {
   static transformParticipant(
     apiParticipant: any,
     webinarId: string
-  ): Omit<ZoomParticipant, 'id' | 'created_at' | 'updated_at'> {
+  ): Omit<ZoomParticipant, 'id' | 'created_at' | 'updated_at'> & { ip_address: string | null } {
     return {
       webinar_id: webinarId,
       participant_id: apiParticipant.id || apiParticipant.participant_id,
