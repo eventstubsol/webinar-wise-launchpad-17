@@ -3,6 +3,7 @@ import { createSyncLog, updateSyncLog, updateSyncStage } from './database-operat
 import { validateZoomConnection, createZoomAPIClient } from './zoom-api-client.ts';
 import { processSimpleWebinarSync } from './simple-sync-processor.ts';
 import { processEnhancedWebinarSync } from './enhanced-sync-processor.ts';
+import { processParticipantsOnlySync } from './participants-only-processor.ts';
 import { RetryQueueProcessor } from './retry-queue-processor.ts';
 import { SyncOperation, SYNC_PRIORITIES } from './types.ts';
 
@@ -17,27 +18,36 @@ export async function processSequentialSync(
   try {
     await updateSyncStage(supabase, syncLogId, null, 'initializing', 0);
 
-    // Determine sync type based on operation options
-    const useEnhancedSync = syncOperation.options?.includeRegistrants || 
-                           syncOperation.options?.includeParticipants || 
-                           syncOperation.syncType === 'initial' ||
-                           syncOperation.syncType === 'full';
-
-    if (useEnhancedSync) {
-      console.log('Using enhanced comprehensive sync with registrants and participants');
-      await processEnhancedWebinarSync(supabase, syncOperation, connection, syncLogId);
+    // Route to appropriate sync processor based on type
+    if (syncOperation.syncType === 'participants_only') {
+      console.log('Using participants-only sync processor');
+      await processParticipantsOnlySync(supabase, syncOperation, connection, syncLogId);
     } else {
-      console.log('Using simple webinar-only sync');
-      await processSimpleWebinarSync(supabase, syncOperation, connection, syncLogId);
+      // Determine sync type based on operation options for regular syncs
+      const useEnhancedSync = syncOperation.options?.includeRegistrants || 
+                             syncOperation.options?.includeParticipants || 
+                             syncOperation.syncType === 'initial' ||
+                             syncOperation.syncType === 'full';
+
+      if (useEnhancedSync) {
+        console.log('Using enhanced comprehensive sync with registrants and participants');
+        await processEnhancedWebinarSync(supabase, syncOperation, connection, syncLogId);
+      } else {
+        console.log('Using simple webinar-only sync');
+        await processSimpleWebinarSync(supabase, syncOperation, connection, syncLogId);
+      }
     }
 
     // After main sync completes, check for any pending retries from previous syncs
-    try {
-      console.log('\n=== CHECKING FOR PENDING RETRIES FROM PREVIOUS SYNCS ===');
-      await RetryQueueProcessor.processAllPendingRetries(supabase);
-    } catch (retryError) {
-      console.error('Error processing pending retries:', retryError);
-      // Don't fail the main sync if retry processing fails
+    // (Skip for participants_only sync as it handles its own retries)
+    if (syncOperation.syncType !== 'participants_only') {
+      try {
+        console.log('\n=== CHECKING FOR PENDING RETRIES FROM PREVIOUS SYNCS ===');
+        await RetryQueueProcessor.processAllPendingRetries(supabase);
+      } catch (retryError) {
+        console.error('Error processing pending retries:', retryError);
+        // Don't fail the main sync if retry processing fails
+      }
     }
 
     console.log(`Sync completed successfully: ${syncOperation.id}`);

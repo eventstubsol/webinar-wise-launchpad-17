@@ -58,3 +58,32 @@ export interface RetryableWebinar {
   retryAttempt: number;
   nextRetryAt: string;
 }
+
+/** Participant sync report for detailed tracking */
+export interface ParticipantSyncReport {
+  id: string;
+  sync_log_id: string;
+  webinar_id: string;
+  webinar_zoom_id: string;
+  webinar_title: string;
+  sync_status: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped';
+  participants_before_sync: number;
+  participants_after_sync: number;
+  participants_fetched: number;
+  api_response_time_ms: number | null;
+  database_operation_time_ms: number | null;
+  started_at: string;
+  completed_at: string | null;
+  error_message: string | null;
+  error_details: any;
+  forced_sync: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Options for participants-only sync */
+export interface ParticipantsOnlySyncOptions {
+  webinarIds: string[];
+  forceSync?: boolean;
+  skipEligibilityCheck?: boolean;
+}
