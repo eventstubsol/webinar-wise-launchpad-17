@@ -1,361 +1,213 @@
-export async function validateZoomConnection(connection: any): Promise<boolean> {
-  console.log(`Validating Zoom connection: ${connection.id}`);
-  
-  try {
-    if (!connection.access_token) {
-      console.error('No access token found in connection');
-      return false;
-    }
+import { SimpleTokenEncryption } from './encryption.ts';
 
-    // Check if token is valid string
-    if (typeof connection.access_token !== 'string' || connection.access_token.length < 10) {
-      console.error('Invalid access token format');
-      return false;
-    }
-
-    // For Server-to-Server connections, we don't need to validate expiry the same way
-    const isServerToServer = !connection.refresh_token || connection.refresh_token.includes('SERVER_TO_SERVER_NOT_APPLICABLE');
-    
-    if (isServerToServer) {
-      console.log('Connection is Server-to-Server type, validation successful');
-      return true;
-    }
-
-    // For OAuth connections, check token expiry
-    const expiresAt = new Date(connection.token_expires_at);
-    const now = new Date();
-    const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-
-    console.log(`Token expires at: ${expiresAt.toISOString()}, Current time: ${now.toISOString()}`);
-
-    if (now.getTime() >= (expiresAt.getTime() - bufferTime)) {
-      console.log('OAuth access token has expired or will expire soon, will need refresh');
-      return true; // Still valid for refresh
-    }
-
-    console.log('Connection validation successful - token is valid');
-    return true;
-  } catch (error) {
-    console.error('Error validating Zoom connection:', error);
-    return false;
-  }
-}
-
-export async function createZoomAPIClient(connection: any, supabase: any) {
-  console.log(`Creating Zoom API client for connection: ${connection.id}`);
-  
-  const isServerToServer = !connection.refresh_token || connection.refresh_token.includes('SERVER_TO_SERVER_NOT_APPLICABLE');
-  console.log(`Connection type determined as: ${isServerToServer ? 'Server-to-Server' : 'OAuth'}`);
-  
-  // Use tokens directly (no decryption needed)
-  const accessToken = connection.access_token;
-  const refreshToken = isServerToServer ? undefined : connection.refresh_token;
-  
-  console.log('Using plain text tokens for API client.');
-  
-  return new ZoomAPIClient(connection, supabase, accessToken, refreshToken, !isServerToServer);
-}
-
-class ZoomAPIClient {
-  private connection: any;
-  private supabase: any;
+export class ZoomAPIClient {
+  private baseUrl = 'https://api.zoom.us/v2';
   private accessToken: string;
-  private refreshTokenValue: string | undefined;
-  private isOAuth: boolean;
-  private baseURL = 'https://api.zoom.us/v2';
+  private rateLimitRemaining: number = 100;
+  private rateLimitResetTime: number = Date.now() + (24 * 60 * 60 * 1000);
 
-  constructor(connection: any, supabase: any, accessToken: string, refreshToken: string | undefined, isOAuth: boolean) {
-    this.connection = connection;
-    this.supabase = supabase;
+  constructor(accessToken: string) {
     this.accessToken = accessToken;
-    this.refreshTokenValue = refreshToken;
-    this.isOAuth = isOAuth;
   }
 
-  private async refreshTokens() {
-    console.log(`Attempting to refresh tokens for connection: ${this.connection.id}`);
-    
-    if (!this.isOAuth) {
-      console.log('Refreshing Server-to-Server token using client credentials flow');
-      return await this.refreshServerToServerToken();
-    } else {
-      console.log('Refreshing OAuth token using refresh token flow');
-      return await this.refreshOAuthToken();
+  async makeRequest(endpoint: string, method: string = 'GET', data: any = null): Promise<any> {
+    const url = `${this.baseUrl}${endpoint}`;
+    console.log(`Making ${method} request to ${url}`);
+
+    const headers: HeadersInit = {
+      'Authorization': `Bearer ${this.accessToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    const config: RequestInit = {
+      method,
+      headers
+    };
+
+    if (data) {
+      config.body = JSON.stringify(data);
     }
+
+    const response = await fetch(url, config);
+
+    if (!response.ok) {
+      console.error(`Request failed: ${response.status} ${response.statusText}`);
+      try {
+        const errorBody = await response.json();
+        console.error('Error details:', errorBody);
+        throw new Error(errorBody.message || `Request failed with status ${response.status}`);
+      } catch (jsonError) {
+        console.error('Failed to parse error JSON:', jsonError);
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+    }
+
+    const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining');
+    const rateLimitReset = response.headers.get('X-RateLimit-Reset');
+
+    if (rateLimitRemaining) {
+      this.rateLimitRemaining = parseInt(rateLimitRemaining, 10);
+    }
+
+    if (rateLimitReset) {
+      this.rateLimitResetTime = parseInt(rateLimitReset, 10) * 1000;
+    }
+
+    return await response.json();
   }
 
-  private async refreshServerToServerToken() {
-    try {
-      const { data: credentials, error: credError } = await this.supabase
-        .from('zoom_credentials')
-        .select('client_id, client_secret, account_id')
-        .eq('user_id', this.connection.user_id)
-        .eq('is_active', true)
-        .single();
+  async listWebinars(userId: string, options: { type?: string, from?: string, to?: string } = {}): Promise<any> {
+    const { type = 'past', from, to } = options;
+    let endpoint = `/users/${userId}/webinars?type=${type}&page_size=300`;
 
-      if (credError || !credentials) {
-        console.error('No active credentials found for Server-to-Server refresh');
-        throw new Error('No active Zoom credentials found for token refresh');
-      }
-
-      const tokenRequestBody = new URLSearchParams({
-        grant_type: 'account_credentials',
-        account_id: credentials.account_id
-      });
-
-      const tokenResponse = await fetch('https://zoom.us/oauth/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${credentials.client_id}:${credentials.client_secret}`)}`,
-        },
-        body: tokenRequestBody,
-      });
-
-      if (!tokenResponse.ok) {
-        const errorText = await tokenResponse.text();
-        console.error('Server-to-Server token refresh failed:', tokenResponse.status, errorText);
-        throw new Error('Failed to refresh Server-to-Server token');
-      }
-
-      const tokenData = await tokenResponse.json();
-      this.accessToken = tokenData.access_token;
-
-      // Update the connection with the new token (plain text)
-      const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
-
-      const { error: updateError } = await this.supabase
-        .from('zoom_connections')
-        .update({
-          access_token: tokenData.access_token,
-          token_expires_at: newExpiresAt,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', this.connection.id);
-
-      if (updateError) {
-        console.error('Failed to update connection with new token:', updateError);
-        throw new Error('Failed to save refreshed token');
-      }
-
-      console.log(`Server-to-Server token refreshed successfully for connection: ${this.connection.id}`);
-      
-    } catch (error) {
-      console.error(`Server-to-Server token refresh failed for connection ${this.connection.id}:`, error);
-      throw error;
-    }
-  }
-
-  private async refreshOAuthToken() {
-    try {
-      const { data, error } = await this.supabase.functions.invoke('zoom-token-refresh', {
-        body: { connectionId: this.connection.id }
-      });
-
-      if (error) {
-        console.error(`OAuth token refresh invocation failed for connection ${this.connection.id}:`, error);
-        throw new Error('OAuth token refresh failed. Please re-authenticate.');
-      }
-
-      if (!data?.connection) {
-        console.error('OAuth token refresh response missing connection data');
-        throw new Error('OAuth token refresh failed - invalid response.');
-      }
-
-      this.connection = data.connection;
-      this.accessToken = data.connection.access_token;
-      
-      console.log(`OAuth tokens refreshed successfully for connection: ${this.connection.id}`);
-      
-    } catch (error) {
-      console.error(`OAuth token refresh failed for connection ${this.connection.id}:`, error);
-      throw error;
-    }
-  }
-
-  private validateAndSanitizeToken(token: string): string {
-    if (!token || typeof token !== 'string') {
-      throw new Error('Invalid token: token must be a non-empty string');
-    }
-    
-    const sanitized = token.trim();
-    
-    if (sanitized.length < 10) {
-      throw new Error('Invalid token: token too short');
-    }
-    
-    return sanitized;
-  }
-
-  private async makeRequest(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
-    const url = `${this.baseURL}${endpoint}`;
-    
-    try {
-      const sanitizedToken = this.validateAndSanitizeToken(this.accessToken);
-      
-      let requestHeaders = {
-        'Authorization': `Bearer ${sanitizedToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      };
-      
-      console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`);
-      
-      // Check if token needs refresh (only for OAuth connections)
-      if (this.isOAuth) {
-        const expiresAt = new Date(this.connection.token_expires_at);
-        const now = new Date();
-        const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-
-        if (now.getTime() >= (expiresAt.getTime() - bufferTime) && retryCount === 0) {
-          console.log(`Forcing OAuth token refresh: token expired/expiring`);
-          try {
-            await this.refreshTokens();
-            const newSanitizedToken = this.validateAndSanitizeToken(this.accessToken);
-            requestHeaders = {
-                ...requestHeaders,
-                'Authorization': `Bearer ${newSanitizedToken}`,
-            };
-            console.log('Headers updated with new token.');
-          } catch (refreshError) {
-            console.error('Pre-emptive OAuth token refresh failed:', refreshError);
-            const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
-            (authError as any).status = 401;
-            (authError as any).isAuthError = true;
-            throw authError;
-          }
-        }
-      }
-      
-      const response = await fetch(url, {
-        ...options,
-        headers: requestHeaders,
-      });
-
-      console.log(`Zoom API response: ${response.status} for ${endpoint}`);
-
-      if (!response.ok) {
-        if (response.status === 401 && retryCount < 1) {
-          console.log(`Received 401 for ${endpoint}. Attempting token refresh.`);
-          try {
-            await this.refreshTokens();
-            return await this.makeRequest(endpoint, options, retryCount + 1);
-          } catch (refreshError) {
-            console.error(`Token refresh flow failed for ${endpoint}:`, refreshError.message);
-            const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
-            (authError as any).status = 401;
-            (authError as any).isAuthError = true;
-            throw authError;
-          }
-        }
-
-        const errorText = await response.text();
-        console.error(`Zoom API error (${response.status}) for ${endpoint}:`, errorText);
-        
-        const error = new Error(`Zoom API request failed: ${response.status} ${response.statusText}`);
-        (error as any).status = response.status;
-        
-        if (response.status === 401) {
-          (error as any).isAuthError = true;
-        }
-        
-        try {
-          (error as any).body = JSON.parse(errorText);
-        } catch {
-          (error as any).body = { message: errorText };
-        }
-        
-        throw error;
-      }
-
-      const responseText = await response.text();
-      const result = responseText ? JSON.parse(responseText) : {};
-      console.log(`Zoom API success for ${endpoint}:`, Object.keys(result));
-      return result;
-    } catch (error) {
-      if (error.message.includes('Invalid token') && retryCount === 0) {
-        console.log('Token validation failed, attempting refresh...');
-        try {
-          await this.refreshTokens();
-          return await this.makeRequest(endpoint, options, retryCount + 1);
-        } catch (refreshError) {
-          console.error('Token refresh after validation failure failed:', refreshError);
-          throw error;
-        }
-      }
-      throw error;
-    }
-  }
-
-  async listWebinarsWithRange(options: { from?: Date; to?: Date; type?: string } = {}): Promise<any[]> {
-    const { from, to, type = 'past' } = options;
-    let endpoint = `/users/me/webinars?page_size=300&type=${type}`;
-    
     if (from) {
-      endpoint += `&from=${from.toISOString().split('T')[0]}`;
+      endpoint += `&from=${from}`;
     }
     if (to) {
-      endpoint += `&to=${to.toISOString().split('T')[0]}`;
+      endpoint += `&to=${to}`;
     }
 
-    console.log(`Fetching ${type} webinars with endpoint: ${endpoint}`);
-
-    const response = await this.makeRequest(endpoint);
-    return response.webinars || [];
+    return await this.makeRequest(endpoint);
   }
 
   async getWebinar(webinarId: string): Promise<any> {
     return await this.makeRequest(`/webinars/${webinarId}`);
   }
 
-  async listWebinars(options: { from?: Date } = {}): Promise<any[]> {
-    let endpoint = '/users/me/webinars?page_size=300';
-    
-    if (options.from) {
-      endpoint += `&from=${options.from.toISOString()}`;
-    }
-
-    const response = await this.makeRequest(endpoint);
-    return response.webinars || [];
+  async listWebinarParticipants(webinarId: string): Promise<any> {
+    return await this.makeRequest(`/webinars/${webinarId}/participants`);
   }
 
-  async getWebinarRegistrants(webinarId: string): Promise<any[]> {
-    try {
-      const response = await this.makeRequest(`/webinars/${webinarId}/registrants?page_size=300`);
-      return response.registrants || [];
-    } catch (error) {
-      console.log(`No registrants for webinar ${webinarId}:`, error.message);
-      return [];
-    }
+  async getWebinarRegistrants(webinarId: string): Promise<any> {
+    let allRegistrants: any[] = [];
+    let nextPageToken: string | null = null;
+
+    do {
+      let endpoint = `/webinars/${webinarId}/registrants?status=approved`;
+      if (nextPageToken) {
+        endpoint += `&next_page_token=${nextPageToken}`;
+      }
+
+      const response = await this.makeRequest(endpoint);
+      if (response.registrants) {
+        allRegistrants = allRegistrants.concat(response.registrants);
+      }
+      nextPageToken = response.next_page_token || null;
+    } while (nextPageToken);
+
+    return allRegistrants;
   }
 
+  async updateWebinarRegistrantStatus(webinarId: string, registrantId: string, action: string): Promise<any> {
+    const data = { action };
+    return await this.makeRequest(`/webinars/${webinarId}/registrants/${registrantId}/status`, 'PUT', data);
+  }
+
+  async listRecordings(webinarId: string): Promise<any> {
+    return await this.makeRequest(`/webinars/${webinarId}/recordings`);
+  }
+
+  async deleteRecording(webinarId: string, recordingId: string): Promise<any> {
+    return await this.makeRequest(`/webinars/${webinarId}/recordings/${recordingId}`, 'DELETE');
+  }
+
+  async listWebinarsWithRange(options: { type?: string } = {}): Promise<any[]> {
+    const { type = 'all' } = options;
+    const now = new Date();
+    const pastDate = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+    const futureDate = new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000));
+    const pastWebinars = await this.listAllWebinars('me', { type: 'past', from: pastDate.toISOString().split('T')[0], to: now.toISOString().split('T')[0] });
+    const upcomingWebinars = await this.listAllWebinars('me', { type: 'upcoming', from: now.toISOString().split('T')[0], to: futureDate.toISOString().split('T')[0] });
+    const allWebinars = [...pastWebinars, ...upcomingWebinars];
+    const uniqueWebinars = this.deduplicateWebinars(allWebinars);
+    return uniqueWebinars;
+  }
+
+  private deduplicateWebinars(webinars: any[]): any[] {
+    const seen = new Set();
+    return webinars.filter(webinar => {
+      if (seen.has(webinar.id)) {
+        return false;
+      }
+      seen.add(webinar.id);
+      return true;
+    });
+  }
+
+  private async listAllWebinars(userId: string, options: { type?: string, from?: string, to?: string } = {}): Promise<any[]> {
+    const { type = 'past', from, to } = options;
+    let allWebinars: any[] = [];
+    let pageNumber = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      let endpoint = `/users/${userId}/webinars?type=${type}&page_size=300&page_number=${pageNumber}`;
+      if (from) {
+        endpoint += `&from=${from}`;
+      }
+      if (to) {
+        endpoint += `&to=${to}`;
+      }
+
+      const response = await this.makeRequest(endpoint);
+      if (response.webinars && response.webinars.length > 0) {
+        allWebinars = allWebinars.concat(response.webinars);
+      }
+      hasMore = (response.page_number * response.page_size) < response.total_records;
+      pageNumber++;
+    }
+
+    return allWebinars;
+  }
+
+  /**
+   * Get webinar participants from reports
+   */
   async getWebinarParticipants(webinarId: string): Promise<any[]> {
-    try {
-      const response = await this.makeRequest(`/report/webinars/${webinarId}/participants?page_size=300`);
-      return response.participants || [];
-    } catch (error) {
-      console.log(`No participants for webinar ${webinarId}:`, error.message);
-      return [];
+    console.log(`Fetching participants for webinar ${webinarId}`);
+    
+    const allParticipants = [];
+    let nextPageToken = '';
+    let hasMore = true;
+
+    while (hasMore) {
+      const params = new URLSearchParams({
+        page_size: '300',
+      });
+
+      if (nextPageToken) {
+        params.append('next_page_token', nextPageToken);
+      }
+
+      const endpoint = `/report/webinars/${webinarId}/participants?${params}`;
+      const response = await this.makeRequest(endpoint);
+
+      if (response.participants && response.participants.length > 0) {
+        allParticipants.push(...response.participants);
+        console.log(`Fetched ${response.participants.length} participants (total: ${allParticipants.length})`);
+      }
+
+      hasMore = !!response.next_page_token;
+      nextPageToken = response.next_page_token || '';
     }
+
+    console.log(`Total participants fetched for webinar ${webinarId}: ${allParticipants.length}`);
+    return allParticipants;
+  }
+}
+
+export async function createZoomAPIClient(connection: any, supabase: any): Promise<ZoomAPIClient> {
+  if (!connection) {
+    throw new Error('No Zoom connection found');
   }
 
-  async getWebinarPolls(webinarId: string): Promise<any[]> {
-    try {
-      const response = await this.makeRequest(`/report/webinars/${webinarId}/polls`);
-      return response.questions || [];
-    } catch (error) {
-      console.log(`No polls for webinar ${webinarId}:`, error.message);
-      return [];
-    }
+  let accessToken = connection.access_token;
+  if (!accessToken) {
+    throw new Error('No access token found in Zoom connection');
   }
 
-  async getWebinarQA(webinarId: string): Promise<any[]> {
-    try {
-      const response = await this.makeRequest(`/report/webinars/${webinarId}/qa`);
-      return response.questions || [];
-    } catch (error) {
-      console.log(`No Q&A for webinar ${webinarId}:`, error.message);
-      return [];
-    }
-  }
+  // Decrypt the token
+  accessToken = await SimpleTokenEncryption.decryptToken(accessToken, connection.user_id);
+
+  return new ZoomAPIClient(accessToken);
 }

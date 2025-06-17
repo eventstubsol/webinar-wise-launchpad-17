@@ -24,7 +24,8 @@ export enum SyncType {
   INITIAL = 'initial',
   INCREMENTAL = 'incremental',
   MANUAL = 'manual',
-  WEBHOOK = 'webhook'
+  WEBHOOK = 'webhook',
+  PARTICIPANTS_ONLY = 'participants_only'
 }
 
 /** Sync operation status values */

@@ -1,5 +1,6 @@
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
+import { processParticipantsOnlySync } from './participants-only-processor.ts';
 
 export async function processComprehensiveSync(
   supabase: any,
@@ -8,6 +9,12 @@ export async function processComprehensiveSync(
   syncLogId: string
 ): Promise<void> {
   console.log(`Starting enhanced comprehensive sync for connection: ${connection.id}`);
+  
+  // Handle participants-only sync
+  if (syncOperation.syncType === 'participants_only') {
+    console.log('Processing participants-only sync...');
+    return await processParticipantsOnlySync(supabase, syncOperation, connection, syncLogId);
+  }
   
   try {
     // Initialize Zoom API client with enhanced error handling

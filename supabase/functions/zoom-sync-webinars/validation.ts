@@ -29,6 +29,13 @@ export async function validateRequest(req: Request, supabase: any) {
     throw { status: 400, message: 'Missing required fields: connectionId, syncType' };
   }
   
+  // Validate sync type
+  const validSyncTypes = ['initial', 'incremental', 'single', 'participants_only'];
+  if (!validSyncTypes.includes(requestBody.syncType)) {
+    console.error(`Invalid sync type: ${requestBody.syncType}`);
+    throw { status: 400, message: `Invalid sync type. Must be one of: ${validSyncTypes.join(', ')}` };
+  }
+  
   if (requestBody.syncType === 'single' && !requestBody.webinarId) {
     console.error('Missing webinarId for single webinar sync');
     throw { status: 400, message: 'webinarId is required for single webinar sync' };
