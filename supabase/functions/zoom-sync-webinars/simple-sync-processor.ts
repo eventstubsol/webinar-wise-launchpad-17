@@ -1,6 +1,193 @@
+
 import { updateSyncLog, updateSyncStage, updateWebinarParticipantSyncStatus, determineParticipantSyncStatus } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 import { syncWebinarParticipants } from './processors/participant-processor.ts';
+
+// Enhanced validation and summary tracking interface
+interface SyncValidationSummary {
+  webinarsWithRegistrants: number;
+  webinarsWithParticipants: number;
+  webinarsWithZeroRegistrants: string[];
+  webinarsWithZeroParticipants: string[];
+  failedRegistrantSyncs: string[];
+  failedParticipantSyncs: string[];
+  validationWarnings: Array<{
+    webinarId: string;
+    type: string;
+    message: string;
+    severity: 'warning' | 'error';
+  }>;
+  validationErrors: Array<{
+    webinarId: string;
+    type: string;
+    message: string;
+    severity: 'warning' | 'error';
+  }>;
+}
+
+interface WebinarValidationContext {
+  webinarId: string;
+  title: string;
+  status: string;
+  startTime: Date | null;
+  registrationRequired: boolean;
+  registrantCount: number;
+  attendeeCount: number;
+}
+
+function validateWebinarData(
+  webinarData: any,
+  participantResult: any,
+  summary: SyncValidationSummary
+): void {
+  const context: WebinarValidationContext = {
+    webinarId: webinarData.id?.toString() || 'unknown',
+    title: webinarData.topic || 'Unknown Webinar',
+    status: webinarData.status?.toLowerCase() || 'unknown',
+    startTime: webinarData.start_time ? new Date(webinarData.start_time) : null,
+    registrationRequired: !!webinarData.registration_url,
+    registrantCount: 0, // Will be updated after registrant sync
+    attendeeCount: participantResult?.count || 0
+  };
+
+  const now = new Date();
+  const fiveMinutesAgo = new Date(now.getTime() - (5 * 60 * 1000));
+  const isPastWebinar = context.startTime && context.startTime < now;
+  const isEndedWebinar = ['ended', 'finished'].includes(context.status);
+  const isRecentWebinar = context.startTime && context.startTime > fiveMinutesAgo;
+
+  console.log(`🔍 Validating webinar ${context.webinarId}: ${context.title}`);
+  console.log(`  - Status: ${context.status}`);
+  console.log(`  - Start time: ${context.startTime?.toISOString() || 'N/A'}`);
+  console.log(`  - Past webinar: ${isPastWebinar}`);
+  console.log(`  - Ended webinar: ${isEndedWebinar}`);
+  console.log(`  - Registration required: ${context.registrationRequired}`);
+  console.log(`  - Attendee count: ${context.attendeeCount}`);
+
+  // Validate participant data
+  if (participantResult?.count > 0) {
+    summary.webinarsWithParticipants++;
+    console.log(`✅ Webinar ${context.webinarId} has ${participantResult.count} participants`);
+  } else {
+    summary.webinarsWithZeroParticipants.push(context.webinarId);
+    
+    if (isEndedWebinar && !isRecentWebinar) {
+      const error = {
+        webinarId: context.webinarId,
+        type: 'zero_participants_ended_webinar',
+        message: `Ended webinar "${context.title}" has no participants - likely sync failure`,
+        severity: 'error' as const
+      };
+      summary.validationErrors.push(error);
+      console.log(`❌ VALIDATION ERROR: ${error.message}`);
+    } else if (isPastWebinar && !isRecentWebinar) {
+      const warning = {
+        webinarId: context.webinarId,
+        type: 'zero_participants_past_webinar',
+        message: `Past webinar "${context.title}" has no participants - may indicate low attendance or sync issue`,
+        severity: 'warning' as const
+      };
+      summary.validationWarnings.push(warning);
+      console.log(`⚠️ VALIDATION WARNING: ${warning.message}`);
+    }
+  }
+
+  // Track failed participant syncs
+  if (participantResult?.skipped && participantResult.reason?.includes('error')) {
+    summary.failedParticipantSyncs.push(context.webinarId);
+    const error = {
+      webinarId: context.webinarId,
+      type: 'participant_sync_failed',
+      message: `Participant sync failed for "${context.title}": ${participantResult.reason}`,
+      severity: 'error' as const
+    };
+    summary.validationErrors.push(error);
+    console.log(`❌ PARTICIPANT SYNC FAILED: ${error.message}`);
+  }
+
+  // Validate registration data (placeholder for future registrant sync)
+  if (context.registrationRequired && isPastWebinar) {
+    const warning = {
+      webinarId: context.webinarId,
+      type: 'registration_data_missing',
+      message: `Webinar "${context.title}" required registration but registrant data not yet synced`,
+      severity: 'warning' as const
+    };
+    summary.validationWarnings.push(warning);
+    console.log(`⚠️ REGISTRATION WARNING: ${warning.message}`);
+  }
+}
+
+function determineFinalSyncStatus(
+  summary: SyncValidationSummary,
+  processedCount: number,
+  successCount: number
+): string {
+  const hasFailures = processedCount !== successCount;
+  const hasValidationErrors = summary.validationErrors.length > 0;
+  const hasValidationWarnings = summary.validationWarnings.length > 0;
+  const hasFailedSyncs = summary.failedParticipantSyncs.length > 0 || summary.failedRegistrantSyncs.length > 0;
+
+  if (hasFailures || hasValidationErrors || hasFailedSyncs) {
+    return 'completed_with_errors';
+  } else if (hasValidationWarnings) {
+    return 'completed_with_warnings';
+  } else {
+    return 'completed';
+  }
+}
+
+function generateValidationReport(summary: SyncValidationSummary): string {
+  const report = [
+    '=== ENHANCED SYNC VALIDATION REPORT ===',
+    '',
+    'DATA QUALITY SUMMARY:',
+    `  - Webinars with participants: ${summary.webinarsWithParticipants}`,
+    `  - Webinars with registrants: ${summary.webinarsWithRegistrants}`,
+    `  - Webinars with zero participants: ${summary.webinarsWithZeroParticipants.length}`,
+    `  - Webinars with zero registrants: ${summary.webinarsWithZeroRegistrants.length}`,
+    '',
+    'SYNC FAILURES:',
+    `  - Failed participant syncs: ${summary.failedParticipantSyncs.length}`,
+    `  - Failed registrant syncs: ${summary.failedRegistrantSyncs.length}`,
+    '',
+    'VALIDATION RESULTS:',
+    `  - Validation errors: ${summary.validationErrors.length}`,
+    `  - Validation warnings: ${summary.validationWarnings.length}`,
+    ''
+  ];
+
+  if (summary.validationErrors.length > 0) {
+    report.push('VALIDATION ERRORS:');
+    summary.validationErrors.forEach(error => {
+      report.push(`  - ${error.type}: ${error.message}`);
+    });
+    report.push('');
+  }
+
+  if (summary.validationWarnings.length > 0) {
+    report.push('VALIDATION WARNINGS:');
+    summary.validationWarnings.forEach(warning => {
+      report.push(`  - ${warning.type}: ${warning.message}`);
+    });
+    report.push('');
+  }
+
+  if (summary.failedParticipantSyncs.length > 0) {
+    report.push('FAILED PARTICIPANT SYNCS:');
+    report.push(`  - Webinar IDs: ${summary.failedParticipantSyncs.join(', ')}`);
+    report.push('');
+  }
+
+  if (summary.webinarsWithZeroParticipants.length > 0) {
+    report.push('WEBINARS WITH ZERO PARTICIPANTS:');
+    report.push(`  - Webinar IDs: ${summary.webinarsWithZeroParticipants.join(', ')}`);
+    report.push('');
+  }
+
+  report.push('=== END VALIDATION REPORT ===');
+  return report.join('\n');
+}
 
 export async function processSimpleWebinarSync(
   supabase: any,
@@ -9,9 +196,9 @@ export async function processSimpleWebinarSync(
   syncLogId: string
 ): Promise<void> {
   const debugMode = syncOperation.options?.debug || false;
-  console.log(`Starting enhanced simple webinar sync for connection: ${connection.id}${debugMode ? ' (DEBUG MODE)' : ''}`);
+  console.log(`Starting enhanced simple webinar sync with comprehensive validation for connection: ${connection.id}${debugMode ? ' (DEBUG MODE)' : ''}`);
 
-  // Track processing statistics
+  // Initialize enhanced tracking with validation summary
   let processedCount = 0;
   let successCount = 0;
   let skippedForParticipants = 0;
@@ -20,6 +207,18 @@ export async function processSimpleWebinarSync(
   let insertCount = 0;
   let updateCount = 0;
   
+  // Initialize comprehensive validation summary
+  const validationSummary: SyncValidationSummary = {
+    webinarsWithRegistrants: 0,
+    webinarsWithParticipants: 0,
+    webinarsWithZeroRegistrants: [],
+    webinarsWithZeroParticipants: [],
+    failedRegistrantSyncs: [],
+    failedParticipantSyncs: [],
+    validationWarnings: [],
+    validationErrors: []
+  };
+
   try {
     const zoomApi = await import('./zoom-api-client.ts');
     const client = await zoomApi.createZoomAPIClient(connection, supabase);
@@ -30,7 +229,7 @@ export async function processSimpleWebinarSync(
       type: 'all'
     });
     
-    console.log(`Found ${webinars.length} webinars to sync with enhanced upsert logic`);
+    console.log(`Found ${webinars.length} webinars to sync with enhanced validation`);
     
     if (webinars.length === 0) {
       await updateSyncLog(supabase, syncLogId, {
@@ -47,7 +246,7 @@ export async function processSimpleWebinarSync(
     
     const totalWebinars = webinars.length;
     
-    // Process each webinar with enhanced upsert
+    // Process each webinar with enhanced validation
     for (const webinar of webinars) {
       try {
         const baseProgress = 20 + Math.round(((processedCount) / totalWebinars) * 60);
@@ -60,7 +259,7 @@ export async function processSimpleWebinarSync(
           baseProgress
         );
         
-        console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars}) with enhanced upsert`);
+        console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars}) with enhanced validation`);
         
         // Get detailed webinar data
         const webinarDetails = await client.getWebinar(webinar.id);
@@ -91,7 +290,8 @@ export async function processSimpleWebinarSync(
           console.log(`✅ EXISTING webinar updated: ${webinar.id} -> DB ID: ${webinarDbId} (data preserved)`);
         }
 
-        // Sync participants with eligibility check and status tracking
+        // Sync participants with eligibility check and enhanced validation
+        let participantResult = { skipped: true, reason: 'Not attempted', count: 0 };
         try {
           await updateSyncStage(
             supabase, 
@@ -101,7 +301,7 @@ export async function processSimpleWebinarSync(
             baseProgress + 10
           );
           
-          const participantResult = await syncWebinarParticipants(
+          participantResult = await syncWebinarParticipants(
             supabase, 
             client, 
             webinar.id, 
@@ -121,14 +321,31 @@ export async function processSimpleWebinarSync(
           
         } catch (participantError) {
           console.error(`Error syncing participants for webinar ${webinar.id}:`, participantError);
+          participantResult = { 
+            skipped: true, 
+            reason: `Sync error: ${participantError.message}`, 
+            count: 0 
+          };
           // Continue with next webinar even if participant sync fails
         }
+
+        // ENHANCED VALIDATION: Validate webinar data after sync
+        validateWebinarData(webinarDetails, participantResult, validationSummary);
         
         successCount++;
         processedCount++;
         
       } catch (webinarError) {
         console.error(`Error processing webinar ${webinar.id}:`, webinarError);
+        
+        // Add validation error for failed webinar processing
+        validationSummary.validationErrors.push({
+          webinarId: webinar.id?.toString() || 'unknown',
+          type: 'webinar_processing_failed',
+          message: `Failed to process webinar: ${webinarError.message}`,
+          severity: 'error'
+        });
+        
         processedCount++;
         // Continue with next webinar
       }
@@ -136,8 +353,15 @@ export async function processSimpleWebinarSync(
     
     await updateSyncStage(supabase, syncLogId, null, 'completing', 90);
     
-    // Enhanced completion logging with operation statistics
-    console.log(`\n🎉 Enhanced simple webinar sync completed with statistics:`);
+    // ENHANCED STATUS DETERMINATION: Determine final status based on validation results
+    const finalStatus = determineFinalSyncStatus(validationSummary, processedCount, successCount);
+    
+    // Generate comprehensive validation report
+    const validationReport = generateValidationReport(validationSummary);
+    console.log(validationReport);
+    
+    // Enhanced completion logging with validation summary
+    console.log(`\n🎉 Enhanced simple webinar sync completed with comprehensive validation:`);
     console.log(`  - Total webinars found: ${totalWebinars}`);
     console.log(`  - Webinars processed successfully: ${successCount}`);
     console.log(`  - Webinars failed: ${processedCount - successCount}`);
@@ -147,29 +371,58 @@ export async function processSimpleWebinarSync(
     console.log(`  - Webinars processed for participants: ${processedForParticipants}`);
     console.log(`  - Webinars skipped for participants: ${skippedForParticipants}`);
     console.log(`  - Total participants synced: ${totalParticipantsSynced}`);
+    console.log(`  - Final sync status: ${finalStatus}`);
+    console.log(`  - Validation errors: ${validationSummary.validationErrors.length}`);
+    console.log(`  - Validation warnings: ${validationSummary.validationWarnings.length}`);
     
+    // Enhanced sync log with comprehensive validation data
     await updateSyncLog(supabase, syncLogId, {
-      sync_status: 'completed',
+      sync_status: finalStatus,
       processed_items: processedCount,
       total_participants: totalParticipantsSynced,
       completed_at: new Date().toISOString(),
       sync_stage: 'completed',
       stage_progress_percentage: 100,
-      // Store enhanced statistics in sync_notes
+      // Store enhanced validation summary in sync_notes
       sync_notes: JSON.stringify({
         webinars_inserted: insertCount,
         webinars_updated: updateCount,
         data_preservation_enabled: true,
         webinars_for_participants_processed: processedForParticipants,
         webinars_for_participants_skipped: skippedForParticipants,
-        participant_sync_skip_reasons: 'Webinars not yet occurred or invalid status'
+        participant_sync_skip_reasons: 'Webinars not yet occurred or invalid status',
+        validation_summary: {
+          webinars_with_participants: validationSummary.webinarsWithParticipants,
+          webinars_with_registrants: validationSummary.webinarsWithRegistrants,
+          webinars_with_zero_participants: validationSummary.webinarsWithZeroParticipants,
+          webinars_with_zero_registrants: validationSummary.webinarsWithZeroRegistrants,
+          failed_participant_syncs: validationSummary.failedParticipantSyncs,
+          failed_registrant_syncs: validationSummary.failedRegistrantSyncs,
+          validation_errors_count: validationSummary.validationErrors.length,
+          validation_warnings_count: validationSummary.validationWarnings.length,
+          validation_errors: validationSummary.validationErrors,
+          validation_warnings: validationSummary.validationWarnings
+        }
       })
     });
     
-    console.log(`✅ Enhanced sync completed. ${insertCount} new webinars inserted, ${updateCount} existing webinars updated (with data preservation), ${totalParticipantsSynced} participants synced.`);
+    console.log(`✅ Enhanced sync completed with comprehensive validation. Status: ${finalStatus}`);
+    console.log(`📊 ${insertCount} new webinars inserted, ${updateCount} existing webinars updated (with data preservation), ${totalParticipantsSynced} participants synced.`);
+    
+    if (finalStatus !== 'completed') {
+      console.log(`⚠️ Sync completed with issues. Check validation report above for details.`);
+    }
     
   } catch (error) {
-    console.error('Enhanced simple webinar sync failed:', error);
+    console.error('Enhanced simple webinar sync with validation failed:', error);
+    
+    // Add critical error to validation summary
+    validationSummary.validationErrors.push({
+      webinarId: 'sync_process',
+      type: 'critical_sync_failure',
+      message: `Critical sync failure: ${error.message}`,
+      severity: 'error'
+    });
     
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'failed',
@@ -185,7 +438,19 @@ export async function processSimpleWebinarSync(
         data_preservation_enabled: true,
         webinars_for_participants_processed: processedForParticipants,
         webinars_for_participants_skipped: skippedForParticipants,
-        error_type: error.constructor.name
+        error_type: error.constructor.name,
+        validation_summary: {
+          webinars_with_participants: validationSummary.webinarsWithParticipants,
+          webinars_with_registrants: validationSummary.webinarsWithRegistrants,
+          webinars_with_zero_participants: validationSummary.webinarsWithZeroParticipants,
+          webinars_with_zero_registrants: validationSummary.webinarsWithZeroRegistrants,
+          failed_participant_syncs: validationSummary.failedParticipantSyncs,
+          failed_registrant_syncs: validationSummary.failedRegistrantSyncs,
+          validation_errors_count: validationSummary.validationErrors.length,
+          validation_warnings_count: validationSummary.validationWarnings.length,
+          validation_errors: validationSummary.validationErrors,
+          validation_warnings: validationSummary.validationWarnings
+        }
       })
     });
     
