@@ -36,7 +36,7 @@ export interface ZoomSyncLog {
   max_participant_retries: number;
 }
 
-/** Retry schedule entry for participant fetching */
+/** Retry schedule entry for participant fetching - compatible with Supabase Json type */
 export interface RetryScheduleEntry {
   webinarId: string;
   dbId: string;
@@ -45,6 +45,7 @@ export interface RetryScheduleEntry {
   scheduledFor: string;
   errorType: string;
   originalError: string;
+  [key: string]: any; // Index signature for Json compatibility
 }
 
 /** Retryable webinar for participant fetching */
