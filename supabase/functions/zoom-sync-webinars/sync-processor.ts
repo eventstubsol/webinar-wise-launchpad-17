@@ -19,10 +19,11 @@ export async function processSequentialSync(
     // Determine sync type based on operation options
     const useEnhancedSync = syncOperation.options?.includeRegistrants || 
                            syncOperation.options?.includeParticipants || 
-                           syncOperation.syncType === 'initial';
+                           syncOperation.syncType === 'initial' ||
+                           syncOperation.syncType === 'full';
 
     if (useEnhancedSync) {
-      console.log('Using enhanced sync with registrants and participants');
+      console.log('Using enhanced comprehensive sync with registrants and participants');
       await processEnhancedWebinarSync(supabase, syncOperation, connection, syncLogId);
     } else {
       console.log('Using simple webinar-only sync');
