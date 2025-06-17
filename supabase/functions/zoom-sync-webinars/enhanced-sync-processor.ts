@@ -1,26 +1,45 @@
 
-import { updateSyncLog, updateSyncStage, saveWebinarToDatabase, updateWebinarParticipantSyncStatus, determineParticipantSyncStatus } from './database-operations.ts';
-import { SyncOperation } from './types.ts';
-import { syncWebinarWithDetails, updateWebinarTotals } from './processors/webinar-processor.ts';
-import { ParticipantRetryService, RetryableWebinar } from './participant-retry-service.ts';
+import { createSyncLog, updateSyncLog, updateSyncStage, saveWebinarToDatabase } from './database-operations.ts';
+import { validateEnhancedRequest, EnhancedSyncRequest } from './enhanced-validation.ts';
+import { TestModeManager, TestModeConfig } from './test-mode-manager.ts';
+import { createZoomAPIClient } from './zoom-api-client.ts';
 
 export async function processEnhancedWebinarSync(
   supabase: any,
-  syncOperation: SyncOperation,
+  syncOperation: any,
   connection: any,
   syncLogId: string
 ): Promise<void> {
+  console.log('=== ENHANCED SYNC PROCESSOR START ===');
+  
+  // Extract enhanced options
+  const options = syncOperation.options || {};
+  const testModeConfig = TestModeManager.prepareTestModeConfig(options);
+  
+  // Log configuration if verbose logging is enabled
+  if (options.verboseLogging || testModeConfig.enhancedLogging) {
+    console.log('ENHANCED SYNC: Configuration:', {
+      syncType: syncOperation.syncType,
+      testMode: testModeConfig.enabled,
+      dryRun: testModeConfig.dryRun,
+      maxWebinars: options.maxWebinars,
+      respectRateLimits: options.respectRateLimits,
+      enableAutoRetry: options.enableAutoRetry
+    });
+  }
+
   const zoomApiClient = await createZoomAPIClient(connection);
   
   try {
-    await updateSyncStage(supabase, syncLogId, null, 'fetching_webinars', 5);
+    await updateSyncStage(supabase, syncLogId, null, 'initializing_enhanced', 5);
     
-    // Fetch webinars from Zoom
+    // Fetch webinars from Zoom with enhanced error handling
+    console.log('ENHANCED SYNC: Fetching webinars from Zoom API...');
     const webinarsResponse = await zoomApiClient.makeRequest('/users/me/webinars?page_size=100');
-    const webinars = webinarsResponse.webinars || [];
+    let webinars = webinarsResponse.webinars || [];
     
     if (webinars.length === 0) {
-      console.log('No webinars found for enhanced sync');
+      console.log('ENHANCED SYNC: No webinars found');
       await updateSyncLog(supabase, syncLogId, {
         sync_status: 'completed',
         completed_at: new Date().toISOString(),
@@ -29,94 +48,60 @@ export async function processEnhancedWebinarSync(
       });
       return;
     }
-    
+
+    // Apply test mode limitations
+    if (testModeConfig.enabled) {
+      webinars = TestModeManager.limitWebinarsForTestMode(webinars, testModeConfig);
+      TestModeManager.logTestModeOperation('webinar_limitation', { 
+        originalCount: webinarsResponse.webinars?.length || 0,
+        limitedCount: webinars.length 
+      }, testModeConfig);
+    }
+
+    // Apply max webinars limit if specified
+    if (options.maxWebinars && webinars.length > options.maxWebinars) {
+      console.log(`ENHANCED SYNC: Limiting webinars to ${options.maxWebinars} (was ${webinars.length})`);
+      webinars = webinars.slice(0, options.maxWebinars);
+    }
+
     await updateSyncLog(supabase, syncLogId, {
       total_items: webinars.length,
       processed_items: 0
     });
     
-    console.log(`Starting enhanced sync for ${webinars.length} webinars`);
+    console.log(`ENHANCED SYNC: Processing ${webinars.length} webinars`);
     
     let processedCount = 0;
-    const failedParticipantFetches: RetryableWebinar[] = [];
+    const operations: Array<{ operation: string; data: any; skipped: boolean }> = [];
     
-    // Process each webinar
+    // Process each webinar with enhanced error handling
     for (const webinar of webinars) {
       try {
-        await updateSyncStage(supabase, syncLogId, webinar.id, 'processing_webinar', 
+        await updateSyncStage(supabase, syncLogId, webinar.id, 'processing_webinar_enhanced', 
           Math.round(((processedCount + 0.5) / webinars.length) * 100));
         
-        console.log(`Processing webinar: ${webinar.topic} (${webinar.id})`);
-        
-        // Save basic webinar data
-        await saveWebinarToDatabase(supabase, webinar, connection.id);
-        
-        // Get webinar database ID
-        const { data: webinarDbData } = await supabase
-          .from('zoom_webinars')
-          .select('id')
-          .eq('connection_id', connection.id)
-          .eq('webinar_id', webinar.id.toString())
-          .single();
-        
-        if (!webinarDbData) {
-          console.error(`Could not find database record for webinar ${webinar.id}`);
-          continue;
+        if (options.verboseLogging || testModeConfig.enhancedLogging) {
+          console.log(`ENHANCED SYNC: Processing webinar ${processedCount + 1}/${webinars.length}: ${webinar.topic} (${webinar.id})`);
         }
         
-        const webinarDbId = webinarDbData.id;
+        // Check if this is a dry run
+        const shouldSkip = TestModeManager.shouldSkipDatabaseWrite(testModeConfig);
         
-        // Determine participant sync status
-        const participantSyncStatus = await determineParticipantSyncStatus(webinar);
-        
-        if (participantSyncStatus === 'pending') {
-          // Try to fetch participants
-          try {
-            console.log(`Fetching participants for webinar: ${webinar.topic}`);
-            
-            const participantsResponse = await zoomApiClient.makeRequest(
-              `/report/webinars/${webinar.id}/participants?page_size=300`
-            );
-            
-            const participants = participantsResponse.participants || [];
-            
-            if (participants.length > 0) {
-              // Save participants to database
-              await saveParticipantsToDatabase(supabase, webinarDbId, participants);
-              await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'synced');
-              
-              console.log(`✓ Saved ${participants.length} participants for ${webinar.topic}`);
-            } else {
-              await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'no_participants');
-              console.log(`✓ No participants found for ${webinar.topic}`);
-            }
-            
-          } catch (participantError) {
-            const errorMessage = participantError instanceof Error ? participantError.message : 'Unknown error';
-            console.log(`✗ Failed to fetch participants for ${webinar.topic}: ${errorMessage}`);
-            
-            // Classify error and add to retry queue if eligible
-            const errorType = ParticipantRetryService.classifyError(errorMessage);
-            
-            if (ParticipantRetryService.isRetryableError(errorType)) {
-              failedParticipantFetches.push({
-                webinarId: webinar.id.toString(),
-                dbId: webinarDbId,
-                topic: webinar.topic,
-                errorMessage,
-                errorType: errorType as any,
-                retryAttempt: 0,
-                nextRetryAt: new Date().toISOString()
-              });
-              
-              await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'pending', errorMessage);
-            } else {
-              await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'failed', errorMessage);
-            }
-          }
+        if (!shouldSkip) {
+          // Save webinar to database
+          await saveWebinarToDatabase(supabase, webinar, connection.id);
+          operations.push({
+            operation: `Save webinar: ${webinar.topic}`,
+            data: { id: webinar.id, topic: webinar.topic },
+            skipped: false
+          });
         } else {
-          // Update status to not applicable
-          await updateWebinarParticipantSyncStatus(supabase, webinarDbId, participantSyncStatus);
+          console.log(`DRY RUN: Skipping database write for webinar: ${webinar.topic}`);
+          operations.push({
+            operation: `Save webinar: ${webinar.topic}`,
+            data: { id: webinar.id, topic: webinar.topic },
+            skipped: true
+          });
         }
         
         processedCount++;
@@ -127,142 +112,96 @@ export async function processEnhancedWebinarSync(
         });
         
       } catch (webinarError) {
-        console.error(`Error processing webinar ${webinar.id}:`, webinarError);
+        console.error(`ENHANCED SYNC: Error processing webinar ${webinar.id}:`, webinarError);
+        
+        // Log the error operation
+        operations.push({
+          operation: `ERROR - Save webinar: ${webinar.topic}`,
+          data: { id: webinar.id, error: webinarError.message },
+          skipped: false
+        });
+        
         processedCount++;
         
         await updateSyncLog(supabase, syncLogId, {
           processed_items: processedCount,
-          failed_items: (await getCurrentFailedCount(supabase, syncLogId)) + 1
+          failed_items: processedCount - (operations.filter(op => !op.operation.startsWith('ERROR')).length)
         });
+        
+        // Continue processing other webinars unless forceSync is disabled
+        if (!options.forceSync && !options.enableAutoRetry) {
+          console.log('ENHANCED SYNC: Stopping on error (forceSync disabled)');
+          break;
+        }
       }
     }
     
-    // Handle participant retries if any failures occurred
-    if (failedParticipantFetches.length > 0) {
-      await updateSyncStage(supabase, syncLogId, null, 'scheduling_retries', 95);
-      
-      console.log(`\n=== PARTICIPANT RETRY PHASE ===`);
-      console.log(`Found ${failedParticipantFetches.length} webinars with failed participant fetches`);
-      
-      // Get max retries setting
-      const { data: syncLogData } = await supabase
-        .from('zoom_sync_logs')
-        .select('max_participant_retries')
-        .eq('id', syncLogId)
-        .single();
-      
-      const maxRetries = syncLogData?.max_participant_retries || 3;
-      
-      // Schedule retries
-      const retrySchedule = await ParticipantRetryService.scheduleRetries(
-        supabase,
-        syncLogId,
-        failedParticipantFetches,
-        maxRetries
-      );
-      
-      if (retrySchedule.length > 0) {
-        await updateSyncStage(supabase, syncLogId, null, 'executing_retries', 98);
-        
-        // Execute immediate retries (for errors that don't need backoff)
-        const retryResults = await ParticipantRetryService.executeRetries(
-          supabase,
-          syncLogId,
-          retrySchedule,
-          zoomApiClient,
-          connection.id
-        );
-        
-        console.log(`Retry execution results:`, retryResults);
-        
-        // Update sync log with retry summary
-        const retryErrorDetails = {
-          total_failed_participant_fetches: failedParticipantFetches.length,
-          immediate_retry_results: retryResults,
-          remaining_scheduled_retries: retryResults.deferred
-        };
-        
-        await updateSyncLog(supabase, syncLogId, {
-          error_details: retryErrorDetails
-        });
-      }
+    // Generate test mode report if enabled
+    if (testModeConfig.enabled) {
+      const report = this.generateTestModeReport(operations, testModeConfig);
+      console.log(report);
     }
     
-    // Complete the sync
-    await updateSyncStage(supabase, syncLogId, null, 'completed', 100);
+    // Complete sync
+    await updateSyncStage(supabase, syncLogId, null, 'completed_enhanced', 100);
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'completed',
-      completed_at: new Date().toISOString()
+      completed_at: new Date().toISOString(),
+      error_details: testModeConfig.enabled ? {
+        testModeReport: operations,
+        dryRun: testModeConfig.dryRun
+      } : null
     });
-    
-    console.log(`\n=== ENHANCED SYNC COMPLETED ===`);
+
+    console.log('=== ENHANCED SYNC COMPLETED ===');
     console.log(`Total webinars processed: ${processedCount}`);
-    console.log(`Failed participant fetches: ${failedParticipantFetches.length}`);
-    console.log(`Retries scheduled: ${failedParticipantFetches.length > 0 ? 'Yes' : 'No'}`);
+    console.log(`Operations performed: ${operations.length}`);
+    console.log(`Dry run: ${testModeConfig.dryRun ? 'YES' : 'NO'}`);
     
   } catch (error) {
-    console.error('Enhanced sync failed:', error);
+    console.error('ENHANCED SYNC: Operation failed:', error);
+    
+    await updateSyncLog(supabase, syncLogId, {
+      sync_status: 'failed',
+      error_message: error instanceof Error ? error.message : 'Enhanced sync failed',
+      completed_at: new Date().toISOString(),
+      sync_stage: 'failed',
+      stage_progress_percentage: 0
+    });
+
     throw error;
   }
 }
 
-// Helper function to save participants
-async function saveParticipantsToDatabase(supabase: any, webinarDbId: string, participants: any[]): Promise<void> {
-  const participantInserts = participants.map(p => ({
-    webinar_id: webinarDbId,
-    zoom_user_id: p.user_id || p.id,
-    name: p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
-    email: p.email,
-    join_time: p.join_time,
-    leave_time: p.leave_time,
-    duration: p.duration,
-    participant_data: p,
-    created_at: new Date().toISOString()
-  }));
-
-  if (participantInserts.length > 0) {
-    const { error } = await supabase
-      .from('zoom_participants')
-      .upsert(participantInserts, { 
-        onConflict: 'webinar_id,zoom_user_id',
-        ignoreDuplicates: false 
-      });
-
-    if (error) {
-      throw new Error(`Failed to save participants: ${error.message}`);
-    }
+function generateTestModeReport(
+  operations: Array<{ operation: string; data: any; skipped: boolean }>,
+  config: TestModeConfig
+): string {
+  if (!config.enabled) {
+    return '';
   }
-}
 
-// Helper function to get current failed count
-async function getCurrentFailedCount(supabase: any, syncLogId: string): Promise<number> {
-  const { data } = await supabase
-    .from('zoom_sync_logs')
-    .select('failed_items')
-    .eq('id', syncLogId)
-    .single();
-  
-  return data?.failed_items || 0;
-}
+  const report = [
+    '=== ENHANCED TEST MODE REPORT ===',
+    `Configuration:`,
+    `  - Test Mode: ${config.enabled ? 'ENABLED' : 'DISABLED'}`,
+    `  - Dry Run: ${config.dryRun ? 'YES' : 'NO'}`,
+    `  - Max Webinars: ${config.maxWebinars}`,
+    `  - Enhanced Logging: ${config.enhancedLogging ? 'YES' : 'NO'}`,
+    '',
+    'Operations Summary:',
+    `  - Total Operations: ${operations.length}`,
+    `  - Executed: ${operations.filter(op => !op.skipped).length}`,
+    `  - Skipped (Dry Run): ${operations.filter(op => op.skipped).length}`,
+    `  - Errors: ${operations.filter(op => op.operation.startsWith('ERROR')).length}`,
+    '',
+    'Detailed Operations:',
+    ...operations.map(op => 
+      `  - ${op.operation}: ${op.skipped ? 'SKIPPED' : 'EXECUTED'}`
+    ),
+    '',
+    '=== END ENHANCED TEST MODE REPORT ==='
+  ];
 
-// Helper function to create Zoom API client (this should be imported from the existing module)
-async function createZoomAPIClient(connection: any) {
-  // This should be the same function used elsewhere in the sync system
-  // Simplified version for this example
-  return {
-    async makeRequest(endpoint: string) {
-      const response = await fetch(`https://api.zoom.us/v2${endpoint}`, {
-        headers: {
-          'Authorization': `Bearer ${connection.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Zoom API error: ${response.status} ${response.statusText}`);
-      }
-      
-      return await response.json();
-    }
-  };
+  return report.join('\n');
 }
