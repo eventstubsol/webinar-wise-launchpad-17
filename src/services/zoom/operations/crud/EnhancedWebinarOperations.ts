@@ -47,6 +47,50 @@ export class EnhancedWebinarOperations {
   }
 
   /**
+   * Merge new API data with existing database data
+   */
+  static mergeWebinarData(apiWebinar: any, existingWebinar: any | null, connectionId: string): any {
+    // Start with transformed API data
+    const newData = ZoomDataTransformers.transformWebinarForDatabase(apiWebinar, connectionId);
+    
+    if (!existingWebinar) {
+      console.log(`New webinar detected: ${apiWebinar.id} - will be inserted`);
+      return newData;
+    }
+
+    console.log(`Existing webinar found: ${apiWebinar.id} - will be updated, preserving calculated fields`);
+
+    // Create the merged data object with preserved fields
+    const mergedData = {
+      ...newData,
+      // Preserve critical calculated fields that should never be overwritten during sync
+      total_registrants: existingWebinar.total_registrants,
+      total_attendees: existingWebinar.total_attendees,
+      total_minutes: existingWebinar.total_minutes,
+      avg_attendance_duration: existingWebinar.avg_attendance_duration,
+      participant_sync_status: existingWebinar.participant_sync_status,
+      participant_sync_attempted_at: existingWebinar.participant_sync_attempted_at,
+      participant_sync_error: existingWebinar.participant_sync_error,
+      created_at: existingWebinar.created_at, // Preserve original creation time
+      
+      // Merge JSONB fields instead of replacing them
+      settings: this.mergeJSONBField(existingWebinar.settings, newData.settings),
+      tracking_fields: this.mergeJSONBField(existingWebinar.tracking_fields, newData.tracking_fields),
+      recurrence: this.mergeJSONBField(existingWebinar.recurrence, newData.recurrence),
+      occurrences: this.mergeJSONBField(existingWebinar.occurrences, newData.occurrences),
+    };
+
+    // Log what's being preserved vs updated
+    console.log(`Webinar ${apiWebinar.id} merge summary:`);
+    console.log(`- Preserved calculated metrics: registrants=${existingWebinar.total_registrants}, attendees=${existingWebinar.total_attendees}`);
+    console.log(`- Preserved participant sync status: ${existingWebinar.participant_sync_status}`);
+    console.log(`- Merged JSONB fields: settings, tracking_fields, recurrence, occurrences`);
+    console.log(`- Updated API fields: topic, start_time, duration, status, etc.`);
+
+    return mergedData;
+  }
+
+  /**
    * Enhanced upsert with data preservation
    */
   static async upsertWebinar(webinarData: any, connectionId: string): Promise<string> {
@@ -58,41 +102,19 @@ export class EnhancedWebinarOperations {
       const zoomWebinarId = (webinarData.id || webinarData.webinar_id)?.toString();
       const existingWebinar = await this.getExistingWebinar(zoomWebinarId, connectionId);
       
-      // Step 2: Transform new data
-      const transformedWebinar = ZoomDataTransformers.transformWebinarForDatabase(webinarData, connectionId);
+      // Step 2: Merge with existing data to preserve calculated fields
+      const mergedWebinar = this.mergeWebinarData(webinarData, existingWebinar, connectionId);
       
-      // Step 3: Merge with existing data to preserve calculated fields
-      let finalWebinar = transformedWebinar;
-      
+      // Step 3: If existing webinar, preserve the database ID by adding it to the merged data
       if (existingWebinar) {
-        console.log(`Existing webinar found - preserving calculated fields and merging JSONB data`);
-        
-        // Preserve critical calculated fields
-        finalWebinar = {
-          ...transformedWebinar,
-          id: existingWebinar.id, // Preserve database ID
-          total_registrants: existingWebinar.total_registrants,
-          total_attendees: existingWebinar.total_attendees,
-          total_minutes: existingWebinar.total_minutes,
-          avg_attendance_duration: existingWebinar.avg_attendance_duration,
-          participant_sync_status: existingWebinar.participant_sync_status,
-          participant_sync_attempted_at: existingWebinar.participant_sync_attempted_at,
-          participant_sync_error: existingWebinar.participant_sync_error,
-          created_at: existingWebinar.created_at,
-          
-          // Merge JSONB fields
-          settings: this.mergeJSONBField(existingWebinar.settings, transformedWebinar.settings),
-          tracking_fields: this.mergeJSONBField(existingWebinar.tracking_fields, transformedWebinar.tracking_fields),
-          recurrence: this.mergeJSONBField(existingWebinar.recurrence, transformedWebinar.recurrence),
-          occurrences: this.mergeJSONBField(existingWebinar.occurrences, transformedWebinar.occurrences),
-        };
+        mergedWebinar.id = existingWebinar.id;
       }
 
       // Step 4: Perform the upsert
       const { data, error } = await supabase
         .from('zoom_webinars')
         .upsert(
-          finalWebinar,
+          mergedWebinar,
           {
             onConflict: 'connection_id,webinar_id',
             ignoreDuplicates: false
