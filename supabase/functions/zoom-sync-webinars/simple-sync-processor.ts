@@ -1,4 +1,3 @@
-
 import { updateSyncLog, updateSyncStage, updateWebinarParticipantSyncStatus, determineParticipantSyncStatus } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 import { syncWebinarParticipants } from './processors/participant-processor.ts';
@@ -10,7 +9,7 @@ export async function processSimpleWebinarSync(
   syncLogId: string
 ): Promise<void> {
   const debugMode = syncOperation.options?.debug || false;
-  console.log(`Starting simple webinar sync for connection: ${connection.id}${debugMode ? ' (DEBUG MODE)' : ''}`);
+  console.log(`Starting enhanced simple webinar sync for connection: ${connection.id}${debugMode ? ' (DEBUG MODE)' : ''}`);
 
   // Track processing statistics
   let processedCount = 0;
@@ -18,6 +17,8 @@ export async function processSimpleWebinarSync(
   let skippedForParticipants = 0;
   let processedForParticipants = 0;
   let totalParticipantsSynced = 0;
+  let insertCount = 0;
+  let updateCount = 0;
   
   try {
     const zoomApi = await import('./zoom-api-client.ts');
@@ -29,7 +30,7 @@ export async function processSimpleWebinarSync(
       type: 'all'
     });
     
-    console.log(`Found ${webinars.length} webinars to sync`);
+    console.log(`Found ${webinars.length} webinars to sync with enhanced upsert logic`);
     
     if (webinars.length === 0) {
       await updateSyncLog(supabase, syncLogId, {
@@ -46,7 +47,7 @@ export async function processSimpleWebinarSync(
     
     const totalWebinars = webinars.length;
     
-    // Process each webinar
+    // Process each webinar with enhanced upsert
     for (const webinar of webinars) {
       try {
         const baseProgress = 20 + Math.round(((processedCount) / totalWebinars) * 60);
@@ -59,52 +60,35 @@ export async function processSimpleWebinarSync(
           baseProgress
         );
         
-        console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars})`);
+        console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars}) with enhanced upsert`);
         
         // Get detailed webinar data
         const webinarDetails = await client.getWebinar(webinar.id);
         
+        // Check if webinar already exists to track INSERT vs UPDATE
+        const existingCheck = await supabase
+          .from('zoom_webinars')
+          .select('id')
+          .eq('connection_id', connection.id)
+          .eq('webinar_id', webinarDetails.id?.toString())
+          .maybeSingle();
+        
+        const isNewWebinar = !existingCheck.data;
+        
         // Determine initial participant sync status
         const initialParticipantSyncStatus = await determineParticipantSyncStatus(webinarDetails);
         
-        // Store webinar data in database with initial participant sync status
-        const { data: webinarRecord, error: webinarError } = await supabase
-          .from('zoom_webinars')
-          .upsert(
-            {
-              connection_id: connection.id,
-              webinar_id: webinarDetails.id?.toString(),
-              webinar_uuid: webinarDetails.uuid,
-              host_id: webinarDetails.host_id,
-              host_email: webinarDetails.host_email,
-              topic: webinarDetails.topic,
-              agenda: webinarDetails.agenda,
-              type: webinarDetails.type,
-              status: webinarDetails.status,
-              start_time: webinarDetails.start_time,
-              duration: webinarDetails.duration,
-              timezone: webinarDetails.timezone,
-              registration_required: !!webinarDetails.registration_url,
-              registration_url: webinarDetails.registration_url,
-              join_url: webinarDetails.join_url,
-              approval_type: webinarDetails.settings?.approval_type,
-              max_registrants: webinarDetails.settings?.registrants_restrict_number,
-              participant_sync_status: initialParticipantSyncStatus,
-              synced_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            },
-            {
-              onConflict: 'connection_id,webinar_id',
-              ignoreDuplicates: false
-            }
-          )
-          .select('id')
-          .single();
-
-        if (webinarError) {
-          console.error(`Failed to store webinar ${webinar.id}:`, webinarError);
-          processedCount++;
-          continue;
+        // Use enhanced sync function from webinar-processor
+        const { syncBasicWebinarData } = await import('./processors/webinar-processor.ts');
+        const webinarDbId = await syncBasicWebinarData(supabase, webinarDetails, connection.id);
+        
+        // Track operation type for statistics
+        if (isNewWebinar) {
+          insertCount++;
+          console.log(`✅ NEW webinar inserted: ${webinar.id} -> DB ID: ${webinarDbId}`);
+        } else {
+          updateCount++;
+          console.log(`✅ EXISTING webinar updated: ${webinar.id} -> DB ID: ${webinarDbId} (data preserved)`);
         }
 
         // Sync participants with eligibility check and status tracking
@@ -121,7 +105,7 @@ export async function processSimpleWebinarSync(
             supabase, 
             client, 
             webinar.id, 
-            webinarRecord.id,
+            webinarDbId,
             webinarDetails, // Pass webinar data for eligibility check
             debugMode
           );
@@ -152,11 +136,14 @@ export async function processSimpleWebinarSync(
     
     await updateSyncStage(supabase, syncLogId, null, 'completing', 90);
     
-    // Enhanced completion logging with statistics
-    console.log(`Simple webinar sync completed with statistics:`);
+    // Enhanced completion logging with operation statistics
+    console.log(`\n🎉 Enhanced simple webinar sync completed with statistics:`);
     console.log(`  - Total webinars found: ${totalWebinars}`);
     console.log(`  - Webinars processed successfully: ${successCount}`);
     console.log(`  - Webinars failed: ${processedCount - successCount}`);
+    console.log(`  - NEW webinars inserted: ${insertCount}`);
+    console.log(`  - EXISTING webinars updated: ${updateCount}`);
+    console.log(`  - Data preservation: ${updateCount > 0 ? 'ENABLED (calculated fields preserved)' : 'N/A'}`);
     console.log(`  - Webinars processed for participants: ${processedForParticipants}`);
     console.log(`  - Webinars skipped for participants: ${skippedForParticipants}`);
     console.log(`  - Total participants synced: ${totalParticipantsSynced}`);
@@ -168,18 +155,21 @@ export async function processSimpleWebinarSync(
       completed_at: new Date().toISOString(),
       sync_stage: 'completed',
       stage_progress_percentage: 100,
-      // Store additional statistics in sync_notes
+      // Store enhanced statistics in sync_notes
       sync_notes: JSON.stringify({
+        webinars_inserted: insertCount,
+        webinars_updated: updateCount,
+        data_preservation_enabled: true,
         webinars_for_participants_processed: processedForParticipants,
         webinars_for_participants_skipped: skippedForParticipants,
         participant_sync_skip_reasons: 'Webinars not yet occurred or invalid status'
       })
     });
     
-    console.log(`Simple webinar sync completed. Successfully processed ${successCount}/${totalWebinars} webinars and ${totalParticipantsSynced} participants.`);
+    console.log(`✅ Enhanced sync completed. ${insertCount} new webinars inserted, ${updateCount} existing webinars updated (with data preservation), ${totalParticipantsSynced} participants synced.`);
     
   } catch (error) {
-    console.error('Simple webinar sync failed:', error);
+    console.error('Enhanced simple webinar sync failed:', error);
     
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'failed',
@@ -190,6 +180,9 @@ export async function processSimpleWebinarSync(
       sync_stage: 'failed',
       stage_progress_percentage: 0,
       sync_notes: JSON.stringify({
+        webinars_inserted: insertCount,
+        webinars_updated: updateCount,
+        data_preservation_enabled: true,
         webinars_for_participants_processed: processedForParticipants,
         webinars_for_participants_skipped: skippedForParticipants,
         error_type: error.constructor.name

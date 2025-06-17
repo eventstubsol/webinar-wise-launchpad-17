@@ -1,4 +1,3 @@
-
 export async function createSyncLog(supabase: any, connectionId: string, syncType: string, webinarId?: string): Promise<string> {
   const { data, error } = await supabase
     .from('zoom_sync_logs')
@@ -38,29 +37,16 @@ export async function updateSyncStage(supabase: any, syncLogId: string, webinarI
 }
 
 export async function saveWebinarToDatabase(supabase: any, webinarData: any, connectionId: string): Promise<void> {
-  const webinarInsert = {
-    connection_id: connectionId,
-    webinar_id: webinarData.id.toString(),
-    webinar_uuid: webinarData.uuid,
-    topic: webinarData.topic,
-    start_time: webinarData.start_time,
-    duration: webinarData.duration,
-    timezone: webinarData.timezone,
-    host_id: webinarData.host_id,
-    host_email: webinarData.host_email,
-    status: webinarData.status,
-    agenda: webinarData.agenda,
-    type: webinarData.type,
-    settings: webinarData.settings,
-    synced_at: new Date().toISOString(),
-  };
-
-  const { error } = await supabase
-    .from('zoom_webinars')
-    .upsert(webinarInsert, { onConflict: 'connection_id,webinar_id' });
-
-  if (error) {
-    console.error(`Error saving webinar ${webinarData.id}:`, error);
+  console.log(`🔄 Enhanced saveWebinarToDatabase for webinar ${webinarData.id}`);
+  
+  try {
+    // Use the same enhanced sync logic from webinar-processor
+    const { syncBasicWebinarData } = await import('./processors/webinar-processor.ts');
+    const webinarId = await syncBasicWebinarData(supabase, webinarData, connectionId);
+    
+    console.log(`✅ saveWebinarToDatabase completed - Database ID: ${webinarId}`);
+  } catch (error) {
+    console.error(`❌ saveWebinarToDatabase failed for webinar ${webinarData.id}:`, error);
     throw error;
   }
 }
