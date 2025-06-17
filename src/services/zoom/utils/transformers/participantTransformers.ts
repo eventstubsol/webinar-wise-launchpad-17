@@ -31,7 +31,7 @@ export class ParticipantTransformers {
       answered_polling: apiParticipant.answered_polling || false,
       asked_question: apiParticipant.asked_question || false,
       device: apiParticipant.device || null,
-      ip_address: apiParticipant.ip_address || null,
+      ip_address: apiParticipant.ip_address ? String(apiParticipant.ip_address) : null,
       location: apiParticipant.location || null,
       network_type: apiParticipant.network_type || null,
       version: apiParticipant.version || null,
