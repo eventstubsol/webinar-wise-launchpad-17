@@ -19,6 +19,20 @@ export enum WebinarStatus {
   CANCELLED = 'cancelled'
 }
 
+/** Webinar type values */
+export enum WebinarType {
+  WEBINAR = 5,
+  RECURRING_WEBINAR = 6,
+  RECURRING_WITH_FIXED_TIME = 9
+}
+
+/** Approval type values */
+export enum ApprovalType {
+  AUTOMATICALLY_APPROVE = 0,
+  MANUALLY_APPROVE = 1,
+  NO_REGISTRATION_REQUIRED = 2
+}
+
 /** Sync operation types */
 export enum SyncType {
   INITIAL = 'initial',

@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomDataTransformers } from '../../utils/dataTransformers';
+import { WebinarTransformers } from '../../utils/transformers/webinarTransformers';
 
 /**
  * Database operations for webinar registrants
@@ -17,7 +17,7 @@ export class RegistrantOperations {
 
     try {
       const transformedRegistrants = registrants.map(registrant => {
-        const transformed = ZoomDataTransformers.transformRegistrant(registrant, webinarDbId);
+        const transformed = WebinarTransformers.transformRegistrant(registrant, webinarDbId);
         return {
           ...transformed,
           custom_questions: transformed.custom_questions ? JSON.parse(JSON.stringify(transformed.custom_questions)) : null,

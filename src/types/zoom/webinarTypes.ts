@@ -49,7 +49,7 @@ export interface ZoomRegistrant {
   webinar_id: string;
   registrant_id: string;
   registrant_uuid: string | null;
-  email: string;
+  registrant_email: string;
   first_name: string | null;
   last_name: string | null;
   address: string | null;

@@ -29,44 +29,31 @@ export class WebinarTransformers {
       duration: apiWebinar.duration || null,
       timezone: apiWebinar.timezone || null,
       registration_required: !!apiWebinar.registration_url,
-      registration_type: settings.registration_type || null,
       registration_url: apiWebinar.registration_url || null,
       join_url: apiWebinar.join_url || null,
       approval_type: settings.approval_type || null,
-      alternative_hosts: settings.alternative_hosts ? 
-        settings.alternative_hosts.split(',').map((h: string) => h.trim()) : null,
       max_registrants: settings.registrants_restrict_number || null,
-      max_attendees: null,
-      occurrence_id: apiWebinar.occurrences?.[0]?.occurrence_id || apiWebinar.occurrence_id || null,
-      total_registrants: null,
-      total_attendees: null,
-      total_minutes: null,
-      avg_attendance_duration: null,
+      attendees_count: null,
+      registrants_count: null,
       synced_at: new Date().toISOString(),
       
       // Enhanced field mapping for missing data
       password: apiWebinar.password || null,
-      h323_password: apiWebinar.h323_password || apiWebinar.h323_passcode || null,
-      pstn_password: apiWebinar.pstn_password || null,
-      encrypted_password: apiWebinar.encrypted_password || apiWebinar.encrypted_passcode || null,
       settings: settings,
       tracking_fields: apiWebinar.tracking_fields || null,
       recurrence: apiWebinar.recurrence || null,
       occurrences: apiWebinar.occurrences || null,
+      panelists: apiWebinar.panelists || null,
       
-      // New fields from Zoom API schema
-      start_url: apiWebinar.start_url || null,
-      encrypted_passcode: apiWebinar.encrypted_passcode || apiWebinar.encrypted_password || null,
-      creation_source: apiWebinar.creation_source || null,
-      is_simulive: apiWebinar.is_simulive || false,
-      record_file_id: apiWebinar.record_file_id || null,
-      transition_to_live: apiWebinar.transition_to_live || false,
-      webinar_created_at: apiWebinar.created_at || null,
+      // Participant sync status fields
+      participant_sync_status: 'pending',
+      participant_sync_attempted_at: null,
+      participant_sync_error: null,
     };
   }
 
   /**
-   * Transform Zoom API registrant to database format with new fields
+   * Transform Zoom API registrant to database format with correct field names
    */
   static transformRegistrant(
     apiRegistrant: any,
@@ -75,6 +62,7 @@ export class WebinarTransformers {
     return {
       webinar_id: webinarId,
       registrant_id: apiRegistrant.id || apiRegistrant.registrant_id,
+      registrant_uuid: apiRegistrant.uuid || null,
       registrant_email: apiRegistrant.email,
       first_name: apiRegistrant.first_name || null,
       last_name: apiRegistrant.last_name || null,
@@ -86,25 +74,15 @@ export class WebinarTransformers {
       phone: apiRegistrant.phone || null,
       comments: apiRegistrant.comments || null,
       custom_questions: apiRegistrant.custom_questions || null,
-      // Handle null/undefined registration_time by letting database default apply
-      registration_time: apiRegistrant.registration_time || apiRegistrant.create_time || null,
-      source_id: apiRegistrant.source_id || null,
-      tracking_source: apiRegistrant.tracking_source || null,
+      create_time: apiRegistrant.create_time || apiRegistrant.registration_time || null,
+      join_url: apiRegistrant.join_url || null,
       status: apiRegistrant.status || 'approved',
-      join_time: apiRegistrant.join_time || null,
-      leave_time: apiRegistrant.leave_time || null,
-      duration: apiRegistrant.duration || null,
-      attended: !!apiRegistrant.join_time,
       job_title: apiRegistrant.job_title || null,
       purchasing_time_frame: apiRegistrant.purchasing_time_frame || null,
       role_in_purchase_process: apiRegistrant.role_in_purchase_process || null,
       no_of_employees: apiRegistrant.no_of_employees || null,
       industry: apiRegistrant.industry || null,
       org: apiRegistrant.org || null,
-      language: apiRegistrant.language || null,
-      // New fields from API alignment
-      join_url: apiRegistrant.join_url || null,
-      create_time: apiRegistrant.create_time || apiRegistrant.registration_time || null,
     };
   }
 }
