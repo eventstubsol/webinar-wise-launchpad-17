@@ -1,57 +1,33 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomDataTransformers } from '../../utils/dataTransformers';
+import { WebinarTransformers } from '../../utils/transformers/webinarTransformers';
 import { RegistrantOperations } from './RegistrantOperations';
 import { ParticipantOperations } from './ParticipantOperations';
 
 /**
- * Enhanced database operations for webinars with complete data pipeline
+ * Enhanced database operations for webinars with comprehensive field mapping and status detection
  */
 export class EnhancedWebinarOperations {
   /**
-   * Upsert webinar with comprehensive field mapping including new schema fields
+   * Upsert webinar with enhanced status detection and comprehensive field mapping
    */
   static async upsertWebinar(webinarData: any, connectionId: string): Promise<string> {
-    const transformedWebinar = ZoomDataTransformers.transformWebinarForDatabase(webinarData, connectionId);
+    const transformedWebinar = WebinarTransformers.transformWebinarForDatabase(webinarData, connectionId);
     
-    // Enhanced field mapping to capture all available Zoom API data
-    const enhancedWebinar = {
-      ...transformedWebinar,
-      // Ensure status is properly mapped from API
-      status: webinarData.status || 'available',
-      
-      // Map settings fields that were previously missing
-      approval_type: webinarData.settings?.approval_type || null,
-      registration_type: webinarData.settings?.registration_type || null,
-      
-      // New fields from schema update
-      start_url: webinarData.start_url || null,
-      encrypted_passcode: webinarData.encrypted_passcode || webinarData.encrypted_password || null,
-      creation_source: webinarData.creation_source || null,
-      is_simulive: webinarData.is_simulive || false,
-      record_file_id: webinarData.record_file_id || null,
-      transition_to_live: webinarData.transition_to_live || false,
-      webinar_created_at: webinarData.created_at || null,
-      
-      // Enhanced password field mapping
-      password: webinarData.password || null,
-      h323_password: webinarData.h323_password || webinarData.h323_passcode || null,
-      pstn_password: webinarData.pstn_password || null,
-      encrypted_password: webinarData.encrypted_password || webinarData.encrypted_passcode || null,
-      
-      // Comprehensive settings and metadata
-      settings: webinarData.settings ? JSON.stringify(webinarData.settings) : null,
-      tracking_fields: webinarData.tracking_fields ? JSON.stringify(webinarData.tracking_fields) : null,
-      recurrence: webinarData.recurrence ? JSON.stringify(webinarData.recurrence) : null,
-      occurrences: webinarData.occurrences ? JSON.stringify(webinarData.occurrences) : null,
-      
-      updated_at: new Date().toISOString()
-    };
+    console.log(`Enhanced webinar transformation for ${webinarData.id}:`, {
+      originalStatus: webinarData.status,
+      detectedStatus: transformedWebinar.status,
+      startTime: transformedWebinar.start_time,
+      title: transformedWebinar.topic
+    });
 
     const { data, error } = await supabase
       .from('zoom_webinars')
       .upsert(
-        enhancedWebinar,
+        {
+          ...transformedWebinar,
+          updated_at: new Date().toISOString()
+        },
         {
           onConflict: 'connection_id,webinar_id',
           ignoreDuplicates: false
@@ -65,7 +41,7 @@ export class EnhancedWebinarOperations {
       throw new Error(`Failed to upsert webinar: ${error.message}`);
     }
 
-    console.log(`Enhanced webinar upserted with comprehensive data mapping: ${data.id}`);
+    console.log(`Enhanced webinar upserted successfully: ${data.id}`);
     return data.id;
   }
 

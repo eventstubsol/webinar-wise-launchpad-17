@@ -1,5 +1,7 @@
+
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
+import { WebinarStatusDetector } from './webinar-status-detector.ts';
 
 export async function processComprehensiveSync(
   supabase: any,
@@ -18,7 +20,6 @@ export async function processComprehensiveSync(
     console.log('Fetching webinars list...');
     await updateSyncStage(supabase, syncLogId, null, 'fetching_webinar_list', 10);
     
-    // Use the correct method from ZoomAPIClient
     const webinars = await client.listWebinarsWithRange({
       type: 'all'
     });
@@ -38,9 +39,11 @@ export async function processComprehensiveSync(
     
     let processedCount = 0;
     let successCount = 0;
+    let failedCount = 0;
     const totalWebinars = webinars.length;
+    const errors: string[] = [];
     
-    // Process each webinar with focus on webinar details and registrants
+    // Process each webinar with enhanced error tracking
     for (const webinar of webinars) {
       try {
         await updateSyncStage(
@@ -53,17 +56,9 @@ export async function processComprehensiveSync(
         
         console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars})`);
         
-        // Fetch detailed webinar information with all fields
+        // Fetch detailed webinar information
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_details', null);
         const webinarDetails = await client.getWebinar(webinar.id);
-        console.log(`Fetched webinar details for ${webinar.id}:`, {
-          hasSettings: !!webinarDetails.settings,
-          hasStartUrl: !!webinarDetails.start_url,
-          hasEncryptedPasscode: !!webinarDetails.encrypted_passcode,
-          creationSource: webinarDetails.creation_source,
-          isSimulive: webinarDetails.is_simulive,
-          status: webinarDetails.status
-        });
         
         // Fetch registrants with proper error handling
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'registrants', null);
@@ -73,96 +68,90 @@ export async function processComprehensiveSync(
           console.log(`Fetched ${registrants.length} registrants for webinar ${webinar.id}`);
         } catch (registrantError) {
           console.log(`No registrants data available for webinar ${webinar.id}: ${registrantError.message}`);
-          // Continue processing even if registrants fail
         }
         
-        // Skip participants, polls, and Q&A for now to focus on webinar + registrants
-        console.log(`Skipping participants, polls, and Q&A for progressive build - focusing on registrants`);
+        // Process webinar data with enhanced validation
+        console.log(`Syncing webinar data for webinar ${webinar.id}...`);
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'saving_webinar', null);
         
-        // Process webinar and registrant data with metrics calculation
-        console.log(`Syncing webinar and registrant data for webinar ${webinar.id}...`);
-        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'saving_webinar_and_registrants', null);
-        
-        const webinarDbId = await syncWebinarAndRegistrants(
+        const insertionResult = await syncWebinarWithValidation(
           supabase,
           webinarDetails,
           registrants,
           connection.id
         );
         
-        console.log(`Successfully synced webinar ${webinar.id} to database with ID: ${webinarDbId}`);
+        if (insertionResult.success) {
+          console.log(`Successfully synced webinar ${webinar.id} to database`);
+          successCount++;
+        } else {
+          console.error(`Failed to sync webinar ${webinar.id}: ${insertionResult.error}`);
+          errors.push(`Webinar ${webinar.id}: ${insertionResult.error}`);
+          failedCount++;
+        }
         
-        // Calculate and update webinar metrics
-        console.log(`Calculating metrics for webinar ${webinar.id}...`);
-        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'calculating_metrics', null);
-        await updateWebinarMetrics(supabase, webinarDbId, registrants);
-        
-        console.log(`Data collected for webinar ${webinar.id}:`, {
-          registrants: registrants.length,
-          participants: 'skipped',
-          polls: 'skipped',
-          qa: 'skipped'
-        });
-        
-        successCount++;
         processedCount++;
         await updateSyncStage(
           supabase, 
           syncLogId, 
           webinar.id?.toString(), 
-          'webinar_completed', 
+          insertionResult.success ? 'webinar_completed' : 'webinar_failed', 
           Math.round((processedCount / totalWebinars) * 90) + 10
         );
-        
-        console.log(`Successfully processed webinar ${webinar.id} with metrics calculated`);
         
       } catch (webinarError) {
         console.error(`Error processing webinar ${webinar.id}:`, webinarError);
         await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_failed', null);
+        errors.push(`Webinar ${webinar.id}: ${webinarError.message}`);
+        failedCount++;
         processedCount++;
-        // Continue with next webinar
       }
     }
     
-    // Complete the sync
+    // Complete the sync with detailed results
+    const syncStatus = failedCount === 0 ? 'completed' : (successCount > 0 ? 'partial' : 'failed');
+    
     await updateSyncLog(supabase, syncLogId, {
-      sync_status: 'completed',
+      sync_status: syncStatus,
       processed_items: processedCount,
       completed_at: new Date().toISOString(),
       sync_stage: 'completed',
-      stage_progress_percentage: 100
+      stage_progress_percentage: 100,
+      error_message: errors.length > 0 ? `${failedCount} webinars failed to sync` : null,
+      error_details: errors.length > 0 ? { errors, successCount, failedCount } : null
     });
     
-    console.log(`Progressive sync completed with metrics calculation. Successfully processed ${successCount}/${totalWebinars} webinars.`);
+    console.log(`Enhanced sync completed. Success: ${successCount}, Failed: ${failedCount}, Total: ${totalWebinars}`);
     
   } catch (error) {
-    console.error('Progressive sync failed:', error);
+    console.error('Enhanced sync failed:', error);
     throw error;
   }
 }
 
 /**
- * Sync webinar and registrants data with metrics calculation and new field support
+ * Sync webinar with comprehensive validation and error handling
  */
-async function syncWebinarAndRegistrants(
+async function syncWebinarWithValidation(
   supabase: any,
   webinarData: any,
   registrants: any[],
   connectionId: string
-): Promise<string> {
-  console.log(`Starting webinar and registrants sync for webinar ${webinarData.id}`);
+): Promise<{ success: boolean; error?: string; webinarId?: string }> {
+  console.log(`Starting validated webinar sync for webinar ${webinarData.id}`);
   
   try {
-    // First, sync the webinar data (we know this works from previous testing)
-    const transformedWebinar = transformWebinarForDatabase(webinarData, connectionId);
-    console.log(`Transformed webinar data for ${webinarData.id}:`, {
+    // Transform webinar with enhanced status detection
+    const transformedWebinar = transformWebinarWithStatusDetection(webinarData, connectionId);
+    
+    console.log(`Transformed webinar ${webinarData.id}:`, {
+      id: transformedWebinar.webinar_id,
       status: transformedWebinar.status,
-      type: transformedWebinar.type,
-      hasStartUrl: !!transformedWebinar.start_url,
-      hasEncryptedPasscode: !!transformedWebinar.encrypted_passcode,
-      creationSource: transformedWebinar.creation_source
+      title: transformedWebinar.topic,
+      startTime: transformedWebinar.start_time
     });
 
+    // Attempt to insert webinar with detailed error catching
     const { data: webinarRecord, error: webinarError } = await supabase
       .from('zoom_webinars')
       .upsert(
@@ -176,21 +165,22 @@ async function syncWebinarAndRegistrants(
       .single();
 
     if (webinarError) {
-      console.error('Failed to upsert webinar:', webinarError);
-      throw new Error(`Failed to upsert webinar: ${webinarError.message}`);
+      console.error('Webinar insertion failed:', webinarError);
+      return { 
+        success: false, 
+        error: `Database insertion failed: ${webinarError.message}` 
+      };
     }
 
-    console.log(`Webinar upserted successfully with ID: ${webinarRecord.id}`);
+    console.log(`Webinar inserted successfully with ID: ${webinarRecord.id}`);
     
-    // Now sync registrants if we have any
+    // Process registrants if available
     if (registrants && registrants.length > 0) {
       console.log(`Processing ${registrants.length} registrants for webinar ${webinarData.id}`);
       
       const transformedRegistrants = registrants.map(registrant => 
         transformRegistrantForDatabase(registrant, webinarRecord.id)
       );
-      
-      console.log(`Sample transformed registrant:`, transformedRegistrants[0]);
       
       const { error: registrantsError } = await supabase
         .from('zoom_registrants')
@@ -203,26 +193,138 @@ async function syncWebinarAndRegistrants(
         );
 
       if (registrantsError) {
-        console.error('Failed to upsert registrants:', registrantsError);
-        console.error('Sample registrant data that failed:', transformedRegistrants[0]);
-        // Don't throw here - we want to continue even if registrants fail
+        console.error('Registrants insertion failed:', registrantsError);
+        // Don't fail the entire operation for registrant errors
         console.log(`Continuing despite registrants error for webinar ${webinarData.id}`);
       } else {
-        console.log(`Successfully upserted ${transformedRegistrants.length} registrants for webinar ${webinarData.id}`);
+        console.log(`Successfully inserted ${transformedRegistrants.length} registrants`);
       }
-    } else {
-      console.log(`No registrants to process for webinar ${webinarData.id}`);
     }
 
-    return webinarRecord.id;
+    // Update webinar metrics
+    await updateWebinarMetrics(supabase, webinarRecord.id, registrants || []);
+
+    return { 
+      success: true, 
+      webinarId: webinarRecord.id 
+    };
+    
   } catch (error) {
-    console.error(`Error in webinar and registrants sync for ${webinarData.id}:`, error);
-    throw error;
+    console.error(`Validation error for webinar ${webinarData.id}:`, error);
+    return { 
+      success: false, 
+      error: `Validation failed: ${error.message}` 
+    };
   }
 }
 
 /**
- * Update webinar metrics after syncing all data
+ * Transform webinar with enhanced status detection
+ */
+function transformWebinarWithStatusDetection(apiWebinar: any, connectionId: string): any {
+  // Detect proper status using the enhanced detector
+  const detectedStatus = WebinarStatusDetector.detectStatus(apiWebinar);
+  
+  console.log(`Status detection for webinar ${apiWebinar.id}:`, {
+    originalStatus: apiWebinar.status,
+    detectedStatus: detectedStatus,
+    startTime: apiWebinar.start_time
+  });
+  
+  return {
+    connection_id: connectionId,
+    webinar_id: apiWebinar.id?.toString() || apiWebinar.webinar_id?.toString(),
+    webinar_uuid: apiWebinar.uuid,
+    host_id: apiWebinar.host_id,
+    host_email: apiWebinar.host_email || null,
+    topic: apiWebinar.topic,
+    agenda: apiWebinar.agenda || null,
+    type: apiWebinar.type || 5,
+    status: detectedStatus,
+    start_time: apiWebinar.start_time || null,
+    duration: apiWebinar.duration || null,
+    timezone: apiWebinar.timezone || null,
+    registration_required: !!apiWebinar.registration_url,
+    registration_type: apiWebinar.settings?.registration_type || null,
+    registration_url: apiWebinar.registration_url || null,
+    join_url: apiWebinar.join_url || null,
+    approval_type: apiWebinar.settings?.approval_type || null,
+    alternative_hosts: apiWebinar.settings?.alternative_hosts ? 
+      apiWebinar.settings.alternative_hosts.split(',').map((h: string) => h.trim()) : null,
+    max_registrants: apiWebinar.settings?.registrants_restrict_number || null,
+    max_attendees: null,
+    occurrence_id: apiWebinar.occurrences?.[0]?.occurrence_id || apiWebinar.occurrence_id || null,
+    total_registrants: null,
+    total_attendees: null,
+    total_minutes: null,
+    avg_attendance_duration: null,
+    synced_at: new Date().toISOString(),
+    
+    // Enhanced field mapping
+    password: apiWebinar.password || null,
+    h323_password: apiWebinar.h323_password || apiWebinar.h323_passcode || null,
+    pstn_password: apiWebinar.pstn_password || null,
+    encrypted_password: apiWebinar.encrypted_password || apiWebinar.encrypted_passcode || null,
+    settings: apiWebinar.settings || null,
+    tracking_fields: apiWebinar.tracking_fields || null,
+    recurrence: apiWebinar.recurrence || null,
+    occurrences: apiWebinar.occurrences || null,
+    
+    // New fields from schema
+    start_url: apiWebinar.start_url || null,
+    encrypted_passcode: apiWebinar.encrypted_passcode || apiWebinar.encrypted_password || null,
+    creation_source: apiWebinar.creation_source || null,
+    is_simulive: apiWebinar.is_simulive || false,
+    record_file_id: apiWebinar.record_file_id || null,
+    transition_to_live: apiWebinar.transition_to_live || false,
+    webinar_created_at: apiWebinar.created_at || null,
+    
+    updated_at: new Date().toISOString()
+  };
+}
+
+/**
+ * Transform registrant data for database insertion
+ */
+function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string): any {
+  return {
+    webinar_id: webinarDbId,
+    registrant_id: apiRegistrant.id || apiRegistrant.registrant_id,
+    registrant_email: apiRegistrant.email,
+    first_name: apiRegistrant.first_name || null,
+    last_name: apiRegistrant.last_name || null,
+    address: apiRegistrant.address || null,
+    city: apiRegistrant.city || null,
+    state: apiRegistrant.state || null,
+    zip: apiRegistrant.zip || null,
+    country: apiRegistrant.country || null,
+    phone: apiRegistrant.phone || null,
+    comments: apiRegistrant.comments || null,
+    custom_questions: apiRegistrant.custom_questions ? JSON.stringify(apiRegistrant.custom_questions) : null,
+    registration_time: apiRegistrant.registration_time || apiRegistrant.create_time || new Date().toISOString(),
+    source_id: apiRegistrant.source_id || null,
+    tracking_source: apiRegistrant.tracking_source || null,
+    status: apiRegistrant.status || 'approved',
+    join_time: apiRegistrant.join_time || null,
+    leave_time: apiRegistrant.leave_time || null,
+    duration: apiRegistrant.duration || null,
+    attended: !!apiRegistrant.join_time,
+    job_title: apiRegistrant.job_title || null,
+    purchasing_time_frame: apiRegistrant.purchasing_time_frame || null,
+    role_in_purchase_process: apiRegistrant.role_in_purchase_process || null,
+    no_of_employees: apiRegistrant.no_of_employees || null,
+    industry: apiRegistrant.industry || null,
+    org: apiRegistrant.org || null,
+    language: apiRegistrant.language || null,
+    join_url: apiRegistrant.join_url || null,
+    create_time: apiRegistrant.create_time || apiRegistrant.registration_time || null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
+/**
+ * Update webinar metrics after syncing
  */
 async function updateWebinarMetrics(
   supabase: any,
@@ -232,15 +334,10 @@ async function updateWebinarMetrics(
   console.log(`Calculating metrics for webinar ${webinarDbId}`);
   
   try {
-    // Calculate metrics from available data (registrants for now)
     const totalRegistrants = registrants?.length || 0;
-    
-    // For now, we'll use registrants who have attended (have join_time) as attendees
-    // This is a simplification until we get actual participant data
     const attendees = registrants?.filter(r => r.join_time) || [];
     const totalAttendees = attendees.length;
     
-    // Calculate total minutes and average duration from registrant attendance data
     let totalMinutes = 0;
     let avgAttendanceDuration = 0;
     
@@ -258,7 +355,6 @@ async function updateWebinarMetrics(
       avgAttendanceDuration
     });
 
-    // Update webinar with calculated metrics
     const { error: updateError } = await supabase
       .from('zoom_webinars')
       .update({
@@ -272,138 +368,10 @@ async function updateWebinarMetrics(
 
     if (updateError) {
       console.error('Failed to update webinar metrics:', updateError);
-      throw new Error(`Failed to update webinar metrics: ${updateError.message}`);
+    } else {
+      console.log(`Successfully updated metrics for webinar ${webinarDbId}`);
     }
-    
-    console.log(`Successfully updated metrics for webinar ${webinarDbId}`);
   } catch (error) {
     console.error('Error calculating webinar metrics:', error);
-    // Don't throw here - metrics calculation failure shouldn't stop the entire sync
-    console.log(`Continuing sync despite metrics calculation error for webinar ${webinarDbId}`);
   }
-}
-
-/**
- * Transform Zoom API webinar to database format (same as before)
- */
-function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any {
-  // Extract settings for better field mapping
-  const settings = apiWebinar.settings || {};
-  
-  // Normalize status value to ensure it matches our constraint
-  let normalizedStatus = 'available'; // default fallback
-  if (apiWebinar.status) {
-    const statusMap: { [key: string]: string } = {
-      'available': 'available',
-      'unavailable': 'unavailable', 
-      'started': 'started',
-      'ended': 'ended',
-      'deleted': 'deleted',
-      'scheduled': 'scheduled'
-    };
-    normalizedStatus = statusMap[apiWebinar.status.toLowerCase()] || 'available';
-  }
-  
-  console.log(`Status mapping for webinar ${apiWebinar.id}: ${apiWebinar.status} -> ${normalizedStatus}`);
-  
-  return {
-    connection_id: connectionId,
-    webinar_id: apiWebinar.id?.toString() || apiWebinar.webinar_id?.toString(),
-    webinar_uuid: apiWebinar.uuid,
-    host_id: apiWebinar.host_id,
-    host_email: apiWebinar.host_email || null,
-    topic: apiWebinar.topic,
-    agenda: apiWebinar.agenda || null,
-    type: apiWebinar.type || 5,
-    status: normalizedStatus,
-    start_time: apiWebinar.start_time || null,
-    duration: apiWebinar.duration || null,
-    timezone: apiWebinar.timezone || null,
-    registration_required: !!apiWebinar.registration_url,
-    registration_type: settings.registration_type || null,
-    registration_url: apiWebinar.registration_url || null,
-    join_url: apiWebinar.join_url || null,
-    approval_type: settings.approval_type || null,
-    alternative_hosts: settings.alternative_hosts ? 
-      settings.alternative_hosts.split(',').map((h: string) => h.trim()) : null,
-    max_registrants: settings.registrants_restrict_number || null,
-    max_attendees: null,
-    occurrence_id: apiWebinar.occurrences?.[0]?.occurrence_id || apiWebinar.occurrence_id || null,
-    total_registrants: null, // Will be calculated later
-    total_attendees: null, // Will be calculated later
-    total_minutes: null, // Will be calculated later
-    avg_attendance_duration: null, // Will be calculated later
-    synced_at: new Date().toISOString(),
-    
-    // Enhanced field mapping for missing data
-    password: apiWebinar.password || null,
-    h323_password: apiWebinar.h323_password || apiWebinar.h323_passcode || null,
-    pstn_password: apiWebinar.pstn_password || null,
-    encrypted_password: apiWebinar.encrypted_password || apiWebinar.encrypted_passcode || null,
-    settings: settings,
-    tracking_fields: apiWebinar.tracking_fields || null,
-    recurrence: apiWebinar.recurrence || null,
-    occurrences: apiWebinar.occurrences || null,
-    
-    // New fields from Zoom API schema
-    start_url: apiWebinar.start_url || null,
-    encrypted_passcode: apiWebinar.encrypted_passcode || apiWebinar.encrypted_password || null,
-    creation_source: apiWebinar.creation_source || null,
-    is_simulive: apiWebinar.is_simulive || false,
-    record_file_id: apiWebinar.record_file_id || null,
-    transition_to_live: apiWebinar.transition_to_live || false,
-    webinar_created_at: apiWebinar.created_at || null,
-    
-    updated_at: new Date().toISOString()
-  };
-}
-
-/**
- * Transform Zoom API registrant to database format with new fields support
- */
-function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string): any {
-  console.log(`Transforming registrant:`, {
-    id: apiRegistrant.id,
-    email: apiRegistrant.email,
-    firstName: apiRegistrant.first_name,
-    lastName: apiRegistrant.last_name,
-    hasJoinUrl: !!apiRegistrant.join_url,
-    hasCreateTime: !!apiRegistrant.create_time
-  });
-  
-  return {
-    webinar_id: webinarDbId,
-    registrant_id: apiRegistrant.id || apiRegistrant.registrant_id,
-    registrant_email: apiRegistrant.email,
-    first_name: apiRegistrant.first_name || null,
-    last_name: apiRegistrant.last_name || null,
-    address: apiRegistrant.address || null,
-    city: apiRegistrant.city || null,
-    state: apiRegistrant.state || null,
-    zip: apiRegistrant.zip || null,
-    country: apiRegistrant.country || null,
-    phone: apiRegistrant.phone || null,
-    comments: apiRegistrant.comments || null,
-    custom_questions: apiRegistrant.custom_questions ? JSON.stringify(apiRegistrant.custom_questions) : null,
-    registration_time: apiRegistrant.registration_time,
-    source_id: apiRegistrant.source_id || null,
-    tracking_source: apiRegistrant.tracking_source || null,
-    status: apiRegistrant.status || 'approved',
-    join_time: apiRegistrant.join_time || null,
-    leave_time: apiRegistrant.leave_time || null,
-    duration: apiRegistrant.duration || null,
-    attended: !!apiRegistrant.join_time,
-    job_title: apiRegistrant.job_title || null,
-    purchasing_time_frame: apiRegistrant.purchasing_time_frame || null,
-    role_in_purchase_process: apiRegistrant.role_in_purchase_process || null,
-    no_of_employees: apiRegistrant.no_of_employees || null,
-    industry: apiRegistrant.industry || null,
-    org: apiRegistrant.org || null,
-    language: apiRegistrant.language || null,
-    // New fields from API alignment
-    join_url: apiRegistrant.join_url || null,
-    create_time: apiRegistrant.create_time || apiRegistrant.registration_time || null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
 }
