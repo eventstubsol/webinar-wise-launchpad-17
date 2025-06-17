@@ -1,6 +1,6 @@
 
 /**
- * Webinar eligibility checker for participant sync
+ * Enhanced Webinar eligibility checker for participant sync with intelligent fallbacks
  */
 
 /**
@@ -12,46 +12,78 @@ export function isWebinarEligibleForParticipantSync(webinarData: any, debugMode 
     console.log(`  - Webinar ID: ${webinarData.id || webinarData.webinar_id}`);
     console.log(`  - Status: ${webinarData.status}`);
     console.log(`  - Start time: ${webinarData.start_time}`);
+    console.log(`  - Duration: ${webinarData.duration}`);
     console.log(`  - Current time: ${new Date().toISOString()}`);
+    console.log(`  - Available fields: [${Object.keys(webinarData).join(', ')}]`);
   }
 
-  // Check if webinar has a valid status for participant data
-  const validStatuses = ['ended', 'finished', 'available']; // 'available' might contain past webinars
-  if (!validStatuses.includes(webinarData.status?.toLowerCase())) {
+  // Enhanced status validation with fallbacks
+  const status = webinarData.status?.toLowerCase();
+  const validStatuses = ['ended', 'finished', 'available'];
+  
+  if (status && !validStatuses.includes(status)) {
     return {
       eligible: false,
       reason: `Webinar status '${webinarData.status}' is not eligible for participant sync. Valid statuses: ${validStatuses.join(', ')}`
     };
   }
 
-  // Check if webinar has occurred (start time is in the past)
-  if (webinarData.start_time) {
-    const startTime = new Date(webinarData.start_time);
-    const now = new Date();
+  // If status is missing or 'available', use time-based eligibility check
+  if (!status || status === 'undefined' || status === 'available') {
+    if (debugMode) {
+      console.log(`DEBUG: Status is '${status}', using time-based eligibility check`);
+    }
     
-    if (debugMode) {
-      console.log(`  - Start time parsed: ${startTime.toISOString()}`);
-      console.log(`  - Time difference: ${now.getTime() - startTime.getTime()}ms`);
-    }
+    // Check if webinar has occurred based on start time and duration
+    if (webinarData.start_time) {
+      const startTime = new Date(webinarData.start_time);
+      const now = new Date();
+      const duration = webinarData.duration || 60; // Default to 60 minutes if not specified
+      const estimatedEndTime = new Date(startTime.getTime() + (duration * 60 * 1000));
+      
+      if (debugMode) {
+        console.log(`  - Start time parsed: ${startTime.toISOString()}`);
+        console.log(`  - Estimated end time: ${estimatedEndTime.toISOString()}`);
+        console.log(`  - Time since start: ${now.getTime() - startTime.getTime()}ms`);
+        console.log(`  - Time since estimated end: ${now.getTime() - estimatedEndTime.getTime()}ms`);
+      }
 
-    if (startTime > now) {
-      return {
-        eligible: false,
-        reason: `Webinar has not occurred yet. Start time: ${startTime.toISOString()}, Current time: ${now.toISOString()}`
-      };
-    }
+      // Check if webinar hasn't started yet
+      if (startTime > now) {
+        return {
+          eligible: false,
+          reason: `Webinar has not occurred yet. Start time: ${startTime.toISOString()}, Current time: ${now.toISOString()}`
+        };
+      }
 
-    // Check if webinar started at least 5 minutes ago to ensure it had time to complete
-    const fiveMinutesAgo = new Date(now.getTime() - (5 * 60 * 1000));
-    if (startTime > fiveMinutesAgo) {
-      return {
-        eligible: false,
-        reason: `Webinar started too recently (less than 5 minutes ago). Participants might not be available yet.`
-      };
+      // Check if webinar started but might not be finished yet
+      // Allow 5 minutes buffer after estimated end time for data to be available
+      const bufferTime = new Date(estimatedEndTime.getTime() + (5 * 60 * 1000));
+      if (now < bufferTime) {
+        return {
+          eligible: false,
+          reason: `Webinar may still be in progress or just ended. Estimated end: ${estimatedEndTime.toISOString()}, Current: ${now.toISOString()}. Waiting 5min buffer for participant data.`
+        };
+      }
+      
+      // Webinar should have ended - eligible for participant sync
+      if (debugMode) {
+        console.log(`DEBUG: Webinar appears to have ended, eligible for participant sync`);
+      }
+      
+    } else {
+      if (debugMode) {
+        console.log(`DEBUG: No start_time found, allowing participant sync (assuming webinar has occurred)`);
+      }
+      // If no start time is available, we can't determine timing, so allow sync
+      // This is a fallback for edge cases where start_time might be missing
     }
-  } else {
+  }
+
+  // For 'ended' and 'finished' statuses, always eligible
+  if (status === 'ended' || status === 'finished') {
     if (debugMode) {
-      console.log(`  - No start_time found, assuming webinar is eligible`);
+      console.log(`DEBUG: Webinar status '${status}' indicates completion, eligible for participant sync`);
     }
   }
 
