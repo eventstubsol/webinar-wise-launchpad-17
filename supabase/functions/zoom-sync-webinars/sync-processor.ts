@@ -1,11 +1,7 @@
 
-import { createSyncLog, updateSyncLog, updateSyncStage } from './database-operations.ts';
-import { validateZoomConnection, createZoomAPIClient } from './zoom-api-client.ts';
+import { updateSyncLog, updateSyncStage, saveWebinarToDatabase } from './database-operations.ts';
+import { SyncOperation } from './types.ts';
 import { processSimpleWebinarSync } from './simple-sync-processor.ts';
-import { processEnhancedWebinarSync } from './enhanced-sync-processor.ts';
-import { processParticipantsOnlySync } from './participants-only-processor.ts';
-import { RetryQueueProcessor } from './retry-queue-processor.ts';
-import { SyncOperation, SYNC_PRIORITIES } from './types.ts';
 
 export async function processSequentialSync(
   supabase: any,
@@ -13,60 +9,25 @@ export async function processSequentialSync(
   connection: any,
   syncLogId: string
 ): Promise<void> {
-  console.log(`Starting sync operation: ${syncOperation.id}, type: ${syncOperation.syncType}`);
+  console.log(`Starting sequential sync with enhanced verification for connection: ${connection.id}`);
   
   try {
-    await updateSyncStage(supabase, syncLogId, null, 'initializing', 0);
-
-    // Route to appropriate sync processor based on type
-    if (syncOperation.syncType === 'participants_only') {
-      console.log('Using participants-only sync processor');
-      await processParticipantsOnlySync(supabase, syncOperation, connection, syncLogId);
-    } else {
-      // Determine sync type based on operation options for regular syncs
-      const useEnhancedSync = syncOperation.options?.includeRegistrants || 
-                             syncOperation.options?.includeParticipants || 
-                             syncOperation.syncType === 'initial' ||
-                             syncOperation.syncType === 'full';
-
-      if (useEnhancedSync) {
-        console.log('Using enhanced comprehensive sync with registrants and participants');
-        await processEnhancedWebinarSync(supabase, syncOperation, connection, syncLogId);
-      } else {
-        console.log('Using simple webinar-only sync');
-        await processSimpleWebinarSync(supabase, syncOperation, connection, syncLogId);
-      }
-    }
-
-    // After main sync completes, check for any pending retries from previous syncs
-    // (Skip for participants_only sync as it handles its own retries)
-    if (syncOperation.syncType !== 'participants_only') {
-      try {
-        console.log('\n=== CHECKING FOR PENDING RETRIES FROM PREVIOUS SYNCS ===');
-        await RetryQueueProcessor.processAllPendingRetries(supabase);
-      } catch (retryError) {
-        console.error('Error processing pending retries:', retryError);
-        // Don't fail the main sync if retry processing fails
-      }
-    }
-
-    console.log(`Sync completed successfully: ${syncOperation.id}`);
-
-  } catch (error) {
-    console.error('Sync operation failed:', error);
+    // Use the enhanced simple sync processor which now includes comprehensive verification
+    await processSimpleWebinarSync(supabase, syncOperation, connection, syncLogId);
     
-    const isAuthError = !!error.isAuthError;
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
+    console.log(`✅ Sequential sync with verification completed successfully`);
+    
+  } catch (error) {
+    console.error('Sequential sync with verification failed:', error);
+    
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'failed',
-      error_message: errorMessage,
-      error_details: { isAuthError },
+      error_message: error.message,
       completed_at: new Date().toISOString(),
       sync_stage: 'failed',
       stage_progress_percentage: 0
     });
-
+    
     throw error;
   }
 }

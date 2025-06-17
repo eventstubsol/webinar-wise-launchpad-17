@@ -1,7 +1,14 @@
-
 import { updateSyncLog, updateSyncStage, updateWebinarParticipantSyncStatus, determineParticipantSyncStatus } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 import { syncWebinarParticipants } from './processors/participant-processor.ts';
+import { 
+  capturePreSyncBaseline, 
+  verifySync, 
+  determineEnhancedSyncStatus, 
+  generateVerificationReport,
+  type SyncBaseline,
+  type VerificationResult 
+} from './sync-verification.ts';
 
 // Enhanced validation and summary tracking interface
 interface SyncValidationSummary {
@@ -196,9 +203,9 @@ export async function processSimpleWebinarSync(
   syncLogId: string
 ): Promise<void> {
   const debugMode = syncOperation.options?.debug || false;
-  console.log(`Starting enhanced simple webinar sync with comprehensive validation for connection: ${connection.id}${debugMode ? ' (DEBUG MODE)' : ''}`);
+  console.log(`Starting enhanced simple webinar sync with comprehensive verification for connection: ${connection.id}${debugMode ? ' (DEBUG MODE)' : ''}`);
 
-  // Initialize enhanced tracking with validation summary
+  // Initialize enhanced tracking with verification capability
   let processedCount = 0;
   let successCount = 0;
   let skippedForParticipants = 0;
@@ -206,6 +213,8 @@ export async function processSimpleWebinarSync(
   let totalParticipantsSynced = 0;
   let insertCount = 0;
   let updateCount = 0;
+  let preSync: SyncBaseline | null = null;
+  let verificationResult: VerificationResult | null = null;
   
   // Initialize comprehensive validation summary
   const validationSummary: SyncValidationSummary = {
@@ -223,21 +232,52 @@ export async function processSimpleWebinarSync(
     const zoomApi = await import('./zoom-api-client.ts');
     const client = await zoomApi.createZoomAPIClient(connection, supabase);
     
+    // STEP 1: CAPTURE PRE-SYNC BASELINE FOR VERIFICATION
+    console.log(`🔍 VERIFICATION: Capturing pre-sync baseline...`);
+    await updateSyncStage(supabase, syncLogId, null, 'capturing_baseline', 5);
+    
+    try {
+      preSync = await capturePreSyncBaseline(supabase, connection.id);
+      console.log(`✅ VERIFICATION: Pre-sync baseline captured successfully`);
+    } catch (baselineError) {
+      console.error('Failed to capture pre-sync baseline:', baselineError);
+      // Continue with sync but log the issue
+      await updateSyncLog(supabase, syncLogId, {
+        error_message: `Baseline capture failed: ${baselineError.message}`,
+        sync_notes: JSON.stringify({
+          verification_enabled: true,
+          baseline_capture_failed: true,
+          baseline_error: baselineError.message
+        })
+      });
+    }
+    
     await updateSyncStage(supabase, syncLogId, null, 'fetching_webinars', 10);
     
     const webinars = await client.listWebinarsWithRange({
       type: 'all'
     });
     
-    console.log(`Found ${webinars.length} webinars to sync with enhanced validation`);
+    console.log(`Found ${webinars.length} webinars to sync with enhanced verification`);
     
     if (webinars.length === 0) {
+      // Run verification even for empty sync
+      if (preSync) {
+        await updateSyncStage(supabase, syncLogId, null, 'verifying_sync', 95);
+        verificationResult = await verifySync(supabase, connection.id, preSync, syncLogId);
+      }
+      
       await updateSyncLog(supabase, syncLogId, {
         sync_status: 'completed',
         processed_items: 0,
         completed_at: new Date().toISOString(),
         sync_stage: 'completed',
-        stage_progress_percentage: 100
+        stage_progress_percentage: 100,
+        sync_notes: JSON.stringify({
+          verification_enabled: true,
+          verification_result: verificationResult || 'baseline_unavailable',
+          empty_sync: true
+        })
       });
       return;
     }
@@ -351,17 +391,41 @@ export async function processSimpleWebinarSync(
       }
     }
     
-    await updateSyncStage(supabase, syncLogId, null, 'completing', 90);
+    await updateSyncStage(supabase, syncLogId, null, 'completing', 80);
     
-    // ENHANCED STATUS DETERMINATION: Determine final status based on validation results
-    const finalStatus = determineFinalSyncStatus(validationSummary, processedCount, successCount);
+    // STEP 2: RUN COMPREHENSIVE VERIFICATION
+    console.log(`🔍 VERIFICATION: Running comprehensive sync verification...`);
+    await updateSyncStage(supabase, syncLogId, null, 'verifying_sync', 90);
     
-    // Generate comprehensive validation report
+    if (preSync) {
+      try {
+        verificationResult = await verifySync(supabase, connection.id, preSync, syncLogId);
+        console.log(`✅ VERIFICATION: Sync verification completed`);
+      } catch (verificationError) {
+        console.error('Sync verification failed:', verificationError);
+        // Continue with sync completion but log verification failure
+      }
+    } else {
+      console.warn('⚠️ VERIFICATION: Skipping verification due to missing baseline');
+    }
+    
+    // STEP 3: DETERMINE ENHANCED STATUS BASED ON VERIFICATION
+    const preliminaryStatus = determineFinalSyncStatus(validationSummary, processedCount, successCount);
+    const finalStatus = verificationResult 
+      ? determineEnhancedSyncStatus(preliminaryStatus, verificationResult, processedCount, successCount)
+      : preliminaryStatus;
+    
+    // STEP 4: GENERATE COMPREHENSIVE REPORTS
     const validationReport = generateValidationReport(validationSummary);
-    console.log(validationReport);
+    const verificationReport = verificationResult 
+      ? generateVerificationReport(verificationResult)
+      : 'Verification report unavailable - baseline capture failed';
     
-    // Enhanced completion logging with validation summary
-    console.log(`\n🎉 Enhanced simple webinar sync completed with comprehensive validation:`);
+    console.log(validationReport);
+    console.log(verificationReport);
+    
+    // Enhanced completion logging with verification summary
+    console.log(`\n🎉 Enhanced simple webinar sync completed with comprehensive verification:`);
     console.log(`  - Total webinars found: ${totalWebinars}`);
     console.log(`  - Webinars processed successfully: ${successCount}`);
     console.log(`  - Webinars failed: ${processedCount - successCount}`);
@@ -374,8 +438,13 @@ export async function processSimpleWebinarSync(
     console.log(`  - Final sync status: ${finalStatus}`);
     console.log(`  - Validation errors: ${validationSummary.validationErrors.length}`);
     console.log(`  - Validation warnings: ${validationSummary.validationWarnings.length}`);
+    if (verificationResult) {
+      console.log(`  - Verification passed: ${verificationResult.passed}`);
+      console.log(`  - Data loss detected: ${verificationResult.hasDataLoss}`);
+      console.log(`  - Integrity score: ${verificationResult.summary.integrityScore}/100`);
+    }
     
-    // Enhanced sync log with comprehensive validation data
+    // Enhanced sync log with comprehensive verification data
     await updateSyncLog(supabase, syncLogId, {
       sync_status: finalStatus,
       processed_items: processedCount,
@@ -383,7 +452,7 @@ export async function processSimpleWebinarSync(
       completed_at: new Date().toISOString(),
       sync_stage: 'completed',
       stage_progress_percentage: 100,
-      // Store enhanced validation summary in sync_notes
+      // Store enhanced verification summary in sync_notes
       sync_notes: JSON.stringify({
         webinars_inserted: insertCount,
         webinars_updated: updateCount,
@@ -391,6 +460,9 @@ export async function processSimpleWebinarSync(
         webinars_for_participants_processed: processedForParticipants,
         webinars_for_participants_skipped: skippedForParticipants,
         participant_sync_skip_reasons: 'Webinars not yet occurred or invalid status',
+        verification_enabled: true,
+        verification_baseline: preSync,
+        verification_result: verificationResult,
         validation_summary: {
           webinars_with_participants: validationSummary.webinarsWithParticipants,
           webinars_with_registrants: validationSummary.webinarsWithRegistrants,
@@ -406,15 +478,22 @@ export async function processSimpleWebinarSync(
       })
     });
     
-    console.log(`✅ Enhanced sync completed with comprehensive validation. Status: ${finalStatus}`);
+    console.log(`✅ Enhanced sync with verification completed. Status: ${finalStatus}`);
     console.log(`📊 ${insertCount} new webinars inserted, ${updateCount} existing webinars updated (with data preservation), ${totalParticipantsSynced} participants synced.`);
     
     if (finalStatus !== 'completed') {
-      console.log(`⚠️ Sync completed with issues. Check validation report above for details.`);
+      console.log(`⚠️ Sync completed with issues. Check verification and validation reports above for details.`);
+    }
+    
+    if (verificationResult && !verificationResult.passed) {
+      console.log(`🚨 VERIFICATION FAILED: Data integrity issues detected!`);
+      if (verificationResult.hasDataLoss) {
+        console.log(`💥 CRITICAL: Data loss detected during sync - immediate investigation required!`);
+      }
     }
     
   } catch (error) {
-    console.error('Enhanced simple webinar sync with validation failed:', error);
+    console.error('Enhanced simple webinar sync with verification failed:', error);
     
     // Add critical error to validation summary
     validationSummary.validationErrors.push({
@@ -439,6 +518,9 @@ export async function processSimpleWebinarSync(
         webinars_for_participants_processed: processedForParticipants,
         webinars_for_participants_skipped: skippedForParticipants,
         error_type: error.constructor.name,
+        verification_enabled: true,
+        verification_baseline: preSync,
+        verification_result: verificationResult,
         validation_summary: {
           webinars_with_participants: validationSummary.webinarsWithParticipants,
           webinars_with_registrants: validationSummary.webinarsWithRegistrants,
