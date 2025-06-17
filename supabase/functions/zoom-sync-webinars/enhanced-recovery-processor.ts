@@ -70,19 +70,20 @@ export async function processRecoverySync(
     let failedCount = 0;
     const errors: string[] = [];
     
-    // Recovery sync with enhanced monitoring
+    // Recovery sync with enhanced monitoring and proper timeout
     const syncStartTime = Date.now();
-    const maxSyncDuration = 25 * 60 * 1000; // 25 minutes
+    const maxSyncDuration = 20 * 60 * 1000; // 20 minutes for recovery
     
     console.log(`=== PROCESSING ${webinars.length} WEBINARS ===`);
     
     for (const webinar of webinars) {
-      // Timeout protection
-      if (Date.now() - syncStartTime > maxSyncDuration) {
-        console.log(`Recovery sync approaching timeout, stopping at ${processedCount}/${webinars.length}`);
+      // Enhanced timeout protection with actual enforcement
+      const elapsedTime = Date.now() - syncStartTime;
+      if (elapsedTime > maxSyncDuration) {
+        console.log(`Recovery sync timeout reached at ${elapsedTime}ms, stopping at ${processedCount}/${webinars.length}`);
         await updateSyncLog(supabase, syncLogId, {
           sync_status: 'partial',
-          error_message: 'Recovery sync stopped due to timeout protection',
+          error_message: `Recovery sync timeout after ${Math.round(elapsedTime / 1000 / 60)} minutes`,
           completed_at: new Date().toISOString()
         });
         break;
@@ -102,6 +103,7 @@ export async function processRecoverySync(
         console.log(`=== PROCESSING WEBINAR ${webinar.id} (${processedCount + 1}/${webinars.length}) ===`);
         console.log(`Webinar: ${webinar.topic}`);
         console.log(`Start time: ${webinar.start_time}`);
+        console.log(`Elapsed time: ${Math.round(elapsedTime / 1000)}s / ${Math.round(maxSyncDuration / 1000)}s`);
         
         // Check if webinar already exists
         const { data: existingWebinar } = await supabase

@@ -107,7 +107,7 @@ export function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: 
 }
 
 /**
- * Transform participant data for database insertion with enhanced validation and debugging
+ * Transform participant data for database insertion with enhanced validation and constraint fixing
  */
 export function transformParticipantForDatabase(apiParticipant: any, webinarDbId: string): any {
   console.log(`=== TRANSFORMING PARTICIPANT ===`);
@@ -122,12 +122,13 @@ export function transformParticipantForDatabase(apiParticipant: any, webinarDbId
   // Handle different API response structures
   const details = apiParticipant.details?.[0] || apiParticipant;
   
-  // Generate a unique participant_id if missing
+  // Generate a unique participant_id if missing - this is the key fix
   const participantId = apiParticipant.id || 
                        apiParticipant.participant_id || 
                        apiParticipant.user_id || 
                        details.id ||
-                       `participant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                       details.user_id ||
+                       `participant_${webinarDbId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
   // Extract participant name from various possible fields
   const participantName = apiParticipant.name || 
@@ -147,13 +148,14 @@ export function transformParticipantForDatabase(apiParticipant: any, webinarDbId
                           details.email ||
                           null;
   
-  // Handle IP address conversion safely
+  // Handle IP address conversion safely - ensure string or null
   let ipAddress = null;
   const rawIpAddress = details.ip_address || apiParticipant.ip_address;
   if (rawIpAddress) {
     try {
-      // Convert to string to avoid inet type issues
-      ipAddress = rawIpAddress.toString();
+      ipAddress = String(rawIpAddress).trim();
+      // Ensure it's not an empty string
+      if (ipAddress === '') ipAddress = null;
     } catch (ipError) {
       console.log(`IP address conversion failed: ${ipError.message}`);
       ipAddress = null;

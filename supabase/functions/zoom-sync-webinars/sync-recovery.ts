@@ -11,7 +11,7 @@ export async function clearStuckSync(supabase: any, syncLogId: string): Promise<
       .from('zoom_sync_logs')
       .update({
         sync_status: 'failed',
-        error_message: 'Sync cleared due to timeout - manual recovery',
+        error_message: 'Sync cleared due to timeout - manual recovery initiated',
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -32,15 +32,15 @@ export async function clearStuckSync(supabase: any, syncLogId: string): Promise<
 export async function findAndClearStuckSyncs(supabase: any, connectionId: string): Promise<number> {
   console.log('Finding and clearing stuck syncs...');
   
-  // Consider syncs stuck if they've been running for more than 30 minutes
-  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  // Consider syncs stuck if they've been running for more than 15 minutes (more aggressive)
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
   
   const { data: stuckSyncs, error: findError } = await supabase
     .from('zoom_sync_logs')
-    .select('id, sync_status, created_at, current_webinar_id')
+    .select('id, sync_status, created_at, current_webinar_id, sync_stage')
     .eq('connection_id', connectionId)
     .in('sync_status', ['started', 'in_progress'])
-    .lt('created_at', thirtyMinutesAgo);
+    .lt('created_at', fifteenMinutesAgo);
 
   if (findError) {
     console.error('Error finding stuck syncs:', findError);
@@ -69,25 +69,48 @@ export async function validateConnectionData(supabase: any, connectionId: string
   console.log(`Validating data for connection: ${connectionId}`);
   
   try {
-    const [webinarsResult, registrantsResult, participantsResult] = await Promise.all([
-      supabase
+    // Get webinar count
+    const { count: webinarCount, error: webinarError } = await supabase
+      .from('zoom_webinars')
+      .select('id', { count: 'exact' })
+      .eq('connection_id', connectionId);
+
+    if (webinarError) {
+      console.error('Error counting webinars:', webinarError);
+    }
+
+    // Get registrant count
+    const { count: registrantCount, error: registrantError } = await supabase
+      .from('zoom_registrants')
+      .select('id', { count: 'exact' })
+      .in('webinar_id', supabase
         .from('zoom_webinars')
-        .select('id', { count: 'exact' })
-        .eq('connection_id', connectionId),
-      supabase
-        .from('zoom_registrants')
-        .select('id', { count: 'exact' })
-        .eq('webinar_id', `(SELECT id FROM zoom_webinars WHERE connection_id = '${connectionId}')`),
-      supabase
-        .from('zoom_participants')
-        .select('id', { count: 'exact' })
-        .eq('webinar_id', `(SELECT id FROM zoom_webinars WHERE connection_id = '${connectionId}')`)
-    ]);
+        .select('id')
+        .eq('connection_id', connectionId)
+      );
+
+    if (registrantError) {
+      console.error('Error counting registrants:', registrantError);
+    }
+
+    // Get participant count
+    const { count: participantCount, error: participantError } = await supabase
+      .from('zoom_participants')
+      .select('id', { count: 'exact' })
+      .in('webinar_id', supabase
+        .from('zoom_webinars')
+        .select('id')
+        .eq('connection_id', connectionId)
+      );
+
+    if (participantError) {
+      console.error('Error counting participants:', participantError);
+    }
 
     const counts = {
-      webinarCount: webinarsResult.count || 0,
-      registrantCount: registrantsResult.count || 0,
-      participantCount: participantsResult.count || 0
+      webinarCount: webinarCount || 0,
+      registrantCount: registrantCount || 0,
+      participantCount: participantCount || 0
     };
 
     console.log('Current data counts:', counts);
@@ -95,5 +118,44 @@ export async function validateConnectionData(supabase: any, connectionId: string
   } catch (error) {
     console.error('Error validating connection data:', error);
     return { webinarCount: 0, registrantCount: 0, participantCount: 0 };
+  }
+}
+
+export async function clearAllStuckSyncsForConnection(supabase: any, connectionId: string): Promise<void> {
+  console.log(`Clearing ALL stuck syncs for connection: ${connectionId}`);
+  
+  try {
+    const { data: allActiveSyncs, error: findError } = await supabase
+      .from('zoom_sync_logs')
+      .select('id, sync_status, created_at')
+      .eq('connection_id', connectionId)
+      .in('sync_status', ['started', 'in_progress']);
+
+    if (findError) {
+      console.error('Error finding active syncs:', findError);
+      return;
+    }
+
+    if (allActiveSyncs && allActiveSyncs.length > 0) {
+      console.log(`Found ${allActiveSyncs.length} active syncs to clear`);
+      
+      const { error: updateError } = await supabase
+        .from('zoom_sync_logs')
+        .update({
+          sync_status: 'failed',
+          error_message: 'Sync cleared for recovery - multiple stuck syncs detected',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .in('id', allActiveSyncs.map(s => s.id));
+
+      if (updateError) {
+        console.error('Error clearing all stuck syncs:', updateError);
+      } else {
+        console.log(`Successfully cleared ${allActiveSyncs.length} stuck syncs`);
+      }
+    }
+  } catch (error) {
+    console.error('Error in clearAllStuckSyncsForConnection:', error);
   }
 }
