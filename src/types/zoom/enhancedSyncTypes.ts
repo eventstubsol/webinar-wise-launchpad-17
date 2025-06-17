@@ -49,6 +49,9 @@ export interface EnhancedSyncOptions {
   skipEligibilityCheck?: boolean;
   includeRegistrants?: boolean;
   includeParticipants?: boolean;
+  
+  // Webinar Selection
+  webinarIds?: string[];
 }
 
 export interface RateLimitStatus {

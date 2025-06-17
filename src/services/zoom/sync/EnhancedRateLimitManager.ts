@@ -10,9 +10,9 @@ export class EnhancedRateLimitManager {
   private static readonly DEFAULT_CONCURRENT_REQUESTS = 5;
 
   private rateLimitStatus: RateLimitStatus = {
-    remaining: this.DEFAULT_DAILY_LIMIT,
+    remaining: EnhancedRateLimitManager.DEFAULT_DAILY_LIMIT,
     resetTime: Date.now() + 24 * 60 * 60 * 1000,
-    dailyLimit: this.DEFAULT_DAILY_LIMIT,
+    dailyLimit: EnhancedRateLimitManager.DEFAULT_DAILY_LIMIT,
     currentUsage: 0,
     isLimited: false
   };
@@ -29,7 +29,7 @@ export class EnhancedRateLimitManager {
   private maxConcurrentRequests: number;
 
   constructor(options: EnhancedSyncOptions = {}) {
-    this.maxConcurrentRequests = options.maxConcurrentRequests || this.DEFAULT_CONCURRENT_REQUESTS;
+    this.maxConcurrentRequests = options.maxConcurrentRequests || EnhancedRateLimitManager.DEFAULT_CONCURRENT_REQUESTS;
   }
 
   async queueRequest<T>(
