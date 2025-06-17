@@ -1,40 +1,11 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomDataTransformers } from '../../utils/dataTransformers';
 
 /**
  * Database operations for webinar participants
+ * NOTE: Currently simplified for webinar-only sync
  */
 export class ParticipantOperations {
-  /**
-   * Upsert participants for a webinar
-   */
-  static async upsertParticipants(participants: any[], webinarDbId: string): Promise<void> {
-    if (!participants || participants.length === 0) return;
-
-    const transformedParticipants = participants.map(participant => {
-      const transformed = ZoomDataTransformers.transformParticipant(participant, webinarDbId);
-      return {
-        ...transformed,
-        updated_at: new Date().toISOString()
-      };
-    });
-
-    const { error } = await supabase
-      .from('zoom_participants')
-      .upsert(
-        transformedParticipants,
-        {
-          onConflict: 'webinar_id,participant_id',
-          ignoreDuplicates: false
-        }
-      );
-
-    if (error) {
-      throw new Error(`Failed to upsert participants: ${error.message}`);
-    }
-  }
-
   /**
    * Get participant metrics for a webinar
    */
@@ -43,24 +14,22 @@ export class ParticipantOperations {
     totalMinutes: number;
     avgDuration: number;
   }> {
-    const { data: participants, error } = await supabase
-      .from('zoom_participants')
-      .select('duration')
-      .eq('webinar_id', webinarDbId);
-
-    if (error) {
-      console.error('Failed to get participant metrics:', error);
-      return { totalAttendees: 0, totalMinutes: 0, avgDuration: 0 };
-    }
-
-    const totalAttendees = participants?.length || 0;
-    const totalMinutes = participants?.reduce((sum, p) => sum + (p.duration || 0), 0) || 0;
-    const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
-
+    // For now, return empty metrics since we're only syncing basic webinar data
+    // This can be implemented later when we add participant sync back
     return {
-      totalAttendees,
-      totalMinutes,
-      avgDuration
+      totalAttendees: 0,
+      totalMinutes: 0,
+      avgDuration: 0
     };
+  }
+
+  /**
+   * Placeholder for future participant upsert functionality
+   * Currently not used in webinar-only sync
+   */
+  static async upsertParticipants(participants: any[], webinarDbId: string): Promise<void> {
+    // Not implemented for webinar-only sync
+    console.log('Participant sync is disabled in webinar-only mode');
+    return;
   }
 }
