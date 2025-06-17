@@ -2,10 +2,10 @@
 import { updateSyncStage } from './database-operations.ts';
 import { 
   transformWebinarWithStatusDetection,
-  transformRegistrantForDatabase, 
-  transformParticipantForDatabase 
+  transformRegistrantForDatabase
 } from './data-transformers.ts';
 import { updateWebinarMetrics } from './metrics-calculator.ts';
+import { processParticipantsForWebinar } from './participant-processor.ts';
 
 /**
  * Sync webinar with comprehensive validation and error handling
@@ -37,7 +37,7 @@ export async function syncWebinarWithValidation(
         transformedWebinar,
         {
           onConflict: 'connection_id,webinar_id',
-          ignoreDuplicates: false  // FIXED: Allow updates to existing webinars
+          ignoreDuplicates: false
         }
       )
       .select('id')
@@ -91,7 +91,7 @@ export async function syncWebinarWithValidation(
           transformedRegistrants,
           {
             onConflict: 'webinar_id,registrant_id',
-            ignoreDuplicates: false  // FIXED: Allow updates to existing registrants
+            ignoreDuplicates: false
           }
         );
 
@@ -103,149 +103,22 @@ export async function syncWebinarWithValidation(
       }
     }
 
-    // ENHANCED: Process participants with comprehensive logging and debugging
+    // Process participants using the dedicated processor with fixed constraints
     if (participants && participants.length > 0) {
-      console.log(`=== PARTICIPANT PROCESSING DEBUG START ===`);
-      console.log(`Raw participants count from Zoom API: ${participants.length}`);
-      console.log(`Webinar DB ID for participants: ${webinarDbId}`);
-      console.log(`Sample raw participant data:`, JSON.stringify(participants[0], null, 2));
+      const participantResult = await processParticipantsForWebinar(
+        supabase,
+        participants,
+        webinarDbId,
+        webinarData.id
+      );
       
-      let transformedParticipants = [];
-      let transformationErrors = [];
-      
-      // Transform participants with individual error handling
-      for (let i = 0; i < participants.length; i++) {
-        try {
-          const transformed = transformParticipantForDatabase(participants[i], webinarDbId);
-          transformedParticipants.push(transformed);
-          console.log(`✅ Participant ${i + 1} transformed successfully`);
-        } catch (transformError) {
-          console.error(`❌ Failed to transform participant ${i + 1}:`, transformError);
-          console.error(`Problematic participant data:`, JSON.stringify(participants[i], null, 2));
-          transformationErrors.push({
-            index: i,
-            error: transformError.message,
-            data: participants[i]
-          });
-        }
-      }
-      
-      console.log(`Transformation results: ${transformedParticipants.length} successful, ${transformationErrors.length} failed`);
-      
-      if (transformedParticipants.length > 0) {
-        console.log(`Sample transformed participant:`, JSON.stringify(transformedParticipants[0], null, 2));
-        
-        // Process participants in smaller batches with detailed logging
-        const batchSize = 10; // Smaller batches for better error isolation
-        let successfulInserts = 0;
-        let batchErrors = [];
-        
-        for (let i = 0; i < transformedParticipants.length; i += batchSize) {
-          const batch = transformedParticipants.slice(i, i + batchSize);
-          const batchNumber = Math.floor(i / batchSize) + 1;
-          
-          console.log(`Processing participant batch ${batchNumber}: ${batch.length} participants`);
-          
-          try {
-            const { data: insertedParticipants, error: participantsError } = await supabase
-              .from('zoom_participants')
-              .upsert(
-                batch,
-                {
-                  onConflict: 'webinar_id,participant_id',
-                  ignoreDuplicates: false  // FIXED: Allow updates to existing participants
-                }
-              )
-              .select('id');
-
-            if (participantsError) {
-              console.error(`❌ Batch ${batchNumber} insertion failed:`, participantsError);
-              console.error(`Batch ${batchNumber} sample data:`, JSON.stringify(batch[0], null, 2));
-              
-              batchErrors.push({
-                batch: batchNumber,
-                error: participantsError.message,
-                sampleData: batch[0]
-              });
-              
-              // Try individual inserts to identify problematic records
-              console.log(`Attempting individual inserts for batch ${batchNumber}...`);
-              for (let j = 0; j < batch.length; j++) {
-                try {
-                  const { error: individualError } = await supabase
-                    .from('zoom_participants')
-                    .upsert(
-                      batch[j],
-                      {
-                        onConflict: 'webinar_id,participant_id',
-                        ignoreDuplicates: false
-                      }
-                    );
-                  
-                  if (individualError) {
-                    console.error(`❌ Individual participant ${j + 1} in batch ${batchNumber} failed:`, individualError);
-                    console.error(`Failed participant data:`, JSON.stringify(batch[j], null, 2));
-                  } else {
-                    successfulInserts++;
-                    console.log(`✅ Individual participant ${j + 1} in batch ${batchNumber} succeeded`);
-                  }
-                } catch (individualException) {
-                  console.error(`❌ Exception inserting individual participant ${j + 1}:`, individualException);
-                }
-              }
-            } else {
-              successfulInserts += batch.length;
-              console.log(`✅ Batch ${batchNumber} successful: ${batch.length} participants inserted`);
-              if (insertedParticipants) {
-                console.log(`Batch ${batchNumber} returned ${insertedParticipants.length} IDs`);
-              }
-            }
-          } catch (batchException) {
-            console.error(`❌ Batch ${batchNumber} exception:`, batchException);
-            batchErrors.push({
-              batch: batchNumber,
-              error: batchException.message,
-              type: 'exception'
-            });
-          }
-        }
-        
-        console.log(`=== PARTICIPANT PROCESSING SUMMARY ===`);
-        console.log(`Total participants from API: ${participants.length}`);
-        console.log(`Successfully transformed: ${transformedParticipants.length}`);
-        console.log(`Transformation errors: ${transformationErrors.length}`);
-        console.log(`Successfully inserted to DB: ${successfulInserts}`);
-        console.log(`Batch errors: ${batchErrors.length}`);
-        
-        if (transformationErrors.length > 0) {
-          console.log(`Transformation error details:`, transformationErrors);
-        }
-        
-        if (batchErrors.length > 0) {
-          console.log(`Batch error details:`, batchErrors);
-        }
-        
-        // Verify actual database insertion
-        const { data: dbParticipants, error: verifyError } = await supabase
-          .from('zoom_participants')
-          .select('id, participant_name, participant_email')
-          .eq('webinar_id', webinarDbId);
-        
-        if (verifyError) {
-          console.error(`❌ Failed to verify participants in database:`, verifyError);
-        } else {
-          console.log(`✅ Database verification: ${dbParticipants?.length || 0} participants found in DB for webinar ${webinarDbId}`);
-          if (dbParticipants && dbParticipants.length > 0) {
-            console.log(`Sample DB participant:`, dbParticipants[0]);
-          }
-        }
-        
-        console.log(`=== PARTICIPANT PROCESSING DEBUG END ===`);
+      if (participantResult.successfulInserts === 0 && participants.length > 0) {
+        console.error(`❌ Failed to insert any participants for webinar ${webinarData.id}`);
+        console.error(`Transformation errors: ${participantResult.transformationErrors.length}`);
+        console.error(`Batch errors: ${participantResult.batchErrors.length}`);
       } else {
-        console.log(`❌ No valid participants to process for webinar ${webinarData.id} after transformation`);
+        console.log(`✅ Participant processing completed: ${participantResult.successfulInserts}/${participants.length} successful`);
       }
-    } else {
-      console.log(`ℹ️ No participants data to process for webinar ${webinarData.id}`);
     }
 
     // Update webinar metrics
