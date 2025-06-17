@@ -3,6 +3,7 @@ import { createSyncLog, updateSyncLog, updateSyncStage } from './database-operat
 import { validateZoomConnection, createZoomAPIClient } from './zoom-api-client.ts';
 import { processSimpleWebinarSync } from './simple-sync-processor.ts';
 import { processEnhancedWebinarSync } from './enhanced-sync-processor.ts';
+import { RetryQueueProcessor } from './retry-queue-processor.ts';
 import { SyncOperation, SYNC_PRIORITIES } from './types.ts';
 
 export async function processSequentialSync(
@@ -30,6 +31,15 @@ export async function processSequentialSync(
       await processSimpleWebinarSync(supabase, syncOperation, connection, syncLogId);
     }
 
+    // After main sync completes, check for any pending retries from previous syncs
+    try {
+      console.log('\n=== CHECKING FOR PENDING RETRIES FROM PREVIOUS SYNCS ===');
+      await RetryQueueProcessor.processAllPendingRetries(supabase);
+    } catch (retryError) {
+      console.error('Error processing pending retries:', retryError);
+      // Don't fail the main sync if retry processing fails
+    }
+
     console.log(`Sync completed successfully: ${syncOperation.id}`);
 
   } catch (error) {
@@ -46,5 +56,7 @@ export async function processSequentialSync(
       sync_stage: 'failed',
       stage_progress_percentage: 0
     });
+
+    throw error;
   }
 }

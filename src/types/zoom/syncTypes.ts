@@ -30,4 +30,30 @@ export interface ZoomSyncLog {
   current_webinar_id: string | null;
   sync_stage: string | null;
   stage_progress_percentage: number | null;
+  // New fields for retry mechanism
+  retry_attempts: number;
+  retry_schedule: RetryScheduleEntry[];
+  max_participant_retries: number;
+}
+
+/** Retry schedule entry for participant fetching */
+export interface RetryScheduleEntry {
+  webinarId: string;
+  dbId: string;
+  topic: string;
+  retryAttempt: number;
+  scheduledFor: string;
+  errorType: string;
+  originalError: string;
+}
+
+/** Retryable webinar for participant fetching */
+export interface RetryableWebinar {
+  webinarId: string;
+  dbId: string;
+  topic: string;
+  errorMessage: string;
+  errorType: 'rate_limit' | 'network' | 'api_error' | 'timeout';
+  retryAttempt: number;
+  nextRetryAt: string;
 }

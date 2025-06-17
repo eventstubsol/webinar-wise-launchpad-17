@@ -5231,10 +5231,13 @@ export type Database = {
           error_message: string | null
           failed_items: number | null
           id: string
+          max_participant_retries: number | null
           processed_items: number | null
           rate_limit_hits: number | null
           resource_id: string | null
           resource_type: string | null
+          retry_attempts: number | null
+          retry_schedule: Json | null
           stage_progress_percentage: number | null
           started_at: string
           sync_stage: string | null
@@ -5254,10 +5257,13 @@ export type Database = {
           error_message?: string | null
           failed_items?: number | null
           id?: string
+          max_participant_retries?: number | null
           processed_items?: number | null
           rate_limit_hits?: number | null
           resource_id?: string | null
           resource_type?: string | null
+          retry_attempts?: number | null
+          retry_schedule?: Json | null
           stage_progress_percentage?: number | null
           started_at?: string
           sync_stage?: string | null
@@ -5277,10 +5283,13 @@ export type Database = {
           error_message?: string | null
           failed_items?: number | null
           id?: string
+          max_participant_retries?: number | null
           processed_items?: number | null
           rate_limit_hits?: number | null
           resource_id?: string | null
           resource_type?: string | null
+          retry_attempts?: number | null
+          retry_schedule?: Json | null
           stage_progress_percentage?: number | null
           started_at?: string
           sync_stage?: string | null
