@@ -10,7 +10,7 @@ interface UseRealtimeAnalyticsOptions {
   enableProcessingUpdates?: boolean;
   enableCacheUpdates?: boolean;
   reconnectInterval?: number;
-  disabled?: boolean;
+  disabled?: boolean; // Add option to disable real-time features
 }
 
 export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) => {
@@ -21,7 +21,7 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
   const [cacheEntries, setCacheEntries] = useState<Map<string, CacheEntry>>(new Map());
   const [analyticsEvents, setAnalyticsEvents] = useState<AnalyticsEvent[]>([]);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
-  const channelsRef = useRef<any[]>([]);
+  const subscriptionsRef = useRef<any[]>([]);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
 
   // Connection management with exponential backoff
@@ -29,22 +29,11 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
     // Skip if disabled or no user
     if (options.disabled || !user?.id) return;
 
-    // Clean up existing channels first
-    channelsRef.current.forEach(channel => {
-      try {
-        supabase.removeChannel(channel);
-      } catch (error) {
-        console.warn('Error removing existing channel:', error);
-      }
-    });
-    channelsRef.current = [];
-
     try {
       // Subscribe to processing queue updates
       if (options.enableProcessingUpdates !== false) {
-        const processingChannelName = `processing-queue-${user.id}-${Date.now()}`;
         const processingChannel = supabase
-          .channel(processingChannelName)
+          .channel(`processing-queue-${user.id}`)
           .on(
             'postgres_changes',
             {
@@ -97,19 +86,16 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
             setIsConnected(status === 'SUBSCRIBED');
             if (status === 'SUBSCRIBED') {
               setConnectionAttempts(0);
-            } else if (status === 'CHANNEL_ERROR') {
-              scheduleReconnect();
             }
           });
 
-        channelsRef.current.push(processingChannel);
+        subscriptionsRef.current.push(processingChannel);
       }
 
       // Subscribe to cache updates (simplified - only if explicitly enabled)
       if (options.enableCacheUpdates === true) {
-        const cacheChannelName = `analytics-cache-global-${Date.now()}`;
         const cacheChannel = supabase
-          .channel(cacheChannelName)
+          .channel('analytics-cache-global')
           .on(
             'postgres_changes',
             {
@@ -140,7 +126,7 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
           )
           .subscribe();
 
-        channelsRef.current.push(cacheChannel);
+        subscriptionsRef.current.push(cacheChannel);
       }
 
     } catch (error) {
@@ -165,14 +151,14 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
 
   // Disconnect all subscriptions
   const disconnect = useCallback(() => {
-    channelsRef.current.forEach(channel => {
+    subscriptionsRef.current.forEach(channel => {
       try {
         supabase.removeChannel(channel);
       } catch (error) {
         console.warn('Error removing channel:', error);
       }
     });
-    channelsRef.current = [];
+    subscriptionsRef.current = [];
     setIsConnected(false);
     
     if (reconnectTimeoutRef.current) {

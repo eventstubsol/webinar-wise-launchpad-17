@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useToast } from '@/hooks/use-toast';
@@ -12,7 +12,7 @@ import { ZoomSyncLog, SyncStatus, SyncType } from '@/types/zoom';
 
 interface SyncProgressProps {
   onClose?: () => void;
-  autoCloseDelay?: number;
+  autoCloseDelay?: number; // Auto-close delay in milliseconds after completion
 }
 
 interface ActiveSync {
@@ -24,7 +24,6 @@ interface ActiveSync {
   resourceType?: string;
   errorMessage?: string;
   startedAt: string;
-  isTimedOut?: boolean;
 }
 
 export const SyncProgress: React.FC<SyncProgressProps> = ({ 
@@ -35,7 +34,6 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
   const { toast } = useToast();
   const [activeSync, setActiveSync] = useState<ActiveSync | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const channelRef = useRef<any>(null);
 
   // Calculate progress percentage
   const getProgressPercentage = useCallback((sync: ActiveSync): number => {
@@ -43,21 +41,9 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
     return Math.min(100, Math.round((sync.processedItems / sync.totalItems) * 100));
   }, []);
 
-  // Check if sync is timed out (older than 10 minutes)
-  const checkSyncTimeout = useCallback((sync: ActiveSync): boolean => {
-    const startTime = new Date(sync.startedAt).getTime();
-    const now = Date.now();
-    const tenMinutes = 10 * 60 * 1000;
-    return now - startTime > tenMinutes;
-  }, []);
-
   // Generate user-friendly status message
   const getStatusMessage = useCallback((sync: ActiveSync): string => {
     const { syncType, status, processedItems, totalItems, resourceType } = sync;
-    
-    if (sync.isTimedOut) {
-      return 'Sync appears to have timed out. You can safely retry.';
-    }
     
     if (status === SyncStatus.FAILED) {
       return `Sync failed: ${sync.errorMessage || 'Unknown error'}`;
@@ -90,8 +76,6 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
         return 'Manual Sync';
       case SyncType.WEBHOOK:
         return 'Webhook Sync';
-      case SyncType.PARTICIPANTS_ONLY:
-        return 'Participants Sync';
       default:
         return 'Sync';
     }
@@ -102,11 +86,14 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
     if (!activeSync) return;
     
     try {
+      // Trigger a new manual sync - this would need to be implemented
+      // based on your sync service architecture
       toast({
         title: "Retry requested",
         description: "Starting a new sync operation...",
       });
       
+      // For now, just close the component
       handleClose();
     } catch (error) {
       toast({
@@ -123,7 +110,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
     setTimeout(() => {
       setActiveSync(null);
       onClose?.();
-    }, 300);
+    }, 300); // Allow for fade-out animation
   }, [onClose]);
 
   // Auto-close on successful completion
@@ -137,25 +124,15 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
     }
   }, [activeSync?.status, autoCloseDelay, handleClose]);
 
-  // Set up real-time subscription with proper cleanup
+  // Set up real-time subscription
   useEffect(() => {
     if (!connection?.id) return;
 
-    // Clean up existing channel if it exists
-    if (channelRef.current) {
-      try {
-        supabase.removeChannel(channelRef.current);
-      } catch (error) {
-        console.warn('Error removing existing channel:', error);
-      }
-      channelRef.current = null;
-    }
+    let channel: any = null;
 
     const setupSubscription = () => {
-      const channelName = `sync-progress-${connection.id}`;
-      channelRef.current = supabase.channel(channelName);
-
-      channelRef.current
+      channel = supabase
+        .channel('sync-progress')
         .on(
           'postgres_changes',
           {
@@ -164,7 +141,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
             table: 'zoom_sync_logs',
             filter: `connection_id=eq.${connection.id}`,
           },
-          (payload: any) => {
+          (payload) => {
             const syncLog = payload.new as ZoomSyncLog;
             
             // Only show active syncs (not completed/failed unless there's an error)
@@ -183,14 +160,6 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
                 resourceType: syncLog.resource_type || undefined,
                 errorMessage: syncLog.error_message || undefined,
                 startedAt: syncLog.started_at,
-                isTimedOut: checkSyncTimeout({
-                  id: syncLog.id,
-                  syncType: syncLog.sync_type,
-                  status: syncLog.sync_status,
-                  totalItems: syncLog.total_items || 0,
-                  processedItems: syncLog.processed_items || 0,
-                  startedAt: syncLog.started_at
-                })
               };
               
               setActiveSync(newActiveSync);
@@ -218,6 +187,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
               syncLog.sync_status === SyncStatus.CANCELLED ||
               (syncLog.sync_status === SyncStatus.COMPLETED && !syncLog.error_message)
             )) {
+              // Don't immediately hide on completion, let auto-close handle it
               if (syncLog.sync_status === SyncStatus.CANCELLED) {
                 setIsVisible(false);
                 setTimeout(() => setActiveSync(null), 300);
@@ -242,16 +212,11 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
     setupSubscription();
 
     return () => {
-      if (channelRef.current) {
-        try {
-          supabase.removeChannel(channelRef.current);
-        } catch (error) {
-          console.warn('Error removing channel on cleanup:', error);
-        }
-        channelRef.current = null;
+      if (channel) {
+        supabase.removeChannel(channel);
       }
     };
-  }, [connection?.id, toast, checkSyncTimeout]);
+  }, [connection?.id, toast]);
 
   // Don't render if no active sync
   if (!activeSync || !isVisible) {
@@ -261,7 +226,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
   const progressPercentage = getProgressPercentage(activeSync);
   const statusMessage = getStatusMessage(activeSync);
   const syncTypeDisplay = getSyncTypeDisplay(activeSync.syncType);
-  const isError = activeSync.status === SyncStatus.FAILED || activeSync.isTimedOut;
+  const isError = activeSync.status === SyncStatus.FAILED;
   const isCompleted = activeSync.status === SyncStatus.COMPLETED;
   const isInProgress = activeSync.status === SyncStatus.IN_PROGRESS || activeSync.status === SyncStatus.STARTED;
 
@@ -292,7 +257,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
 
           <div className="space-y-3">
             {/* Progress Bar */}
-            {isInProgress && !activeSync.isTimedOut && (
+            {isInProgress && (
               <div className="space-y-2">
                 <Progress value={progressPercentage} className="h-2" />
                 <div className="flex justify-between text-xs text-muted-foreground">
