@@ -51,24 +51,31 @@ serve(async (req) => {
       createdAt: new Date()
     };
     
-    console.log('Starting simplified webinar-only sync process...');
+    console.log('Determining sync processor based on sync type...');
     
-    // Always use simplified processor
-    console.log('Using simplified webinar-only processor...');
-    queueMicrotask(() => processSimpleWebinarSync(supabase, syncOperation, connection, syncLogId));
+    // Route to appropriate processor based on sync type
+    if (requestBody.syncType === 'registrants_only') {
+      console.log('Using registrant-focused processor...');
+      const { processRegistrantFocusedSync } = await import('./registrant-focused-processor.ts');
+      queueMicrotask(() => processRegistrantFocusedSync(supabase, syncOperation, connection, syncLogId));
+    } else {
+      // Use simplified processor for other sync types
+      console.log('Using simplified webinar-only processor...');
+      queueMicrotask(() => processSimpleWebinarSync(supabase, syncOperation, connection, syncLogId));
+    }
 
-    console.log(`=== Simplified Sync Request Successful (Total time: ${Date.now() - startTime}ms) ===`);
+    console.log(`=== Sync Request Successful (Total time: ${Date.now() - startTime}ms) ===`);
     return new Response(
       JSON.stringify({
         success: true,
         syncId: syncLogId,
         status: 'started',
-        message: `Simplified webinar-only ${requestBody.syncType} sync initiated successfully.`,
+        message: `${requestBody.syncType} sync initiated successfully.`,
         debug: {
           connectionId: requestBody.connectionId,
           userId: user.id,
           syncType: requestBody.syncType,
-          processorType: 'simplified_webinar_only'
+          processorType: requestBody.syncType === 'registrants_only' ? 'registrant_focused' : 'simplified_webinar_only'
         }
       }),
       { status: 202, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
