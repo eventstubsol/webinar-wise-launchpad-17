@@ -1,8 +1,8 @@
-
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 import { syncWebinarWithValidation } from './webinar-sync-handler.ts';
 import { findAndClearStuckSyncs, validateConnectionData } from './sync-recovery.ts';
+import { ComprehensiveWebinarFetcher } from './comprehensive-webinar-fetcher.ts';
 
 // Per-webinar timeout: 5 minutes maximum
 const WEBINAR_TIMEOUT_MS = 5 * 60 * 1000;
@@ -38,18 +38,20 @@ export async function processRecoverySync(
     const zoomApi = await import('./zoom-api-client.ts');
     const client = await zoomApi.createZoomAPIClient(connection, supabase);
     
-    // Fetch webinars with error handling
-    console.log('Fetching complete webinar list...');
-    await updateSyncStage(supabase, syncLogId, null, 'fetching_webinar_list', 10);
+    // ENHANCED: Use comprehensive webinar fetching strategy
+    console.log('=== USING COMPREHENSIVE WEBINAR FETCHING STRATEGY ===');
+    await updateSyncStage(supabase, syncLogId, null, 'comprehensive_webinar_fetch', 10);
     
-    const webinars = await client.listWebinarsWithRange({
-      type: 'all'
-    });
+    const webinarFetcher = new ComprehensiveWebinarFetcher(client, connection.id);
+    const fetchResult = await webinarFetcher.fetchAllWebinars();
     
-    console.log(`=== ENHANCED RECOVERY ANALYSIS ===`);
-    console.log(`Total webinars from Zoom: ${webinars.length}`);
-    console.log(`Current webinars in DB: ${currentCounts.webinarCount}`);
-    console.log(`Expected to process: ${webinars.length - currentCounts.webinarCount} new webinars`);
+    const webinars = fetchResult.webinars;
+    const fetchSummary = fetchResult.summary;
+    
+    console.log(`=== COMPREHENSIVE WEBINAR FETCH COMPLETED ===`);
+    console.log(`Expected from logs: 43 webinars`);
+    console.log(`Actually fetched: ${fetchSummary.finalCount} webinars`);
+    console.log(`Fetch breakdown:`, fetchSummary);
     
     if (webinars.length === 0) {
       await updateSyncLog(supabase, syncLogId, {
@@ -58,13 +60,19 @@ export async function processRecoverySync(
         completed_at: new Date().toISOString(),
         sync_stage: 'completed',
         stage_progress_percentage: 100,
-        error_message: 'No webinars found in Zoom account'
+        error_message: 'No webinars found using comprehensive fetch strategy',
+        error_details: { fetchSummary }
       });
       return;
     }
     
     await updateSyncLog(supabase, syncLogId, {
-      total_items: webinars.length
+      total_items: webinars.length,
+      error_details: { 
+        comprehensiveFetchSummary: fetchSummary,
+        expectedWebinars: 43,
+        actuallyFetched: fetchSummary.finalCount
+      }
     });
 
     let processedCount = 0;
@@ -234,7 +242,8 @@ export async function processRecoverySync(
         failedCount,
         skippedCount,
         finalCounts,
-        problemWebinars: Array.from(PROBLEM_WEBINARS)
+        problemWebinars: Array.from(PROBLEM_WEBINARS),
+        comprehensiveFetchSummary: fetchSummary
       }
     });
     

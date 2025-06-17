@@ -1,4 +1,3 @@
-
 export async function validateZoomConnection(connection: any): Promise<boolean> {
   console.log(`Validating Zoom connection: ${connection.id}`);
   
@@ -71,6 +70,107 @@ class ZoomAPIClient {
     this.accessToken = accessToken;
     this.refreshTokenValue = refreshToken;
     this.isOAuth = isOAuth;
+  }
+
+  // ENHANCED: Add makeRequest method that can be used by ComprehensiveWebinarFetcher
+  async makeRequest(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
+    const url = `${this.baseURL}${endpoint}`;
+    
+    try {
+      const sanitizedToken = this.validateAndSanitizeToken(this.accessToken);
+      
+      let requestHeaders = {
+        'Authorization': `Bearer ${sanitizedToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers,
+      };
+      
+      console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`);
+      
+      // Check if token needs refresh (only for OAuth connections)
+      if (this.isOAuth) {
+        const expiresAt = new Date(this.connection.token_expires_at);
+        const now = new Date();
+        const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+
+        if (now.getTime() >= (expiresAt.getTime() - bufferTime) && retryCount === 0) {
+          console.log(`Forcing OAuth token refresh: token expired/expiring`);
+          try {
+            await this.refreshTokens();
+            const newSanitizedToken = this.validateAndSanitizeToken(this.accessToken);
+            requestHeaders = {
+                ...requestHeaders,
+                'Authorization': `Bearer ${newSanitizedToken}`,
+            };
+            console.log('Headers updated with new token.');
+          } catch (refreshError) {
+            console.error('Pre-emptive OAuth token refresh failed:', refreshError);
+            const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
+            (authError as any).status = 401;
+            (authError as any).isAuthError = true;
+            throw authError;
+          }
+        }
+      }
+      
+      const response = await fetch(url, {
+        ...options,
+        headers: requestHeaders,
+      });
+
+      console.log(`Zoom API response: ${response.status} for ${endpoint}`);
+
+      if (!response.ok) {
+        if (response.status === 401 && retryCount < 1) {
+          console.log(`Received 401 for ${endpoint}. Attempting token refresh.`);
+          try {
+            await this.refreshTokens();
+            return await this.makeRequest(endpoint, options, retryCount + 1);
+          } catch (refreshError) {
+            console.error(`Token refresh flow failed for ${endpoint}:`, refreshError.message);
+            const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
+            (authError as any).status = 401;
+            (authError as any).isAuthError = true;
+            throw authError;
+          }
+        }
+
+        const errorText = await response.text();
+        console.error(`Zoom API error (${response.status}) for ${endpoint}:`, errorText);
+        
+        const error = new Error(`Zoom API request failed: ${response.status} ${response.statusText}`);
+        (error as any).status = response.status;
+        
+        if (response.status === 401) {
+          (error as any).isAuthError = true;
+        }
+        
+        try {
+          (error as any).body = JSON.parse(errorText);
+        } catch {
+          (error as any).body = { message: errorText };
+        }
+        
+        throw error;
+      }
+
+      const responseText = await response.text();
+      const result = responseText ? JSON.parse(responseText) : {};
+      console.log(`Zoom API success for ${endpoint}:`, Object.keys(result));
+      return result;
+    } catch (error) {
+      if (error.message.includes('Invalid token') && retryCount === 0) {
+        console.log('Token validation failed, attempting refresh...');
+        try {
+          await this.refreshTokens();
+          return await this.makeRequest(endpoint, options, retryCount + 1);
+        } catch (refreshError) {
+          console.error('Token refresh after validation failure failed:', refreshError);
+          throw error;
+        }
+      }
+      throw error;
+    }
   }
 
   private async refreshTokens() {
@@ -186,106 +286,6 @@ class ZoomAPIClient {
     }
     
     return sanitized;
-  }
-
-  private async makeRequest(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
-    const url = `${this.baseURL}${endpoint}`;
-    
-    try {
-      const sanitizedToken = this.validateAndSanitizeToken(this.accessToken);
-      
-      let requestHeaders = {
-        'Authorization': `Bearer ${sanitizedToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      };
-      
-      console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`);
-      
-      // Check if token needs refresh (only for OAuth connections)
-      if (this.isOAuth) {
-        const expiresAt = new Date(this.connection.token_expires_at);
-        const now = new Date();
-        const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-
-        if (now.getTime() >= (expiresAt.getTime() - bufferTime) && retryCount === 0) {
-          console.log(`Forcing OAuth token refresh: token expired/expiring`);
-          try {
-            await this.refreshTokens();
-            const newSanitizedToken = this.validateAndSanitizeToken(this.accessToken);
-            requestHeaders = {
-                ...requestHeaders,
-                'Authorization': `Bearer ${newSanitizedToken}`,
-            };
-            console.log('Headers updated with new token.');
-          } catch (refreshError) {
-            console.error('Pre-emptive OAuth token refresh failed:', refreshError);
-            const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
-            (authError as any).status = 401;
-            (authError as any).isAuthError = true;
-            throw authError;
-          }
-        }
-      }
-      
-      const response = await fetch(url, {
-        ...options,
-        headers: requestHeaders,
-      });
-
-      console.log(`Zoom API response: ${response.status} for ${endpoint}`);
-
-      if (!response.ok) {
-        if (response.status === 401 && retryCount < 1) {
-          console.log(`Received 401 for ${endpoint}. Attempting token refresh.`);
-          try {
-            await this.refreshTokens();
-            return await this.makeRequest(endpoint, options, retryCount + 1);
-          } catch (refreshError) {
-            console.error(`Token refresh flow failed for ${endpoint}:`, refreshError.message);
-            const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
-            (authError as any).status = 401;
-            (authError as any).isAuthError = true;
-            throw authError;
-          }
-        }
-
-        const errorText = await response.text();
-        console.error(`Zoom API error (${response.status}) for ${endpoint}:`, errorText);
-        
-        const error = new Error(`Zoom API request failed: ${response.status} ${response.statusText}`);
-        (error as any).status = response.status;
-        
-        if (response.status === 401) {
-          (error as any).isAuthError = true;
-        }
-        
-        try {
-          (error as any).body = JSON.parse(errorText);
-        } catch {
-          (error as any).body = { message: errorText };
-        }
-        
-        throw error;
-      }
-
-      const responseText = await response.text();
-      const result = responseText ? JSON.parse(responseText) : {};
-      console.log(`Zoom API success for ${endpoint}:`, Object.keys(result));
-      return result;
-    } catch (error) {
-      if (error.message.includes('Invalid token') && retryCount === 0) {
-        console.log('Token validation failed, attempting refresh...');
-        try {
-          await this.refreshTokens();
-          return await this.makeRequest(endpoint, options, retryCount + 1);
-        } catch (refreshError) {
-          console.error('Token refresh after validation failure failed:', refreshError);
-          throw error;
-        }
-      }
-      throw error;
-    }
   }
 
   async listWebinarsWithRange(options: { from?: Date; to?: Date; type?: string } = {}): Promise<any[]> {
@@ -403,221 +403,6 @@ class ZoomAPIClient {
     } catch (error) {
       console.log(`No Q&A for webinar ${webinarId}:`, error.message);
       return [];
-    }
-  }
-
-  private async refreshTokens() {
-    console.log(`Attempting to refresh tokens for connection: ${this.connection.id}`);
-    
-    if (!this.isOAuth) {
-      console.log('Refreshing Server-to-Server token using client credentials flow');
-      return await this.refreshServerToServerToken();
-    } else {
-      console.log('Refreshing OAuth token using refresh token flow');
-      return await this.refreshOAuthToken();
-    }
-  }
-
-  private async refreshServerToServerToken() {
-    try {
-      const { data: credentials, error: credError } = await this.supabase
-        .from('zoom_credentials')
-        .select('client_id, client_secret, account_id')
-        .eq('user_id', this.connection.user_id)
-        .eq('is_active', true)
-        .single();
-
-      if (credError || !credentials) {
-        console.error('No active credentials found for Server-to-Server refresh');
-        throw new Error('No active Zoom credentials found for token refresh');
-      }
-
-      const tokenRequestBody = new URLSearchParams({
-        grant_type: 'account_credentials',
-        account_id: credentials.account_id
-      });
-
-      const tokenResponse = await fetch('https://zoom.us/oauth/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${credentials.client_id}:${credentials.client_secret}`)}`,
-        },
-        body: tokenRequestBody,
-      });
-
-      if (!tokenResponse.ok) {
-        const errorText = await tokenResponse.text();
-        console.error('Server-to-Server token refresh failed:', tokenResponse.status, errorText);
-        throw new Error('Failed to refresh Server-to-Server token');
-      }
-
-      const tokenData = await tokenResponse.json();
-      this.accessToken = tokenData.access_token;
-
-      // Update the connection with the new token (plain text)
-      const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
-
-      const { error: updateError } = await this.supabase
-        .from('zoom_connections')
-        .update({
-          access_token: tokenData.access_token,
-          token_expires_at: newExpiresAt,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', this.connection.id);
-
-      if (updateError) {
-        console.error('Failed to update connection with new token:', updateError);
-        throw new Error('Failed to save refreshed token');
-      }
-
-      console.log(`Server-to-Server token refreshed successfully for connection: ${this.connection.id}`);
-      
-    } catch (error) {
-      console.error(`Server-to-Server token refresh failed for connection ${this.connection.id}:`, error);
-      throw error;
-    }
-  }
-
-  private async refreshOAuthToken() {
-    try {
-      const { data, error } = await this.supabase.functions.invoke('zoom-token-refresh', {
-        body: { connectionId: this.connection.id }
-      });
-
-      if (error) {
-        console.error(`OAuth token refresh invocation failed for connection ${this.connection.id}:`, error);
-        throw new Error('OAuth token refresh failed. Please re-authenticate.');
-      }
-
-      if (!data?.connection) {
-        console.error('OAuth token refresh response missing connection data');
-        throw new Error('OAuth token refresh failed - invalid response.');
-      }
-
-      this.connection = data.connection;
-      this.accessToken = data.connection.access_token;
-      
-      console.log(`OAuth tokens refreshed successfully for connection: ${this.connection.id}`);
-      
-    } catch (error) {
-      console.error(`OAuth token refresh failed for connection ${this.connection.id}:`, error);
-      throw error;
-    }
-  }
-
-  private validateAndSanitizeToken(token: string): string {
-    if (!token || typeof token !== 'string') {
-      throw new Error('Invalid token: token must be a non-empty string');
-    }
-    
-    const sanitized = token.trim();
-    
-    if (sanitized.length < 10) {
-      throw new Error('Invalid token: token too short');
-    }
-    
-    return sanitized;
-  }
-
-  private async makeRequest(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
-    const url = `${this.baseURL}${endpoint}`;
-    
-    try {
-      const sanitizedToken = this.validateAndSanitizeToken(this.accessToken);
-      
-      let requestHeaders = {
-        'Authorization': `Bearer ${sanitizedToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      };
-      
-      console.log(`Making Zoom API request: ${endpoint} (attempt ${retryCount + 1})`);
-      
-      // Check if token needs refresh (only for OAuth connections)
-      if (this.isOAuth) {
-        const expiresAt = new Date(this.connection.token_expires_at);
-        const now = new Date();
-        const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-
-        if (now.getTime() >= (expiresAt.getTime() - bufferTime) && retryCount === 0) {
-          console.log(`Forcing OAuth token refresh: token expired/expiring`);
-          try {
-            await this.refreshTokens();
-            const newSanitizedToken = this.validateAndSanitizeToken(this.accessToken);
-            requestHeaders = {
-                ...requestHeaders,
-                'Authorization': `Bearer ${newSanitizedToken}`,
-            };
-            console.log('Headers updated with new token.');
-          } catch (refreshError) {
-            console.error('Pre-emptive OAuth token refresh failed:', refreshError);
-            const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
-            (authError as any).status = 401;
-            (authError as any).isAuthError = true;
-            throw authError;
-          }
-        }
-      }
-      
-      const response = await fetch(url, {
-        ...options,
-        headers: requestHeaders,
-      });
-
-      console.log(`Zoom API response: ${response.status} for ${endpoint}`);
-
-      if (!response.ok) {
-        if (response.status === 401 && retryCount < 1) {
-          console.log(`Received 401 for ${endpoint}. Attempting token refresh.`);
-          try {
-            await this.refreshTokens();
-            return await this.makeRequest(endpoint, options, retryCount + 1);
-          } catch (refreshError) {
-            console.error(`Token refresh flow failed for ${endpoint}:`, refreshError.message);
-            const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
-            (authError as any).status = 401;
-            (authError as any).isAuthError = true;
-            throw authError;
-          }
-        }
-
-        const errorText = await response.text();
-        console.error(`Zoom API error (${response.status}) for ${endpoint}:`, errorText);
-        
-        const error = new Error(`Zoom API request failed: ${response.status} ${response.statusText}`);
-        (error as any).status = response.status;
-        
-        if (response.status === 401) {
-          (error as any).isAuthError = true;
-        }
-        
-        try {
-          (error as any).body = JSON.parse(errorText);
-        } catch {
-          (error as any).body = { message: errorText };
-        }
-        
-        throw error;
-      }
-
-      const responseText = await response.text();
-      const result = responseText ? JSON.parse(responseText) : {};
-      console.log(`Zoom API success for ${endpoint}:`, Object.keys(result));
-      return result;
-    } catch (error) {
-      if (error.message.includes('Invalid token') && retryCount === 0) {
-        console.log('Token validation failed, attempting refresh...');
-        try {
-          await this.refreshTokens();
-          return await this.makeRequest(endpoint, options, retryCount + 1);
-        } catch (refreshError) {
-          console.error('Token refresh after validation failure failed:', refreshError);
-          throw error;
-        }
-      }
-      throw error;
     }
   }
 }
