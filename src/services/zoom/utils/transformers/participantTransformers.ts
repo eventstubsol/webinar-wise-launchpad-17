@@ -3,22 +3,19 @@ import { ZoomParticipant } from '@/types/zoom';
 
 /**
  * Data transformation utilities for participants and engagement
- * NOTE: Currently simplified for webinar-only sync
  */
 export class ParticipantTransformers {
   /**
    * Transform Zoom API participant to database format
-   * Currently not used in webinar-only sync
    */
   static transformParticipant(
     apiParticipant: any,
     webinarId: string
   ): Omit<ZoomParticipant, 'id' | 'created_at' | 'updated_at'> {
-    // Simplified transformation for future use
     return {
       webinar_id: webinarId,
       participant_id: apiParticipant.id || apiParticipant.participant_id,
-      registrant_id: null,
+      registrant_id: apiParticipant.registrant_id || null,
       participant_name: apiParticipant.name || apiParticipant.participant_name,
       participant_email: apiParticipant.user_email || apiParticipant.participant_email || null,
       participant_user_id: apiParticipant.user_id || null,
@@ -26,25 +23,24 @@ export class ParticipantTransformers {
       leave_time: apiParticipant.leave_time || null,
       duration: apiParticipant.duration || null,
       attentiveness_score: apiParticipant.attentiveness_score || null,
-      camera_on_duration: null,
-      share_application_duration: null,
-      share_desktop_duration: null,
+      camera_on_duration: apiParticipant.camera_on_duration || null,
+      share_application_duration: apiParticipant.share_application_duration || null,
+      share_desktop_duration: apiParticipant.share_desktop_duration || null,
       posted_chat: apiParticipant.posted_chat || false,
       raised_hand: apiParticipant.raised_hand || false,
       answered_polling: apiParticipant.answered_polling || false,
       asked_question: apiParticipant.asked_question || false,
-      device: null,
-      ip_address: null, // Fixed: set to null instead of unknown type
-      location: null,
-      network_type: null,
-      version: null,
+      device: apiParticipant.device || null,
+      ip_address: apiParticipant.ip_address || null,
+      location: apiParticipant.location || null,
+      network_type: apiParticipant.network_type || null,
+      version: apiParticipant.version || null,
       customer_key: apiParticipant.customer_key || null,
     };
   }
 
   /**
    * Normalize participant engagement data
-   * Currently not used in webinar-only sync
    */
   static normalizeEngagementData(participant: any): {
     engagement_score: number;
@@ -56,14 +52,31 @@ export class ParticipantTransformers {
       camera_usage_percent: number;
     };
   } {
+    const duration = participant.duration || 0;
+    const cameraOnDuration = participant.camera_on_duration || 0;
+    
+    // Calculate engagement score (0-100)
+    let score = 0;
+    
+    // Duration component (0-40 points)
+    score += Math.min(40, (duration / 60) * 10);
+    
+    // Interaction components (60 points total)
+    if (participant.answered_polling) score += 20;
+    if (participant.asked_question) score += 15;
+    if (participant.posted_chat) score += 15;
+    if (participant.raised_hand) score += 10;
+    
+    const cameraUsagePercent = duration > 0 ? (cameraOnDuration / duration) * 100 : 0;
+    
     return {
-      engagement_score: 0,
+      engagement_score: Math.round(Math.min(100, score)),
       participation_summary: {
-        polls_answered: false,
-        questions_asked: false,
-        chat_messages: false,
-        hand_raised: false,
-        camera_usage_percent: 0,
+        polls_answered: !!participant.answered_polling,
+        questions_asked: !!participant.asked_question,
+        chat_messages: !!participant.posted_chat,
+        hand_raised: !!participant.raised_hand,
+        camera_usage_percent: Math.round(cameraUsagePercent),
       },
     };
   }

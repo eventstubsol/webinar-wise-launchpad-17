@@ -1,24 +1,24 @@
+
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 
-export async function processComprehensiveSync(
+export async function processEnhancedWebinarSync(
   supabase: any,
   syncOperation: SyncOperation,
   connection: any,
   syncLogId: string
 ): Promise<void> {
-  console.log(`Starting enhanced comprehensive sync for connection: ${connection.id}`);
+  console.log(`Starting enhanced webinar sync for connection: ${connection.id}`);
   
   try {
-    // Initialize Zoom API client with enhanced error handling
+    // Initialize Zoom API client
     const zoomApi = await import('./zoom-api-client.ts');
     const client = await zoomApi.createZoomAPIClient(connection, supabase);
     
-    // Fetch webinars list with comprehensive data
+    // Fetch webinars list
     console.log('Fetching webinars list...');
-    await updateSyncStage(supabase, syncLogId, null, 'fetching_webinar_list', 10);
+    await updateSyncStage(supabase, syncLogId, null, 'fetching_webinars', 10);
     
-    // Use the correct method from ZoomAPIClient
     const webinars = await client.listWebinarsWithRange({
       type: 'all'
     });
@@ -38,87 +38,70 @@ export async function processComprehensiveSync(
     
     let processedCount = 0;
     let successCount = 0;
+    let registrantsTotal = 0;
+    let participantsTotal = 0;
     const totalWebinars = webinars.length;
     
-    // Process each webinar with focus on webinar details and registrants
+    // Process each webinar with comprehensive data
     for (const webinar of webinars) {
       try {
+        const webinarProgress = Math.round((processedCount / totalWebinars) * 20);
         await updateSyncStage(
           supabase, 
           syncLogId, 
           webinar.id?.toString(), 
-          'starting_webinar', 
-          Math.round((processedCount / totalWebinars) * 90) + 10
+          'processing_webinar', 
+          webinarProgress
         );
         
         console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars})`);
         
-        // Fetch detailed webinar information with all fields
-        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_details', null);
+        // Get basic webinar details
         const webinarDetails = await client.getWebinar(webinar.id);
-        console.log(`Fetched webinar details for ${webinar.id}:`, {
-          hasSettings: !!webinarDetails.settings,
-          hasStartUrl: !!webinarDetails.start_url,
-          hasEncryptedPasscode: !!webinarDetails.encrypted_passcode,
-          creationSource: webinarDetails.creation_source,
-          isSimulive: webinarDetails.is_simulive,
-          status: webinarDetails.status
-        });
         
-        // Fetch registrants with proper error handling
-        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'registrants', null);
-        let registrants = [];
+        // Store webinar data and get database ID
+        const webinarDbId = await syncEnhancedWebinarData(supabase, webinarDetails, connection.id);
+        
+        // Fetch and process registrants
+        const registrantsProgress = 20 + Math.round((processedCount / totalWebinars) * 30);
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'fetching_registrants', registrantsProgress);
+        
         try {
-          registrants = await client.getWebinarRegistrants(webinar.id);
-          console.log(`Fetched ${registrants.length} registrants for webinar ${webinar.id}`);
+          const registrants = await client.getWebinarRegistrants(webinar.id);
+          console.log(`Found ${registrants.length} registrants for webinar ${webinar.id}`);
+          
+          if (registrants.length > 0) {
+            await syncRegistrantsData(supabase, registrants, webinarDbId);
+            registrantsTotal += registrants.length;
+          }
         } catch (registrantError) {
-          console.log(`No registrants data available for webinar ${webinar.id}: ${registrantError.message}`);
-          // Continue processing even if registrants fail
+          console.error(`Error fetching registrants for webinar ${webinar.id}:`, registrantError);
+          // Continue with participants even if registrants fail
         }
         
-        // Skip participants, polls, and Q&A for now to focus on webinar + registrants
-        console.log(`Skipping participants, polls, and Q&A for progressive build - focusing on registrants`);
+        // Fetch and process participants
+        const participantsProgress = 50 + Math.round((processedCount / totalWebinars) * 40);
+        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'fetching_participants', participantsProgress);
         
-        // Process webinar and registrant data with metrics calculation
-        console.log(`Syncing webinar and registrant data for webinar ${webinar.id}...`);
-        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'saving_webinar_and_registrants', null);
+        try {
+          const participants = await client.getWebinarParticipants(webinar.id);
+          console.log(`Found ${participants.length} participants for webinar ${webinar.id}`);
+          
+          if (participants.length > 0) {
+            await syncParticipantsData(supabase, participants, webinarDbId);
+            participantsTotal += participants.length;
+          }
+        } catch (participantError) {
+          console.error(`Error fetching participants for webinar ${webinar.id}:`, participantError);
+          // Continue with next webinar even if participants fail
+        }
         
-        const webinarDbId = await syncWebinarAndRegistrants(
-          supabase,
-          webinarDetails,
-          registrants,
-          connection.id
-        );
-        
-        console.log(`Successfully synced webinar ${webinar.id} to database with ID: ${webinarDbId}`);
-        
-        // Calculate and update webinar metrics
-        console.log(`Calculating metrics for webinar ${webinar.id}...`);
-        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'calculating_metrics', null);
-        await updateWebinarMetrics(supabase, webinarDbId, registrants);
-        
-        console.log(`Data collected for webinar ${webinar.id}:`, {
-          registrants: registrants.length,
-          participants: 'skipped',
-          polls: 'skipped',
-          qa: 'skipped'
-        });
-        
+        console.log(`Successfully processed webinar ${webinar.id}`);
         successCount++;
         processedCount++;
-        await updateSyncStage(
-          supabase, 
-          syncLogId, 
-          webinar.id?.toString(), 
-          'webinar_completed', 
-          Math.round((processedCount / totalWebinars) * 90) + 10
-        );
-        
-        console.log(`Successfully processed webinar ${webinar.id} with metrics calculated`);
         
       } catch (webinarError) {
         console.error(`Error processing webinar ${webinar.id}:`, webinarError);
-        await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'webinar_failed', null);
         processedCount++;
         // Continue with next webinar
       }
@@ -133,34 +116,31 @@ export async function processComprehensiveSync(
       stage_progress_percentage: 100
     });
     
-    console.log(`Progressive sync completed with metrics calculation. Successfully processed ${successCount}/${totalWebinars} webinars.`);
+    console.log(`Enhanced webinar sync completed. Successfully processed ${successCount}/${totalWebinars} webinars, ${registrantsTotal} registrants, ${participantsTotal} participants.`);
     
   } catch (error) {
-    console.error('Progressive sync failed:', error);
+    console.error('Enhanced webinar sync failed:', error);
     throw error;
   }
 }
 
 /**
- * Sync webinar and registrants data with metrics calculation and new field support
+ * Sync enhanced webinar data with calculated metrics
  */
-async function syncWebinarAndRegistrants(
+async function syncEnhancedWebinarData(
   supabase: any,
   webinarData: any,
-  registrants: any[],
   connectionId: string
 ): Promise<string> {
-  console.log(`Starting webinar and registrants sync for webinar ${webinarData.id}`);
+  console.log(`Storing enhanced webinar data for webinar ${webinarData.id}`);
   
   try {
-    // First, sync the webinar data (we know this works from previous testing)
-    const transformedWebinar = transformWebinarForDatabase(webinarData, connectionId);
+    const transformedWebinar = transformEnhancedWebinarForDatabase(webinarData, connectionId);
+    
     console.log(`Transformed webinar data for ${webinarData.id}:`, {
       status: transformedWebinar.status,
       type: transformedWebinar.type,
-      hasStartUrl: !!transformedWebinar.start_url,
-      hasEncryptedPasscode: !!transformedWebinar.encrypted_passcode,
-      creationSource: transformedWebinar.creation_source
+      title: transformedWebinar.topic
     });
 
     const { data: webinarRecord, error: webinarError } = await supabase
@@ -180,118 +160,99 @@ async function syncWebinarAndRegistrants(
       throw new Error(`Failed to upsert webinar: ${webinarError.message}`);
     }
 
-    console.log(`Webinar upserted successfully with ID: ${webinarRecord.id}`);
-    
-    // Now sync registrants if we have any
-    if (registrants && registrants.length > 0) {
-      console.log(`Processing ${registrants.length} registrants for webinar ${webinarData.id}`);
-      
-      const transformedRegistrants = registrants.map(registrant => 
-        transformRegistrantForDatabase(registrant, webinarRecord.id)
-      );
-      
-      console.log(`Sample transformed registrant:`, transformedRegistrants[0]);
-      
-      const { error: registrantsError } = await supabase
-        .from('zoom_registrants')
-        .upsert(
-          transformedRegistrants,
-          {
-            onConflict: 'webinar_id,registrant_id',
-            ignoreDuplicates: false
-          }
-        );
-
-      if (registrantsError) {
-        console.error('Failed to upsert registrants:', registrantsError);
-        console.error('Sample registrant data that failed:', transformedRegistrants[0]);
-        // Don't throw here - we want to continue even if registrants fail
-        console.log(`Continuing despite registrants error for webinar ${webinarData.id}`);
-      } else {
-        console.log(`Successfully upserted ${transformedRegistrants.length} registrants for webinar ${webinarData.id}`);
-      }
-    } else {
-      console.log(`No registrants to process for webinar ${webinarData.id}`);
-    }
-
+    console.log(`Webinar stored successfully with ID: ${webinarRecord.id}`);
     return webinarRecord.id;
+    
   } catch (error) {
-    console.error(`Error in webinar and registrants sync for ${webinarData.id}:`, error);
+    console.error(`Error storing webinar data for ${webinarData.id}:`, error);
     throw error;
   }
 }
 
 /**
- * Update webinar metrics after syncing all data
+ * Sync registrants data to database
  */
-async function updateWebinarMetrics(
+async function syncRegistrantsData(
   supabase: any,
-  webinarDbId: string,
-  registrants: any[]
+  registrants: any[],
+  webinarDbId: string
 ): Promise<void> {
-  console.log(`Calculating metrics for webinar ${webinarDbId}`);
+  console.log(`Syncing ${registrants.length} registrants for webinar ${webinarDbId}`);
   
   try {
-    // Calculate metrics from available data (registrants for now)
-    const totalRegistrants = registrants?.length || 0;
-    
-    // For now, we'll use registrants who have attended (have join_time) as attendees
-    // This is a simplification until we get actual participant data
-    const attendees = registrants?.filter(r => r.join_time) || [];
-    const totalAttendees = attendees.length;
-    
-    // Calculate total minutes and average duration from registrant attendance data
-    let totalMinutes = 0;
-    let avgAttendanceDuration = 0;
-    
-    if (attendees.length > 0) {
-      totalMinutes = attendees.reduce((sum, attendee) => {
-        return sum + (attendee.duration || 0);
-      }, 0);
-      avgAttendanceDuration = Math.round(totalMinutes / attendees.length);
-    }
-    
-    console.log(`Calculated metrics:`, {
-      totalRegistrants,
-      totalAttendees,
-      totalMinutes,
-      avgAttendanceDuration
-    });
+    const transformedRegistrants = registrants.map(registrant => 
+      transformRegistrantForDatabase(registrant, webinarDbId)
+    );
 
-    // Update webinar with calculated metrics
-    const { error: updateError } = await supabase
-      .from('zoom_webinars')
-      .update({
-        total_registrants: totalRegistrants,
-        total_attendees: totalAttendees,
-        total_minutes: totalMinutes,
-        avg_attendance_duration: avgAttendanceDuration,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', webinarDbId);
+    const { error } = await supabase
+      .from('zoom_registrants')
+      .upsert(
+        transformedRegistrants,
+        {
+          onConflict: 'webinar_id,registrant_id',
+          ignoreDuplicates: false
+        }
+      );
 
-    if (updateError) {
-      console.error('Failed to update webinar metrics:', updateError);
-      throw new Error(`Failed to update webinar metrics: ${updateError.message}`);
+    if (error) {
+      console.error('Failed to upsert registrants:', error);
+      throw new Error(`Failed to upsert registrants: ${error.message}`);
     }
+
+    console.log(`Successfully synced ${registrants.length} registrants`);
     
-    console.log(`Successfully updated metrics for webinar ${webinarDbId}`);
   } catch (error) {
-    console.error('Error calculating webinar metrics:', error);
-    // Don't throw here - metrics calculation failure shouldn't stop the entire sync
-    console.log(`Continuing sync despite metrics calculation error for webinar ${webinarDbId}`);
+    console.error(`Error syncing registrants:`, error);
+    throw error;
   }
 }
 
 /**
- * Transform Zoom API webinar to database format (same as before)
+ * Sync participants data to database
  */
-function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any {
-  // Extract settings for better field mapping
+async function syncParticipantsData(
+  supabase: any,
+  participants: any[],
+  webinarDbId: string
+): Promise<void> {
+  console.log(`Syncing ${participants.length} participants for webinar ${webinarDbId}`);
+  
+  try {
+    const transformedParticipants = participants.map(participant => 
+      transformParticipantForDatabase(participant, webinarDbId)
+    );
+
+    const { error } = await supabase
+      .from('zoom_participants')
+      .upsert(
+        transformedParticipants,
+        {
+          onConflict: 'webinar_id,participant_id',
+          ignoreDuplicates: false
+        }
+      );
+
+    if (error) {
+      console.error('Failed to upsert participants:', error);
+      throw new Error(`Failed to upsert participants: ${error.message}`);
+    }
+
+    console.log(`Successfully synced ${participants.length} participants`);
+    
+  } catch (error) {
+    console.error(`Error syncing participants:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Transform Zoom API webinar to database format - enhanced version
+ */
+function transformEnhancedWebinarForDatabase(apiWebinar: any, connectionId: string): any {
   const settings = apiWebinar.settings || {};
   
-  // Normalize status value to ensure it matches our constraint
-  let normalizedStatus = 'available'; // default fallback
+  // Normalize status value
+  let normalizedStatus = 'available';
   if (apiWebinar.status) {
     const statusMap: { [key: string]: string } = {
       'available': 'available',
@@ -303,8 +264,6 @@ function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any
     };
     normalizedStatus = statusMap[apiWebinar.status.toLowerCase()] || 'available';
   }
-  
-  console.log(`Status mapping for webinar ${apiWebinar.id}: ${apiWebinar.status} -> ${normalizedStatus}`);
   
   return {
     connection_id: connectionId,
@@ -329,13 +288,16 @@ function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any
     max_registrants: settings.registrants_restrict_number || null,
     max_attendees: null,
     occurrence_id: apiWebinar.occurrences?.[0]?.occurrence_id || apiWebinar.occurrence_id || null,
-    total_registrants: null, // Will be calculated later
-    total_attendees: null, // Will be calculated later
-    total_minutes: null, // Will be calculated later
-    avg_attendance_duration: null, // Will be calculated later
+    
+    // Initialize metrics - will be calculated later
+    total_registrants: null,
+    total_attendees: null,
+    total_minutes: null,
+    avg_attendance_duration: null,
+    
     synced_at: new Date().toISOString(),
     
-    // Enhanced field mapping for missing data
+    // Enhanced field mapping
     password: apiWebinar.password || null,
     h323_password: apiWebinar.h323_password || apiWebinar.h323_passcode || null,
     pstn_password: apiWebinar.pstn_password || null,
@@ -344,8 +306,6 @@ function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any
     tracking_fields: apiWebinar.tracking_fields || null,
     recurrence: apiWebinar.recurrence || null,
     occurrences: apiWebinar.occurrences || null,
-    
-    // New fields from Zoom API schema
     start_url: apiWebinar.start_url || null,
     encrypted_passcode: apiWebinar.encrypted_passcode || apiWebinar.encrypted_password || null,
     creation_source: apiWebinar.creation_source || null,
@@ -359,18 +319,21 @@ function transformWebinarForDatabase(apiWebinar: any, connectionId: string): any
 }
 
 /**
- * Transform Zoom API registrant to database format with new fields support
+ * Transform Zoom API registrant to database format
  */
 function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string): any {
-  console.log(`Transforming registrant:`, {
-    id: apiRegistrant.id,
-    email: apiRegistrant.email,
-    firstName: apiRegistrant.first_name,
-    lastName: apiRegistrant.last_name,
-    hasJoinUrl: !!apiRegistrant.join_url,
-    hasCreateTime: !!apiRegistrant.create_time
-  });
-  
+  // Normalize status
+  let normalizedStatus = 'approved';
+  if (apiRegistrant.status) {
+    const statusMap: { [key: string]: string } = {
+      'approved': 'approved',
+      'pending': 'pending',
+      'denied': 'denied',
+      'cancelled': 'cancelled'
+    };
+    normalizedStatus = statusMap[apiRegistrant.status.toLowerCase()] || 'approved';
+  }
+
   return {
     webinar_id: webinarDbId,
     registrant_id: apiRegistrant.id || apiRegistrant.registrant_id,
@@ -383,26 +346,58 @@ function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string)
     zip: apiRegistrant.zip || null,
     country: apiRegistrant.country || null,
     phone: apiRegistrant.phone || null,
-    comments: apiRegistrant.comments || null,
-    custom_questions: apiRegistrant.custom_questions ? JSON.stringify(apiRegistrant.custom_questions) : null,
-    registration_time: apiRegistrant.registration_time,
-    source_id: apiRegistrant.source_id || null,
-    tracking_source: apiRegistrant.tracking_source || null,
-    status: apiRegistrant.status || 'approved',
-    join_time: apiRegistrant.join_time || null,
-    leave_time: apiRegistrant.leave_time || null,
-    duration: apiRegistrant.duration || null,
-    attended: !!apiRegistrant.join_time,
+    industry: apiRegistrant.industry || null,
+    org: apiRegistrant.org || null,
     job_title: apiRegistrant.job_title || null,
     purchasing_time_frame: apiRegistrant.purchasing_time_frame || null,
     role_in_purchase_process: apiRegistrant.role_in_purchase_process || null,
     no_of_employees: apiRegistrant.no_of_employees || null,
-    industry: apiRegistrant.industry || null,
-    org: apiRegistrant.org || null,
-    language: apiRegistrant.language || null,
-    // New fields from API alignment
+    comments: apiRegistrant.comments || null,
+    custom_questions: apiRegistrant.custom_questions || null,
+    registration_time: apiRegistrant.registration_time || new Date().toISOString(),
+    source_id: apiRegistrant.source_id || null,
+    tracking_source: apiRegistrant.tracking_source || null,
+    status: normalizedStatus,
     join_url: apiRegistrant.join_url || null,
-    create_time: apiRegistrant.create_time || apiRegistrant.registration_time || null,
+    create_time: apiRegistrant.create_time || null,
+    language: apiRegistrant.language || null,
+    join_time: null, // Will be updated from participant data if available
+    leave_time: null,
+    duration: null,
+    attended: false, // Will be updated from participant data if available
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
+/**
+ * Transform Zoom API participant to database format
+ */
+function transformParticipantForDatabase(apiParticipant: any, webinarDbId: string): any {
+  return {
+    webinar_id: webinarDbId,
+    participant_id: apiParticipant.id || apiParticipant.participant_id,
+    registrant_id: apiParticipant.registrant_id || null,
+    participant_name: apiParticipant.name || apiParticipant.participant_name,
+    participant_email: apiParticipant.user_email || apiParticipant.participant_email || null,
+    participant_user_id: apiParticipant.user_id || null,
+    join_time: apiParticipant.join_time || null,
+    leave_time: apiParticipant.leave_time || null,
+    duration: apiParticipant.duration || null,
+    attentiveness_score: apiParticipant.attentiveness_score || null,
+    camera_on_duration: apiParticipant.camera_on_duration || null,
+    share_application_duration: apiParticipant.share_application_duration || null,
+    share_desktop_duration: apiParticipant.share_desktop_duration || null,
+    posted_chat: apiParticipant.posted_chat || false,
+    raised_hand: apiParticipant.raised_hand || false,
+    answered_polling: apiParticipant.answered_polling || false,
+    asked_question: apiParticipant.asked_question || false,
+    device: apiParticipant.device || null,
+    ip_address: apiParticipant.ip_address || null,
+    location: apiParticipant.location || null,
+    network_type: apiParticipant.network_type || null,
+    version: apiParticipant.version || null,
+    customer_key: apiParticipant.customer_key || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
