@@ -33,12 +33,33 @@ export class ParticipantTransformers {
       answered_polling: apiParticipant.answered_polling || false,
       asked_question: apiParticipant.asked_question || false,
       device: details.device || null,
-      ip_address: details.ip_address || null,
+      ip_address: this.safeStringConversion(details.ip_address),
       location: details.location || null,
       network_type: details.network_type || null,
       version: details.version || null,
       customer_key: apiParticipant.customer_key || null,
     };
+  }
+
+  /**
+   * Safely convert unknown values to string | null
+   */
+  private static safeStringConversion(value: unknown): string | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    // For objects or other complex types, try JSON stringification
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return null;
+    }
   }
 
   /**

@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomDataTransformers } from '../../utils/dataTransformers';
+import { ParticipantTransformers } from '../../utils/transformers/participantTransformers';
 
 /**
  * Database operations for webinar participants
@@ -13,7 +13,7 @@ export class ParticipantOperations {
     if (!participants || participants.length === 0) return;
 
     const transformedParticipants = participants.map(participant => {
-      const transformed = ZoomDataTransformers.transformParticipant(participant, webinarDbId);
+      const transformed = ParticipantTransformers.transformParticipant(participant, webinarDbId);
       return {
         ...transformed,
         updated_at: new Date().toISOString()

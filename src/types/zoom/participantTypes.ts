@@ -24,7 +24,7 @@ export interface ZoomParticipant {
   answered_polling: boolean | null;
   asked_question: boolean | null;
   device: string | null;
-  ip_address: unknown | null;
+  ip_address: string | null; // Changed from unknown to string
   location: string | null;
   network_type: string | null;
   version: string | null;
