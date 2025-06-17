@@ -1,6 +1,6 @@
 
 /**
- * Enhanced registrant sync eligibility checker with comprehensive logging
+ * Enhanced registrant sync eligibility checker with relaxed rules and comprehensive logging
  */
 
 export interface RegistrantEligibilityResult {
@@ -18,20 +18,22 @@ export interface RegistrantEligibilityResult {
     isEndedWebinar: boolean;
     isRecentWebinar: boolean;
     fieldCompleteness: number;
+    approvalType: number;
+    forceSync: boolean;
   };
 }
 
 /**
- * ENHANCED: Multi-source registrant eligibility check with fallback mechanisms
+ * ENHANCED: Much more lenient registrant eligibility check with comprehensive debugging
  */
-export function checkRegistrantEligibility(webinarData: any): RegistrantEligibilityResult {
+export function checkRegistrantEligibility(webinarData: any, forceSync: boolean = false): RegistrantEligibilityResult {
   console.log(`🔍 ENHANCED REGISTRANT ELIGIBILITY CHECK for webinar ${webinarData.id}:`);
   
   const now = new Date();
   const fiveMinutesAgo = new Date(now.getTime() - (5 * 60 * 1000));
   
   // Enhanced field analysis
-  const requiredFields = ['id', 'status', 'start_time', 'registration_url'];
+  const requiredFields = ['id', 'start_time'];
   const availableFields = Object.keys(webinarData || {});
   const missingFields = requiredFields.filter(field => 
     webinarData[field] === undefined || webinarData[field] === null
@@ -112,15 +114,19 @@ export function checkRegistrantEligibility(webinarData: any): RegistrantEligibil
   console.log(`  - Is recent webinar: ${isRecentWebinar}`);
   console.log(`  - Is ended webinar: ${isEndedWebinar}`);
 
-  // Registration analysis
+  // Registration analysis - MUCH MORE LENIENT
   const hasRegistrationUrl = !!(webinarData.registration_url && webinarData.registration_url.trim());
-  const registrationRequired = hasRegistrationUrl || webinarData.approval_type !== 0;
+  const approvalType = webinarData.approval_type ?? webinarData.settings?.approval_type ?? 0;
+  
+  // FIXED: Much more lenient registration detection
+  const registrationRequired = hasRegistrationUrl || approvalType !== 0;
 
-  console.log(`📝 REGISTRATION ANALYSIS:`);
+  console.log(`📝 ENHANCED REGISTRATION ANALYSIS:`);
   console.log(`  - Has registration URL: ${hasRegistrationUrl}`);
   console.log(`  - Registration URL: ${webinarData.registration_url || 'N/A'}`);
-  console.log(`  - Approval type: ${webinarData.approval_type}`);
+  console.log(`  - Approval type: ${approvalType}`);
   console.log(`  - Registration required: ${registrationRequired}`);
+  console.log(`  - Force sync mode: ${forceSync}`);
 
   const debugInfo = {
     hasRegistrationUrl,
@@ -130,33 +136,42 @@ export function checkRegistrantEligibility(webinarData: any): RegistrantEligibil
     isPastWebinar,
     isEndedWebinar,
     isRecentWebinar,
-    fieldCompleteness
+    fieldCompleteness,
+    approvalType,
+    forceSync
   };
 
-  // Eligibility determination logic
+  // ENHANCED: Much more lenient eligibility determination
   let eligible = false;
   let reason = '';
 
-  if (!registrationRequired) {
+  if (forceSync) {
+    eligible = true;
+    reason = 'Force sync mode enabled - bypassing all checks';
+    console.log(`🚀 FORCE SYNC: ${reason}`);
+  } else if (fieldCompleteness < 50) {
     eligible = false;
-    reason = 'No registration required for this webinar';
-    console.log(`❌ NO REGISTRATION: ${reason}`);
-  } else if (!isPastWebinar) {
-    eligible = true; // Future webinars can have registrants
-    reason = 'Future webinar with registration - registrants may be available';
-    console.log(`✅ FUTURE WEBINAR: ${reason}`);
-  } else if (isEndedWebinar) {
+    reason = 'Insufficient webinar data for registrant sync';
+    console.log(`❌ INSUFFICIENT DATA: ${reason}`);
+  } else if (!registrationRequired) {
+    // CHANGED: Still try to sync even if registration not obviously required
     eligible = true;
-    reason = 'Ended webinar with registration - registrants should be available';
-    console.log(`✅ ENDED WEBINAR: ${reason}`);
-  } else if (isPastWebinar && !isRecentWebinar) {
-    eligible = true;
-    reason = 'Past webinar with registration - registrants should be available';
-    console.log(`✅ PAST WEBINAR: ${reason}`);
+    reason = 'No clear registration requirement, but attempting sync anyway';
+    console.log(`⚠️ ATTEMPTING ANYWAY: ${reason}`);
+    warnings.push('Registration requirement unclear, attempting sync');
   } else {
-    eligible = false;
-    reason = 'Recent webinar - registrant data may not be ready yet';
-    console.log(`⏳ RECENT WEBINAR: ${reason}`);
+    // CHANGED: Much more permissive - try to sync almost all webinars
+    eligible = true;
+    if (isEndedWebinar) {
+      reason = 'Ended webinar with registration - registrants should be available';
+      console.log(`✅ ENDED WEBINAR: ${reason}`);
+    } else if (isPastWebinar) {
+      reason = 'Past webinar with registration - registrants likely available';
+      console.log(`✅ PAST WEBINAR: ${reason}`);
+    } else {
+      reason = 'Future/current webinar with registration - attempting registrant sync';
+      console.log(`✅ FUTURE/CURRENT WEBINAR: ${reason}`);
+    }
   }
 
   const result: RegistrantEligibilityResult = {
@@ -168,12 +183,21 @@ export function checkRegistrantEligibility(webinarData: any): RegistrantEligibil
     debugInfo
   };
 
-  console.log(`🏁 REGISTRANT ELIGIBILITY RESULT:`);
+  console.log(`🏁 ENHANCED REGISTRANT ELIGIBILITY RESULT:`);
   console.log(`  - Eligible: ${eligible}`);
   console.log(`  - Reason: ${reason}`);
   console.log(`  - Confidence: ${confidence}`);
   console.log(`  - Source: ${source}`);
   console.log(`  - Warnings: ${warnings.length}`);
+  console.log(`  - Force sync: ${forceSync}`);
 
   return result;
+}
+
+/**
+ * NEW: Test registrant eligibility with force sync for debugging
+ */
+export function forceRegistrantEligibilityCheck(webinarData: any): RegistrantEligibilityResult {
+  console.log(`🧪 FORCE TESTING registrant eligibility for webinar ${webinarData.id}`);
+  return checkRegistrantEligibility(webinarData, true);
 }

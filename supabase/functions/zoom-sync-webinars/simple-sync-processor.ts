@@ -1,4 +1,3 @@
-
 import { updateSyncLog, updateSyncStage, updateWebinarParticipantSyncStatus, determineParticipantSyncStatus } from './database-operations.ts';
 import { SyncOperation } from './types.ts';
 import { syncWebinarParticipants } from './processors/participant-processor.ts';
@@ -31,7 +30,7 @@ import {
 
 // NEW: Import registrant sync functionality
 import { syncWebinarRegistrants } from './processors/registrant-processor.ts';
-import { checkRegistrantEligibility } from './processors/registrant-eligibility.ts';
+import { checkRegistrantEligibility, forceRegistrantEligibilityCheck } from './processors/registrant-eligibility.ts';
 
 export async function processSimpleWebinarSync(
   supabase: any,
@@ -40,7 +39,11 @@ export async function processSimpleWebinarSync(
   syncLogId: string
 ): Promise<void> {
   const debugMode = syncOperation.options?.debug || false;
-  console.log(`Starting enhanced simple webinar sync with registrant support for connection: ${connection.id}${debugMode ? ' (DEBUG MODE)' : ''}`);
+  const testMode = syncOperation.options?.testMode || false;
+  
+  console.log(`Starting enhanced simple webinar sync with ENHANCED registrant support for connection: ${connection.id}`);
+  console.log(`  - Debug mode: ${debugMode}`);
+  console.log(`  - Test mode: ${testMode}`);
 
   // Initialize enhanced tracking with registrant metrics
   let processedCount = 0;
@@ -120,10 +123,10 @@ export async function processSimpleWebinarSync(
     
     const totalWebinars = webinars.length;
     
-    // Process each webinar with enhanced validation and registrant sync
+    // Process each webinar with enhanced validation and ENHANCED registrant sync
     for (const webinar of webinars) {
       try {
-        const baseProgress = 20 + Math.round(((processedCount) / totalWebinars) * 50); // Reduced to make room for registrant sync
+        const baseProgress = 20 + Math.round(((processedCount) / totalWebinars) * 45); // Adjusted for registrant sync
         
         await updateSyncStage(
           supabase, 
@@ -133,7 +136,7 @@ export async function processSimpleWebinarSync(
           baseProgress
         );
         
-        console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars}) with enhanced validation and registrant sync`);
+        console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars}) with enhanced validation and ENHANCED registrant sync`);
         
         // ENHANCED DEBUG: Log original webinar data from list
         console.log(`📊 ORIGINAL LIST DATA for webinar ${webinar.id}:`);
@@ -259,7 +262,7 @@ export async function processSimpleWebinarSync(
           // Continue with next webinar even if participant sync fails
         }
 
-        // NEW: Sync registrants with eligibility check and enhanced validation
+        // NEW: ENHANCED Sync registrants with comprehensive error handling and debugging
         let registrantResult = { skipped: true, reason: 'Not attempted', count: 0 };
         try {
           await updateSyncStage(
@@ -270,20 +273,36 @@ export async function processSimpleWebinarSync(
             baseProgress + 15
           );
           
-          console.log(`🎯 REGISTRANT SYNC: Starting registrant sync for webinar ${webinar.id}`);
+          console.log(`🎯 ENHANCED REGISTRANT SYNC: Starting registrant sync for webinar ${webinar.id}`);
           
-          // Check registrant eligibility
-          const registrantEligibility = checkRegistrantEligibility(webinarDataForParticipants);
+          // NEW: Enhanced registrant eligibility check
+          const { checkRegistrantEligibility, forceRegistrantEligibilityCheck } = await import('./processors/registrant-eligibility.ts');
           
-          if (registrantEligibility.eligible) {
+          // Use force mode for testing or if specifically requested
+          const useForceMode = testMode || syncOperation.options?.forceRegistrantSync;
+          const registrantEligibility = useForceMode 
+            ? forceRegistrantEligibilityCheck(webinarDataForParticipants)
+            : checkRegistrantEligibility(webinarDataForParticipants);
+          
+          console.log(`📋 REGISTRANT ELIGIBILITY RESULT:`);
+          console.log(`  - Eligible: ${registrantEligibility.eligible}`);
+          console.log(`  - Reason: ${registrantEligibility.reason}`);
+          console.log(`  - Confidence: ${registrantEligibility.confidence}`);
+          console.log(`  - Warnings: ${registrantEligibility.warnings.length}`);
+          console.log(`  - Force mode: ${useForceMode}`);
+          
+          if (registrantEligibility.eligible || useForceMode) {
             console.log(`✅ REGISTRANT ELIGIBLE: ${registrantEligibility.reason}`);
             
             try {
+              const { syncWebinarRegistrants } = await import('./processors/registrant-processor.ts');
+              
               const registrantCount = await syncWebinarRegistrants(
                 supabase,
                 client,
                 webinar.id,
-                webinarDbId
+                webinarDbId,
+                testMode
               );
               
               registrantResult = { 
@@ -295,7 +314,7 @@ export async function processSimpleWebinarSync(
               processedForRegistrants++;
               totalRegistrantsSynced += registrantCount;
               
-              console.log(`✅ REGISTRANT SYNC SUCCESS: ${registrantCount} registrants synced for webinar ${webinar.id}`);
+              console.log(`✅ ENHANCED REGISTRANT SYNC SUCCESS: ${registrantCount} registrants synced for webinar ${webinar.id}`);
               
               // Update validation summary
               if (registrantCount > 0) {
@@ -305,18 +324,38 @@ export async function processSimpleWebinarSync(
               }
               
             } catch (registrantSyncError) {
-              console.error(`❌ REGISTRANT SYNC ERROR for webinar ${webinar.id}:`, registrantSyncError);
-              registrantResult = { 
-                skipped: true, 
-                reason: `Registrant sync error: ${registrantSyncError.message}`, 
-                count: 0 
-              };
+              console.error(`❌ ENHANCED REGISTRANT SYNC ERROR for webinar ${webinar.id}:`, registrantSyncError);
+              
+              const errorMessage = registrantSyncError.message || 'Unknown error';
+              
+              // Enhanced error categorization
+              if (errorMessage.toLowerCase().includes('scope')) {
+                console.error(`🚨 ZOOM SCOPE ISSUE: Please add 'webinar:read:admin' scope to your Zoom app`);
+                registrantResult = { 
+                  skipped: true, 
+                  reason: `Zoom scope error: Missing 'webinar:read:admin' scope`, 
+                  count: 0 
+                };
+              } else if (errorMessage.toLowerCase().includes('permission')) {
+                console.error(`🚨 ZOOM PERMISSION ISSUE: Insufficient permissions for registrant data`);
+                registrantResult = { 
+                  skipped: true, 
+                  reason: `Permission error: ${errorMessage}`, 
+                  count: 0 
+                };
+              } else {
+                registrantResult = { 
+                  skipped: true, 
+                  reason: `Registrant sync error: ${errorMessage}`, 
+                  count: 0 
+                };
+              }
               
               validationSummary.failedRegistrantSyncs.push(webinar.id?.toString());
               validationSummary.validationErrors.push({
                 webinarId: webinar.id?.toString() || 'unknown',
                 type: 'registrant_sync_failed',
-                message: `Registrant sync failed: ${registrantSyncError.message}`,
+                message: `Enhanced registrant sync failed: ${errorMessage}`,
                 severity: 'error'
               });
             }
@@ -330,14 +369,14 @@ export async function processSimpleWebinarSync(
             };
             skippedForRegistrants++;
             
-            // Add to zero registrants list if registration was expected
+            // Only add to zero registrants list if registration was clearly expected
             if (registrantEligibility.debugInfo.registrationRequired) {
               validationSummary.webinarsWithZeroRegistrants.push(webinar.id?.toString());
             }
           }
           
         } catch (registrantError) {
-          console.error(`Error in registrant sync process for webinar ${webinar.id}:`, registrantError);
+          console.error(`💥 ERROR in enhanced registrant sync process for webinar ${webinar.id}:`, registrantError);
           registrantResult = { 
             skipped: true, 
             reason: `Registrant process error: ${registrantError.message}`, 
@@ -345,6 +384,12 @@ export async function processSimpleWebinarSync(
           };
           skippedForRegistrants++;
         }
+
+        // Log detailed registrant sync results
+        console.log(`📊 ENHANCED REGISTRANT SYNC SUMMARY for webinar ${webinar.id}:`);
+        console.log(`  - Skipped: ${registrantResult.skipped}`);
+        console.log(`  - Reason: ${registrantResult.reason}`);
+        console.log(`  - Count: ${registrantResult.count}`);
 
         // ENHANCED VALIDATION: Validate webinar data after sync (including registrant data)
         validateWebinarData(webinarDataForParticipants, participantResult, validationSummary);
