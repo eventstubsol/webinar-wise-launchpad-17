@@ -320,24 +320,17 @@ class ZoomAPIClient {
     return response.webinars || [];
   }
 
-  async getWebinarRegistrants(webinarId: string): Promise<any[]> {
-    try {
-      const response = await this.makeRequest(`/webinars/${webinarId}/registrants?page_size=300`);
-      return response.registrants || [];
-    } catch (error) {
-      console.log(`No registrants for webinar ${webinarId}:`, error.message);
-      return [];
-    }
-  }
-
-  async getWebinarParticipants(webinarId: string, debugMode = false): Promise<any[]> {
+  async getWebinarRegistrants(webinarId: string, debugMode = false): Promise<any[]> {
     const startTime = Date.now();
-    const endpoint = `/report/webinars/${webinarId}/participants?page_size=300`;
+    const endpoint = `/webinars/${webinarId}/registrants?page_size=300`;
+    
+    console.log(`ENHANCED: Starting registrants fetch for webinar ${webinarId}`);
+    console.log(`ENHANCED: Connection ID: ${this.connection.id}`);
+    console.log(`ENHANCED: Using token type: ${this.isOAuth ? 'OAuth' : 'Server-to-Server'}`);
     
     if (debugMode) {
-      console.log(`DEBUG: Starting participants fetch for webinar ${webinarId}`);
       console.log(`DEBUG: Endpoint: ${endpoint}`);
-      console.log(`DEBUG: Using token type: ${this.isOAuth ? 'OAuth' : 'Server-to-Server'}`);
+      console.log(`DEBUG: Token length: ${this.accessToken?.length || 0}`);
     }
     
     try {
@@ -351,7 +344,199 @@ class ZoomAPIClient {
 
       if (debugMode) {
         console.log(`DEBUG: Making request to: ${url}`);
-        console.log(`DEBUG: Request headers prepared (token length: ${sanitizedToken.length})`);
+        console.log(`DEBUG: Request headers prepared`);
+      }
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: requestHeaders,
+      });
+
+      const responseTime = Date.now() - startTime;
+      
+      // Enhanced logging: Log full response details
+      console.log(`ENHANCED: Registrants API Response Details for ${webinarId}:`);
+      console.log(`  Status: ${response.status} ${response.statusText}`);
+      console.log(`  Response time: ${responseTime}ms`);
+      console.log(`  Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`);
+      
+      if (debugMode) {
+        console.log(`DEBUG: Response received in ${responseTime}ms`);
+        console.log(`DEBUG: Response status: ${response.status}`);
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        
+        // Enhanced error logging: Complete error object details
+        const errorDetails = {
+          status: response.status,
+          statusText: response.statusText,
+          url: url,
+          headers: Object.fromEntries(response.headers.entries()),
+          responseText: errorText,
+          webinarId: webinarId,
+          connectionId: this.connection.id,
+          requestTime: responseTime,
+          timestamp: new Date().toISOString()
+        };
+
+        console.error(`ENHANCED: Complete registrants API error details:`, errorDetails);
+        
+        let errorBody;
+        try {
+          errorBody = JSON.parse(errorText);
+        } catch {
+          errorBody = { message: errorText };
+        }
+
+        // Enhanced error classification
+        let errorType = 'unknown';
+        let isRetryable = false;
+        
+        if (response.status === 400 && errorBody.code === 4711) {
+          errorType = 'scope_permission_error';
+          isRetryable = false;
+          console.error(`ENHANCED: SCOPE PERMISSION ERROR - Missing required scope for registrants`);
+        } else if (response.status === 404) {
+          errorType = 'webinar_not_found_or_no_registrants';
+          isRetryable = false;
+          console.log(`ENHANCED: Webinar ${webinarId} not found or no registrant data available (this may be normal)`);
+        } else if (response.status === 401) {
+          errorType = 'authentication_error';
+          isRetryable = true;
+          console.error(`ENHANCED: Authentication error for registrants API`);
+        } else if (response.status === 429) {
+          errorType = 'rate_limit_error';
+          isRetryable = true;
+          console.error(`ENHANCED: Rate limit exceeded for registrants API`);
+        } else if (response.status >= 500) {
+          errorType = 'server_error';
+          isRetryable = true;
+          console.error(`ENHANCED: Server error for registrants API`);
+        }
+
+        const enhancedError = new Error(`Registrants API failed: ${response.status} ${response.statusText}`);
+        (enhancedError as any).type = errorType;
+        (enhancedError as any).isRetryable = isRetryable;
+        (enhancedError as any).details = errorDetails;
+        (enhancedError as any).body = errorBody;
+        (enhancedError as any).status = response.status;
+
+        console.log(`ENHANCED: Registrants error classified as: ${errorType} (retryable: ${isRetryable})`);
+        
+        // Log specific error context
+        if (errorType === 'scope_permission_error') {
+          console.log(`No registrants for webinar ${webinarId}: SCOPE PERMISSION ERROR - webinar:read:admin scope required`);
+        } else if (errorType === 'webinar_not_found_or_no_registrants') {
+          console.log(`No registrants for webinar ${webinarId}: WEBINAR NOT FOUND or NO REGISTRANT DATA (this is normal for webinars without registration)`);
+        } else {
+          console.log(`No registrants for webinar ${webinarId}: ${enhancedError.message}`);
+        }
+        
+        return [];
+      }
+
+      const responseText = await response.text();
+      
+      if (debugMode) {
+        console.log(`DEBUG: Response body length: ${responseText.length} characters`);
+      }
+
+      let result;
+      try {
+        result = responseText ? JSON.parse(responseText) : {};
+      } catch (parseError) {
+        console.error(`ENHANCED: Failed to parse registrants response for ${webinarId}:`, parseError);
+        console.error(`ENHANCED: Raw response text:`, responseText.substring(0, 1000) + '...');
+        return [];
+      }
+
+      // Enhanced response validation
+      const registrants = result.registrants || [];
+      
+      // Log response structure details
+      console.log(`ENHANCED: Registrants API Success for ${webinarId}:`);
+      console.log(`  Registrants found: ${registrants.length}`);
+      console.log(`  Response structure keys: [${Object.keys(result).join(', ')}]`);
+      console.log(`  Total records indicated: ${result.total_records || 'not specified'}`);
+      console.log(`  Page info: ${result.page_count || 'N/A'} pages, current: ${result.page_number || 'N/A'}`);
+      
+      // Validate response structure
+      if (!Array.isArray(registrants)) {
+        console.error(`ENHANCED: Invalid registrants response structure - expected array, got: ${typeof registrants}`);
+        return [];
+      }
+      
+      if (debugMode && registrants.length > 0) {
+        console.log(`DEBUG: First registrant structure:`, Object.keys(registrants[0]));
+        console.log(`DEBUG: Sample registrant data:`, JSON.stringify(registrants[0], null, 2));
+      }
+
+      return registrants;
+      
+    } catch (error) {
+      const totalTime = Date.now() - startTime;
+      
+      // Enhanced error logging for caught exceptions
+      console.error(`ENHANCED: Exception in getWebinarRegistrants for ${webinarId}:`);
+      console.error(`  Connection ID: ${this.connection.id}`);
+      console.error(`  Error type: ${error.constructor.name}`);
+      console.error(`  Error message: ${error.message}`);
+      console.error(`  Total time: ${totalTime}ms`);
+      console.error(`  Full error object:`, {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        type: error.type,
+        isRetryable: error.isRetryable,
+        status: error.status,
+        details: error.details
+      });
+      
+      if (debugMode) {
+        console.log(`DEBUG: Caught exception after ${totalTime}ms`);
+        console.log(`DEBUG: Error properties:`, Object.getOwnPropertyNames(error));
+      }
+
+      // Log classification for empty results vs real errors
+      if (error.type === 'scope_permission_error') {
+        console.log(`No registrants for webinar ${webinarId}: SCOPE PERMISSION ERROR - webinar:read:admin scope required`);
+      } else if (error.type === 'webinar_not_found_or_no_registrants') {
+        console.log(`No registrants for webinar ${webinarId}: WEBINAR NOT FOUND or NO REGISTRANT DATA (normal for non-registration webinars)`);
+      } else {
+        console.log(`No registrants for webinar ${webinarId}: ${error.message}`);
+      }
+      
+      return [];
+    }
+  }
+
+  async getWebinarParticipants(webinarId: string, debugMode = false): Promise<any[]> {
+    const startTime = Date.now();
+    const endpoint = `/report/webinars/${webinarId}/participants?page_size=300`;
+    
+    console.log(`ENHANCED: Starting participants fetch for webinar ${webinarId}`);
+    console.log(`ENHANCED: Connection ID: ${this.connection.id}`);
+    console.log(`ENHANCED: Using token type: ${this.isOAuth ? 'OAuth' : 'Server-to-Server'}`);
+    
+    if (debugMode) {
+      console.log(`DEBUG: Endpoint: ${endpoint}`);
+      console.log(`DEBUG: Token length: ${this.accessToken?.length || 0}`);
+    }
+    
+    try {
+      const url = `${this.baseURL}${endpoint}`;
+      const sanitizedToken = this.validateAndSanitizeToken(this.accessToken);
+      
+      const requestHeaders = {
+        'Authorization': `Bearer ${sanitizedToken}`,
+        'Content-Type': 'application/json',
+      };
+
+      if (debugMode) {
+        console.log(`DEBUG: Making request to: ${url}`);
+        console.log(`DEBUG: Request headers prepared`);
       }
 
       const response = await fetch(url, {
@@ -365,6 +550,7 @@ class ZoomAPIClient {
       console.log(`ENHANCED: Participants API Response Details for ${webinarId}:`);
       console.log(`  Status: ${response.status} ${response.statusText}`);
       console.log(`  Response time: ${responseTime}ms`);
+      console.log(`  Connection ID: ${this.connection.id}`);
       console.log(`  Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`);
       
       if (debugMode) {
@@ -384,6 +570,7 @@ class ZoomAPIClient {
           headers: Object.fromEntries(response.headers.entries()),
           responseText: errorText,
           webinarId: webinarId,
+          connectionId: this.connection.id,
           requestTime: responseTime,
           timestamp: new Date().toISOString()
         };
@@ -449,12 +636,20 @@ class ZoomAPIClient {
 
       const participants = result.participants || [];
       
-      // Enhanced success logging
+      // Enhanced success logging with response validation
       console.log(`ENHANCED: Participants API Success for ${webinarId}:`);
+      console.log(`  Connection ID: ${this.connection.id}`);
       console.log(`  Participants found: ${participants.length}`);
       console.log(`  Response structure keys: [${Object.keys(result).join(', ')}]`);
       console.log(`  Total records indicated: ${result.total_records || 'not specified'}`);
       console.log(`  Page info: ${result.page_count || 'N/A'} pages, current: ${result.page_number || 'N/A'}`);
+      console.log(`  Response time: ${responseTime}ms`);
+      
+      // Validate response structure
+      if (!Array.isArray(participants)) {
+        console.error(`ENHANCED: Invalid participants response structure - expected array, got: ${typeof participants}`);
+        return [];
+      }
       
       if (debugMode && participants.length > 0) {
         console.log(`DEBUG: First participant structure:`, Object.keys(participants[0]));
@@ -468,6 +663,7 @@ class ZoomAPIClient {
       
       // Enhanced error logging for caught exceptions
       console.error(`ENHANCED: Exception in getWebinarParticipants for ${webinarId}:`);
+      console.error(`  Connection ID: ${this.connection.id}`);
       console.error(`  Error type: ${error.constructor.name}`);
       console.error(`  Error message: ${error.message}`);
       console.error(`  Total time: ${totalTime}ms`);
