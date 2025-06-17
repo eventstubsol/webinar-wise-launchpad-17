@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
+import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
@@ -13,13 +13,13 @@ import Register from "./pages/Register";
 import Settings from "./pages/Settings";
 import ZoomTest from "./pages/ZoomTest";
 import ZoomDiagnostics from "./pages/ZoomDiagnostics";
-import WebinarAnalytics from "./pages/WebinarAnalytics";
-import ExportCenter from "./pages/ExportCenter";
+import Webinars from "./pages/Webinars";
+import Reports from "./pages/Reports";
 import SyncCenter from "./pages/SyncCenter";
-import EmailCampaigns from "./pages/EmailCampaigns";
-import CRMIntegration from "./pages/CRMIntegration";
-import CSVManager from "./pages/CSVManager";
-import AIAnalytics from "./pages/AIAnalytics";
+import Campaigns from "./pages/Campaigns";
+import CRMIntegrations from "./pages/CRMIntegrations";
+import CSVUpload from "./pages/CSVUpload";
+import AIInsights from "./pages/AIInsights";
 
 const queryClient = new QueryClient();
 
@@ -70,7 +70,7 @@ const App = () => (
               path="/analytics"
               element={
                 <ProtectedRoute>
-                  <WebinarAnalytics />
+                  <Webinars />
                 </ProtectedRoute>
               }
             />
@@ -78,7 +78,7 @@ const App = () => (
               path="/exports"
               element={
                 <ProtectedRoute>
-                  <ExportCenter />
+                  <Reports />
                 </ProtectedRoute>
               }
             />
@@ -94,7 +94,7 @@ const App = () => (
               path="/email-campaigns"
               element={
                 <ProtectedRoute>
-                  <EmailCampaigns />
+                  <Campaigns />
                 </ProtectedRoute>
               }
             />
@@ -102,7 +102,7 @@ const App = () => (
               path="/crm"
               element={
                 <ProtectedRoute>
-                  <CRMIntegration />
+                  <CRMIntegrations />
                 </ProtectedRoute>
               }
             />
@@ -110,7 +110,7 @@ const App = () => (
               path="/csv-manager"
               element={
                 <ProtectedRoute>
-                  <CSVManager />
+                  <CSVUpload />
                 </ProtectedRoute>
               }
             />
@@ -118,7 +118,7 @@ const App = () => (
               path="/ai-analytics"
               element={
                 <ProtectedRoute>
-                  <AIAnalytics />
+                  <AIInsights />
                 </ProtectedRoute>
               }
             />
