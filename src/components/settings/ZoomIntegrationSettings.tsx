@@ -11,6 +11,7 @@ import { ConnectionStatusAlert } from './zoom/ConnectionStatusAlert';
 import { SyncControls } from './zoom/SyncControls';
 import { DisconnectSection } from './zoom/DisconnectSection';
 import { WebhookConfiguration } from './zoom/WebhookConfiguration';
+import { DiagnosticsSection } from './zoom/DiagnosticsSection';
 import { useZoomCredentials } from '@/hooks/useZoomCredentials';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { ZoomConnectButton } from '@/components/zoom/ZoomConnectButton';
@@ -75,8 +76,9 @@ export const ZoomIntegrationSettings = () => {
       {/* Step 2: Connection and Configuration Tabs */}
       {hasCredentials && !showCredentialsForm && (
         <Tabs defaultValue="connection" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="connection">Connection & Sync</TabsTrigger>
+            <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
             <TabsTrigger value="webhooks">Real-time Updates</TabsTrigger>
           </TabsList>
 
@@ -108,6 +110,10 @@ export const ZoomIntegrationSettings = () => {
                 <DisconnectSection connection={connection} />
               </>
             )}
+          </TabsContent>
+
+          <TabsContent value="diagnostics">
+            <DiagnosticsSection />
           </TabsContent>
 
           <TabsContent value="webhooks">
