@@ -15,17 +15,21 @@ export const useSyncExecution = () => {
     try {
       console.log('🚀 Executing sync strategy:', strategy.syncType);
       
+      // FIXED: Map participants_only to manual for database compatibility
+      // The edge function logic will handle this as a participant-only sync based on webinarIds
+      const dbSyncType = strategy.syncType === 'participants_only' ? 'manual' : strategy.syncType;
+      
       // Prepare sync request based on strategy
       const syncRequest: any = {
         connectionId: connection.id,
-        syncType: strategy.syncType,
+        syncType: dbSyncType, // Use database-compliant sync type
         options: {
           forceSync: true,
           verboseLogging: true
         }
       };
 
-      // Add webinarIds only if we have them and it's a participants_only sync
+      // Add webinarIds for participants_only syncs (mapped to manual)
       if (strategy.syncType === 'participants_only' && strategy.webinarIds && strategy.webinarIds.length > 0) {
         syncRequest.webinarIds = strategy.webinarIds;
         
