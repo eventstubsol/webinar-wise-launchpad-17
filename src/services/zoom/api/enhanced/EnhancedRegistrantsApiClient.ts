@@ -1,9 +1,8 @@
-
 /**
  * Enhanced Zoom API client for 100% compliant webinar registrants endpoint
  */
 
-import { performanceMonitor } from '../utils/PerformanceMonitoringService';
+import { performanceMonitor } from '../../utils/PerformanceMonitoringService';
 
 export interface ZoomRegistrantsQueryParams {
   occurrence_id?: string;
