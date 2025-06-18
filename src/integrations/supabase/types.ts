@@ -5043,6 +5043,7 @@ export type Database = {
           purchasing_time_frame: string | null
           registrant_email: string
           registrant_id: string
+          registrant_uuid: string | null
           registration_time: string | null
           role_in_purchase_process: string | null
           source_id: string | null
@@ -5078,6 +5079,7 @@ export type Database = {
           purchasing_time_frame?: string | null
           registrant_email: string
           registrant_id: string
+          registrant_uuid?: string | null
           registration_time?: string | null
           role_in_purchase_process?: string | null
           source_id?: string | null
@@ -5113,6 +5115,7 @@ export type Database = {
           purchasing_time_frame?: string | null
           registrant_email?: string
           registrant_id?: string
+          registrant_uuid?: string | null
           registration_time?: string | null
           role_in_purchase_process?: string | null
           source_id?: string | null

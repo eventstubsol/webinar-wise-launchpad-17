@@ -1,3 +1,4 @@
+
 import { zoomApiClient } from './ZoomApiClient';
 import type { ApiResponse } from './types';
 
@@ -41,6 +42,50 @@ interface ZoomWebinarApiResponse {
     duration: number;
     status: string;
   }>;
+}
+
+/**
+ * Zoom API registrants response format with modern pagination
+ */
+interface ZoomRegistrantsResponse {
+  page_count?: number; // Legacy field, still present
+  page_number?: number; // Legacy field, still present  
+  page_size: number;
+  total_records: number;
+  next_page_token?: string; // Modern pagination token
+  registrants: ZoomRegistrantApiResponse[];
+}
+
+/**
+ * Zoom API registrant response format
+ */
+interface ZoomRegistrantApiResponse {
+  id: string;
+  uuid?: string; // The missing field we now support
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+  phone?: string;
+  industry?: string;
+  org?: string;
+  job_title?: string;
+  purchasing_time_frame?: string;
+  role_in_purchase_process?: string;
+  no_of_employees?: string;
+  comments?: string;
+  custom_questions?: any[];
+  registration_time?: string;
+  create_time?: string; // Alternative timestamp field
+  source_id?: string;
+  tracking_source?: string;
+  status: string;
+  join_url?: string;
+  language?: string;
 }
 
 /**
@@ -256,39 +301,129 @@ export class ZoomWebinarDataService {
     return null;
   }
 
+  /**
+   * ENHANCED: Get webinar registrants with modern next_page_token pagination
+   */
   static async getWebinarRegistrants(
     webinarId: string,
-    options: { pageSize?: number; status?: 'pending' | 'approved' | 'denied' } = {}
-  ) {
-    const { pageSize = 100, status = 'approved' } = options;
-    const allRegistrants = [];
-    let pageNumber = 1;
+    options: { 
+      pageSize?: number; 
+      status?: 'pending' | 'approved' | 'denied';
+      debugMode?: boolean;
+    } = {}
+  ): Promise<ZoomRegistrantApiResponse[]> {
+    const { pageSize = 300, status = 'approved', debugMode = false } = options;
+    const allRegistrants: ZoomRegistrantApiResponse[] = [];
+    let nextPageToken = '';
     let hasMore = true;
+    let pageCount = 0;
 
-    while (hasMore) {
-      const params = new URLSearchParams({
-        page_size: pageSize.toString(),
-        page_number: pageNumber.toString(),
-        status,
-      });
-
-      const response = await zoomApiClient.get(
-        `/webinars/${webinarId}/registrants?${params}`
-      );
-
-      if (!response.success || !response.data) {
-        console.error(`Failed to fetch registrants for webinar ${webinarId}:`, response.error);
-        break;
-      }
-
-      const { registrants, page_count, page_number: currentPage } = response.data;
-      allRegistrants.push(...registrants);
-
-      hasMore = currentPage < page_count;
-      pageNumber++;
+    if (debugMode) {
+      console.log(`🔄 ENHANCED REGISTRANTS FETCH: Starting for webinar ${webinarId}`);
+      console.log(`  - Page size: ${pageSize} (increased from 100 for efficiency)`);
+      console.log(`  - Status filter: ${status}`);
+      console.log(`  - Using modern next_page_token pagination`);
     }
 
-    return allRegistrants;
+    try {
+      while (hasMore) {
+        pageCount++;
+        const params = new URLSearchParams({
+          page_size: pageSize.toString(),
+          status,
+        });
+
+        // Use next_page_token for modern pagination (not page_number)
+        if (nextPageToken) {
+          params.append('next_page_token', nextPageToken);
+        }
+
+        const startTime = Date.now();
+        const response = await zoomApiClient.get<ZoomRegistrantsResponse>(
+          `/webinars/${webinarId}/registrants?${params}`
+        );
+        const responseTime = Date.now() - startTime;
+
+        if (debugMode) {
+          console.log(`📄 REGISTRANTS API PAGE ${pageCount}: Response time ${responseTime}ms`);
+        }
+
+        if (!response.success || !response.data) {
+          const errorMsg = `Failed to fetch registrants for webinar ${webinarId}: ${response.error}`;
+          console.error(`❌ ${errorMsg}`);
+          throw new Error(errorMsg);
+        }
+
+        const { registrants, next_page_token, total_records } = response.data;
+        
+        if (registrants && registrants.length > 0) {
+          // Process and enhance registrant data
+          const processedRegistrants = registrants.map((registrant, index) => {
+            const processed = this.processRegistrantData(registrant);
+            
+            if (debugMode && index === 0 && pageCount === 1) {
+              console.log(`📋 SAMPLE REGISTRANT DATA:`, {
+                id: processed.id,
+                uuid: processed.uuid,
+                email: processed.email,
+                registration_time: processed.registration_time,
+                create_time: processed.create_time,
+                status: processed.status,
+                availableFields: Object.keys(processed)
+              });
+            }
+            
+            return processed;
+          });
+
+          allRegistrants.push(...processedRegistrants);
+
+          if (debugMode) {
+            console.log(`📊 PAGE ${pageCount} PROCESSED: ${processedRegistrants.length} registrants`);
+            console.log(`📈 TOTAL SO FAR: ${allRegistrants.length} registrants`);
+          }
+        }
+
+        // Check for more pages using next_page_token (modern approach)
+        hasMore = !!next_page_token;
+        nextPageToken = next_page_token || '';
+
+        if (debugMode) {
+          console.log(`🔄 PAGINATION STATUS: hasMore=${hasMore}, nextToken=${nextPageToken ? 'present' : 'none'}`);
+        }
+      }
+
+      if (debugMode) {
+        console.log(`✅ REGISTRANTS FETCH COMPLETE: ${allRegistrants.length} total registrants in ${pageCount} pages`);
+      }
+
+      return allRegistrants;
+    } catch (error) {
+      console.error(`💥 REGISTRANTS FETCH ERROR for webinar ${webinarId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * NEW: Process and normalize registrant data for consistency
+   */
+  private static processRegistrantData(registrant: ZoomRegistrantApiResponse): ZoomRegistrantApiResponse {
+    // Normalize timestamp fields - prefer registration_time over create_time
+    const normalizedRegistrant = {
+      ...registrant,
+      registration_time: registrant.registration_time || registrant.create_time || new Date().toISOString(),
+      // Ensure uuid field is captured (was missing from DB schema)
+      uuid: registrant.uuid || null,
+    };
+
+    // Clean up empty string values to null for better database consistency
+    Object.keys(normalizedRegistrant).forEach(key => {
+      if (normalizedRegistrant[key as keyof ZoomRegistrantApiResponse] === '') {
+        (normalizedRegistrant as any)[key] = null;
+      }
+    });
+
+    return normalizedRegistrant;
   }
 
   /**
@@ -563,4 +698,4 @@ export class ZoomWebinarDataService {
 }
 
 // Export types for use in other services
-export type { ZoomWebinarApiResponse, ListWebinarsOptions, SyncProgress, ParticipantsComparisonResult };
+export type { ZoomWebinarApiResponse, ZoomRegistrantApiResponse, ListWebinarsOptions, SyncProgress, ParticipantsComparisonResult };

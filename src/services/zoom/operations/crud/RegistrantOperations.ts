@@ -3,28 +3,53 @@ import { supabase } from '@/integrations/supabase/client';
 import { WebinarTransformers } from '../../utils/transformers/webinarTransformers';
 
 /**
- * Database operations for webinar registrants
+ * ENHANCED: Database operations for webinar registrants with improved error handling
  */
 export class RegistrantOperations {
   /**
-   * Upsert registrants for a webinar
+   * ENHANCED: Upsert registrants for a webinar with modern field mapping
    */
   static async upsertRegistrants(registrants: any[], webinarDbId: string): Promise<void> {
     if (!registrants || registrants.length === 0) {
-      console.log('No registrants to upsert');
+      console.log('📭 No registrants to upsert');
       return;
     }
 
+    if (!webinarDbId) {
+      throw new Error('❌ Cannot upsert registrants without webinar DB ID');
+    }
+
     try {
-      const transformedRegistrants = registrants.map(registrant => {
-        const transformed = WebinarTransformers.transformRegistrant(registrant, webinarDbId);
-        return {
-          ...transformed,
-          custom_questions: transformed.custom_questions ? JSON.parse(JSON.stringify(transformed.custom_questions)) : null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
+      console.log(`🔄 ENHANCED REGISTRANT UPSERT: Processing ${registrants.length} registrants`);
+      
+      const transformedRegistrants = registrants.map((registrant, index) => {
+        try {
+          const transformed = WebinarTransformers.transformRegistrant(registrant, webinarDbId);
+          
+          // Enhanced logging for first registrant
+          if (index === 0) {
+            console.log(`📋 SAMPLE TRANSFORMED REGISTRANT:`, {
+              registrant_id: transformed.registrant_id,
+              registrant_uuid: transformed.registrant_uuid, // NEW FIELD
+              email: transformed.registrant_email,
+              registration_time: transformed.registration_time,
+              create_time: transformed.create_time,
+              status: transformed.status
+            });
+          }
+          
+          return {
+            ...transformed,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+        } catch (transformError) {
+          console.error(`❌ Failed to transform registrant at index ${index}:`, transformError);
+          throw new Error(`Failed to transform registrant ${index + 1}: ${transformError.message}`);
+        }
       });
+
+      console.log(`💾 ENHANCED DATABASE UPSERT: Inserting ${transformedRegistrants.length} transformed registrants`);
 
       const { error } = await supabase
         .from('zoom_registrants')
@@ -37,15 +62,37 @@ export class RegistrantOperations {
         );
 
       if (error) {
-        console.error('Failed to upsert registrants:', error);
+        console.error('❌ DATABASE UPSERT ERROR:', error);
         throw new Error(`Failed to upsert registrants: ${error.message}`);
       }
 
-      console.log(`Successfully upserted ${registrants.length} registrants`);
+      console.log(`✅ ENHANCED REGISTRANT UPSERT SUCCESS: ${registrants.length} registrants processed`);
+      
+      // Enhanced success logging
+      const stats = {
+        processed: registrants.length,
+        withUuid: transformedRegistrants.filter(r => r.registrant_uuid).length,
+        withCreateTime: transformedRegistrants.filter(r => r.create_time).length,
+        statusBreakdown: this.calculateStatusBreakdown(transformedRegistrants)
+      };
+      
+      console.log(`📊 REGISTRANT PROCESSING STATS:`, stats);
+      
     } catch (error) {
-      console.error('Error in upsertRegistrants:', error);
+      console.error(`💥 ENHANCED REGISTRANT UPSERT ERROR:`, error);
       throw error;
     }
+  }
+
+  /**
+   * NEW: Calculate status breakdown for enhanced logging
+   */
+  private static calculateStatusBreakdown(registrants: any[]): any {
+    return registrants.reduce((acc, registrant) => {
+      const status = registrant.status || 'unknown';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
   }
 
   /**
@@ -71,7 +118,7 @@ export class RegistrantOperations {
   }
 
   /**
-   * Get registrants with attendance status
+   * ENHANCED: Get registrants with attendance status and enhanced fields
    */
   static async getRegistrantsWithAttendance(webinarDbId: string) {
     try {
@@ -98,6 +145,51 @@ export class RegistrantOperations {
     } catch (error) {
       console.error('Error getting registrants with attendance:', error);
       return [];
+    }
+  }
+
+  /**
+   * NEW: Get enhanced registrant statistics for reporting
+   */
+  static async getRegistrantStatistics(webinarDbId: string): Promise<{
+    total: number;
+    byStatus: any;
+    withUuid: number;
+    attended: number;
+    attendanceRate: number;
+  }> {
+    try {
+      const { data: registrants, error } = await supabase
+        .from('zoom_registrants')
+        .select('status, registrant_uuid, attended')
+        .eq('webinar_id', webinarDbId);
+
+      if (error) {
+        console.error('Failed to get registrant statistics:', error);
+        return { total: 0, byStatus: {}, withUuid: 0, attended: 0, attendanceRate: 0 };
+      }
+
+      const total = registrants?.length || 0;
+      const withUuid = registrants?.filter(r => r.registrant_uuid).length || 0;
+      const attended = registrants?.filter(r => r.attended).length || 0;
+      const attendanceRate = total > 0 ? (attended / total) * 100 : 0;
+
+      const byStatus = registrants?.reduce((acc: any, registrant: any) => {
+        const status = registrant.status || 'unknown';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {}) || {};
+
+      return {
+        total,
+        byStatus,
+        withUuid,
+        attended,
+        attendanceRate: Math.round(attendanceRate * 100) / 100
+      };
+    } catch (error) {
+      console.error('Error getting registrant statistics:', error);
+      return { total: 0, byStatus: {}, withUuid: 0, attended: 0, attendanceRate: 0 };
     }
   }
 }
