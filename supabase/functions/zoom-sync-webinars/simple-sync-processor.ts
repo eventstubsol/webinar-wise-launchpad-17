@@ -32,13 +32,13 @@ export async function processSimpleWebinarSync(
       started_at: new Date().toISOString()
     });
 
-    // Create Zoom API client
+    // Create Zoom API client using the existing zoom-api-client from the same directory
     const client = await createZoomAPIClient(connection, supabase);
     
     await updateSyncStage(supabase, syncLogId, null, 'fetching_webinars', 10);
     console.log(`📡 Fetching webinars from Zoom API...`);
     
-    // Fetch webinars from Zoom
+    // Fetch webinars from Zoom using the proper API client
     const webinars = await client.listWebinarsWithRange({
       type: 'all'
     });
