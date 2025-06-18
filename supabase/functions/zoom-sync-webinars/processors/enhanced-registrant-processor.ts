@@ -1,109 +1,163 @@
 
 /**
- * Enhanced registrant sync with proper status mapping
+ * Enhanced registrant processor with 100% Zoom API compliance and complete pagination
  */
-export async function syncWebinarRegistrantsEnhanced(
+import { EnhancedRegistrantsApiClient, ZoomRegistrantsQueryParams } from '../../../../src/services/zoom/api/enhanced/EnhancedRegistrantsApiClient';
+import { EnhancedRegistrantOperations } from '../../../../src/services/zoom/operations/crud/EnhancedRegistrantOperations';
+
+/**
+ * Enhanced registrant sync with full pagination and error handling
+ */
+export async function syncWebinarRegistrantsFullCompliance(
   supabase: any,
   client: any,
   webinarId: string,
-  webinarDbId: string
-): Promise<number> {
-  console.log(`Syncing registrants for webinar ${webinarId}`);
+  webinarDbId: string,
+  options: {
+    occurrenceId?: string;
+    trackingSourceId?: string;
+    status?: 'pending' | 'approved' | 'denied';
+    maxPages?: number;
+  } = {}
+): Promise<{
+  totalSynced: number;
+  errors: string[];
+  pagesProcessed: number;
+  warnings: string[];
+}> {
+  console.log(`🎯 FULL COMPLIANCE REGISTRANT SYNC starting for webinar ${webinarId}`);
   
   try {
-    // Fetch registrants from Zoom API
-    const registrants = await client.getWebinarRegistrants(webinarId);
-    
-    if (!registrants || registrants.length === 0) {
-      console.log(`No registrants found for webinar ${webinarId}`);
-      return 0;
-    }
-    
-    console.log(`Found ${registrants.length} registrants for webinar ${webinarId}`);
-    
-    // Transform registrant data with enhanced status mapping
-    const transformedRegistrants = registrants.map(registrant => {
-      const transformed = transformRegistrantWithEnhancedStatus(registrant, webinarDbId);
-      return {
-        ...transformed,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-    });
-    
-    // Upsert registrants to database
-    const { error } = await supabase
-      .from('zoom_registrants')
-      .upsert(
-        transformedRegistrants,
-        {
-          onConflict: 'webinar_id,registrant_id',
-          ignoreDuplicates: false
+    // Create enhanced API client with proper token management
+    const enhancedClient = new EnhancedRegistrantsApiClient(
+      client.accessToken || client.getAccessToken?.(),
+      client.userId || client.connectionId,
+      client.connectionId
+    );
+
+    console.log(`🔄 ENHANCED CLIENT: Created for webinar ${webinarId}`);
+
+    let totalSynced = 0;
+    let pagesProcessed = 0;
+    let nextPageToken: string | undefined;
+    const errors: string[] = [];
+    const allWarnings: string[] = [];
+    const maxPages = options.maxPages || 50; // Safety limit
+
+    do {
+      try {
+        const params: ZoomRegistrantsQueryParams = {
+          page_size: 300, // Maximum allowed by Zoom API
+          occurrence_id: options.occurrenceId,
+          tracking_source_id: options.trackingSourceId,
+          status: options.status,
+          next_page_token: nextPageToken
+        };
+
+        console.log(`📥 FETCHING PAGE ${pagesProcessed + 1} for webinar ${webinarId}`, {
+          pageSize: params.page_size,
+          hasNextToken: !!nextPageToken,
+          status: params.status
+        });
+
+        const result = await EnhancedRegistrantOperations.syncWebinarRegistrantsEnhanced(
+          enhancedClient,
+          webinarId,
+          webinarDbId,
+          params,
+          client.userId || client.connectionId
+        );
+
+        totalSynced += result.totalSynced;
+        pagesProcessed++;
+        nextPageToken = result.nextPageToken;
+
+        if (result.warnings) {
+          allWarnings.push(...result.warnings);
         }
-      );
 
-    if (error) {
-      console.error('Failed to upsert registrants:', error);
-      throw new Error(`Failed to upsert registrants: ${error.message}`);
-    }
+        console.log(`✅ PAGE ${pagesProcessed} COMPLETED: ${result.totalSynced} registrants synced, hasMore: ${result.hasMore}`);
 
-    console.log(`Successfully synced ${registrants.length} registrants for webinar ${webinarId}`);
-    return registrants.length;
-    
+        // Safety check for infinite loops
+        if (pagesProcessed >= maxPages) {
+          console.warn(`⚠️ SAFETY LIMIT: Reached maximum pages (${maxPages}) for webinar ${webinarId}`);
+          break;
+        }
+
+        // Break if no more pages or no more data
+        if (!result.hasMore || !nextPageToken) {
+          console.log(`🏁 PAGINATION COMPLETE: No more pages for webinar ${webinarId}`);
+          break;
+        }
+
+        // Small delay between pages to be respectful to API
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+      } catch (pageError) {
+        const errorMsg = `Page ${pagesProcessed + 1} failed: ${pageError.message}`;
+        console.error(`❌ ${errorMsg}`);
+        errors.push(errorMsg);
+        
+        // Break on pagination errors to avoid infinite loops
+        break;
+      }
+
+    } while (nextPageToken && pagesProcessed < maxPages);
+
+    console.log(`🎉 FULL COMPLIANCE SYNC COMPLETED: ${totalSynced} total registrants synced across ${pagesProcessed} pages`);
+
+    return {
+      totalSynced,
+      errors,
+      pagesProcessed,
+      warnings: allWarnings
+    };
+
   } catch (error) {
-    console.error(`Error syncing registrants for webinar ${webinarId}:`, error);
-    throw error;
+    console.error(`💥 FULL COMPLIANCE REGISTRANT SYNC ERROR for webinar ${webinarId}:`, error);
+    
+    return {
+      totalSynced: 0,
+      errors: [error.message],
+      pagesProcessed: 0,
+      warnings: []
+    };
   }
 }
 
 /**
- * Transform registrant with enhanced status mapping
+ * Test API access before attempting sync
  */
-function transformRegistrantWithEnhancedStatus(apiRegistrant: any, webinarDbId: string): any {
-  // Enhanced status mapping for registrants
-  let normalizedStatus = 'approved';
-  if (apiRegistrant.status) {
-    const statusMap: { [key: string]: string } = {
-      'approved': 'approved',
-      'pending': 'pending',
-      'denied': 'denied',
-      'cancelled': 'cancelled',
-      'waiting': 'pending',
-      'rejected': 'denied'
+async function testRegistrantAPIAccess(client: any, webinarId: string): Promise<{
+  hasAccess: boolean;
+  error?: string;
+  scopeIssue?: boolean;
+}> {
+  try {
+    // Try to fetch just the first page with minimal size to test access
+    const testResult = await client.getWebinarRegistrants(webinarId, {
+      page_size: 1,
+      page_number: 1
+    });
+    
+    return { hasAccess: true };
+  } catch (error) {
+    const errorMessage = error.message?.toLowerCase() || '';
+    
+    if (errorMessage.includes('scope') || errorMessage.includes('permission')) {
+      return {
+        hasAccess: false,
+        error: error.message,
+        scopeIssue: true
+      };
+    }
+    
+    return {
+      hasAccess: false,
+      error: error.message,
+      scopeIssue: false
     };
-    normalizedStatus = statusMap[apiRegistrant.status.toLowerCase()] || 'approved';
   }
-
-  return {
-    webinar_id: webinarDbId,
-    registrant_id: apiRegistrant.id || apiRegistrant.registrant_id,
-    registrant_email: apiRegistrant.email,
-    first_name: apiRegistrant.first_name || null,
-    last_name: apiRegistrant.last_name || null,
-    address: apiRegistrant.address || null,
-    city: apiRegistrant.city || null,
-    state: apiRegistrant.state || null,
-    zip: apiRegistrant.zip || null,
-    country: apiRegistrant.country || null,
-    phone: apiRegistrant.phone || null,
-    industry: apiRegistrant.industry || null,
-    org: apiRegistrant.org || null,
-    job_title: apiRegistrant.job_title || null,
-    purchasing_time_frame: apiRegistrant.purchasing_time_frame || null,
-    role_in_purchase_process: apiRegistrant.role_in_purchase_process || null,
-    no_of_employees: apiRegistrant.no_of_employees || null,
-    comments: apiRegistrant.comments || null,
-    custom_questions: apiRegistrant.custom_questions || null,
-    registration_time: apiRegistrant.registration_time || new Date().toISOString(),
-    source_id: apiRegistrant.source_id || null,
-    tracking_source: apiRegistrant.tracking_source || null,
-    status: normalizedStatus,
-    join_url: apiRegistrant.join_url || null,
-    create_time: apiRegistrant.create_time || null,
-    language: apiRegistrant.language || null,
-    join_time: null, // Will be updated from participant data if available
-    leave_time: null,
-    duration: null,
-    attended: false // Will be updated from participant data if available
-  };
 }
+
+export { testRegistrantAPIAccess };
