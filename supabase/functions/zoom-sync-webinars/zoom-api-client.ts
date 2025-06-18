@@ -401,295 +401,97 @@ class ZoomAPIClient {
     }
   }
 
+  /**
+   * FIXED: Get webinar participants using correct past_webinars endpoint
+   */
   async getWebinarParticipants(webinarId: string, debugMode = false): Promise<any[]> {
     const startTime = Date.now();
-    const endpoint = `/report/webinars/${webinarId}/participants?page_size=300`;
     
-    console.log(`ENHANCED: Starting participants fetch for webinar ${webinarId}`);
-    console.log(`ENHANCED: Connection ID: ${this.connection.id}`);
-    console.log(`ENHANCED: Using token type: ${this.isOAuth ? 'OAuth' : 'Server-to-Server'}`);
-    
-    if (debugMode) {
-      console.log(`DEBUG: Endpoint: ${endpoint}`);
-      console.log(`DEBUG: Token length: ${this.accessToken?.length || 0}`);
-    }
+    console.log(`🎯 ENHANCED: Starting participants fetch for webinar ${webinarId}`);
+    console.log(`🎯 ENHANCED: Connection ID: ${this.connection.id}`);
+    console.log(`🎯 ENHANCED: Using token type: ${this.isOAuth ? 'OAuth' : 'Server-to-Server'}`);
     
     try {
-      const url = `${this.baseURL}${endpoint}`;
-      const sanitizedToken = this.validateAndSanitizeToken(this.accessToken);
-      
-      const requestHeaders = {
-        'Authorization': `Bearer ${sanitizedToken}`,
-        'Content-Type': 'application/json',
-      };
-
-      if (debugMode) {
-        console.log(`DEBUG: Making request to: ${url}`);
-        console.log(`DEBUG: Request headers prepared`);
-      }
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: requestHeaders,
+      // FIXED: Use the correct past_webinars endpoint instead of report endpoint
+      const endpoint = `/past_webinars/${webinarId}/participants`;
+      const params = new URLSearchParams({
+        page_size: '300'
       });
-
-      const responseTime = Date.now() - startTime;
       
-      // Enhanced logging: Log full response details
-      console.log(`ENHANCED: Participants API Response Details for ${webinarId}:`);
-      console.log(`  Status: ${response.status} ${response.statusText}`);
-      console.log(`  Response time: ${responseTime}ms`);
-      console.log(`  Connection ID: ${this.connection.id}`);
-      console.log(`  Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`);
+      console.log(`📡 FIXED ENDPOINT: Using ${endpoint}?${params.toString()}`);
       
       if (debugMode) {
-        console.log(`DEBUG: Response received in ${responseTime}ms`);
-        console.log(`DEBUG: Response status: ${response.status}`);
-        console.log(`DEBUG: Response headers:`, Object.fromEntries(response.headers.entries()));
+        console.log(`DEBUG: Using corrected past_webinars endpoint`);
+        console.log(`DEBUG: Token length: ${this.accessToken?.length || 0}`);
       }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        
-        // Enhanced error logging: Complete error object details
-        const errorDetails = {
-          status: response.status,
-          statusText: response.statusText,
-          url: url,
-          headers: Object.fromEntries(response.headers.entries()),
-          responseText: errorText,
-          webinarId: webinarId,
-          connectionId: this.connection.id,
-          requestTime: responseTime,
-          timestamp: new Date().toISOString()
-        };
-
-        console.error(`ENHANCED: Complete participants API error details:`, errorDetails);
-        
-        let errorBody;
-        try {
-          errorBody = JSON.parse(errorText);
-        } catch {
-          errorBody = { message: errorText };
-        }
-
-        // Enhanced error classification
-        let errorType = 'unknown';
-        let isRetryable = false;
-        
-        if (response.status === 400 && errorBody.code === 4711) {
-          errorType = 'scope_permission_error';
-          isRetryable = false;
-          console.error(`ENHANCED: SCOPE PERMISSION ERROR - Missing required scope: report:read:list_webinar_participants:admin`);
-        } else if (response.status === 404) {
-          errorType = 'webinar_not_found';
-          isRetryable = false;
-          console.log(`ENHANCED: Webinar ${webinarId} not found or no participant data available`);
-        } else if (response.status === 401) {
-          errorType = 'authentication_error';
-          isRetryable = true;
-        } else if (response.status === 429) {
-          errorType = 'rate_limit_error';
-          isRetryable = true;
-        } else if (response.status >= 500) {
-          errorType = 'server_error';
-          isRetryable = true;
-        }
-
-        const enhancedError = new Error(`Participants API failed: ${response.status} ${response.statusText}`);
-        (enhancedError as any).type = errorType;
-        (enhancedError as any).isRetryable = isRetryable;
-        (enhancedError as any).details = errorDetails;
-        (enhancedError as any).body = errorBody;
-        (enhancedError as any).status = response.status;
-
-        console.log(`ENHANCED: Error classified as: ${errorType} (retryable: ${isRetryable})`);
-        
-        throw enhancedError;
-      }
-
-      const responseText = await response.text();
       
-      if (debugMode) {
-        console.log(`DEBUG: Response body length: ${responseText.length} characters`);
-      }
-
-      let result;
-      try {
-        result = responseText ? JSON.parse(responseText) : {};
-      } catch (parseError) {
-        console.error(`ENHANCED: Failed to parse participants response for ${webinarId}:`, parseError);
-        console.error(`ENHANCED: Raw response text:`, responseText.substring(0, 1000) + '...');
-        throw new Error('Invalid JSON response from participants API');
-      }
-
-      const participants = result.participants || [];
+      const response = await this.makeRequest(`${endpoint}?${params.toString()}`);
       
-      // Enhanced success logging with response validation
-      console.log(`ENHANCED: Participants API Success for ${webinarId}:`);
-      console.log(`  Connection ID: ${this.connection.id}`);
-      console.log(`  Participants found: ${participants.length}`);
-      console.log(`  Response structure keys: [${Object.keys(result).join(', ')}]`);
-      console.log(`  Total records indicated: ${result.total_records || 'not specified'}`);
-      console.log(`  Page info: ${result.page_count || 'N/A'} pages, current: ${result.page_number || 'N/A'}`);
-      console.log(`  Response time: ${responseTime}ms`);
-      
-      // Validate response structure
-      if (!Array.isArray(participants)) {
-        console.error(`ENHANCED: Invalid participants response structure - expected array, got: ${typeof participants}`);
+      if (!response) {
+        console.log(`⚠️ PARTICIPANTS API: Null response for webinar ${webinarId}`);
         return [];
       }
       
-      if (debugMode && participants.length > 0) {
-        console.log(`DEBUG: First participant structure:`, Object.keys(participants[0]));
-        console.log(`DEBUG: Sample participant data:`, JSON.stringify(participants[0], null, 2));
+      // Handle different response formats from past_webinars endpoint
+      let participants = [];
+      
+      if (Array.isArray(response)) {
+        participants = response;
+      } else if (response.participants && Array.isArray(response.participants)) {
+        participants = response.participants;
+      } else if (response.data && Array.isArray(response.data)) {
+        participants = response.data;
+      } else {
+        console.log(`⚠️ PARTICIPANTS API: Unexpected response format:`, {
+          responseType: typeof response,
+          hasParticipants: 'participants' in response,
+          hasData: 'data' in response,
+          keys: Object.keys(response)
+        });
+        return [];
       }
-
+      
+      const fetchTime = Date.now() - startTime;
+      console.log(`✅ ENHANCED: Participants fetch completed in ${fetchTime}ms`);
+      console.log(`✅ ENHANCED: Found ${participants.length} participants for webinar ${webinarId}`);
+      
+      if (debugMode && participants.length > 0) {
+        const sample = participants[0];
+        console.log(`DEBUG: Sample participant from past_webinars endpoint:`, {
+          id: sample.id || sample.participant_id,
+          name: sample.name || sample.participant_name,
+          email: sample.user_email || sample.participant_email,
+          join_time: sample.join_time,
+          leave_time: sample.leave_time,
+          duration: sample.duration,
+          fields: Object.keys(sample)
+        });
+      }
+      
       return participants;
       
     } catch (error) {
-      const totalTime = Date.now() - startTime;
+      console.error(`❌ ENHANCED: Participants fetch failed for webinar ${webinarId}:`, error);
       
-      // Enhanced error logging for caught exceptions
-      console.error(`ENHANCED: Exception in getWebinarParticipants for ${webinarId}:`);
-      console.error(`  Connection ID: ${this.connection.id}`);
-      console.error(`  Error type: ${error.constructor.name}`);
-      console.error(`  Error message: ${error.message}`);
-      console.error(`  Total time: ${totalTime}ms`);
-      console.error(`  Full error object:`, {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-        type: error.type,
-        isRetryable: error.isRetryable,
-        status: error.status,
-        details: error.details
-      });
+      const errorMessage = error.message?.toLowerCase() || '';
+      const statusCode = error.status || error.statusCode;
       
-      if (debugMode) {
-        console.log(`DEBUG: Caught exception after ${totalTime}ms`);
-        console.log(`DEBUG: Error properties:`, Object.getOwnPropertyNames(error));
-      }
-
-      // Log classification for empty results vs real errors
-      if (error.type === 'scope_permission_error') {
-        console.log(`No participants for webinar ${webinarId}: SCOPE PERMISSION ERROR - report:read:list_webinar_participants:admin scope required`);
-      } else if (error.type === 'webinar_not_found') {
-        console.log(`No participants for webinar ${webinarId}: WEBINAR NOT FOUND or NO DATA AVAILABLE`);
+      // Enhanced error categorization
+      if (statusCode === 403 || errorMessage.includes('forbidden')) {
+        throw new Error(`Scope Error: Missing 'webinar:read:admin' scope for participants access. Status: ${statusCode}`);
+      } else if (statusCode === 401 || errorMessage.includes('unauthorized')) {
+        const authError = new Error('Authentication expired. Please reconnect your Zoom account.');
+        (authError as any).status = 401;
+        (authError as any).isAuthError = true;
+        throw authError;
+      } else if (statusCode === 404) {
+        console.log(`📭 PARTICIPANTS API: Webinar ${webinarId} not found or has no participants`);
+        return []; // Return empty array for 404 instead of throwing
+      } else if (statusCode === 429 || errorMessage.includes('rate limit')) {
+        throw new Error(`Rate Limit Error: Too many API requests. Status: ${statusCode}`);
       } else {
-        console.log(`No participants for webinar ${webinarId}: ${error.message}`);
+        throw new Error(`API Error: ${error.message}. Status: ${statusCode}`);
       }
-      
-      return [];
-    }
-  }
-
-  /**
-   * NEW: Get webinar participants using alternative /past_webinars/ endpoint
-   */
-  async getWebinarParticipantsAlternative(webinarId: string, debugMode = false): Promise<any[]> {
-    const startTime = Date.now();
-    const allParticipants = [];
-    let pageNumber = 1;
-    let hasMore = true;
-
-    console.log(`ALTERNATIVE: Starting participants fetch for webinar ${webinarId}`);
-    console.log(`ALTERNATIVE: Connection ID: ${this.connection.id}`);
-    console.log(`ALTERNATIVE: Using token type: ${this.isOAuth ? 'OAuth' : 'Server-to-Server'}`);
-
-    while (hasMore) {
-      const endpoint = `/past_webinars/${webinarId}/participants?page_size=300&page_number=${pageNumber}`;
-      
-      if (debugMode) {
-        console.log(`DEBUG ALT: Page ${pageNumber} endpoint: ${endpoint}`);
-      }
-
-      try {
-        const url = `${this.baseURL}${endpoint}`;
-        const sanitizedToken = this.validateAndSanitizeToken(this.accessToken);
-        
-        const requestHeaders = {
-          'Authorization': `Bearer ${sanitizedToken}`,
-          'Content-Type': 'application/json',
-        };
-
-        const pageStartTime = Date.now();
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: requestHeaders,
-        });
-
-        const pageResponseTime = Date.now() - pageStartTime;
-        
-        console.log(`ALTERNATIVE: Page ${pageNumber} Response Details for ${webinarId}:`);
-        console.log(`  Status: ${response.status} ${response.statusText}`);
-        console.log(`  Page response time: ${pageResponseTime}ms`);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          
-          if (response.status === 404) {
-            console.log(`ALTERNATIVE: Webinar ${webinarId} not found in past_webinars endpoint`);
-            break;
-          }
-          
-          console.error(`ALTERNATIVE: API error (${response.status}) for ${webinarId} page ${pageNumber}:`, errorText);
-          throw new Error(`Alternative participants API failed: ${response.status} ${response.statusText}`);
-        }
-
-        const responseText = await response.text();
-        const result = responseText ? JSON.parse(responseText) : {};
-        
-        const participants = result.participants || [];
-        allParticipants.push(...participants);
-        
-        console.log(`ALTERNATIVE: Page ${pageNumber} Success:`);
-        console.log(`  Participants on page: ${participants.length}`);
-        console.log(`  Total participants so far: ${allParticipants.length}`);
-        console.log(`  Page count: ${result.page_count || 'N/A'}`);
-        console.log(`  Total records: ${result.total_records || 'N/A'}`);
-        
-        if (debugMode && participants.length > 0) {
-          console.log(`DEBUG ALT: Sample participant from page ${pageNumber}:`, JSON.stringify(participants[0], null, 2));
-        }
-
-        hasMore = pageNumber < (result.page_count || 1);
-        pageNumber++;
-        
-      } catch (error) {
-        console.error(`ALTERNATIVE: Error on page ${pageNumber} for webinar ${webinarId}:`, error);
-        break;
-      }
-    }
-
-    const totalTime = Date.now() - startTime;
-    
-    console.log(`ALTERNATIVE: Final Results for ${webinarId}:`);
-    console.log(`  Total participants: ${allParticipants.length}`);
-    console.log(`  Total pages processed: ${pageNumber - 1}`);
-    console.log(`  Total time: ${totalTime}ms`);
-    console.log(`  Average time per page: ${totalTime / (pageNumber - 1)}ms`);
-
-    return allParticipants;
-  }
-
-  async getWebinarPolls(webinarId: string): Promise<any[]> {
-    try {
-      const response = await this.makeRequest(`/report/webinars/${webinarId}/polls`);
-      return response.questions || [];
-    } catch (error) {
-      console.log(`No polls for webinar ${webinarId}:`, error.message);
-      return [];
-    }
-  }
-
-  async getWebinarQA(webinarId: string): Promise<any[]> {
-    try {
-      const response = await this.makeRequest(`/report/webinars/${webinarId}/qa`);
-      return response.questions || [];
-    } catch (error) {
-      console.log(`No Q&A for webinar ${webinarId}:`, error.message);
-      return [];
     }
   }
 }

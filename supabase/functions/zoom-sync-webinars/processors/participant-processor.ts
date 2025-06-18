@@ -5,7 +5,7 @@ import { transformParticipantForDatabase } from './participant-transformer.ts';
 import { saveParticipantsToDatabase } from './participant-database.ts';
 
 /**
- * Sync participants for a specific webinar with enhanced logging and eligibility checks
+ * SIMPLIFIED: Sync participants for a specific webinar with clear eligibility checks
  */
 export async function syncWebinarParticipants(
   supabase: any,
@@ -16,59 +16,57 @@ export async function syncWebinarParticipants(
   debugMode = false
 ): Promise<{ count: number; skipped: boolean; reason?: string }> {
   const startTime = Date.now();
-  console.log(`${debugMode ? 'DEBUG: ' : ''}Starting participant sync for webinar ${webinarId}`);
+  console.log(`🎯 Starting participant sync for webinar ${webinarId}`);
   
   try {
-    // Enhanced logging: Log sync initiation
-    if (debugMode) {
-      console.log(`DEBUG: Sync parameters:`);
-      console.log(`  - webinarId: ${webinarId}`);
-      console.log(`  - webinarDbId: ${webinarDbId}`);
-      console.log(`  - debugMode: ${debugMode}`);
-      console.log(`  - API client type: ${client.constructor.name}`);
-      console.log(`  - Webinar data provided: ${!!webinarData}`);
-    }
-
     // Update status to indicate sync attempt is starting
     await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'pending');
 
-    // Check if webinar is eligible for participant sync
+    // SIMPLIFIED: Check if webinar is eligible for participant sync
     if (webinarData) {
       const eligibility = isWebinarEligibleForParticipantSync(webinarData, debugMode);
       
       if (!eligibility.eligible) {
-        console.log(`SKIPPING participant sync for webinar ${webinarId}: ${eligibility.reason}`);
+        console.log(`❌ SKIPPING participant sync for webinar ${webinarId}: ${eligibility.reason}`);
         
-        // Update status to not_applicable for ineligible webinars
-        await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'not_applicable', eligibility.reason);
+        // Update status based on reason
+        let statusToSet = 'not_applicable';
+        if (eligibility.reason?.includes('future') || eligibility.reason?.includes('not started')) {
+          statusToSet = 'not_applicable';
+        } else if (eligibility.reason?.includes('recent') || eligibility.reason?.includes('available in')) {
+          statusToSet = 'pending';
+        }
+        
+        await updateWebinarParticipantSyncStatus(supabase, webinarDbId, statusToSet, eligibility.reason);
         
         if (debugMode) {
           console.log(`DEBUG: Webinar eligibility check failed:`);
           console.log(`  - Reason: ${eligibility.reason}`);
-          console.log(`  - Webinar data:`, JSON.stringify(webinarData, null, 2));
+          console.log(`  - Diagnostics:`, eligibility.diagnostics);
         }
         
         return { count: 0, skipped: true, reason: eligibility.reason };
       } else {
-        console.log(`PROCEEDING with participant sync for webinar ${webinarId} - eligibility confirmed`);
+        console.log(`✅ PROCEEDING with participant sync for webinar ${webinarId} - eligibility confirmed`);
         
         if (debugMode) {
           console.log(`DEBUG: Webinar passed eligibility check`);
+          console.log(`  - Diagnostics:`, eligibility.diagnostics);
         }
       }
     } else {
-      console.log(`WARNING: No webinar data provided for eligibility check, proceeding with participant sync for webinar ${webinarId}`);
+      console.log(`⚠️ WARNING: No webinar data provided for eligibility check, proceeding with participant sync for webinar ${webinarId}`);
     }
 
-    // Fetch participants from Zoom API with debug mode
-    console.log(`ENHANCED: Initiating participants fetch for webinar ${webinarId}`);
+    // FIXED: Fetch participants using corrected API endpoint
+    console.log(`🎯 ENHANCED: Initiating participants fetch for webinar ${webinarId} using past_webinars endpoint`);
     const participants = await client.getWebinarParticipants(webinarId, debugMode);
     
     const fetchTime = Date.now() - startTime;
-    console.log(`ENHANCED: Participants fetch completed in ${fetchTime}ms`);
+    console.log(`✅ ENHANCED: Participants fetch completed in ${fetchTime}ms`);
     
     if (!participants || participants.length === 0) {
-      console.log(`ENHANCED: No participants found for webinar ${webinarId} (${participants ? 'empty array' : 'null/undefined result'})`);
+      console.log(`📭 ENHANCED: No participants found for webinar ${webinarId} (${participants ? 'empty array' : 'null/undefined result'})`);
       
       // Update status to no_participants for webinars with no participants
       await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'no_participants', 'No participants found in API response');
@@ -81,7 +79,7 @@ export async function syncWebinarParticipants(
       return { count: 0, skipped: false, reason: 'No participants found in API response' };
     }
     
-    console.log(`ENHANCED: Processing ${participants.length} participants for webinar ${webinarId}`);
+    console.log(`✅ ENHANCED: Processing ${participants.length} participants for webinar ${webinarId}`);
     
     // Enhanced logging: Log raw API response structure
     if (debugMode) {
@@ -118,7 +116,7 @@ export async function syncWebinarParticipants(
     });
     
     const transformTime = Date.now() - startTime - fetchTime;
-    console.log(`ENHANCED: Participant transformation completed in ${transformTime}ms`);
+    console.log(`✅ ENHANCED: Participant transformation completed in ${transformTime}ms`);
 
     // Save to database
     const saveResult = await saveParticipantsToDatabase(supabase, transformedParticipants, webinarId, debugMode);
@@ -136,7 +134,7 @@ export async function syncWebinarParticipants(
     await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'synced');
 
     // Enhanced success logging
-    console.log(`ENHANCED: Participant sync completed successfully for webinar ${webinarId}:`);
+    console.log(`✅ ENHANCED: Participant sync completed successfully for webinar ${webinarId}:`);
     console.log(`  - Participants processed: ${participants.length}`);
     console.log(`  - Database records affected: ${saveResult.data?.length || 'unknown'}`);
     console.log(`  - Fetch time: ${fetchTime}ms`);
@@ -159,7 +157,7 @@ export async function syncWebinarParticipants(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'failed', errorMessage);
     
-    console.error(`ENHANCED: Participant sync failed for webinar ${webinarId}:`);
+    console.error(`❌ ENHANCED: Participant sync failed for webinar ${webinarId}:`);
     console.error(`  - Error type: ${error.constructor.name}`);
     console.error(`  - Error message: ${error.message}`);
     console.error(`  - Time spent: ${totalTime}ms`);
