@@ -4746,13 +4746,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "zoom_participants_registrant_id_fkey"
-            columns: ["registrant_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_registrants"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "zoom_participants_webinar_id_fkey"
             columns: ["webinar_id"]
             isOneToOne: false

@@ -1,4 +1,3 @@
-
 import { zoomApiClient } from './ZoomApiClient';
 import type { ApiResponse } from './types';
 
@@ -89,6 +88,50 @@ interface ZoomRegistrantApiResponse {
 }
 
 /**
+ * ENHANCED: Zoom API participants response format for /past_webinars endpoint (now primary)
+ */
+interface ZoomParticipantsResponse {
+  page_count?: number;
+  page_number?: number;
+  page_size: number;
+  total_records: number;
+  next_page_token?: string;
+  participants: ZoomParticipantApiResponse[];
+}
+
+/**
+ * ENHANCED: Zoom API participant response format with all spec-compliant fields
+ */
+interface ZoomParticipantApiResponse {
+  id: string;
+  user_id?: string;
+  registrant_id?: string; // Now correctly typed as string
+  name: string;
+  user_email?: string;
+  join_time?: string;
+  leave_time?: string;
+  duration?: number;
+  attentiveness_score?: number;
+  failover?: boolean; // NEW: API spec field
+  internal_user?: boolean; // NEW: API spec field
+  status?: string;
+  // Additional fields from enhanced endpoint
+  camera_on_duration?: number;
+  share_application_duration?: number;
+  share_desktop_duration?: number;
+  posted_chat?: boolean;
+  raised_hand?: boolean;
+  answered_polling?: boolean;
+  asked_question?: boolean;
+  device?: string;
+  ip_address?: string;
+  location?: string;
+  network_type?: string;
+  version?: string;
+  customer_key?: string;
+}
+
+/**
  * Options for listing webinars
  */
 interface ListWebinarsOptions {
@@ -134,7 +177,7 @@ interface ParticipantsComparisonResult {
 }
 
 /**
- * Service for fetching webinar data from Zoom API
+ * ENHANCED: Service for fetching webinar data from Zoom API with improved participant handling
  */
 export class ZoomWebinarDataService {
   /**
@@ -427,18 +470,135 @@ export class ZoomWebinarDataService {
   }
 
   /**
-   * Get webinar participants using the existing /report/ endpoint
+   * ENHANCED: Get webinar participants using /past_webinars as PRIMARY endpoint (API spec compliant)
    */
   static async getWebinarParticipants(
     webinarId: string,
-    options: { pageSize?: number } = {}
-  ) {
-    const { pageSize = 100 } = options;
-    const allParticipants = [];
-    let nextPageToken = '';
+    options: { 
+      pageSize?: number; 
+      debugMode?: boolean;
+      useAlternativeEndpoint?: boolean; // Option to force alternative endpoint
+    } = {}
+  ): Promise<ZoomParticipantApiResponse[]> {
+    const { pageSize = 300, debugMode = false, useAlternativeEndpoint = false } = options;
+    
+    if (debugMode) {
+      console.log(`🔄 ENHANCED PARTICIPANTS FETCH: Starting for webinar ${webinarId}`);
+      console.log(`  - Page size: ${pageSize} (API maximum for efficiency)`);
+      console.log(`  - Primary endpoint: /past_webinars/${webinarId}/participants`);
+      console.log(`  - Using spec-compliant field mapping`);
+    }
+
+    // Use past_webinars endpoint as primary (API spec compliant)
+    if (!useAlternativeEndpoint) {
+      try {
+        return await this.getWebinarParticipantsPrimary(webinarId, { pageSize, debugMode });
+      } catch (primaryError) {
+        console.warn(`⚠️ Primary endpoint failed, falling back to report endpoint:`, primaryError);
+        return await this.getWebinarParticipantsReport(webinarId, { pageSize, debugMode });
+      }
+    } else {
+      return await this.getWebinarParticipantsReport(webinarId, { pageSize, debugMode });
+    }
+  }
+
+  /**
+   * NEW: Primary participant endpoint - /past_webinars/{webinarId}/participants (API spec compliant)
+   */
+  static async getWebinarParticipantsPrimary(
+    webinarId: string,
+    options: { pageSize?: number; debugMode?: boolean } = {}
+  ): Promise<ZoomParticipantApiResponse[]> {
+    const { pageSize = 300, debugMode = false } = options;
+    const allParticipants: ZoomParticipantApiResponse[] = [];
+    let pageNumber = 1;
     let hasMore = true;
 
+    if (debugMode) {
+      console.log(`📡 PRIMARY API: /past_webinars/${webinarId}/participants`);
+    }
+
     while (hasMore) {
+      const params = new URLSearchParams({
+        page_size: pageSize.toString(),
+        page_number: pageNumber.toString(),
+      });
+
+      const startTime = Date.now();
+      const response = await zoomApiClient.get<ZoomParticipantsResponse>(
+        `/past_webinars/${webinarId}/participants?${params}`
+      );
+      const responseTime = Date.now() - startTime;
+
+      if (debugMode) {
+        console.log(`📄 PRIMARY API page ${pageNumber}: Response time ${responseTime}ms`);
+      }
+
+      if (!response.success || !response.data) {
+        throw new Error(`Primary API failed: ${response.error}`);
+      }
+
+      const { participants, page_count, page_number: currentPage } = response.data;
+      
+      if (participants && participants.length > 0) {
+        // Process and enhance participant data for spec compliance
+        const processedParticipants = participants.map((participant, index) => {
+          const processed = this.processParticipantDataEnhanced(participant);
+          
+          if (debugMode && index === 0 && pageNumber === 1) {
+            console.log(`📋 PRIMARY API SAMPLE PARTICIPANT:`, {
+              id: processed.id,
+              registrant_id: processed.registrant_id, // Now string
+              name: processed.name,
+              failover: processed.failover, // NEW FIELD
+              internal_user: processed.internal_user, // NEW FIELD
+              duration: processed.duration,
+              status: processed.status,
+              availableFields: Object.keys(processed)
+            });
+          }
+          
+          return processed;
+        });
+
+        allParticipants.push(...processedParticipants);
+
+        if (debugMode) {
+          console.log(`📊 PRIMARY API PAGE ${pageNumber}: ${processedParticipants.length} participants`);
+          console.log(`📈 TOTAL SO FAR: ${allParticipants.length} participants`);
+        }
+      }
+
+      hasMore = currentPage < page_count;
+      pageNumber++;
+    }
+
+    if (debugMode) {
+      console.log(`✅ PRIMARY API COMPLETE: ${allParticipants.length} total participants`);
+    }
+
+    return allParticipants;
+  }
+
+  /**
+   * ENHANCED: Report endpoint as fallback - /report/webinars/{webinarId}/participants
+   */
+  static async getWebinarParticipantsReport(
+    webinarId: string,
+    options: { pageSize?: number; debugMode?: boolean } = {}
+  ): Promise<ZoomParticipantApiResponse[]> {
+    const { pageSize = 100, debugMode = false } = options; // Lower page size for report endpoint
+    const allParticipants: ZoomParticipantApiResponse[] = [];
+    let nextPageToken = '';
+    let hasMore = true;
+    let pageCount = 0;
+
+    if (debugMode) {
+      console.log(`📡 FALLBACK API: /report/webinars/${webinarId}/participants`);
+    }
+
+    while (hasMore) {
+      pageCount++;
       const params = new URLSearchParams({
         page_size: pageSize.toString(),
       });
@@ -447,32 +607,104 @@ export class ZoomWebinarDataService {
         params.append('next_page_token', nextPageToken);
       }
 
-      const response = await zoomApiClient.get(
+      const startTime = Date.now();
+      const response = await zoomApiClient.get<any>(
         `/report/webinars/${webinarId}/participants?${params}`
       );
+      const responseTime = Date.now() - startTime;
+
+      if (debugMode) {
+        console.log(`📄 FALLBACK API page ${pageCount}: Response time ${responseTime}ms`);
+      }
 
       if (!response.success || !response.data) {
-        console.error(`Failed to fetch participants for webinar ${webinarId}:`, response.error);
-        break;
+        throw new Error(`Fallback API failed: ${response.error}`);
       }
 
       const { participants, next_page_token } = response.data;
       
-      // Calculate engagement metrics for each participant
-      const enhancedParticipants = participants.map((participant: any) => ({
-        ...participant,
-        engagement_score: this.calculateEngagementScore(participant),
-        total_duration: participant.duration || 0,
-        join_leave_count: participant.details?.length || 1
-      }));
+      if (participants && participants.length > 0) {
+        const processedParticipants = participants.map((participant: any) => 
+          this.processParticipantDataEnhanced(participant)
+        );
 
-      allParticipants.push(...enhancedParticipants);
+        allParticipants.push(...processedParticipants);
+
+        if (debugMode) {
+          console.log(`📊 FALLBACK API PAGE ${pageCount}: ${processedParticipants.length} participants`);
+        }
+      }
 
       hasMore = !!next_page_token;
       nextPageToken = next_page_token || '';
     }
 
+    if (debugMode) {
+      console.log(`✅ FALLBACK API COMPLETE: ${allParticipants.length} total participants`);
+    }
+
     return allParticipants;
+  }
+
+  /**
+   * NEW: Enhanced participant data processing for API compliance
+   */
+  private static processParticipantDataEnhanced(participant: any): ZoomParticipantApiResponse {
+    // Ensure registrant_id is properly handled as string
+    const registrant_id = participant.registrant_id ? String(participant.registrant_id) : null;
+    
+    // Enhanced status normalization
+    const normalizeStatus = (status: string | undefined): string => {
+      if (!status) return 'attended';
+      
+      const statusMap: { [key: string]: string } = {
+        'in_meeting': 'in_meeting',
+        'in_waiting_room': 'in_waiting_room',
+        'attended': 'attended',
+        'not_attended': 'not_attended',
+        'left_early': 'left_early'
+      };
+      
+      return statusMap[status.toLowerCase()] || 'attended';
+    };
+
+    const normalizedParticipant: ZoomParticipantApiResponse = {
+      id: participant.id || participant.participant_id,
+      user_id: participant.user_id || null,
+      registrant_id: registrant_id, // FIXED: Properly typed as string
+      name: participant.name || participant.participant_name || 'Unknown',
+      user_email: participant.user_email || participant.participant_email || null,
+      join_time: participant.join_time || null,
+      leave_time: participant.leave_time || null,
+      duration: participant.duration || 0,
+      attentiveness_score: participant.attentiveness_score || null,
+      failover: participant.failover || false, // NEW: API spec field
+      internal_user: participant.internal_user || false, // NEW: API spec field
+      status: normalizeStatus(participant.status),
+      // Enhanced fields from report endpoint
+      camera_on_duration: participant.camera_on_duration || null,
+      share_application_duration: participant.share_application_duration || null,
+      share_desktop_duration: participant.share_desktop_duration || null,
+      posted_chat: participant.posted_chat || false,
+      raised_hand: participant.raised_hand || false,
+      answered_polling: participant.answered_polling || false,
+      asked_question: participant.asked_question || false,
+      device: participant.device || null,
+      ip_address: participant.ip_address ? String(participant.ip_address) : null,
+      location: participant.location || null,
+      network_type: participant.network_type || null,
+      version: participant.version || null,
+      customer_key: participant.customer_key || null,
+    };
+
+    // Clean up empty string values to null for better database consistency
+    Object.keys(normalizedParticipant).forEach(key => {
+      if (normalizedParticipant[key as keyof ZoomParticipantApiResponse] === '') {
+        (normalizedParticipant as any)[key] = null;
+      }
+    });
+
+    return normalizedParticipant;
   }
 
   /**
@@ -561,7 +793,7 @@ export class ZoomWebinarDataService {
 
     try {
       const reportStartTime = Date.now();
-      reportResult.data = await this.getWebinarParticipants(webinarId, { pageSize: 100 });
+      reportResult.data = await this.getWebinarParticipantsReport(webinarId, { pageSize: 100 });
       reportResult.responseTime = Date.now() - reportStartTime;
       reportResult.count = reportResult.data.length;
 
@@ -698,4 +930,4 @@ export class ZoomWebinarDataService {
 }
 
 // Export types for use in other services
-export type { ZoomWebinarApiResponse, ZoomRegistrantApiResponse, ListWebinarsOptions, SyncProgress, ParticipantsComparisonResult };
+export type { ZoomWebinarApiResponse, ZoomRegistrantApiResponse, ZoomParticipantApiResponse, ListWebinarsOptions, SyncProgress, ParticipantsComparisonResult };

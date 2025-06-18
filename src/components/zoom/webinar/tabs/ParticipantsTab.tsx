@@ -9,7 +9,10 @@ import {
   TrendingUp, 
   Eye,
   Zap,
-  FlaskConical
+  FlaskConical,
+  AlertTriangle,
+  Shield,
+  Wifi
 } from 'lucide-react';
 import { useParticipantsComparison } from '@/hooks/useParticipantsComparison';
 import { ParticipantsComparisonModal } from '../ParticipantsComparisonModal';
@@ -40,7 +43,7 @@ export const ParticipantsTab: React.FC<ParticipantsTabProps> = ({
     }
   };
 
-  // Calculate engagement metrics
+  // ENHANCED: Calculate engagement metrics with new fields
   const engagementMetrics = React.useMemo(() => {
     if (!participants.length) return null;
 
@@ -51,13 +54,22 @@ export const ParticipantsTab: React.FC<ParticipantsTabProps> = ({
     const mediumEngagement = participants.filter(p => (p.duration || 0) >= 10 && (p.duration || 0) < 30).length;
     const lowEngagement = participants.filter(p => (p.duration || 0) < 10).length;
 
+    // NEW: Enhanced metrics with new fields
+    const technicalIssues = participants.filter(p => p.failover).length;
+    const internalUsers = participants.filter(p => p.internal_user).length;
+    const withRegistrantId = participants.filter(p => p.registrant_id).length;
+
     return {
       totalParticipants: participants.length,
       averageDuration: Math.round(avgDuration),
       highEngagement,
       mediumEngagement,
       lowEngagement,
-      engagementRate: Math.round((highEngagement / participants.length) * 100)
+      engagementRate: Math.round((highEngagement / participants.length) * 100),
+      technicalIssues,
+      internalUsers,
+      withRegistrantId,
+      registrationRate: Math.round((withRegistrantId / participants.length) * 100)
     };
   }, [participants]);
 
@@ -73,9 +85,9 @@ export const ParticipantsTab: React.FC<ParticipantsTabProps> = ({
       {/* Header with API Testing */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Participants Analysis</h2>
+          <h2 className="text-xl font-semibold">Enhanced Participants Analysis</h2>
           <p className="text-muted-foreground">
-            Detailed view of webinar attendees and their engagement
+            Detailed view of webinar attendees with API compliance improvements
           </p>
         </div>
         
@@ -86,61 +98,112 @@ export const ParticipantsTab: React.FC<ParticipantsTabProps> = ({
           className="flex items-center gap-2"
         >
           <FlaskConical className="h-4 w-4" />
-          {isComparing ? 'Comparing APIs...' : 'Compare API Endpoints'}
+          {isComparing ? 'Comparing APIs...' : 'Test API Endpoints'}
         </Button>
       </div>
 
-      {/* Engagement Overview */}
+      {/* ENHANCED: Overview with new metrics */}
       {engagementMetrics && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-blue-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Participants</p>
-                  <p className="text-2xl font-bold">{engagementMetrics.totalParticipants}</p>
+        <>
+          {/* Primary Metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-blue-500" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Participants</p>
+                    <p className="text-2xl font-bold">{engagementMetrics.totalParticipants}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-green-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Avg Duration</p>
-                  <p className="text-2xl font-bold">{engagementMetrics.averageDuration}m</p>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-green-500" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Avg Duration</p>
+                    <p className="text-2xl font-bold">{engagementMetrics.averageDuration}m</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-purple-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">High Engagement</p>
-                  <p className="text-2xl font-bold">{engagementMetrics.highEngagement}</p>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-purple-500" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">High Engagement</p>
+                    <p className="text-2xl font-bold">{engagementMetrics.highEngagement}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Zap className="h-5 w-5 text-orange-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Engagement Rate</p>
-                  <p className="text-2xl font-bold">{engagementMetrics.engagementRate}%</p>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-orange-500" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Engagement Rate</p>
+                    <p className="text-2xl font-bold">{engagementMetrics.engagementRate}%</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* NEW: Enhanced Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Technical Issues</p>
+                    <p className="text-2xl font-bold">{engagementMetrics.technicalIssues}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Participants with failover events
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-indigo-500" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Internal Users</p>
+                    <p className="text-2xl font-bold">{engagementMetrics.internalUsers}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Company team members
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Wifi className="h-5 w-5 text-cyan-500" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Pre-registered</p>
+                    <p className="text-2xl font-bold">{engagementMetrics.withRegistrantId}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {engagementMetrics.registrationRate}% registration rate
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
       )}
 
       {/* Engagement Distribution */}
@@ -194,7 +257,7 @@ export const ParticipantsTab: React.FC<ParticipantsTabProps> = ({
         </Card>
       )}
 
-      {/* Top Participants */}
+      {/* ENHANCED: Top Participants with new field indicators */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -233,6 +296,25 @@ export const ParticipantsTab: React.FC<ParticipantsTabProps> = ({
                     {participant.asked_question && (
                       <Badge variant="outline" className="text-orange-600">
                         Q&A
+                      </Badge>
+                    )}
+                    {/* NEW: Enhanced badges for new fields */}
+                    {participant.internal_user && (
+                      <Badge variant="outline" className="text-indigo-600">
+                        <Shield className="h-3 w-3 mr-1" />
+                        Internal
+                      </Badge>
+                    )}
+                    {participant.failover && (
+                      <Badge variant="outline" className="text-yellow-600">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Issues
+                      </Badge>
+                    )}
+                    {participant.registrant_id && (
+                      <Badge variant="outline" className="text-cyan-600">
+                        <Wifi className="h-3 w-3 mr-1" />
+                        Registered
                       </Badge>
                     )}
                   </div>

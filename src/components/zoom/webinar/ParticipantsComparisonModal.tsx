@@ -1,17 +1,10 @@
 
 import React from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { CheckCircle, XCircle, AlertCircle, Clock, Users, Zap } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { CheckCircle, XCircle, AlertTriangle, Clock, Users, Zap } from 'lucide-react';
 import type { ParticipantsComparisonResult } from '@/services/zoom/api/ZoomWebinarDataService';
 
 interface ParticipantsComparisonModalProps {
@@ -25,183 +18,251 @@ export const ParticipantsComparisonModal: React.FC<ParticipantsComparisonModalPr
   isOpen,
   onClose,
   comparisonResult,
-  isComparing,
+  isComparing
 }) => {
-  if (!comparisonResult && !isComparing) return null;
+  if (!isOpen) return null;
 
-  const getStatusIcon = (hasError: boolean, count: number) => {
-    if (hasError) return <XCircle className="h-4 w-4 text-red-500" />;
-    if (count > 0) return <CheckCircle className="h-4 w-4 text-green-500" />;
-    return <AlertCircle className="h-4 w-4 text-yellow-500" />;
+  if (isComparing) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 animate-spin" />
+              Comparing API Endpoints...
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <div className="animate-pulse text-muted-foreground">
+                Testing both participant API endpoints to compare data quality and performance...
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  if (!comparisonResult) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>API Comparison Results</DialogTitle>
+          </DialogHeader>
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              No comparison data available. Please run the comparison test first.
+            </AlertDescription>
+          </Alert>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  const { reportEndpoint, pastWebinarEndpoint, comparison } = comparisonResult;
+
+  const getStatusIcon = (hasError: boolean) => {
+    return hasError ? 
+      <XCircle className="h-5 w-5 text-red-500" /> : 
+      <CheckCircle className="h-5 w-5 text-green-500" />;
   };
 
   const getPerformanceBadge = (responseTime: number) => {
-    if (responseTime < 1000) return <Badge variant="outline" className="text-green-600">Fast</Badge>;
-    if (responseTime < 3000) return <Badge variant="outline" className="text-yellow-600">Moderate</Badge>;
-    return <Badge variant="outline" className="text-red-600">Slow</Badge>;
+    if (responseTime < 2000) return <Badge variant="default">Fast</Badge>;
+    if (responseTime < 5000) return <Badge variant="secondary">Moderate</Badge>;
+    return <Badge variant="destructive">Slow</Badge>;
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5" />
-            Participants API Endpoints Comparison
+            Participant API Endpoints Comparison
           </DialogTitle>
-          <DialogDescription>
-            Comparing the original /report/ endpoint with the alternative /past_webinars/ endpoint
-          </DialogDescription>
         </DialogHeader>
 
-        {isComparing && (
-          <div className="flex items-center justify-center py-8">
-            <div className="flex items-center gap-3">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              <span>Comparing endpoints...</span>
-            </div>
-          </div>
-        )}
-
-        {comparisonResult && (
-          <div className="space-y-6">
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Report Endpoint */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    {getStatusIcon(!!comparisonResult.reportEndpoint.error, comparisonResult.reportEndpoint.count)}
-                    Report Endpoint
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Participants</span>
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4" />
-                      <span className="font-medium">{comparisonResult.reportEndpoint.count}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Response Time</span>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      <span className="font-medium">{comparisonResult.reportEndpoint.responseTime}ms</span>
-                      {getPerformanceBadge(comparisonResult.reportEndpoint.responseTime)}
-                    </div>
-                  </div>
-                  {comparisonResult.reportEndpoint.error && (
-                    <div className="p-2 bg-red-50 rounded text-sm text-red-700">
-                      Error: {comparisonResult.reportEndpoint.error}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Past Webinars Endpoint */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    {getStatusIcon(!!comparisonResult.pastWebinarEndpoint.error, comparisonResult.pastWebinarEndpoint.count)}
-                    Past Webinars Endpoint
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Participants</span>
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4" />
-                      <span className="font-medium">{comparisonResult.pastWebinarEndpoint.count}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Response Time</span>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      <span className="font-medium">{comparisonResult.pastWebinarEndpoint.responseTime}ms</span>
-                      {getPerformanceBadge(comparisonResult.pastWebinarEndpoint.responseTime)}
-                    </div>
-                  </div>
-                  {comparisonResult.pastWebinarEndpoint.error && (
-                    <div className="p-2 bg-red-50 rounded text-sm text-red-700">
-                      Error: {comparisonResult.pastWebinarEndpoint.error}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            <Separator />
-
-            {/* Comparison Analysis */}
+        <div className="space-y-6">
+          {/* Performance Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardHeader>
-                <CardTitle>Comparison Analysis</CardTitle>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Report Endpoint</span>
+                  {getStatusIcon(!!reportEndpoint.error)}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  /report/webinars/{'{webinarId}'}/participants
+                </p>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {comparisonResult.comparison.countDifference > 0 ? '+' : ''}{comparisonResult.comparison.countDifference}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Count Difference</div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      (Past Webinars - Report)
-                    </div>
-                  </div>
-                  
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold text-orange-600">
-                      {comparisonResult.comparison.uniqueToReport.length}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Unique to Report</div>
-                  </div>
-                  
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600">
-                      {comparisonResult.comparison.uniqueToPastWebinar.length}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Unique to Past Webinars</div>
-                  </div>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span>Participants Found:</span>
+                  <Badge variant="outline">{reportEndpoint.count}</Badge>
                 </div>
-
-                {comparisonResult.comparison.dataStructureDifferences.length > 0 && (
-                  <div>
-                    <h4 className="font-medium mb-2">Data Structure Differences:</h4>
-                    <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                      {comparisonResult.comparison.dataStructureDifferences.map((diff, index) => (
-                        <li key={index}>{diff}</li>
-                      ))}
-                    </ul>
-                  </div>
+                <div className="flex justify-between items-center">
+                  <span>Response Time:</span>
+                  {getPerformanceBadge(reportEndpoint.responseTime)}
+                  <span className="text-sm text-muted-foreground">
+                    {reportEndpoint.responseTime}ms
+                  </span>
+                </div>
+                {reportEndpoint.error && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription className="text-sm">
+                      {reportEndpoint.error}
+                    </AlertDescription>
+                  </Alert>
                 )}
-
-                {/* Performance Comparison */}
-                <div>
-                  <h4 className="font-medium mb-2">Performance Analysis:</h4>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <p>
-                      • The {comparisonResult.reportEndpoint.responseTime < comparisonResult.pastWebinarEndpoint.responseTime ? 'Report' : 'Past Webinars'} endpoint was faster by{' '}
-                      {Math.abs(comparisonResult.reportEndpoint.responseTime - comparisonResult.pastWebinarEndpoint.responseTime)}ms
-                    </p>
-                    {comparisonResult.comparison.countDifference !== 0 && (
-                      <p>
-                        • The Past Webinars endpoint returned {Math.abs(comparisonResult.comparison.countDifference)} {comparisonResult.comparison.countDifference > 0 ? 'more' : 'fewer'} participants
-                      </p>
-                    )}
-                  </div>
-                </div>
               </CardContent>
             </Card>
 
-            <div className="flex justify-end">
-              <Button onClick={onClose}>
-                Close
-              </Button>
-            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Past Webinars Endpoint</span>
+                  {getStatusIcon(!!pastWebinarEndpoint.error)}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  /past_webinars/{'{webinarId}'}/participants
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span>Participants Found:</span>
+                  <Badge variant="outline">{pastWebinarEndpoint.count}</Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Response Time:</span>
+                  {getPerformanceBadge(pastWebinarEndpoint.responseTime)}
+                  <span className="text-sm text-muted-foreground">
+                    {pastWebinarEndpoint.responseTime}ms
+                  </span>
+                </div>
+                {pastWebinarEndpoint.error && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription className="text-sm">
+                      {pastWebinarEndpoint.error}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
           </div>
-        )}
+
+          {/* Data Comparison Analysis */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Data Comparison Analysis
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="text-center p-4 border rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {Math.abs(comparison.countDifference)}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Participant Count Difference
+                  </div>
+                  {comparison.countDifference !== 0 && (
+                    <div className="text-xs mt-1">
+                      {comparison.countDifference > 0 ? 
+                        'Past Webinars has more' : 
+                        'Report endpoint has more'}
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-center p-4 border rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">
+                    {comparison.uniqueToReport.length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Unique to Report Endpoint
+                  </div>
+                </div>
+
+                <div className="text-center p-4 border rounded-lg">
+                  <div className="text-2xl font-bold text-purple-600">
+                    {comparison.uniqueToPastWebinar.length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Unique to Past Webinars
+                  </div>
+                </div>
+              </div>
+
+              {comparison.dataStructureDifferences.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-2">Data Structure Differences:</h4>
+                  <ul className="space-y-1">
+                    {comparison.dataStructureDifferences.map((diff, index) => (
+                      <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-yellow-500" />
+                        {diff}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {comparison.countDifference === 0 && comparison.uniqueToReport.length === 0 && comparison.uniqueToPastWebinar.length === 0 && (
+                <Alert>
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Perfect data consistency! Both endpoints return identical participant data.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recommendations */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Recommendations</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {pastWebinarEndpoint.responseTime < reportEndpoint.responseTime && (
+                  <Alert>
+                    <CheckCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Performance:</strong> Past Webinars endpoint is faster ({pastWebinarEndpoint.responseTime}ms vs {reportEndpoint.responseTime}ms)
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {comparison.countDifference > 0 && (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Data Completeness:</strong> Past Webinars endpoint provides {comparison.countDifference} more participants
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {!pastWebinarEndpoint.error && !reportEndpoint.error && (
+                  <Alert>
+                    <CheckCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Reliability:</strong> Both endpoints are accessible and working properly
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </DialogContent>
     </Dialog>
   );

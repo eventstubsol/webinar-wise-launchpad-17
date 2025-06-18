@@ -8,7 +8,7 @@ export interface ZoomParticipant {
   id: string;
   webinar_id: string;
   participant_id: string;
-  registrant_id: string | null;
+  registrant_id: string | null; // FIXED: Changed from uuid to string to match API
   participant_name: string;
   participant_email: string | null;
   participant_user_id: string | null;
@@ -29,6 +29,9 @@ export interface ZoomParticipant {
   network_type: string | null;
   version: string | null;
   customer_key: string | null;
+  // NEW: Added missing fields from API spec
+  failover: boolean | null;
+  internal_user: boolean | null;
   created_at: string | null;
   updated_at: string | null;
 }

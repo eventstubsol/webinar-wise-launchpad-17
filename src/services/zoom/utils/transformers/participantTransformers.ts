@@ -2,20 +2,36 @@
 import { ZoomParticipant } from '@/types/zoom';
 
 /**
- * Data transformation utilities for participants and engagement
+ * ENHANCED: Data transformation utilities for participants with API compliance fixes
  */
 export class ParticipantTransformers {
   /**
-   * Transform Zoom API participant to database format
+   * ENHANCED: Transform Zoom API participant to database format with proper field mapping
    */
   static transformParticipant(
     apiParticipant: any,
     webinarId: string
   ): Omit<ZoomParticipant, 'id' | 'created_at' | 'updated_at'> & { ip_address: string | null } {
+    
+    // Enhanced status mapping for participant_status enum
+    const normalizeStatus = (status: string | undefined): string => {
+      if (!status) return 'attended';
+      
+      const statusMap: { [key: string]: string } = {
+        'in_meeting': 'in_meeting',
+        'in_waiting_room': 'in_waiting_room', 
+        'attended': 'attended',
+        'not_attended': 'not_attended',
+        'left_early': 'left_early'
+      };
+      
+      return statusMap[status.toLowerCase()] || 'attended';
+    };
+
     return {
       webinar_id: webinarId,
       participant_id: apiParticipant.id || apiParticipant.participant_id,
-      registrant_id: apiParticipant.registrant_id || null,
+      registrant_id: apiParticipant.registrant_id || null, // FIXED: Now handles string values correctly
       participant_name: apiParticipant.name || apiParticipant.participant_name,
       participant_email: apiParticipant.user_email || apiParticipant.participant_email || null,
       participant_user_id: apiParticipant.user_id || null,
@@ -36,11 +52,14 @@ export class ParticipantTransformers {
       network_type: apiParticipant.network_type || null,
       version: apiParticipant.version || null,
       customer_key: apiParticipant.customer_key || null,
+      // NEW: Added missing fields from API spec
+      failover: apiParticipant.failover || false,
+      internal_user: apiParticipant.internal_user || false,
     };
   }
 
   /**
-   * Normalize participant engagement data
+   * ENHANCED: Normalize participant engagement data with improved calculations
    */
   static normalizeEngagementData(participant: any): {
     engagement_score: number;
@@ -50,12 +69,13 @@ export class ParticipantTransformers {
       chat_messages: boolean;
       hand_raised: boolean;
       camera_usage_percent: number;
+      had_technical_issues: boolean; // NEW: Based on failover field
     };
   } {
     const duration = participant.duration || 0;
     const cameraOnDuration = participant.camera_on_duration || 0;
     
-    // Calculate engagement score (0-100)
+    // Enhanced engagement score calculation (0-100)
     let score = 0;
     
     // Duration component (0-40 points)
@@ -67,17 +87,57 @@ export class ParticipantTransformers {
     if (participant.posted_chat) score += 15;
     if (participant.raised_hand) score += 10;
     
+    // Penalty for technical issues
+    if (participant.failover) score -= 5;
+    
     const cameraUsagePercent = duration > 0 ? (cameraOnDuration / duration) * 100 : 0;
     
     return {
-      engagement_score: Math.round(Math.min(100, score)),
+      engagement_score: Math.round(Math.min(100, Math.max(0, score))),
       participation_summary: {
         polls_answered: !!participant.answered_polling,
         questions_asked: !!participant.asked_question,
         chat_messages: !!participant.posted_chat,
         hand_raised: !!participant.raised_hand,
         camera_usage_percent: Math.round(cameraUsagePercent),
+        had_technical_issues: !!participant.failover, // NEW: Technical issues indicator
       },
+    };
+  }
+
+  /**
+   * NEW: Validate participant data before processing
+   */
+  static validateParticipantData(apiParticipant: any): {
+    isValid: boolean;
+    errors: string[];
+    warnings: string[];
+  } {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // Required fields validation
+    if (!apiParticipant.id && !apiParticipant.participant_id) {
+      errors.push('Missing participant ID');
+    }
+
+    if (!apiParticipant.name && !apiParticipant.participant_name) {
+      warnings.push('Missing participant name');
+    }
+
+    // Data type validation
+    if (apiParticipant.duration && typeof apiParticipant.duration !== 'number') {
+      warnings.push('Duration is not a number');
+    }
+
+    if (apiParticipant.registrant_id && typeof apiParticipant.registrant_id !== 'string') {
+      warnings.push('Registrant ID should be a string');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings
     };
   }
 }
