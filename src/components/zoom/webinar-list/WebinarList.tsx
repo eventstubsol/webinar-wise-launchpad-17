@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,6 +14,9 @@ import { WebinarParticipantSyncButton } from './WebinarParticipantSyncButton';
 interface WebinarListProps {
   connectionId: string;
 }
+
+// Define the type for participant sync status
+type ParticipantSyncStatus = 'not_applicable' | 'pending' | 'synced' | 'failed' | 'no_participants';
 
 export const WebinarList: React.FC<WebinarListProps> = ({ connectionId }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,9 +43,9 @@ export const WebinarList: React.FC<WebinarListProps> = ({ connectionId }) => {
       }
 
       if (syncStatusFilter !== 'all') {
-        // Ensure we only filter by valid sync status values
-        const validSyncStatuses = ['pending', 'failed', 'not_applicable', 'synced', 'no_participants'];
-        if (validSyncStatuses.includes(syncStatusFilter)) {
+        // Type guard to ensure the filter value is valid
+        const validSyncStatuses: ParticipantSyncStatus[] = ['pending', 'failed', 'not_applicable', 'synced', 'no_participants'];
+        if (validSyncStatuses.includes(syncStatusFilter as ParticipantSyncStatus)) {
           query = query.eq('participant_sync_status', syncStatusFilter);
         }
       }
