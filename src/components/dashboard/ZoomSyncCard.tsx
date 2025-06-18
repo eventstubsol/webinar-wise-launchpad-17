@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -65,7 +64,7 @@ export function ZoomSyncCard() {
       }
     },
     enabled: !!connection?.id,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // Increased from 30s to 60s to reduce polling
     retry: (failureCount, error) => {
       const hasStatus = error && typeof error === 'object' && 'status' in error;
       const status = hasStatus ? (error as any).status : null;
@@ -75,6 +74,7 @@ export function ZoomSyncCard() {
       }
       return failureCount < 2;
     },
+    staleTime: 30000, // Add stale time to reduce unnecessary fetches
   });
 
   const formatLastSync = (dateString: string | null) => {
