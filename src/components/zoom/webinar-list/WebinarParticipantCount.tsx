@@ -51,7 +51,7 @@ export const WebinarParticipantCount: React.FC<WebinarParticipantCountProps> = (
         {participantCount || 0} participants
       </span>
       {shouldShowWarning && (
-        <AlertTriangle className="h-3 w-3 text-amber-500" title="Finished webinar with no participants - may indicate sync issue" />
+        <AlertTriangle className="h-3 w-3 text-amber-500" />
       )}
     </div>
   );
