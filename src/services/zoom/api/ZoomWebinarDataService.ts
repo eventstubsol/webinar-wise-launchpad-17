@@ -1,4 +1,3 @@
-
 import { zoomApiClient } from './ZoomApiClient';
 import type { ApiResponse } from './types';
 
@@ -63,6 +62,30 @@ interface SyncProgress {
   processed: number;
   failed: number;
   current: string;
+}
+
+/**
+ * Participants API comparison result
+ */
+interface ParticipantsComparisonResult {
+  reportEndpoint: {
+    count: number;
+    data: any[];
+    responseTime: number;
+    error?: string;
+  };
+  pastWebinarEndpoint: {
+    count: number;
+    data: any[];
+    responseTime: number;
+    error?: string;
+  };
+  comparison: {
+    countDifference: number;
+    uniqueToReport: any[];
+    uniqueToPastWebinar: any[];
+    dataStructureDifferences: string[];
+  };
 }
 
 /**
@@ -268,6 +291,9 @@ export class ZoomWebinarDataService {
     return allRegistrants;
   }
 
+  /**
+   * Get webinar participants using the existing /report/ endpoint
+   */
   static async getWebinarParticipants(
     webinarId: string,
     options: { pageSize?: number } = {}
@@ -314,6 +340,185 @@ export class ZoomWebinarDataService {
     return allParticipants;
   }
 
+  /**
+   * NEW: Get webinar participants using the alternative /past_webinars/ endpoint
+   */
+  static async getWebinarParticipantsAlternative(
+    webinarId: string,
+    options: { pageSize?: number; debugMode?: boolean } = {}
+  ) {
+    const { pageSize = 300, debugMode = false } = options;
+    const allParticipants = [];
+    let pageNumber = 1;
+    let hasMore = true;
+
+    if (debugMode) {
+      console.log(`Starting alternative participants fetch for webinar ${webinarId} with pageSize=${pageSize}`);
+    }
+
+    while (hasMore) {
+      const params = new URLSearchParams({
+        page_size: pageSize.toString(),
+        page_number: pageNumber.toString(),
+      });
+
+      const startTime = Date.now();
+      const response = await zoomApiClient.get(
+        `/past_webinars/${webinarId}/participants?${params}`
+      );
+      const responseTime = Date.now() - startTime;
+
+      if (debugMode) {
+        console.log(`Alternative API page ${pageNumber} response time: ${responseTime}ms`);
+      }
+
+      if (!response.success || !response.data) {
+        console.error(`Failed to fetch participants (alternative) for webinar ${webinarId}:`, response.error);
+        break;
+      }
+
+      const { participants, page_count, page_number: currentPage, total_records } = response.data;
+      
+      // Calculate engagement metrics for each participant
+      const enhancedParticipants = participants.map((participant: any) => ({
+        ...participant,
+        engagement_score: this.calculateEngagementScore(participant),
+        total_duration: participant.duration || 0,
+        join_leave_count: participant.details?.length || 1,
+        _source: 'past_webinars_api'
+      }));
+
+      allParticipants.push(...enhancedParticipants);
+
+      if (debugMode) {
+        console.log(`Alternative API page ${pageNumber}: ${participants.length} participants, total so far: ${allParticipants.length}`);
+      }
+
+      hasMore = currentPage < page_count;
+      pageNumber++;
+    }
+
+    if (debugMode) {
+      console.log(`Alternative API total participants fetched: ${allParticipants.length}`);
+    }
+
+    return allParticipants;
+  }
+
+  /**
+   * NEW: Compare both participants API endpoints
+   */
+  static async compareParticipantsEndpoints(
+    webinarId: string,
+    options: { pageSize?: number; debugMode?: boolean } = {}
+  ): Promise<ParticipantsComparisonResult> {
+    const { pageSize = 300, debugMode = false } = options;
+
+    console.log(`Comparing participants endpoints for webinar ${webinarId}`);
+
+    // Test report endpoint
+    let reportResult = {
+      count: 0,
+      data: [],
+      responseTime: 0,
+      error: undefined as string | undefined
+    };
+
+    try {
+      const reportStartTime = Date.now();
+      reportResult.data = await this.getWebinarParticipants(webinarId, { pageSize: 100 });
+      reportResult.responseTime = Date.now() - reportStartTime;
+      reportResult.count = reportResult.data.length;
+
+      if (debugMode) {
+        console.log(`Report endpoint: ${reportResult.count} participants in ${reportResult.responseTime}ms`);
+      }
+    } catch (error) {
+      reportResult.error = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Report endpoint error:', reportResult.error);
+    }
+
+    // Test past_webinars endpoint
+    let pastWebinarResult = {
+      count: 0,
+      data: [],
+      responseTime: 0,
+      error: undefined as string | undefined
+    };
+
+    try {
+      const pastStartTime = Date.now();
+      pastWebinarResult.data = await this.getWebinarParticipantsAlternative(webinarId, { pageSize, debugMode });
+      pastWebinarResult.responseTime = Date.now() - pastStartTime;
+      pastWebinarResult.count = pastWebinarResult.data.length;
+
+      if (debugMode) {
+        console.log(`Past webinars endpoint: ${pastWebinarResult.count} participants in ${pastWebinarResult.responseTime}ms`);
+      }
+    } catch (error) {
+      pastWebinarResult.error = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Past webinars endpoint error:', pastWebinarResult.error);
+    }
+
+    // Compare results
+    const comparison = this.compareParticipantData(reportResult.data, pastWebinarResult.data, debugMode);
+
+    return {
+      reportEndpoint: reportResult,
+      pastWebinarEndpoint: pastWebinarResult,
+      comparison
+    };
+  }
+
+  /**
+   * NEW: Compare participant data from both endpoints
+   */
+  private static compareParticipantData(reportData: any[], pastWebinarData: any[], debugMode = false) {
+    const countDifference = pastWebinarData.length - reportData.length;
+    
+    // Create sets of participant IDs for comparison
+    const reportIds = new Set(reportData.map(p => p.id || p.participant_id));
+    const pastWebinarIds = new Set(pastWebinarData.map(p => p.id || p.participant_id));
+
+    const uniqueToReport = reportData.filter(p => !pastWebinarIds.has(p.id || p.participant_id));
+    const uniqueToPastWebinar = pastWebinarData.filter(p => !reportIds.has(p.id || p.participant_id));
+
+    // Analyze data structure differences
+    const dataStructureDifferences = [];
+    
+    if (reportData.length > 0 && pastWebinarData.length > 0) {
+      const reportFields = Object.keys(reportData[0]);
+      const pastWebinarFields = Object.keys(pastWebinarData[0]);
+      
+      const reportOnlyFields = reportFields.filter(f => !pastWebinarFields.includes(f));
+      const pastWebinarOnlyFields = pastWebinarFields.filter(f => !reportFields.includes(f));
+      
+      if (reportOnlyFields.length > 0) {
+        dataStructureDifferences.push(`Report endpoint has exclusive fields: ${reportOnlyFields.join(', ')}`);
+      }
+      
+      if (pastWebinarOnlyFields.length > 0) {
+        dataStructureDifferences.push(`Past webinars endpoint has exclusive fields: ${pastWebinarOnlyFields.join(', ')}`);
+      }
+    }
+
+    if (debugMode) {
+      console.log('Comparison results:', {
+        countDifference,
+        uniqueToReportCount: uniqueToReport.length,
+        uniqueToPastWebinarCount: uniqueToPastWebinar.length,
+        dataStructureDifferences
+      });
+    }
+
+    return {
+      countDifference,
+      uniqueToReport,
+      uniqueToPastWebinar,
+      dataStructureDifferences
+    };
+  }
+
   static async getWebinarPolls(webinarId: string) {
     const response = await zoomApiClient.get(
       `/webinars/${webinarId}/polls`
@@ -358,4 +563,4 @@ export class ZoomWebinarDataService {
 }
 
 // Export types for use in other services
-export type { ZoomWebinarApiResponse, ListWebinarsOptions, SyncProgress };
+export type { ZoomWebinarApiResponse, ListWebinarsOptions, SyncProgress, ParticipantsComparisonResult };

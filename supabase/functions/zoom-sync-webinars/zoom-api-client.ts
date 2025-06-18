@@ -584,6 +584,95 @@ class ZoomAPIClient {
     }
   }
 
+  /**
+   * NEW: Get webinar participants using alternative /past_webinars/ endpoint
+   */
+  async getWebinarParticipantsAlternative(webinarId: string, debugMode = false): Promise<any[]> {
+    const startTime = Date.now();
+    const allParticipants = [];
+    let pageNumber = 1;
+    let hasMore = true;
+
+    console.log(`ALTERNATIVE: Starting participants fetch for webinar ${webinarId}`);
+    console.log(`ALTERNATIVE: Connection ID: ${this.connection.id}`);
+    console.log(`ALTERNATIVE: Using token type: ${this.isOAuth ? 'OAuth' : 'Server-to-Server'}`);
+
+    while (hasMore) {
+      const endpoint = `/past_webinars/${webinarId}/participants?page_size=300&page_number=${pageNumber}`;
+      
+      if (debugMode) {
+        console.log(`DEBUG ALT: Page ${pageNumber} endpoint: ${endpoint}`);
+      }
+
+      try {
+        const url = `${this.baseURL}${endpoint}`;
+        const sanitizedToken = this.validateAndSanitizeToken(this.accessToken);
+        
+        const requestHeaders = {
+          'Authorization': `Bearer ${sanitizedToken}`,
+          'Content-Type': 'application/json',
+        };
+
+        const pageStartTime = Date.now();
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: requestHeaders,
+        });
+
+        const pageResponseTime = Date.now() - pageStartTime;
+        
+        console.log(`ALTERNATIVE: Page ${pageNumber} Response Details for ${webinarId}:`);
+        console.log(`  Status: ${response.status} ${response.statusText}`);
+        console.log(`  Page response time: ${pageResponseTime}ms`);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          
+          if (response.status === 404) {
+            console.log(`ALTERNATIVE: Webinar ${webinarId} not found in past_webinars endpoint`);
+            break;
+          }
+          
+          console.error(`ALTERNATIVE: API error (${response.status}) for ${webinarId} page ${pageNumber}:`, errorText);
+          throw new Error(`Alternative participants API failed: ${response.status} ${response.statusText}`);
+        }
+
+        const responseText = await response.text();
+        const result = responseText ? JSON.parse(responseText) : {};
+        
+        const participants = result.participants || [];
+        allParticipants.push(...participants);
+        
+        console.log(`ALTERNATIVE: Page ${pageNumber} Success:`);
+        console.log(`  Participants on page: ${participants.length}`);
+        console.log(`  Total participants so far: ${allParticipants.length}`);
+        console.log(`  Page count: ${result.page_count || 'N/A'}`);
+        console.log(`  Total records: ${result.total_records || 'N/A'}`);
+        
+        if (debugMode && participants.length > 0) {
+          console.log(`DEBUG ALT: Sample participant from page ${pageNumber}:`, JSON.stringify(participants[0], null, 2));
+        }
+
+        hasMore = pageNumber < (result.page_count || 1);
+        pageNumber++;
+        
+      } catch (error) {
+        console.error(`ALTERNATIVE: Error on page ${pageNumber} for webinar ${webinarId}:`, error);
+        break;
+      }
+    }
+
+    const totalTime = Date.now() - startTime;
+    
+    console.log(`ALTERNATIVE: Final Results for ${webinarId}:`);
+    console.log(`  Total participants: ${allParticipants.length}`);
+    console.log(`  Total pages processed: ${pageNumber - 1}`);
+    console.log(`  Total time: ${totalTime}ms`);
+    console.log(`  Average time per page: ${totalTime / (pageNumber - 1)}ms`);
+
+    return allParticipants;
+  }
+
   async getWebinarPolls(webinarId: string): Promise<any[]> {
     try {
       const response = await this.makeRequest(`/report/webinars/${webinarId}/polls`);

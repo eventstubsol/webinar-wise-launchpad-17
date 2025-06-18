@@ -4,7 +4,7 @@ import { ZoomWebinarSyncService } from './ZoomWebinarSyncService';
 import { ZoomWebinarTransformService } from './ZoomWebinarTransformService';
 
 // Re-export types for backward compatibility
-export type { ZoomWebinarApiResponse, ListWebinarsOptions, SyncProgress } from './ZoomWebinarDataService';
+export type { ZoomWebinarApiResponse, ListWebinarsOptions, SyncProgress, ParticipantsComparisonResult } from './ZoomWebinarDataService';
 
 /**
  * Main Zoom Webinar Service that delegates to specialized services
@@ -52,10 +52,24 @@ export class ZoomWebinarService {
   }
 
   /**
-   * Get webinar participants with engagement metrics
+   * Get webinar participants with engagement metrics (original endpoint)
    */
   static async getWebinarParticipants(webinarId: string, options: any = {}) {
     return ZoomWebinarDataService.getWebinarParticipants(webinarId, options);
+  }
+
+  /**
+   * NEW: Get webinar participants using alternative endpoint
+   */
+  static async getWebinarParticipantsAlternative(webinarId: string, options: any = {}) {
+    return ZoomWebinarDataService.getWebinarParticipantsAlternative(webinarId, options);
+  }
+
+  /**
+   * NEW: Compare both participants endpoints
+   */
+  static async compareParticipantsEndpoints(webinarId: string, options: any = {}) {
+    return ZoomWebinarDataService.compareParticipantsEndpoints(webinarId, options);
   }
 
   /**
