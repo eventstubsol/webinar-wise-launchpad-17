@@ -320,7 +320,7 @@ class ZoomAPIClient {
   }
 
   /**
-   * FIXED: Get ALL webinar registrants with proper pagination handling
+   * FIXED: Get ALL webinar registrants with ROBUST pagination handling
    */
   async getWebinarRegistrants(webinarId: string, options: { status?: string } = {}): Promise<any[]> {
     const { status = 'approved' } = options;
@@ -331,7 +331,9 @@ class ZoomAPIClient {
     let currentPage = 1;
     let totalPages = 1;
     let nextPageToken: string | undefined;
-    const maxPages = 50; // Safety limit to prevent infinite loops
+    const maxPages = 100; // Increased safety limit
+    let consecutiveEmptyPages = 0;
+    let lastPageSize = 0;
     
     try {
       do {
@@ -357,7 +359,13 @@ class ZoomAPIClient {
         
         if (!response) {
           console.log(`⚠️  NULL RESPONSE for webinar ${webinarId} page ${currentPage}`);
-          break;
+          consecutiveEmptyPages++;
+          if (consecutiveEmptyPages >= 3) {
+            console.log(`🛑 STOPPING: 3 consecutive null responses`);
+            break;
+          }
+          currentPage++;
+          continue;
         }
         
         // Handle different response formats
@@ -376,7 +384,23 @@ class ZoomAPIClient {
             hasData: 'data' in response,
             keys: Object.keys(response)
           });
-          break;
+          
+          // Still try to continue - this might be a temporary API issue
+          consecutiveEmptyPages++;
+          if (consecutiveEmptyPages >= 3) {
+            console.log(`🛑 STOPPING: 3 consecutive unexpected response formats`);
+            break;
+          }
+          currentPage++;
+          continue;
+        }
+        
+        // Reset consecutive empty pages counter if we got data
+        if (pageRegistrants.length > 0) {
+          consecutiveEmptyPages = 0;
+        } else {
+          consecutiveEmptyPages++;
+          console.log(`📭 EMPTY PAGE ${currentPage}: consecutive empty pages = ${consecutiveEmptyPages}`);
         }
         
         // Add registrants from this page
@@ -395,26 +419,61 @@ class ZoomAPIClient {
               fields: Object.keys(sample)
             });
           }
-        } else {
-          console.log(`📭 PAGE ${currentPage} EMPTY: No registrants found`);
         }
         
-        // Update pagination info
+        // Store last page size for continuation logic
+        lastPageSize = pageRegistrants.length;
+        
+        // Update pagination info from response
         if (response.page_count) {
           totalPages = response.page_count;
         }
         
-        // Check for next page using next_page_token (preferred) or page number
+        // Extract next page token
         nextPageToken = response.next_page_token;
-        const hasMore = nextPageToken || (response.page_number && response.page_number < totalPages);
         
-        console.log(`📊 PAGINATION STATUS:`, {
-          currentPage,
+        // ROBUST CONTINUATION LOGIC - Multiple indicators to determine if we should continue
+        let shouldContinue = false;
+        const reasons = [];
+        
+        // 1. If we have a next_page_token, definitely continue
+        if (nextPageToken) {
+          shouldContinue = true;
+          reasons.push('has_next_page_token');
+        }
+        
+        // 2. If last page was full (300 registrants), likely more data
+        if (lastPageSize === 300) {
+          shouldContinue = true;
+          reasons.push('full_page_size');
+        }
+        
+        // 3. If we're below indicated total pages
+        if (response.page_number && totalPages && response.page_number < totalPages) {
+          shouldContinue = true;
+          reasons.push('below_total_pages');
+        }
+        
+        // 4. If we haven't had many consecutive empty pages
+        if (consecutiveEmptyPages < 2 && currentPage < 5 && lastPageSize > 0) {
+          shouldContinue = true;
+          reasons.push('early_pages_with_data');
+        }
+        
+        // 5. Safety check - don't continue if we've had too many empty pages
+        if (consecutiveEmptyPages >= 3) {
+          shouldContinue = false;
+          reasons.push('too_many_empty_pages');
+        }
+        
+        console.log(`📊 CONTINUATION ANALYSIS PAGE ${currentPage}:`, {
+          shouldContinue,
+          reasons: reasons.join(', '),
+          nextPageToken: !!nextPageToken,
+          lastPageSize,
           totalPages,
-          hasNextPageToken: !!nextPageToken,
-          hasMore,
-          registrantsThisPage: pageRegistrants.length,
-          totalRegistrants: allRegistrants.length
+          consecutiveEmptyPages,
+          currentRegistrants: allRegistrants.length
         });
         
         // Safety check to prevent infinite loops
@@ -423,20 +482,21 @@ class ZoomAPIClient {
           break;
         }
         
-        // Break if no more pages
-        if (!hasMore) {
-          console.log(`🏁 PAGINATION COMPLETE: No more pages for webinar ${webinarId}`);
+        // Break if we shouldn't continue
+        if (!shouldContinue) {
+          console.log(`🏁 PAGINATION COMPLETE: Stopping pagination for webinar ${webinarId}. Reasons: ${reasons.join(', ')}`);
           break;
         }
         
         currentPage++;
         
         // Small delay between pages to be respectful to API
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
         
       } while (currentPage <= maxPages);
       
       console.log(`🎉 ALL REGISTRANTS FETCHED: ${allRegistrants.length} total registrants across ${currentPage - 1} pages for webinar ${webinarId}`);
+      console.log(`📈 FINAL PAGINATION STATS: Last page size: ${lastPageSize}, Empty pages: ${consecutiveEmptyPages}, Total pages expected: ${totalPages}`);
       
       return allRegistrants;
       
