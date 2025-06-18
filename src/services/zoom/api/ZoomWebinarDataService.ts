@@ -1,5 +1,5 @@
-
 import { zoomApiClient } from './ZoomApiClient';
+import { ZoomErrorRecovery } from '../utils/transformers/validationUtils';
 import type { ApiResponse } from './types';
 
 /**
@@ -121,7 +121,7 @@ class ZoomApiError extends Error {
  */
 export class ZoomWebinarDataService {
   /**
-   * Enhanced get webinar with query parameters support
+   * Enhanced get webinar with query parameters support and error recovery
    */
   static async getWebinar(
     webinarId: string,
@@ -139,25 +139,53 @@ export class ZoomWebinarDataService {
     
     const url = `/webinars/${webinarId}${params.toString() ? `?${params}` : ''}`;
     
-    try {
-      const response = await zoomApiClient.get<ZoomWebinarApiResponse>(url);
-      
-      if (response.success) {
-        return response.data || null;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount <= maxRetries) {
+      try {
+        const response = await zoomApiClient.get<ZoomWebinarApiResponse>(url);
+        
+        if (response.success) {
+          return response.data || null;
+        }
+        
+        // Enhanced error handling with recovery strategies
+        const recoveryStrategy = await ZoomErrorRecovery.handleApiError(response.error, {
+          operation: 'getWebinar',
+          webinarId,
+          retryCount,
+          maxRetries
+        });
+        
+        if (recoveryStrategy.shouldRetry && retryCount < maxRetries) {
+          retryCount++;
+          console.log(`Retrying getWebinar for ${webinarId} (attempt ${retryCount}/${maxRetries}) after ${recoveryStrategy.delayMs}ms`);
+          await new Promise(resolve => setTimeout(resolve, recoveryStrategy.delayMs));
+          continue;
+        }
+        
+        this.handleZoomApiError(response.error, webinarId);
+        return null;
+        
+      } catch (error) {
+        ZoomErrorRecovery.logError(error, { operation: 'getWebinar', webinarId, retryCount });
+        
+        if (retryCount >= maxRetries) {
+          console.error(`Failed to fetch webinar ${webinarId} after ${maxRetries} retries:`, error);
+          throw error;
+        }
+        
+        retryCount++;
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
       }
-      
-      // Enhanced error handling with Zoom-specific errors
-      this.handleZoomApiError(response.error, webinarId);
-      return null;
-      
-    } catch (error) {
-      console.error(`Failed to fetch webinar ${webinarId}:`, error);
-      throw error;
     }
+    
+    return null;
   }
 
   /**
-   * Enhanced Zoom API error handling
+   * Enhanced Zoom API error handling with specific error categorization
    */
   private static handleZoomApiError(error: any, webinarId: string): void {
     const errorCode = error?.code;
@@ -439,6 +467,9 @@ export class ZoomWebinarDataService {
     return null;
   }
 
+  /**
+   * Calculate engagement score with enhanced metrics
+   */
   private static calculateEngagementScore(participant: any): number {
     let score = 0;
     

@@ -1,14 +1,15 @@
 
 import { ZoomWebinar, ZoomRegistrant } from '@/types/zoom';
 import { WebinarStatus } from '@/types/zoom/enums';
+import { ZoomDataValidator } from './validationUtils';
 
 /**
- * Data transformation utilities for webinars and registrants
+ * Enhanced data transformation utilities for webinars and registrants
  */
 export class WebinarTransformers {
   /**
    * Transform Zoom API webinar to database format with comprehensive field mapping
-   * FIXES: Registration logic, missing fields, hardcoded defaults
+   * FIXES: Registration logic, missing fields, hardcoded defaults, validation
    */
   static transformWebinarForDatabase(
     apiWebinar: any,
@@ -36,7 +37,7 @@ export class WebinarTransformers {
     const alternativeHosts = settings.alternative_hosts ? 
       settings.alternative_hosts.split(',').map((host: string) => host.trim()) : null;
     
-    return {
+    const transformedData = {
       connection_id: connectionId,
       webinar_id: apiWebinar.id?.toString() || apiWebinar.webinar_id?.toString(),
       webinar_uuid: apiWebinar.uuid,
@@ -101,10 +102,30 @@ export class WebinarTransformers {
       panelists: apiWebinar.panelists || null,
       
       // Participant sync status fields
-      participant_sync_status: 'pending',
+      participant_sync_status: 'pending' as const,
       participant_sync_attempted_at: null,
       participant_sync_error: null,
     };
+
+    // Validate transformed data
+    const validation = ZoomDataValidator.validateWebinarData(transformedData);
+    
+    if (!validation.isValid) {
+      console.warn('Webinar transformation validation failed:', {
+        webinarId: transformedData.webinar_id,
+        errors: validation.errors,
+        warnings: validation.warnings
+      });
+    }
+    
+    if (validation.warnings.length > 0) {
+      console.info('Webinar transformation warnings:', {
+        webinarId: transformedData.webinar_id,
+        warnings: validation.warnings
+      });
+    }
+
+    return transformedData;
   }
 
   /**
