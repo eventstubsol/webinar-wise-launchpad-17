@@ -1,6 +1,5 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0';
-import { Database } from '../../../src/types/supabase';
 import { processWebinarSyncEnhanced } from './processors/simple-sync-processor';
 import { createZoomAPIClient } from './zoom-api-client';
 import { EnhancedSyncProgressTracker } from '../../../src/services/zoom/sync/EnhancedSyncProgressTracker';
@@ -24,7 +23,7 @@ export default async function handler(req: Request): Promise<Response> {
       return new Response('Invalid Authorization header format', { status: 401 });
     }
 
-    const supabaseAdmin = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    const supabaseAdmin = createClient(supabaseUrl, supabaseAnonKey, {
       global: {
         headers: {
           Authorization: `Bearer ${bearerToken}`,
