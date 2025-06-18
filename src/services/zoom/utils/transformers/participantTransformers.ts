@@ -13,11 +13,11 @@ export class ParticipantTransformers {
     webinarId: string
   ): Omit<ZoomParticipant, 'id' | 'created_at' | 'updated_at'> & { ip_address: string | null } {
     
-    // Enhanced status mapping for participant_status enum
-    const normalizeStatus = (status: string | undefined): string => {
+    // Enhanced status mapping for participant_status enum with proper return type
+    const normalizeStatus = (status: string | undefined): 'in_meeting' | 'in_waiting_room' | 'attended' | 'not_attended' | 'left_early' => {
       if (!status) return 'attended';
       
-      const statusMap: { [key: string]: string } = {
+      const statusMap: { [key: string]: 'in_meeting' | 'in_waiting_room' | 'attended' | 'not_attended' | 'left_early' } = {
         'in_meeting': 'attended',
         'in_waiting_room': 'in_waiting_room', 
         'attended': 'attended',
@@ -54,7 +54,7 @@ export class ParticipantTransformers {
       network_type: apiParticipant.network_type || null,
       version: apiParticipant.version || null,
       customer_key: apiParticipant.customer_key || null,
-      // FIXED: Use 'status' field to match database schema
+      // FIXED: Use 'status' field to match database schema with proper typing
       status: normalizeStatus(apiParticipant.status),
       // NEW: Added missing fields from API spec
       failover: apiParticipant.failover || false,
