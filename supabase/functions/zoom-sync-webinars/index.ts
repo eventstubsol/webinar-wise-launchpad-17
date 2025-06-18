@@ -2,6 +2,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0';
 import { processSimpleWebinarSync } from './simple-sync-processor.ts';
 import { createZoomAPIClient } from './zoom-api-client.ts';
+import { createSyncLog, updateSyncLog } from './database-operations.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -9,17 +10,34 @@ const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 export default async function handler(req: Request): Promise<Response> {
   console.log('🚀 ZOOM SYNC WEBINARS: Starting sync operation');
   
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, zoom_connection_id, test_mode',
+  };
+
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+  
+  let syncLogId: string | null = null;
+  
   try {
     const authorizationHeader = req.headers.get('Authorization');
     if (!authorizationHeader) {
       console.error('❌ Missing Authorization header');
-      return new Response('Missing Authorization header', { status: 401 });
+      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), { 
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     const bearerToken = authorizationHeader.replace('Bearer ', '');
     if (!bearerToken) {
       console.error('❌ Invalid Authorization header format');
-      return new Response('Invalid Authorization header format', { status: 401 });
+      return new Response(JSON.stringify({ error: 'Invalid Authorization header format' }), { 
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseAnonKey, {
@@ -35,7 +53,7 @@ export default async function handler(req: Request): Promise<Response> {
       console.error('❌ Error getting user:', userError);
       return new Response(JSON.stringify({ error: 'Failed to get user' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
@@ -45,7 +63,10 @@ export default async function handler(req: Request): Promise<Response> {
     const connectionId = req.headers.get('zoom_connection_id');
     if (!connectionId) {
       console.error('❌ Missing zoom_connection_id header');
-      return new Response('Missing zoom_connection_id header', { status: 400 });
+      return new Response(JSON.stringify({ error: 'Missing zoom_connection_id header' }), { 
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     console.log(`🔗 Zoom Connection ID: ${connectionId}`);
@@ -61,13 +82,16 @@ export default async function handler(req: Request): Promise<Response> {
       console.error('❌ Error fetching Zoom connection:', connectionError);
       return new Response(JSON.stringify({ error: 'Failed to fetch Zoom connection' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (!connection) {
       console.error('❌ Zoom connection not found');
-      return new Response('Zoom connection not found', { status: 404 });
+      return new Response(JSON.stringify({ error: 'Zoom connection not found' }), { 
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     console.log(`✅ Zoom Connection Name: ${connection.connection_name}`);
@@ -76,40 +100,11 @@ export default async function handler(req: Request): Promise<Response> {
     const testMode = testModeHeader === 'true';
     console.log(`🧪 Test Mode: ${testMode}`);
 
-    // Create sync log entry in database for frontend polling
-    const { data: syncLog, error: syncLogError } = await supabaseAdmin
-      .from('zoom_sync_logs')
-      .insert({
-        connection_id: connectionId,
-        sync_type: 'full_sync',
-        sync_status: 'started',
-        resource_type: 'webinars',
-        resource_id: null,
-        started_at: new Date().toISOString(),
-        total_items: 0,
-        processed_items: 0,
-        failed_items: 0,
-        api_calls_made: 0,
-        rate_limit_hits: 0,
-        retry_attempts: 0,
-        retry_schedule: [],
-        max_participant_retries: 3
-      })
-      .select('id')
-      .single();
-
-    if (syncLogError) {
-      console.error('❌ Failed to create sync log:', syncLogError);
-      return new Response(JSON.stringify({ error: 'Failed to initialize sync operation' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    const syncLogId = syncLog.id;
+    // Create sync log entry
+    syncLogId = await createSyncLog(supabaseAdmin, connectionId, 'full_sync');
     console.log(`📝 Sync Log ID: ${syncLogId}`);
 
-    // Create sync operation object for the simple processor
+    // Create sync operation object
     const syncOperation = {
       id: connectionId,
       connection_id: connectionId,
@@ -122,7 +117,7 @@ export default async function handler(req: Request): Promise<Response> {
       }
     };
 
-    // Use the simple webinar sync processor
+    // Start the sync process
     await processSimpleWebinarSync(
       supabaseAdmin,
       syncOperation,
@@ -131,15 +126,30 @@ export default async function handler(req: Request): Promise<Response> {
     );
 
     return new Response(JSON.stringify({ 
+      success: true,
       data: 'Webinar sync completed successfully',
       syncId: syncLogId 
     }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
     console.error('💥 Error during sync operation:', error);
+    
+    // Update sync log with error if we have syncLogId
+    if (syncLogId) {
+      try {
+        const supabaseAdmin = createClient(supabaseUrl, supabaseAnonKey);
+        await updateSyncLog(supabaseAdmin, syncLogId, {
+          sync_status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: error.message || 'Unknown error occurred'
+        });
+      } catch (logError) {
+        console.error('Failed to update sync log with error:', logError);
+      }
+    }
     
     if (error instanceof Error) {
       console.error('Error Message:', error.message);
@@ -148,9 +158,13 @@ export default async function handler(req: Request): Promise<Response> {
       console.error('Non-Error object caught:', error);
     }
 
-    return new Response(JSON.stringify({ error: 'Webinar sync failed', details: error }), {
+    return new Response(JSON.stringify({ 
+      error: 'Webinar sync failed', 
+      details: error.message || 'Unknown error occurred',
+      syncId: syncLogId
+    }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 }

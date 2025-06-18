@@ -1,5 +1,6 @@
-
 export async function createSyncLog(supabase: any, connectionId: string, syncType: string, webinarId?: string): Promise<string> {
+  console.log(`📝 Creating sync log for connection: ${connectionId}, type: ${syncType}`);
+  
   const { data, error } = await supabase
     .from('zoom_sync_logs')
     .insert({
@@ -9,23 +10,40 @@ export async function createSyncLog(supabase: any, connectionId: string, syncTyp
       resource_type: syncType === 'single' ? 'webinar' : 'webinars',
       resource_id: webinarId || null,
       started_at: new Date().toISOString(),
+      total_items: 0,
+      processed_items: 0,
+      failed_items: 0,
+      api_calls_made: 0,
+      rate_limit_hits: 0,
+      retry_attempts: 0,
+      retry_schedule: [],
+      max_participant_retries: 3
     })
     .select('id')
     .single();
 
   if (error) {
-    console.error('Failed to create sync log:', error);
+    console.error('❌ Failed to create sync log:', error);
     throw new Error('Failed to initialize sync operation');
   }
+  
+  console.log(`✅ Sync log created with ID: ${data.id}`);
   return data.id;
 }
 
 export async function updateSyncLog(supabase: any, syncLogId: string, updates: Record<string, any>): Promise<void> {
+  console.log(`🔄 Updating sync log ${syncLogId}:`, updates);
+  
   const { error } = await supabase
     .from('zoom_sync_logs')
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', syncLogId);
-  if (error) console.error(`Failed to update sync log ${syncLogId}:`, error);
+    
+  if (error) {
+    console.error(`❌ Failed to update sync log ${syncLogId}:`, error);
+  } else {
+    console.log(`✅ Sync log ${syncLogId} updated successfully`);
+  }
 }
 
 export async function updateSyncStage(supabase: any, syncLogId: string, webinarId: string | null, stage: string, progress: number): Promise<void> {
@@ -34,7 +52,7 @@ export async function updateSyncStage(supabase: any, syncLogId: string, webinarI
     sync_stage: stage,
     stage_progress_percentage: Math.max(0, Math.min(100, progress)),
   });
-  console.log(`Sync ${syncLogId}: ${stage} (${progress}%) - Webinar: ${webinarId || 'N/A'}`);
+  console.log(`📊 Sync ${syncLogId}: ${stage} (${progress}%) - Webinar: ${webinarId || 'N/A'}`);
 }
 
 export async function saveWebinarToDatabase(supabase: any, webinarData: any, connectionId: string): Promise<void> {

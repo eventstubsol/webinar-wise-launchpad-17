@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,8 +35,6 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
     const tokenStatus = TokenUtils.getTokenStatus(connection);
     console.log('Token status:', tokenStatus);
-    console.log('Token expires at:', connection.token_expires_at);
-    console.log('Current time:', new Date().toISOString());
 
     // Check if refresh token is expired
     if (tokenStatus === TokenStatus.REFRESH_EXPIRED || tokenStatus === TokenStatus.INVALID) {
@@ -72,21 +69,11 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
       if (error) {
         console.error('Function invocation error:', error);
-        const errorBody = error.context || {};
-        if (errorBody.isAuthError) {
-          toast({
-            title: "Authentication Failed",
-            description: error.message || "Your Zoom connection has expired. Please reconnect.",
-            variant: "destructive",
-            action: (
-              <Button asChild variant="secondary" size="sm">
-                <Link to="/settings">Go to Settings</Link>
-              </Button>
-            ),
-          });
-          throw new Error(error.message);
-        }
         throw new Error(error.message || 'Failed to start sync');
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Sync failed to start');
       }
 
       console.log('Sync started successfully, beginning status polling...');
@@ -124,14 +111,11 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       setCurrentOperation('');
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-
-      if (!errorMessage.includes("Your Zoom connection has expired") && !errorMessage.includes("Authentication Failed")) {
-        toast({
-          title: "Sync Failed to Start",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Sync Failed to Start",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
   }, [user, connection, toast, queryClient]);
 
@@ -139,7 +123,8 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     console.log('Starting sync status polling for:', syncId);
     
     let pollAttempts = 0;
-    const maxPollAttempts = 150; // 5 minutes with 2-second intervals
+    const maxPollAttempts = 180; // 6 minutes with 2-second intervals
+    let lastKnownStatus = '';
     
     const pollInterval = setInterval(async () => {
       pollAttempts++;
@@ -153,22 +138,48 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
         if (error) {
           console.error('Error polling sync status:', error);
+          if (pollAttempts > 10) { // Stop polling after multiple errors
+            clearInterval(pollInterval);
+            setIsSyncing(false);
+            setSyncProgress(0);
+            setCurrentOperation('');
+            toast({
+              title: "Sync Monitoring Failed",
+              description: "Unable to track sync progress. Please check manually.",
+              variant: "destructive",
+            });
+          }
           return;
         }
 
         if (syncLogs) {
-          console.log('Sync status:', syncLogs.sync_status, `${syncLogs.processed_items}/${syncLogs.total_items}`);
+          const newStatus = syncLogs.sync_status;
+          console.log('Sync status:', newStatus, `${syncLogs.processed_items}/${syncLogs.total_items}`);
+          
+          // Only update if status changed to avoid unnecessary re-renders
+          if (newStatus !== lastKnownStatus) {
+            lastKnownStatus = newStatus;
+          }
           
           const progress = syncLogs.total_items > 0 
             ? Math.round((syncLogs.processed_items / syncLogs.total_items) * 100)
-            : 0;
+            : syncLogs.stage_progress_percentage || 0;
           
           setSyncProgress(progress);
-          setCurrentOperation(
-            syncLogs.sync_status === 'in_progress' 
-              ? `Processing ${syncLogs.processed_items}/${syncLogs.total_items} webinars...`
-              : syncLogs.sync_status
-          );
+          
+          if (syncLogs.sync_stage) {
+            setCurrentOperation(
+              syncLogs.sync_status === 'in_progress' 
+                ? `${syncLogs.sync_stage}: ${syncLogs.processed_items || 0}/${syncLogs.total_items || 0} items`
+                : syncLogs.sync_stage
+            );
+          } else {
+            setCurrentOperation(
+              syncLogs.sync_status === 'in_progress' 
+                ? `Processing ${syncLogs.processed_items || 0}/${syncLogs.total_items || 0} webinars...`
+                : syncLogs.sync_status
+            );
+          }
 
           if (syncLogs.sync_status === 'completed') {
             console.log('Sync completed successfully');
@@ -191,6 +202,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
               setSyncProgress(0);
               setCurrentOperation('');
             }, 3000);
+            
           } else if (syncLogs.sync_status === 'failed') {
             console.error('Sync failed:', syncLogs.error_message);
             clearInterval(pollInterval);
@@ -198,31 +210,11 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
             setSyncProgress(0);
             setCurrentOperation('');
             
-            const errorDetails = syncLogs.error_details;
-            if (
-              errorDetails &&
-              typeof errorDetails === 'object' &&
-              !Array.isArray(errorDetails) &&
-              'isAuthError' in errorDetails &&
-              (errorDetails as { isAuthError?: boolean }).isAuthError
-            ) {
-              toast({
-                title: "Authentication Failed During Sync",
-                description: syncLogs.error_message || "Your Zoom authentication expired. Please reconnect your account.",
-                variant: "destructive",
-                action: (
-                  <Button asChild variant="secondary" size="sm">
-                    <Link to="/settings">Go to Settings</Link>
-                  </Button>
-                ),
-              });
-            } else {
-              toast({
-                title: "Sync Failed",
-                description: syncLogs.error_message || "Unknown error occurred during sync",
-                variant: "destructive",
-              });
-            }
+            toast({
+              title: "Sync Failed",
+              description: syncLogs.error_message || "Unknown error occurred during sync",
+              variant: "destructive",
+            });
           }
         }
       } catch (error) {
@@ -246,10 +238,10 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       }
     }, 2000);
 
-    // Also stop polling after 5 minutes as backup
+    // Also stop polling after 6 minutes as backup
     setTimeout(() => {
       clearInterval(pollInterval);
-    }, 5 * 60 * 1000);
+    }, 6 * 60 * 1000);
   }, [isSyncing, queryClient, toast]);
 
   return {
