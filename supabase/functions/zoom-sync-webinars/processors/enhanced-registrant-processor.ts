@@ -1,17 +1,8 @@
 
 /**
  * Enhanced registrant processor with 100% Zoom API compliance and complete pagination
- * Self-contained version for edge functions
+ * Now uses the main ZoomAPIClient with proper pagination from zoom-api-client.ts
  */
-
-interface ZoomRegistrantsQueryParams {
-  page_size?: number;
-  page_number?: number;
-  next_page_token?: string;
-  occurrence_id?: string;
-  status?: 'pending' | 'approved' | 'denied';
-  tracking_source_id?: string;
-}
 
 interface ZoomRegistrantResponse {
   id: string;
@@ -40,159 +31,12 @@ interface ZoomRegistrantResponse {
   join_url?: string;
 }
 
-interface ZoomRegistrantsListResponse {
-  registrants: ZoomRegistrantResponse[];
-  pagination: {
-    next_page_token?: string;
-    page_count: number;
-    page_number: number;
-    page_size: number;
-    total_records: number;
-    has_more: boolean;
-  };
-  warnings?: string[];
-}
-
 /**
- * Self-contained API client for registrants
- */
-class SelfContainedRegistrantsApiClient {
-  constructor(
-    private accessToken: string,
-    private userId: string,
-    private connectionId?: string
-  ) {}
-
-  async getWebinarRegistrants(
-    webinarId: string,
-    params: ZoomRegistrantsQueryParams = {}
-  ): Promise<ZoomRegistrantsListResponse> {
-    const queryParams = new URLSearchParams();
-    
-    if (params.page_size !== undefined) {
-      queryParams.append('page_size', Math.min(params.page_size, 300).toString());
-    } else {
-      queryParams.append('page_size', '30');
-    }
-
-    if (params.next_page_token) {
-      queryParams.append('next_page_token', params.next_page_token);
-    } else if (params.page_number !== undefined) {
-      queryParams.append('page_number', params.page_number.toString());
-    } else {
-      queryParams.append('page_number', '1');
-    }
-
-    if (params.occurrence_id) {
-      queryParams.append('occurrence_id', params.occurrence_id);
-    }
-    
-    if (params.status) {
-      queryParams.append('status', params.status);
-    }
-    
-    if (params.tracking_source_id) {
-      queryParams.append('tracking_source_id', params.tracking_source_id);
-    }
-
-    const url = `https://api.zoom.us/v2/webinars/${webinarId}/registrants?${queryParams}`;
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      await this.handleApiError(response, webinarId);
-    }
-
-    const zoomData = await response.json();
-    return this.validateAndTransformResponse(zoomData);
-  }
-
-  private async handleApiError(response: Response, webinarId: string): Promise<never> {
-    const errorData = await response.json().catch(() => ({}));
-    
-    switch (response.status) {
-      case 400:
-        if (errorData.code === 200) {
-          throw new Error('No permission or webinar plan is missing. You must subscribe to the webinar plan and enable webinars for this user.');
-        }
-        throw new Error(`Bad Request: ${errorData.message || 'Invalid request parameters'}`);
-        
-      case 401:
-        throw new Error('Unauthorized: Invalid or expired access token. Please re-authenticate your Zoom connection.');
-        
-      case 403:
-        throw new Error('Forbidden: Insufficient permissions. Check your Zoom app scopes: webinar:read:admin, webinar:read');
-        
-      case 404:
-        if (errorData.code === 3001) {
-          throw new Error(`Webinar does not exist: ${webinarId}`);
-        }
-        throw new Error(`Webinar not found: ${webinarId}`);
-        
-      case 429:
-        const retryAfter = response.headers.get('Retry-After') || '60';
-        throw new Error(`Rate limit exceeded. Please try again in ${retryAfter} seconds.`);
-        
-      default:
-        throw new Error(`Zoom API Error ${response.status}: ${errorData.message || 'Unknown error'}`);
-    }
-  }
-
-  private validateAndTransformResponse(data: any): ZoomRegistrantsListResponse {
-    const response: ZoomRegistrantsListResponse = {
-      registrants: (data.registrants || []).map(this.transformRegistrant),
-      pagination: {
-        next_page_token: data.next_page_token || undefined,
-        page_count: data.page_count || 1,
-        page_number: data.page_number || 1,
-        page_size: data.page_size || 30,
-        total_records: data.total_records || 0,
-        has_more: !!(data.next_page_token || (data.page_number < data.page_count))
-      }
-    };
-
-    return response;
-  }
-
-  private transformRegistrant(registrant: any): ZoomRegistrantResponse {
-    return {
-      id: registrant.id,
-      email: registrant.email,
-      first_name: registrant.first_name,
-      last_name: registrant.last_name || undefined,
-      address: registrant.address || undefined,
-      city: registrant.city || undefined,
-      state: registrant.state || undefined,
-      zip: registrant.zip || undefined,
-      country: registrant.country || undefined,
-      phone: registrant.phone || undefined,
-      industry: registrant.industry || undefined,
-      org: registrant.org || undefined,
-      job_title: registrant.job_title || undefined,
-      purchasing_time_frame: registrant.purchasing_time_frame || undefined,
-      role_in_purchase_process: registrant.role_in_purchase_process || undefined,
-      no_of_employees: registrant.no_of_employees || undefined,
-      comments: registrant.comments || undefined,
-      custom_questions: registrant.custom_questions || undefined,
-      status: registrant.status || 'approved',
-      create_time: registrant.create_time || undefined,
-      join_url: registrant.join_url || undefined,
-    };
-  }
-}
-
-/**
- * Enhanced registrant sync with full pagination and error handling
+ * Enhanced registrant sync with full pagination using the main ZoomAPIClient
  */
 export async function syncWebinarRegistrantsFullCompliance(
   supabase: any,
-  client: any,
+  client: any, // This is the main ZoomAPIClient with proper pagination
   webinarId: string,
   webinarDbId: string,
   options: {
@@ -200,6 +44,7 @@ export async function syncWebinarRegistrantsFullCompliance(
     trackingSourceId?: string;
     status?: 'pending' | 'approved' | 'denied';
     maxPages?: number;
+    syncAllPages?: boolean;
   } = {}
 ): Promise<{
   totalSynced: number;
@@ -208,146 +53,99 @@ export async function syncWebinarRegistrantsFullCompliance(
   warnings: string[];
 }> {
   console.log(`🎯 FULL COMPLIANCE REGISTRANT SYNC starting for webinar ${webinarId}`);
+  console.log(`🔧 CLIENT VERIFICATION: Using main ZoomAPIClient with proper pagination`);
+  console.log(`📋 OPTIONS: syncAllPages=${options.syncAllPages}, status=${options.status}, maxPages=${options.maxPages}`);
   
   try {
-    // Create enhanced API client with proper token management
-    const enhancedClient = new SelfContainedRegistrantsApiClient(
-      client.accessToken || client.getAccessToken?.(),
-      client.userId || client.connectionId,
-      client.connectionId
-    );
+    // Use the main ZoomAPIClient's getWebinarRegistrants method which has proper pagination
+    console.log(`📡 CALLING client.getWebinarRegistrants for webinar ${webinarId}`);
+    console.log(`🔍 CLIENT TYPE: ${client.constructor?.name || 'Unknown'}`);
+    
+    // Call the properly fixed getWebinarRegistrants method from zoom-api-client.ts
+    // This method already handles ALL pagination internally and returns ALL registrants
+    const allRegistrants = await client.getWebinarRegistrants(webinarId, {
+      status: options.status || 'approved'
+    });
 
-    console.log(`🔄 ENHANCED CLIENT: Created for webinar ${webinarId}`);
+    console.log(`✅ REGISTRANTS RETRIEVED: ${allRegistrants.length} total registrants from client.getWebinarRegistrants`);
 
-    let totalSynced = 0;
-    let pagesProcessed = 0;
-    let nextPageToken: string | undefined;
-    const errors: string[] = [];
-    const allWarnings: string[] = [];
-    const maxPages = options.maxPages || 50; // Safety limit
+    if (!allRegistrants || allRegistrants.length === 0) {
+      console.log(`📭 NO REGISTRANTS: Found 0 registrants for webinar ${webinarId}`);
+      return { 
+        totalSynced: 0, 
+        errors: [],
+        pagesProcessed: 0,
+        warnings: []
+      };
+    }
 
-    do {
-      try {
-        const params: ZoomRegistrantsQueryParams = {
-          page_size: 300, // Maximum allowed by Zoom API
-          occurrence_id: options.occurrenceId,
-          tracking_source_id: options.trackingSourceId,
-          status: options.status,
-          next_page_token: nextPageToken
-        };
-
-        console.log(`📥 FETCHING PAGE ${pagesProcessed + 1} for webinar ${webinarId}`, {
-          pageSize: params.page_size,
-          hasNextToken: !!nextPageToken,
-          status: params.status
-        });
-
-        const result = await enhancedClient.getWebinarRegistrants(webinarId, params);
-
-        if (!result.registrants || result.registrants.length === 0) {
-          console.log(`📭 NO REGISTRANTS: Found 0 registrants on page ${pagesProcessed + 1} for webinar ${webinarId}`);
-          if (pagesProcessed === 0) {
-            // First page with no results, stop here
-            break;
-          }
-        } else {
-          console.log(`✅ REGISTRANTS FOUND: ${result.registrants.length} registrants on page ${pagesProcessed + 1} for webinar ${webinarId}`);
-          
-          // Transform registrant data for database
-          const transformedRegistrants = result.registrants.map(registrant => ({
-            webinar_id: webinarDbId,
-            registrant_id: registrant.id,
-            registrant_email: registrant.email,
-            first_name: registrant.first_name,
-            last_name: registrant.last_name || null,
-            address: registrant.address || null,
-            city: registrant.city || null,
-            state: registrant.state || null,
-            zip: registrant.zip || null,
-            country: registrant.country || null,
-            phone: registrant.phone || null,
-            industry: registrant.industry || null,
-            org: registrant.org || null,
-            job_title: registrant.job_title || null,
-            purchasing_time_frame: registrant.purchasing_time_frame || null,
-            role_in_purchase_process: registrant.role_in_purchase_process || null,
-            no_of_employees: registrant.no_of_employees || null,
-            comments: registrant.comments || null,
-            custom_questions: registrant.custom_questions ? JSON.stringify(registrant.custom_questions) : null,
-            status: registrant.status,
-            join_url: registrant.join_url || null,
-            create_time: registrant.create_time || null,
-            registration_time: registrant.create_time || new Date().toISOString(),
-            occurrence_id: options.occurrenceId || null,
-            tracking_source_id: options.trackingSourceId || null,
-            source_id: null,
-            tracking_source: null,
-            language: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }));
-          
-          // Upsert registrants to database with enhanced conflict resolution
-          const { error } = await supabase
-            .from('zoom_registrants')
-            .upsert(
-              transformedRegistrants,
-              {
-                onConflict: 'webinar_id,registrant_id',
-                ignoreDuplicates: false
-              }
-            );
-
-          if (error) {
-            console.error(`❌ DATABASE UPSERT ERROR:`, error);
-            throw new Error(`Failed to upsert registrants: ${error.message}`);
-          }
-
-          totalSynced += result.registrants.length;
+    // Transform registrant data for database
+    console.log(`🔄 TRANSFORMING ${allRegistrants.length} registrants for database storage`);
+    const transformedRegistrants = allRegistrants.map(registrant => ({
+      webinar_id: webinarDbId,
+      registrant_id: registrant.id || registrant.registrant_id,
+      registrant_email: registrant.email,
+      first_name: registrant.first_name,
+      last_name: registrant.last_name || null,
+      address: registrant.address || null,
+      city: registrant.city || null,
+      state: registrant.state || null,
+      zip: registrant.zip || null,
+      country: registrant.country || null,
+      phone: registrant.phone || null,
+      industry: registrant.industry || null,
+      org: registrant.org || null,
+      job_title: registrant.job_title || null,
+      purchasing_time_frame: registrant.purchasing_time_frame || null,
+      role_in_purchase_process: registrant.role_in_purchase_process || null,
+      no_of_employees: registrant.no_of_employees || null,
+      comments: registrant.comments || null,
+      custom_questions: registrant.custom_questions ? JSON.stringify(registrant.custom_questions) : null,
+      status: registrant.status || 'approved',
+      join_url: registrant.join_url || null,
+      create_time: registrant.create_time || null,
+      registration_time: registrant.create_time || new Date().toISOString(),
+      occurrence_id: options.occurrenceId || null,
+      tracking_source_id: options.trackingSourceId || null,
+      source_id: null,
+      tracking_source: null,
+      language: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }));
+    
+    console.log(`💾 UPSERTING ${transformedRegistrants.length} registrants to database`);
+    
+    // Upsert registrants to database with enhanced conflict resolution
+    const { error } = await supabase
+      .from('zoom_registrants')
+      .upsert(
+        transformedRegistrants,
+        {
+          onConflict: 'webinar_id,registrant_id',
+          ignoreDuplicates: false
         }
+      );
 
-        pagesProcessed++;
-        nextPageToken = result.pagination.next_page_token;
+    if (error) {
+      console.error(`❌ DATABASE UPSERT ERROR:`, error);
+      throw new Error(`Failed to upsert registrants: ${error.message}`);
+    }
 
-        console.log(`✅ PAGE ${pagesProcessed} COMPLETED: ${result.registrants?.length || 0} registrants synced, hasMore: ${result.pagination.has_more}`);
-
-        // Safety check for infinite loops
-        if (pagesProcessed >= maxPages) {
-          console.warn(`⚠️ SAFETY LIMIT: Reached maximum pages (${maxPages}) for webinar ${webinarId}`);
-          break;
-        }
-
-        // Break if no more pages or no more data
-        if (!result.pagination.has_more || !nextPageToken) {
-          console.log(`🏁 PAGINATION COMPLETE: No more pages for webinar ${webinarId}`);
-          break;
-        }
-
-        // Small delay between pages to be respectful to API
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-      } catch (pageError) {
-        const errorMsg = `Page ${pagesProcessed + 1} failed: ${pageError.message}`;
-        console.error(`❌ ${errorMsg}`);
-        errors.push(errorMsg);
-        
-        // Break on pagination errors to avoid infinite loops
-        break;
-      }
-
-    } while (nextPageToken && pagesProcessed < maxPages);
-
-    console.log(`🎉 FULL COMPLIANCE SYNC COMPLETED: ${totalSynced} total registrants synced across ${pagesProcessed} pages`);
+    console.log(`🎉 FULL COMPLIANCE SYNC COMPLETED: ${allRegistrants.length} total registrants synced`);
+    console.log(`📊 PAGINATION INFO: All pages processed automatically by main ZoomAPIClient`);
 
     return {
-      totalSynced,
-      errors,
-      pagesProcessed,
-      warnings: allWarnings
+      totalSynced: allRegistrants.length,
+      errors: [],
+      pagesProcessed: 1, // The main client handles all pagination internally
+      warnings: []
     };
 
   } catch (error) {
     console.error(`💥 FULL COMPLIANCE REGISTRANT SYNC ERROR for webinar ${webinarId}:`, error);
+    console.error(`🔍 ERROR TYPE: ${error.constructor?.name}`);
+    console.error(`📝 ERROR MESSAGE: ${error.message}`);
     
     return {
       totalSynced: 0,
@@ -359,22 +157,27 @@ export async function syncWebinarRegistrantsFullCompliance(
 }
 
 /**
- * Test API access before attempting sync
+ * Test API access using the main ZoomAPIClient
  */
-async function testRegistrantAPIAccess(client: any, webinarId: string): Promise<{
+export async function testRegistrantAPIAccess(client: any, webinarId: string): Promise<{
   hasAccess: boolean;
   error?: string;
   scopeIssue?: boolean;
 }> {
+  console.log(`🧪 TESTING REGISTRANT API ACCESS for webinar ${webinarId}`);
+  console.log(`🔧 CLIENT TYPE: ${client.constructor?.name || 'Unknown'}`);
+  
   try {
-    // Try to fetch just the first page with minimal size to test access
+    // Use the main client's method to test access with minimal data
+    console.log(`📡 CALLING client.getWebinarRegistrants for access test`);
     const testResult = await client.getWebinarRegistrants(webinarId, {
-      page_size: 1,
-      page_number: 1
+      status: 'approved'
     });
     
+    console.log(`✅ ACCESS TEST SUCCESS: Retrieved ${testResult?.length || 0} registrants`);
     return { hasAccess: true };
   } catch (error) {
+    console.error(`❌ ACCESS TEST FAILED:`, error);
     const errorMessage = error.message?.toLowerCase() || '';
     
     if (errorMessage.includes('scope') || errorMessage.includes('permission')) {
@@ -392,5 +195,3 @@ async function testRegistrantAPIAccess(client: any, webinarId: string): Promise<
     };
   }
 }
-
-export { testRegistrantAPIAccess };

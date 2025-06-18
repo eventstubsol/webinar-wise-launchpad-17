@@ -1,112 +1,169 @@
+import { createClient } from '@supabase/supabase-js';
+import { Database } from '../../../src/types/supabase';
+import { processWebinarSyncEnhanced } from './processors/simple-sync-processor';
+import { createZoomAPIClient } from './zoom-api-client';
+import { EnhancedSyncProgressTracker } from '../../../src/services/zoom/sync/EnhancedSyncProgressTracker';
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { CORS_HEADERS, SYNC_PRIORITIES, SyncOperation } from './types.ts';
-import { validateEnhancedRequest } from './enhanced-validation.ts';
-import { createSyncLog } from './database-operations.ts';
-import { processSequentialSync } from './sync-processor.ts';
-import { processEnhancedWebinarSync } from './enhanced-sync-processor.ts';
+const supabaseUrl = process.env.SUPABASE_URL ?? '';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? '';
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: CORS_HEADERS });
-  }
-
-  console.log('=== ENHANCED SYNC FUNCTION START ===');
-  console.log(`Request received: ${new Date().toISOString()}`);
-  console.log('Request headers:', Object.fromEntries(req.headers.entries()));
-
-  const startTime = Date.now();
-
+export default async function handler(req: Request): Promise<Response> {
+  console.log('🚀 ZOOM SYNC WEBINARS: Starting sync operation');
+  
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    );
+    const authorizationHeader = req.headers.get('Authorization');
+    if (!authorizationHeader) {
+      console.error('❌ Missing Authorization header');
+      return new Response('Missing Authorization header', { status: 401 });
+    }
 
-    console.log('Supabase client created, validating enhanced request...');
-    const { user, connection, requestBody } = await validateEnhancedRequest(req, supabase);
-    const validationTime = Date.now();
-    console.log(`Enhanced request validated successfully in ${validationTime - startTime}ms`);
+    const bearerToken = authorizationHeader.replace('Bearer ', '');
+    if (!bearerToken) {
+      console.error('❌ Invalid Authorization header format');
+      return new Response('Invalid Authorization header format', { status: 401 });
+    }
 
-    console.log('Creating sync log...');
-    const syncLogId = await createSyncLog(supabase, requestBody.connectionId, requestBody.syncType, requestBody.webinarId);
-    const syncLogTime = Date.now();
-    console.log(`Sync log created: ${syncLogId} in ${syncLogTime - validationTime}ms`);
-    
-    const syncOperation: SyncOperation = {
-      id: `enhanced_sync_${Date.now()}`,
-      connectionId: requestBody.connectionId,
-      userId: user.id,
-      syncType: requestBody.syncType,
-      webinarId: requestBody.webinarId,
-      webinarIds: requestBody.webinarIds,
-      options: requestBody.options || {},
-      priority: SYNC_PRIORITIES[requestBody.syncType] || 3,
-      createdAt: new Date()
-    };
-    
-    console.log('Starting enhanced background sync process...');
-    console.log('Sync options:', JSON.stringify(syncOperation.options, null, 2));
-    
-    // Use enhanced processor for better handling
-    queueMicrotask(() => {
-      if (syncOperation.options?.testMode || syncOperation.options?.dryRun || syncOperation.options?.verboseLogging) {
-        console.log('Using enhanced sync processor due to advanced options');
-        processEnhancedWebinarSync(supabase, syncOperation, connection, syncLogId);
-      } else {
-        console.log('Using standard sync processor');
-        processSequentialSync(supabase, syncOperation, connection, syncLogId);
-      }
+    const supabaseAdmin = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${bearerToken}`,
+        },
+      },
     });
 
-    console.log(`=== Enhanced Sync Request Successful (Total time: ${Date.now() - startTime}ms) ===`);
-    return new Response(
-      JSON.stringify({
-        success: true,
-        syncId: syncLogId,
-        status: 'started',
-        message: `Enhanced ${requestBody.syncType} sync initiated successfully.`,
-        configuration: {
-          testMode: syncOperation.options?.testMode || false,
-          dryRun: syncOperation.options?.dryRun || false,
-          maxWebinars: syncOperation.options?.maxWebinars || 'unlimited',
-          verboseLogging: syncOperation.options?.verboseLogging || false
-        },
-        debug: {
-          connectionId: requestBody.connectionId,
-          userId: user.id,
-          syncType: requestBody.syncType,
-          enhancedOptions: Object.keys(syncOperation.options || {})
-        }
-      }),
-      { status: 202, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+    const { data: user, error: userError } = await supabaseAdmin.auth.getUser();
+    if (userError) {
+      console.error('❌ Error getting user:', userError);
+      return new Response(JSON.stringify({ error: 'Failed to get user' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const userId = user.user.id;
+    console.log(`👤 User ID: ${userId}`);
+
+    const connectionId = req.headers.get('zoom_connection_id');
+    if (!connectionId) {
+      console.error('❌ Missing zoom_connection_id header');
+      return new Response('Missing zoom_connection_id header', { status: 400 });
+    }
+
+    console.log(`🔗 Zoom Connection ID: ${connectionId}`);
+
+    const { data: connection, error: connectionError } = await supabaseAdmin
+      .from('zoom_connections')
+      .select('*')
+      .eq('id', connectionId)
+      .eq('user_id', userId)
+      .single();
+
+    if (connectionError) {
+      console.error('❌ Error fetching Zoom connection:', connectionError);
+      return new Response(JSON.stringify({ error: 'Failed to fetch Zoom connection' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!connection) {
+      console.error('❌ Zoom connection not found');
+      return new Response('Zoom connection not found', { status: 404 });
+    }
+
+    console.log(`✅ Zoom Connection Name: ${connection.connection_name}`);
+
+    const webinarId = req.headers.get('zoom_webinar_id');
+    if (!webinarId) {
+      console.error('❌ Missing zoom_webinar_id header');
+      return new Response('Missing zoom_webinar_id header', { status: 400 });
+    }
+
+    console.log(`🎤 Webinar ID: ${webinarId}`);
+
+    const webinarDbId = req.headers.get('zoom_webinar_db_id');
+    if (!webinarDbId) {
+      console.error('❌ Missing zoom_webinar_db_id header');
+      return new Response('Missing zoom_webinar_db_id header', { status: 400 });
+    }
+
+    console.log(`🗄️  Webinar DB ID: ${webinarDbId}`);
+
+    const testModeHeader = req.headers.get('test_mode');
+    const testMode = testModeHeader === 'true';
+    console.log(`🧪 Test Mode: ${testMode}`);
+
+    const { data: webinar, error: webinarError } = await supabaseAdmin
+      .from('zoom_webinars')
+      .select('*')
+      .eq('id', webinarDbId)
+      .single();
+
+    if (webinarError) {
+      console.error('❌ Error fetching webinar:', webinarError);
+      return new Response(JSON.stringify({ error: 'Failed to fetch webinar' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!webinar) {
+      console.error('❌ Webinar not found');
+      return new Response('Webinar not found', { status: 404 });
+    }
+
+    console.log(`🎤 Webinar Topic: ${webinar.topic}`);
+
+    const syncType = 'single_webinar_sync';
+    const progressTracker = new EnhancedSyncProgressTracker();
+    const syncLogId = await progressTracker.createSyncLog(connectionId, syncType, webinarId);
+    console.log(`📝 Sync Log ID: ${syncLogId}`);
+
+    // Create the main ZoomAPIClient with proper pagination
+    console.log(`🔧 CREATING MAIN ZOOM API CLIENT for connection: ${connection.id}`);
+    const client = await createZoomAPIClient(connection, supabaseAdmin);
+    console.log(`✅ MAIN CLIENT CREATED: ${client.constructor?.name || 'Unknown'}`);
+    console.log(`🔍 CLIENT CAPABILITIES: getWebinarRegistrants=${typeof client.getWebinarRegistrants === 'function'}`);
+    
+    console.log(`🎯 USING MAIN CLIENT FOR ALL SYNC OPERATIONS: ${client.constructor?.name || 'Unknown'}`);
+    
+    // Pass the main ZoomAPIClient to all sync operations
+    // This ensures registrant fetching uses the proper pagination from zoom-api-client.ts
+    await processWebinarSyncEnhanced(
+      webinar,
+      supabaseAdmin,
+      client, // Main ZoomAPIClient with proper pagination
+      syncLogId,
+      progressTracker,
+      testMode
     );
+
+    await progressTracker.completeSyncLog(syncLogId);
+
+    return new Response(JSON.stringify({ data: 'Webinar sync completed successfully' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
 
   } catch (error) {
-    console.error('=== Enhanced Sync Function Error ===');
-    console.error(`Error occurred after ${Date.now() - startTime}ms`);
-    console.error('Error details:', error);
-    console.error('Error stack:', error.stack);
+    console.error('💥 Error during sync operation:', error);
     
-    const status = error.status || 500;
-    const message = error.message || 'Internal server error';
-
-    const responseBody: { error: string, isAuthError?: boolean, details?: any } = { 
-      error: message,
-      details: error.details || null
-    };
-    
-    if (error.isAuthError) {
-      responseBody.isAuthError = true;
+    if (error instanceof Error) {
+      console.error('Error Message:', error.message);
+      console.error('Error Stack:', error.stack);
+    } else {
+      console.error('Non-Error object caught:', error);
     }
-    
-    const body = JSON.stringify(responseBody);
 
-    return new Response(body, { 
-      status, 
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } 
+    const syncLogId = req.headers.get('sync_log_id');
+    if (syncLogId) {
+      const progressTracker = new EnhancedSyncProgressTracker();
+      await progressTracker.failSyncLog(syncLogId, error);
+    }
+
+    return new Response(JSON.stringify({ error: 'Webinar sync failed', details: error }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
     });
   }
-});
+}

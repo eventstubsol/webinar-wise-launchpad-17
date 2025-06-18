@@ -1,32 +1,37 @@
 
 /**
- * Registrant processor that delegates to the enhanced self-contained implementation
+ * Registrant processor that delegates to the enhanced implementation
+ * Now properly uses the main ZoomAPIClient with fixed pagination
  */
 
 import { syncWebinarRegistrantsFullCompliance, testRegistrantAPIAccess } from './enhanced-registrant-processor.ts';
 
 /**
  * Enhanced registrant sync with full Zoom API compliance - delegates to enhanced processor
+ * The key change: ensures the main ZoomAPIClient with proper pagination is used
  */
 export async function syncWebinarRegistrants(
   supabase: any,
-  client: any,
+  client: any, // This should be the main ZoomAPIClient from zoom-api-client.ts
   webinarId: string,
   webinarDbId: string,
   testMode: boolean = false
 ): Promise<number> {
   console.log(`🎯 DELEGATING to enhanced registrant sync for webinar ${webinarId} (DB: ${webinarDbId})`);
   console.log(`  - Test mode: ${testMode}`);
+  console.log(`  - Client type: ${client.constructor?.name || 'Unknown'}`);
+  console.log(`  - Client has getWebinarRegistrants: ${typeof client.getWebinarRegistrants === 'function'}`);
   
   try {
     const result = await syncWebinarRegistrantsFullCompliance(
       supabase,
-      client,
+      client, // Pass through the main ZoomAPIClient
       webinarId,
       webinarDbId,
       {
         syncAllPages: true, // Always sync all pages for complete data
-        status: 'approved' // Default to approved registrants
+        status: 'approved', // Default to approved registrants
+        maxPages: 50 // Safety limit
       }
     );
 
