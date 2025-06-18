@@ -320,67 +320,128 @@ class ZoomAPIClient {
   }
 
   /**
-   * ENHANCED: Get webinar registrants with better error handling and scope detection
+   * FIXED: Get ALL webinar registrants with proper pagination handling
    */
   async getWebinarRegistrants(webinarId: string, options: { status?: string } = {}): Promise<any[]> {
     const { status = 'approved' } = options;
     
-    console.log(`🎯 FETCHING REGISTRANTS for webinar ${webinarId} with status: ${status}`);
+    console.log(`🎯 FETCHING ALL REGISTRANTS for webinar ${webinarId} with status: ${status}`);
+    
+    let allRegistrants: any[] = [];
+    let currentPage = 1;
+    let totalPages = 1;
+    let nextPageToken: string | undefined;
+    const maxPages = 50; // Safety limit to prevent infinite loops
     
     try {
-      // Build API endpoint
-      const endpoint = `/webinars/${webinarId}/registrants`;
-      const params = new URLSearchParams({
-        status: status,
-        page_size: '300', // Max page size
-        occurrence_id: '' // Include all occurrences
-      });
-      
-      console.log(`📡 REGISTRANT API REQUEST: ${endpoint}?${params.toString()}`);
-      
-      const response = await this.makeRequest(`${endpoint}?${params.toString()}`);
-      
-      if (!response) {
-        console.log(`⚠️ REGISTRANT API: Null response for webinar ${webinarId}`);
-        return [];
-      }
-      
-      // Handle different response formats
-      let registrants = [];
-      
-      if (Array.isArray(response)) {
-        registrants = response;
-      } else if (response.registrants && Array.isArray(response.registrants)) {
-        registrants = response.registrants;
-      } else if (response.data && Array.isArray(response.data)) {
-        registrants = response.data;
-      } else {
-        console.log(`⚠️ REGISTRANT API: Unexpected response format for webinar ${webinarId}:`, {
-          responseType: typeof response,
-          hasRegistrants: 'registrants' in response,
-          hasData: 'data' in response,
-          keys: Object.keys(response)
+      do {
+        // Build API endpoint with pagination
+        const endpoint = `/webinars/${webinarId}/registrants`;
+        const params = new URLSearchParams({
+          status: status,
+          page_size: '300' // Maximum allowed by Zoom API
         });
-        return [];
-      }
-      
-      console.log(`✅ REGISTRANT API SUCCESS: Found ${registrants.length} registrants for webinar ${webinarId}`);
-      
-      if (registrants.length > 0) {
-        const sample = registrants[0];
-        console.log(`📋 SAMPLE REGISTRANT from API:`, {
-          id: sample.id,
-          email: sample.email,
-          status: sample.status,
-          registration_time: sample.registration_time,
-          fields: Object.keys(sample)
+        
+        // Use next_page_token if available, otherwise use page_number
+        if (nextPageToken) {
+          params.set('next_page_token', nextPageToken);
+          console.log(`📄 FETCHING PAGE via next_page_token for webinar ${webinarId}`);
+        } else {
+          params.set('page_number', currentPage.toString());
+          console.log(`📄 FETCHING PAGE ${currentPage}/${totalPages} for webinar ${webinarId}`);
+        }
+        
+        console.log(`📡 REGISTRANT API REQUEST: ${endpoint}?${params.toString()}`);
+        
+        const response = await this.makeRequest(`${endpoint}?${params.toString()}`);
+        
+        if (!response) {
+          console.log(`⚠️  NULL RESPONSE for webinar ${webinarId} page ${currentPage}`);
+          break;
+        }
+        
+        // Handle different response formats
+        let pageRegistrants = [];
+        
+        if (Array.isArray(response)) {
+          pageRegistrants = response;
+        } else if (response.registrants && Array.isArray(response.registrants)) {
+          pageRegistrants = response.registrants;
+        } else if (response.data && Array.isArray(response.data)) {
+          pageRegistrants = response.data;
+        } else {
+          console.log(`⚠️  UNEXPECTED RESPONSE FORMAT for webinar ${webinarId} page ${currentPage}:`, {
+            responseType: typeof response,
+            hasRegistrants: 'registrants' in response,
+            hasData: 'data' in response,
+            keys: Object.keys(response)
+          });
+          break;
+        }
+        
+        // Add registrants from this page
+        if (pageRegistrants.length > 0) {
+          allRegistrants.push(...pageRegistrants);
+          console.log(`✅ PAGE ${currentPage} SUCCESS: Added ${pageRegistrants.length} registrants (total: ${allRegistrants.length})`);
+          
+          // Log sample registrant from first page
+          if (currentPage === 1) {
+            const sample = pageRegistrants[0];
+            console.log(`📋 SAMPLE REGISTRANT:`, {
+              id: sample.id,
+              email: sample.email,
+              status: sample.status,
+              registration_time: sample.registration_time,
+              fields: Object.keys(sample)
+            });
+          }
+        } else {
+          console.log(`📭 PAGE ${currentPage} EMPTY: No registrants found`);
+        }
+        
+        // Update pagination info
+        if (response.page_count) {
+          totalPages = response.page_count;
+        }
+        
+        // Check for next page using next_page_token (preferred) or page number
+        nextPageToken = response.next_page_token;
+        const hasMore = nextPageToken || (response.page_number && response.page_number < totalPages);
+        
+        console.log(`📊 PAGINATION STATUS:`, {
+          currentPage,
+          totalPages,
+          hasNextPageToken: !!nextPageToken,
+          hasMore,
+          registrantsThisPage: pageRegistrants.length,
+          totalRegistrants: allRegistrants.length
         });
-      }
+        
+        // Safety check to prevent infinite loops
+        if (currentPage >= maxPages) {
+          console.warn(`⚠️  SAFETY LIMIT: Reached maximum pages (${maxPages}) for webinar ${webinarId}`);
+          break;
+        }
+        
+        // Break if no more pages
+        if (!hasMore) {
+          console.log(`🏁 PAGINATION COMPLETE: No more pages for webinar ${webinarId}`);
+          break;
+        }
+        
+        currentPage++;
+        
+        // Small delay between pages to be respectful to API
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } while (currentPage <= maxPages);
       
-      return registrants;
+      console.log(`🎉 ALL REGISTRANTS FETCHED: ${allRegistrants.length} total registrants across ${currentPage - 1} pages for webinar ${webinarId}`);
+      
+      return allRegistrants;
       
     } catch (error) {
-      console.error(`❌ REGISTRANT API ERROR for webinar ${webinarId}:`, error);
+      console.error(`❌ REGISTRANT PAGINATION ERROR for webinar ${webinarId}:`, error);
       
       // Enhanced error analysis
       const errorMessage = error.message?.toLowerCase() || '';
