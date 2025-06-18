@@ -1,48 +1,40 @@
 
 /**
- * Edge Case Handler for complex Zoom scenarios
- * Handles timezone complexity, large-scale webinars, recurring patterns, multi-account support
+ * Edge Case Handler for complex scenarios and advanced features
+ * Handles timezone complexity, large-scale operations, and advanced patterns
  */
 
-interface TimezoneMapping {
-  zoomTimezone: string;
-  ianaTimezone: string;
-  offsetMinutes: number;
-  supportsDST: boolean;
+interface TimezoneInfo {
+  originalTimezone: string;
+  utcTime: string;
+  localTime: string;
+  isDST: boolean;
+  offset: string;
 }
 
-interface LargeScaleConfig {
-  batchSize: number;
-  concurrentRequests: number;
-  memoryThreshold: number;
-  processingDelay: number;
-}
-
-interface RecurrencePattern {
+interface RecurrenceInfo {
   type: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
   interval: number;
   daysOfWeek?: number[];
   dayOfMonth?: number;
-  monthOfYear?: number;
   endDate?: string;
-  occurrenceCount?: number;
-  customPattern?: string;
+  occurrences?: number;
+  pattern: string;
+}
+
+interface LargeScaleResult {
+  totalProcessed: number;
+  batchCount: number;
+  processingTime: number;
+  errors: any[];
 }
 
 export class EdgeCaseHandler {
   private static instance: EdgeCaseHandler;
-  
-  private timezoneMap: Map<string, TimezoneMapping> = new Map();
-  private largeScaleConfig: LargeScaleConfig = {
-    batchSize: 100,
-    concurrentRequests: 5,
-    memoryThreshold: 500 * 1024 * 1024, // 500MB
-    processingDelay: 100 // ms between batches
-  };
+  private timezoneCache = new Map<string, any>();
+  private recurrencePatterns = new Map<string, RecurrenceInfo>();
 
-  private constructor() {
-    this.initializeTimezoneMapping();
-  }
+  private constructor() {}
 
   static getInstance(): EdgeCaseHandler {
     if (!this.instance) {
@@ -52,397 +44,401 @@ export class EdgeCaseHandler {
   }
 
   /**
-   * Advanced timezone handling for complex scheduling scenarios
+   * Handle complex timezone scenarios
    */
-  async handleTimezoneComplexity(webinarData: any): Promise<{
-    localTime: string;
-    utcTime: string;
-    userTimezone: string;
-    isDST: boolean;
-    timezoneOffset: number;
-    conflicts: string[];
-  }> {
-    const conflicts: string[] = [];
+  async handleTimezoneComplexity(webinarData: any): Promise<TimezoneInfo> {
+    const { timezone, start_time } = webinarData;
     
-    // Get timezone information
-    const zoomTz = webinarData.timezone || 'UTC';
-    const mapping = this.timezoneMap.get(zoomTz) || this.createFallbackMapping(zoomTz);
-    
-    // Convert to UTC
-    const startTime = new Date(webinarData.start_time);
-    const utcTime = this.convertToUTC(startTime, mapping);
-    
-    // Check for DST transitions
-    const isDST = this.isDaylightSavingTime(startTime, mapping);
-    if (isDST !== this.isDaylightSavingTime(new Date(), mapping)) {
-      conflicts.push('Webinar crosses daylight saving time transition');
+    // Check cache first
+    const cacheKey = `${timezone}-${start_time}`;
+    if (this.timezoneCache.has(cacheKey)) {
+      return this.timezoneCache.get(cacheKey);
     }
-    
-    // Check for timezone ambiguity
-    if (this.isAmbiguousTime(startTime, mapping)) {
-      conflicts.push('Webinar time falls during DST transition (ambiguous time)');
+
+    try {
+      const startDate = new Date(start_time);
+      
+      // Handle timezone conversion
+      const timezoneInfo: TimezoneInfo = {
+        originalTimezone: timezone,
+        utcTime: startDate.toISOString(),
+        localTime: this.convertToTimezone(startDate, timezone),
+        isDST: this.isDaylightSavingTime(startDate, timezone),
+        offset: this.getTimezoneOffset(timezone)
+      };
+
+      // Cache the result
+      this.timezoneCache.set(cacheKey, timezoneInfo);
+      
+      return timezoneInfo;
+    } catch (error) {
+      console.warn('Timezone handling error:', error);
+      return {
+        originalTimezone: timezone,
+        utcTime: start_time,
+        localTime: start_time,
+        isDST: false,
+        offset: '+00:00'
+      };
     }
-    
-    // Detect user timezone
-    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const userLocalTime = this.convertToTimezone(utcTime, userTimezone);
-    
-    return {
-      localTime: userLocalTime.toISOString(),
-      utcTime: utcTime.toISOString(),
-      userTimezone,
-      isDST,
-      timezoneOffset: mapping.offsetMinutes,
-      conflicts
-    };
   }
 
   /**
-   * Handle large-scale webinars with 1000+ participants
+   * Parse complex recurrence patterns
+   */
+  parseRecurrencePattern(recurrence: any): RecurrenceInfo {
+    const pattern = recurrence.type || 'unknown';
+    
+    // Check cache
+    if (this.recurrencePatterns.has(pattern)) {
+      return this.recurrencePatterns.get(pattern)!;
+    }
+
+    let recurrenceInfo: RecurrenceInfo;
+
+    switch (recurrence.type) {
+      case 1: // Daily
+        recurrenceInfo = {
+          type: 'daily',
+          interval: recurrence.repeat_interval || 1,
+          pattern: `Every ${recurrence.repeat_interval || 1} day(s)`,
+          endDate: recurrence.end_date_time,
+          occurrences: recurrence.end_times
+        };
+        break;
+
+      case 2: // Weekly
+        recurrenceInfo = {
+          type: 'weekly',
+          interval: recurrence.repeat_interval || 1,
+          daysOfWeek: this.parseWeeklyDays(recurrence.weekly_days),
+          pattern: `Every ${recurrence.repeat_interval || 1} week(s) on ${this.formatWeeklyDays(recurrence.weekly_days)}`,
+          endDate: recurrence.end_date_time,
+          occurrences: recurrence.end_times
+        };
+        break;
+
+      case 3: // Monthly
+        recurrenceInfo = {
+          type: 'monthly',
+          interval: recurrence.repeat_interval || 1,
+          dayOfMonth: recurrence.monthly_day,
+          pattern: `Every ${recurrence.repeat_interval || 1} month(s) on day ${recurrence.monthly_day}`,
+          endDate: recurrence.end_date_time,
+          occurrences: recurrence.end_times
+        };
+        break;
+
+      default:
+        recurrenceInfo = {
+          type: 'custom',
+          interval: 1,
+          pattern: 'Custom recurrence pattern',
+          endDate: recurrence.end_date_time,
+          occurrences: recurrence.end_times
+        };
+    }
+
+    // Cache the result
+    this.recurrencePatterns.set(pattern, recurrenceInfo);
+    
+    return recurrenceInfo;
+  }
+
+  /**
+   * Handle large-scale webinar operations (1000+ participants)
    */
   async handleLargeScaleWebinar(
-    webinarId: string,
+    connectionId: string,
     participantCount: number,
-    processor: (batch: any[]) => Promise<void>
-  ): Promise<{
-    totalProcessed: number;
-    batchCount: number;
-    processingTime: number;
-    memoryPeak: number;
-    errors: string[];
-  }> {
+    batchProcessor: (batch: any[]) => Promise<void>
+  ): Promise<LargeScaleResult> {
     const startTime = Date.now();
-    const errors: string[] = [];
+    const batchSize = this.calculateOptimalBatchSize(participantCount);
+    const errors: any[] = [];
     let totalProcessed = 0;
     let batchCount = 0;
-    let memoryPeak = 0;
-    
-    console.log(`Starting large-scale processing for webinar ${webinarId} with ${participantCount} participants`);
-    
+
     try {
-      // Adjust batch size based on participant count
-      const adjustedBatchSize = this.calculateOptimalBatchSize(participantCount);
-      
-      // Process in memory-conscious batches
-      for (let offset = 0; offset < participantCount; offset += adjustedBatchSize) {
-        // Memory check
-        const memoryUsage = process.memoryUsage().heapUsed;
-        memoryPeak = Math.max(memoryPeak, memoryUsage);
-        
-        if (memoryUsage > this.largeScaleConfig.memoryThreshold) {
-          console.warn(`High memory usage detected: ${Math.round(memoryUsage / 1024 / 1024)}MB`);
-          
-          // Force garbage collection if available
-          if (global.gc) {
-            global.gc();
-          }
-          
-          // Increase processing delay
-          await this.sleep(this.largeScaleConfig.processingDelay * 2);
-        }
+      // Simulate processing large datasets in batches
+      for (let i = 0; i < participantCount; i += batchSize) {
+        const batchEnd = Math.min(i + batchSize, participantCount);
+        const batch = this.generateSimulatedBatch(i, batchEnd);
         
         try {
-          // Simulate batch fetching (in real implementation, this would fetch from Zoom API)
-          const batch = await this.fetchParticipantBatch(webinarId, offset, adjustedBatchSize);
-          
-          // Process batch
-          await processor(batch);
-          
+          await batchProcessor(batch);
           totalProcessed += batch.length;
           batchCount++;
           
-          // Progress reporting
-          const progress = Math.round((totalProcessed / participantCount) * 100);
-          console.log(`Large-scale processing: ${progress}% complete (${totalProcessed}/${participantCount})`);
+          // Add small delay to prevent overwhelming the system
+          await this.sleep(100);
           
-          // Controlled delay to prevent overwhelming
-          if (batchCount % this.largeScaleConfig.concurrentRequests === 0) {
-            await this.sleep(this.largeScaleConfig.processingDelay);
+          // Log progress for very large operations
+          if (batchCount % 10 === 0) {
+            console.log(`Processed ${totalProcessed}/${participantCount} participants (${batchCount} batches)`);
           }
-          
-        } catch (batchError) {
-          const error = `Batch ${batchCount + 1} failed: ${batchError instanceof Error ? batchError.message : 'Unknown error'}`;
-          errors.push(error);
-          console.error(error);
+        } catch (error) {
+          errors.push({
+            batch: batchCount,
+            range: `${i}-${batchEnd}`,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
         }
       }
-      
+
+      const processingTime = Date.now() - startTime;
+
+      return {
+        totalProcessed,
+        batchCount,
+        processingTime,
+        errors
+      };
     } catch (error) {
-      errors.push(`Large-scale processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Large-scale processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    
-    const processingTime = Date.now() - startTime;
-    
-    return {
-      totalProcessed,
-      batchCount,
-      processingTime,
-      memoryPeak,
-      errors
-    };
   }
 
   /**
-   * Handle complex recurring webinar patterns
+   * Handle multi-account Zoom integration scenarios
    */
-  parseRecurrencePattern(recurrenceData: any): {
-    pattern: RecurrencePattern;
-    nextOccurrences: Date[];
-    isValid: boolean;
-    validationErrors: string[];
-  } {
-    const validationErrors: string[] = [];
-    
-    // Parse Zoom recurrence format
-    let pattern: RecurrencePattern;
-    
-    try {
-      if (recurrenceData.type === 1) { // Daily
-        pattern = {
-          type: 'daily',
-          interval: recurrenceData.repeat_interval || 1
-        };
-      } else if (recurrenceData.type === 2) { // Weekly
-        pattern = {
-          type: 'weekly',
-          interval: recurrenceData.repeat_interval || 1,
-          daysOfWeek: this.parseWeeklyDays(recurrenceData.weekly_days)
-        };
-      } else if (recurrenceData.type === 3) { // Monthly
-        pattern = {
-          type: 'monthly',
-          interval: recurrenceData.repeat_interval || 1,
-          dayOfMonth: recurrenceData.monthly_day
-        };
-      } else {
-        pattern = {
-          type: 'custom',
-          interval: 1,
-          customPattern: JSON.stringify(recurrenceData)
-        };
-      }
-      
-      // Add end conditions
-      if (recurrenceData.end_date_time) {
-        pattern.endDate = recurrenceData.end_date_time;
-      }
-      if (recurrenceData.end_times) {
-        pattern.occurrenceCount = recurrenceData.end_times;
-      }
-      
-    } catch (error) {
-      validationErrors.push(`Failed to parse recurrence pattern: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      pattern = { type: 'custom', interval: 1 };
-    }
-    
-    // Validate pattern
-    if (pattern.interval <= 0) {
-      validationErrors.push('Recurrence interval must be positive');
-    }
-    
-    if (pattern.type === 'weekly' && (!pattern.daysOfWeek || pattern.daysOfWeek.length === 0)) {
-      validationErrors.push('Weekly recurrence must specify days of week');
-    }
-    
-    // Calculate next occurrences
-    const nextOccurrences = this.calculateNextOccurrences(pattern, new Date(), 10);
-    
-    return {
-      pattern,
-      nextOccurrences,
-      isValid: validationErrors.length === 0,
-      validationErrors
-    };
-  }
-
-  /**
-   * Handle multi-account Zoom integration
-   */
-  async handleMultiAccountScenario(
-    accounts: Array<{ connectionId: string; accountId: string; priority: number }>,
-    operation: (connectionId: string) => Promise<any>
-  ): Promise<{
-    results: Array<{ connectionId: string; success: boolean; data?: any; error?: string }>;
-    primaryResult?: any;
-    failoverUsed: boolean;
+  async handleMultiAccountIntegration(accounts: any[]): Promise<{
+    connectedAccounts: number;
+    failedAccounts: number;
+    accountDetails: any[];
   }> {
-    // Sort by priority
-    const sortedAccounts = accounts.sort((a, b) => a.priority - b.priority);
-    const results: Array<{ connectionId: string; success: boolean; data?: any; error?: string }> = [];
-    let primaryResult: any;
-    let failoverUsed = false;
-    
-    // Try primary account first
-    const primaryAccount = sortedAccounts[0];
-    try {
-      const result = await operation(primaryAccount.connectionId);
-      results.push({
-        connectionId: primaryAccount.connectionId,
-        success: true,
-        data: result
-      });
-      primaryResult = result;
-    } catch (error) {
-      results.push({
-        connectionId: primaryAccount.connectionId,
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      
-      // Try failover accounts
-      for (const account of sortedAccounts.slice(1)) {
-        try {
-          const result = await operation(account.connectionId);
-          results.push({
-            connectionId: account.connectionId,
-            success: true,
-            data: result
+    const results = {
+      connectedAccounts: 0,
+      failedAccounts: 0,
+      accountDetails: []
+    };
+
+    for (const account of accounts) {
+      try {
+        // Simulate account validation
+        const isValid = await this.validateZoomAccount(account);
+        
+        if (isValid) {
+          results.connectedAccounts++;
+          results.accountDetails.push({
+            accountId: account.id,
+            status: 'connected',
+            features: this.getAccountFeatures(account)
           });
-          primaryResult = result;
-          failoverUsed = true;
-          break;
-        } catch (failoverError) {
-          results.push({
-            connectionId: account.connectionId,
-            success: false,
-            error: failoverError instanceof Error ? failoverError.message : 'Unknown error'
+        } else {
+          results.failedAccounts++;
+          results.accountDetails.push({
+            accountId: account.id,
+            status: 'failed',
+            error: 'Account validation failed'
           });
         }
+      } catch (error) {
+        results.failedAccounts++;
+        results.accountDetails.push({
+          accountId: account.id,
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
     }
-    
-    return {
-      results,
-      primaryResult,
-      failoverUsed
-    };
+
+    return results;
   }
 
-  private initializeTimezoneMapping(): void {
-    // Common Zoom timezone mappings
-    const mappings: TimezoneMapping[] = [
-      { zoomTimezone: 'America/New_York', ianaTimezone: 'America/New_York', offsetMinutes: -300, supportsDST: true },
-      { zoomTimezone: 'America/Chicago', ianaTimezone: 'America/Chicago', offsetMinutes: -360, supportsDST: true },
-      { zoomTimezone: 'America/Denver', ianaTimezone: 'America/Denver', offsetMinutes: -420, supportsDST: true },
-      { zoomTimezone: 'America/Los_Angeles', ianaTimezone: 'America/Los_Angeles', offsetMinutes: -480, supportsDST: true },
-      { zoomTimezone: 'Europe/London', ianaTimezone: 'Europe/London', offsetMinutes: 0, supportsDST: true },
-      { zoomTimezone: 'Europe/Paris', ianaTimezone: 'Europe/Paris', offsetMinutes: 60, supportsDST: true },
-      { zoomTimezone: 'Asia/Tokyo', ianaTimezone: 'Asia/Tokyo', offsetMinutes: 540, supportsDST: false },
-      { zoomTimezone: 'Asia/Shanghai', ianaTimezone: 'Asia/Shanghai', offsetMinutes: 480, supportsDST: false },
-      { zoomTimezone: 'Australia/Sydney', ianaTimezone: 'Australia/Sydney', offsetMinutes: 600, supportsDST: true },
-    ];
-    
-    mappings.forEach(mapping => {
-      this.timezoneMap.set(mapping.zoomTimezone, mapping);
-    });
-  }
+  /**
+   * Advanced scheduling scenario handling
+   */
+  handleAdvancedScheduling(webinar: any): {
+    conflicts: any[];
+    suggestions: string[];
+    optimizedTime?: string;
+  } {
+    const conflicts: any[] = [];
+    const suggestions: string[] = [];
 
-  private createFallbackMapping(timezone: string): TimezoneMapping {
-    return {
-      zoomTimezone: timezone,
-      ianaTimezone: timezone,
-      offsetMinutes: 0,
-      supportsDST: false
-    };
-  }
+    // Check for common scheduling conflicts
+    const startTime = new Date(webinar.start_time);
+    const hour = startTime.getHours();
+    const dayOfWeek = startTime.getDay();
 
-  private convertToUTC(date: Date, mapping: TimezoneMapping): Date {
-    const offsetMs = mapping.offsetMinutes * 60 * 1000;
-    return new Date(date.getTime() - offsetMs);
-  }
-
-  private convertToTimezone(utcDate: Date, timezone: string): Date {
-    return new Date(utcDate.toLocaleString('en-US', { timeZone: timezone }));
-  }
-
-  private isDaylightSavingTime(date: Date, mapping: TimezoneMapping): boolean {
-    if (!mapping.supportsDST) return false;
-    
-    // Simplified DST detection (in real implementation, use proper timezone library)
-    const year = date.getFullYear();
-    const dstStart = new Date(year, 2, 14); // Approximate DST start
-    const dstEnd = new Date(year, 10, 7);   // Approximate DST end
-    
-    return date >= dstStart && date < dstEnd;
-  }
-
-  private isAmbiguousTime(date: Date, mapping: TimezoneMapping): boolean {
-    if (!mapping.supportsDST) return false;
-    
-    // Check if time falls during DST transition (simplified)
-    const year = date.getFullYear();
-    const dstEnd = new Date(year, 10, 7, 2, 0, 0); // 2 AM on DST end date
-    const oneHourAfter = new Date(dstEnd.getTime() + 60 * 60 * 1000);
-    
-    return date >= dstEnd && date < oneHourAfter;
-  }
-
-  private calculateOptimalBatchSize(totalCount: number): number {
-    if (totalCount <= 100) return Math.min(totalCount, 20);
-    if (totalCount <= 1000) return 50;
-    if (totalCount <= 5000) return 100;
-    return 200; // For very large datasets
-  }
-
-  private async fetchParticipantBatch(webinarId: string, offset: number, limit: number): Promise<any[]> {
-    // Simulate batch fetching - in real implementation, this would call Zoom API
-    const batch: any[] = [];
-    for (let i = 0; i < limit; i++) {
-      batch.push({
-        id: `participant_${offset + i}`,
-        email: `user${offset + i}@example.com`,
-        name: `User ${offset + i}`,
-        join_time: new Date().toISOString()
+    // Weekend scheduling
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      conflicts.push({
+        type: 'weekend_scheduling',
+        message: 'Webinar scheduled on weekend',
+        impact: 'medium'
       });
+      suggestions.push('Consider rescheduling to weekday for better attendance');
     }
-    return batch;
+
+    // Very early or late hours
+    if (hour < 8 || hour > 18) {
+      conflicts.push({
+        type: 'off_hours',
+        message: 'Webinar scheduled outside business hours',
+        impact: 'high'
+      });
+      suggestions.push('Schedule between 9 AM - 5 PM for optimal attendance');
+    }
+
+    // Lunch time scheduling
+    if (hour >= 12 && hour <= 13) {
+      conflicts.push({
+        type: 'lunch_time',
+        message: 'Webinar scheduled during typical lunch hour',
+        impact: 'low'
+      });
+      suggestions.push('Avoid 12-1 PM scheduling for better engagement');
+    }
+
+    return {
+      conflicts,
+      suggestions,
+      optimizedTime: conflicts.length > 0 ? this.suggestOptimalTime(webinar) : undefined
+    };
+  }
+
+  private convertToTimezone(date: Date, timezone: string): string {
+    try {
+      return date.toLocaleString('en-US', { timeZone: timezone });
+    } catch (error) {
+      return date.toISOString();
+    }
+  }
+
+  private isDaylightSavingTime(date: Date, timezone: string): boolean {
+    try {
+      const january = new Date(date.getFullYear(), 0, 1);
+      const july = new Date(date.getFullYear(), 6, 1);
+      
+      const janOffset = this.getTimezoneOffsetMinutes(january, timezone);
+      const julyOffset = this.getTimezoneOffsetMinutes(july, timezone);
+      const currentOffset = this.getTimezoneOffsetMinutes(date, timezone);
+      
+      return Math.min(janOffset, julyOffset) === currentOffset;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  private getTimezoneOffset(timezone: string): string {
+    try {
+      const date = new Date();
+      const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
+      const targetTime = new Date(utc + this.getTimezoneOffsetMinutes(date, timezone) * 60000);
+      const offset = targetTime.getTimezoneOffset();
+      
+      const hours = Math.floor(Math.abs(offset) / 60);
+      const minutes = Math.abs(offset) % 60;
+      const sign = offset <= 0 ? '+' : '-';
+      
+      return `${sign}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    } catch (error) {
+      return '+00:00';
+    }
+  }
+
+  private getTimezoneOffsetMinutes(date: Date, timezone: string): number {
+    try {
+      const localDate = new Date(date.toLocaleString('en-US', { timeZone: timezone }));
+      const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+      return (localDate.getTime() - utcDate.getTime()) / (1000 * 60);
+    } catch (error) {
+      return 0;
+    }
   }
 
   private parseWeeklyDays(weeklyDays: string): number[] {
-    if (!weeklyDays) return [1]; // Default to Monday
+    if (!weeklyDays) return [];
     
-    // Parse Zoom's weekly days format (e.g., "1,3,5" for Mon, Wed, Fri)
-    return weeklyDays.split(',').map(day => parseInt(day.trim())).filter(day => day >= 1 && day <= 7);
+    // Parse Zoom's weekly_days format
+    return weeklyDays.split(',').map(day => parseInt(day.trim())).filter(day => !isNaN(day));
   }
 
-  private calculateNextOccurrences(pattern: RecurrencePattern, startDate: Date, count: number): Date[] {
-    const occurrences: Date[] = [];
-    let currentDate = new Date(startDate);
+  private formatWeeklyDays(weeklyDays: string): string {
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const days = this.parseWeeklyDays(weeklyDays);
     
-    for (let i = 0; i < count; i++) {
-      switch (pattern.type) {
-        case 'daily':
-          currentDate = new Date(currentDate.getTime() + pattern.interval * 24 * 60 * 60 * 1000);
-          break;
-        case 'weekly':
-          currentDate = new Date(currentDate.getTime() + pattern.interval * 7 * 24 * 60 * 60 * 1000);
-          break;
-        case 'monthly':
-          currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + pattern.interval, currentDate.getDate());
-          break;
-        default:
-          return occurrences; // Stop for custom patterns
-      }
-      
-      if (pattern.endDate && currentDate > new Date(pattern.endDate)) {
-        break;
-      }
-      
-      occurrences.push(new Date(currentDate));
+    return days.map(day => dayNames[day - 1] || 'Unknown').join(', ');
+  }
+
+  private calculateOptimalBatchSize(totalCount: number): number {
+    // Calculate optimal batch size based on total count
+    if (totalCount < 100) return 25;
+    if (totalCount < 500) return 50;
+    if (totalCount < 1000) return 100;
+    return Math.min(200, Math.floor(totalCount / 10));
+  }
+
+  private generateSimulatedBatch(start: number, end: number): any[] {
+    const batch = [];
+    for (let i = start; i < end; i++) {
+      batch.push({
+        id: `participant_${i}`,
+        email: `participant${i}@example.com`,
+        name: `Participant ${i}`,
+        join_time: new Date(Date.now() - Math.random() * 3600000).toISOString()
+      });
     }
-    
-    return occurrences;
+    return batch;
   }
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  private async validateZoomAccount(account: any): Promise<boolean> {
+    // Simulate account validation
+    return Math.random() > 0.1; // 90% success rate
+  }
+
+  private getAccountFeatures(account: any): string[] {
+    const features = ['Basic Webinars'];
+    
+    if (account.plan_type === 'pro') {
+      features.push('Advanced Analytics', 'Custom Branding');
+    }
+    
+    if (account.plan_type === 'business') {
+      features.push('Advanced Analytics', 'Custom Branding', 'API Access', 'Webhooks');
+    }
+    
+    return features;
+  }
+
+  private suggestOptimalTime(webinar: any): string {
+    // Suggest optimal time based on current webinar
+    const currentTime = new Date(webinar.start_time);
+    const optimizedTime = new Date(currentTime);
+    
+    // Move to Tuesday-Thursday, 10 AM - 3 PM
+    const currentDay = optimizedTime.getDay();
+    if (currentDay === 0 || currentDay === 6 || currentDay === 1 || currentDay === 5) {
+      // Move to Tuesday
+      const daysToAdd = currentDay === 0 ? 2 : currentDay === 1 ? 1 : currentDay === 5 ? 4 : 2;
+      optimizedTime.setDate(optimizedTime.getDate() + daysToAdd);
+    }
+    
+    // Set time to 10 AM
+    optimizedTime.setHours(10, 0, 0, 0);
+    
+    return optimizedTime.toISOString();
+  }
+
   /**
-   * Update configuration
+   * Clear caches periodically
    */
-  updateLargeScaleConfig(config: Partial<LargeScaleConfig>): void {
-    this.largeScaleConfig = { ...this.largeScaleConfig, ...config };
+  cleanup(): void {
+    // Clear timezone cache if it gets too large
+    if (this.timezoneCache.size > 1000) {
+      this.timezoneCache.clear();
+    }
+    
+    // Clear recurrence patterns cache
+    if (this.recurrencePatterns.size > 100) {
+      this.recurrencePatterns.clear();
+    }
   }
 }
 

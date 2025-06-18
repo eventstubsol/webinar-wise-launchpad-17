@@ -31,6 +31,13 @@ export interface ApiResponse<T = any> {
   error?: string;
   statusCode?: number;
   retryable?: boolean;
+  fromCache?: boolean;
+  metadata?: {
+    totalProcessed?: number;
+    batchCount?: number;
+    processingTime?: number;
+    [key: string]: any;
+  };
 }
 
 /**

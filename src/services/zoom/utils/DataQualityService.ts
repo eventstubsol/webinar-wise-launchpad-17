@@ -1,70 +1,49 @@
 
 /**
- * Data Quality Service for Zoom webinar data
- * Provides real-time consistency checks, drift detection, and automated cleanup
+ * Data Quality Service for monitoring and ensuring data integrity
+ * Detects inconsistencies, validates data, and provides quality scoring
  */
 
-interface DataQualityCheck {
-  checkName: string;
-  description: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  category: 'consistency' | 'completeness' | 'accuracy' | 'freshness';
+interface DataQualityMetrics {
+  totalRecords: number;
+  validRecords: number;
+  invalidRecords: number;
+  qualityScore: number;
+  issues: DataQualityIssue[];
 }
 
-interface QualityIssue {
+interface DataQualityIssue {
   id: string;
-  checkName: string;
+  type: 'missing_field' | 'invalid_format' | 'inconsistent_data' | 'data_drift';
   severity: 'low' | 'medium' | 'high' | 'critical';
-  category: string;
-  description: string;
-  affectedRecords: string[];
-  detectedAt: number;
-  resolved: boolean;
-  autoFixable: boolean;
-  metadata: Record<string, any>;
+  field: string;
+  message: string;
+  recordId?: string;
+  suggestedFix?: string;
+  timestamp: number;
 }
 
-interface DataQualityScore {
-  overall: number;
-  consistency: number;
-  completeness: number;
-  accuracy: number;
-  freshness: number;
-  issueCount: number;
-  recordsAffected: number;
-}
-
-interface DriftDetectionConfig {
-  enabled: boolean;
-  checkIntervalMinutes: number;
-  thresholds: {
-    fieldValueChange: number; // % change threshold
-    recordCountChange: number; // % change threshold
-    schemaChange: boolean;
-  };
+interface QualityCheckConfig {
+  enableRealTimeChecks: boolean;
+  enableDataDriftDetection: boolean;
+  qualityThreshold: number;
+  maxIssuesPerCheck: number;
 }
 
 export class DataQualityService {
   private static instance: DataQualityService;
-  private qualityChecks: Map<string, DataQualityCheck> = new Map();
-  private qualityIssues: QualityIssue[] = [];
-  private driftBaselines: Map<string, any> = new Map();
-  
-  private config: DriftDetectionConfig = {
-    enabled: true,
-    checkIntervalMinutes: 60,
-    thresholds: {
-      fieldValueChange: 20, // 20% change triggers alert
-      recordCountChange: 15, // 15% change triggers alert
-      schemaChange: true
-    }
+  private qualityIssues: DataQualityIssue[] = [];
+  private config: QualityCheckConfig = {
+    enableRealTimeChecks: true,
+    enableDataDriftDetection: true,
+    qualityThreshold: 0.8,
+    maxIssuesPerCheck: 100
   };
+  
+  private issueListeners: Array<(issue: DataQualityIssue) => void> = [];
+  private baselineData = new Map<string, any>();
 
-  private issueListeners: Array<(issue: QualityIssue) => void> = [];
-
-  private constructor() {
-    this.initializeQualityChecks();
-  }
+  private constructor() {}
 
   static getInstance(): DataQualityService {
     if (!this.instance) {
@@ -74,521 +53,290 @@ export class DataQualityService {
   }
 
   /**
-   * Run comprehensive data quality checks on webinar data
+   * Run comprehensive data quality checks
    */
   async runQualityChecks(data: {
     webinars?: any[];
     participants?: any[];
     registrants?: any[];
-  }): Promise<DataQualityScore> {
-    const issues: QualityIssue[] = [];
-    
-    if (data.webinars) {
-      issues.push(...await this.checkWebinarQuality(data.webinars));
-    }
-    
-    if (data.participants) {
-      issues.push(...await this.checkParticipantQuality(data.participants));
-    }
-    
-    if (data.registrants) {
-      issues.push(...await this.checkRegistrantQuality(data.registrants));
-    }
-    
-    // Store new issues
-    issues.forEach(issue => {
-      this.addQualityIssue(issue);
-    });
-    
-    return this.calculateQualityScore();
-  }
+  }): Promise<DataQualityMetrics> {
+    const allIssues: DataQualityIssue[] = [];
+    let totalRecords = 0;
+    let validRecords = 0;
 
-  /**
-   * Check for data drift since last baseline
-   */
-  async detectDataDrift(
-    entityType: string,
-    currentData: any[],
-    previousData?: any[]
-  ): Promise<{
-    driftDetected: boolean;
-    changes: Array<{
-      type: 'field_value' | 'record_count' | 'schema';
-      field?: string;
-      previousValue?: any;
-      currentValue?: any;
-      changePercentage?: number;
-    }>;
-  }> {
-    const baselineKey = `${entityType}_baseline`;
-    const baseline = previousData || this.driftBaselines.get(baselineKey);
-    
-    if (!baseline || baseline.length === 0) {
-      // Set new baseline
-      this.driftBaselines.set(baselineKey, this.createDataSnapshot(currentData));
-      return { driftDetected: false, changes: [] };
+    if (data.webinars) {
+      const webinarMetrics = await this.checkWebinarDataQuality(data.webinars);
+      allIssues.push(...webinarMetrics.issues);
+      totalRecords += webinarMetrics.totalRecords;
+      validRecords += webinarMetrics.validRecords;
     }
-    
-    const changes: any[] = [];
-    
-    // Check record count drift
-    const countChange = Math.abs(currentData.length - baseline.length) / baseline.length;
-    if (countChange > this.config.thresholds.recordCountChange / 100) {
-      changes.push({
-        type: 'record_count',
-        previousValue: baseline.length,
-        currentValue: currentData.length,
-        changePercentage: countChange * 100
-      });
+
+    if (data.participants) {
+      const participantMetrics = await this.checkParticipantDataQuality(data.participants);
+      allIssues.push(...participantMetrics.issues);
+      totalRecords += participantMetrics.totalRecords;
+      validRecords += participantMetrics.validRecords;
     }
-    
-    // Check field value drift
-    const fieldDrift = this.detectFieldValueDrift(baseline, currentData);
-    changes.push(...fieldDrift);
-    
-    // Check schema drift
-    const schemaDrift = this.detectSchemaDrift(baseline, currentData);
-    changes.push(...schemaDrift);
-    
-    // Update baseline if no significant drift
-    if (changes.length === 0) {
-      this.driftBaselines.set(baselineKey, this.createDataSnapshot(currentData));
+
+    if (data.registrants) {
+      const registrantMetrics = await this.checkRegistrantDataQuality(data.registrants);
+      allIssues.push(...registrantMetrics.issues);
+      totalRecords += registrantMetrics.totalRecords;
+      validRecords += registrantMetrics.validRecords;
     }
-    
+
+    // Store issues and notify listeners
+    this.qualityIssues.push(...allIssues.slice(0, this.config.maxIssuesPerCheck));
+    this.notifyIssueListeners(allIssues);
+
+    const qualityScore = totalRecords > 0 ? validRecords / totalRecords : 1;
+
     return {
-      driftDetected: changes.length > 0,
-      changes
+      totalRecords,
+      validRecords,
+      invalidRecords: totalRecords - validRecords,
+      qualityScore,
+      issues: allIssues
     };
   }
 
   /**
-   * Auto-fix quality issues where possible
+   * Check webinar data quality
    */
-  async autoFixIssues(): Promise<{
-    fixed: number;
-    skipped: number;
-    errors: Array<{ issueId: string; error: string }>;
-  }> {
-    const fixableIssues = this.qualityIssues.filter(issue => 
-      issue.autoFixable && !issue.resolved
-    );
-    
-    let fixed = 0;
-    let skipped = 0;
-    const errors: Array<{ issueId: string; error: string }> = [];
-    
-    for (const issue of fixableIssues) {
-      try {
-        const success = await this.applyAutoFix(issue);
-        if (success) {
-          issue.resolved = true;
-          fixed++;
-        } else {
-          skipped++;
+  private async checkWebinarDataQuality(webinars: any[]): Promise<DataQualityMetrics> {
+    const issues: DataQualityIssue[] = [];
+    let validRecords = 0;
+
+    for (const webinar of webinars) {
+      let isValid = true;
+
+      // Required field checks
+      if (!webinar.id) {
+        issues.push(this.createIssue('missing_field', 'critical', 'id', 'Webinar missing required ID', webinar.uuid));
+        isValid = false;
+      }
+
+      if (!webinar.topic || webinar.topic.trim().length === 0) {
+        issues.push(this.createIssue('missing_field', 'high', 'topic', 'Webinar missing topic/title', webinar.id));
+        isValid = false;
+      }
+
+      // Date validation
+      if (webinar.start_time && !this.isValidDate(webinar.start_time)) {
+        issues.push(this.createIssue('invalid_format', 'high', 'start_time', 'Invalid start time format', webinar.id));
+        isValid = false;
+      }
+
+      // Duration validation
+      if (webinar.duration && (typeof webinar.duration !== 'number' || webinar.duration < 0)) {
+        issues.push(this.createIssue('invalid_format', 'medium', 'duration', 'Invalid duration value', webinar.id));
+        isValid = false;
+      }
+
+      // Data drift detection
+      if (this.config.enableDataDriftDetection) {
+        await this.detectDataDrift('webinar', webinar.id, webinar, issues);
+      }
+
+      if (isValid) validRecords++;
+    }
+
+    return {
+      totalRecords: webinars.length,
+      validRecords,
+      invalidRecords: webinars.length - validRecords,
+      qualityScore: webinars.length > 0 ? validRecords / webinars.length : 1,
+      issues
+    };
+  }
+
+  /**
+   * Check participant data quality
+   */
+  private async checkParticipantDataQuality(participants: any[]): Promise<DataQualityMetrics> {
+    const issues: DataQualityIssue[] = [];
+    let validRecords = 0;
+
+    for (const participant of participants) {
+      let isValid = true;
+
+      // Email validation
+      if (participant.email && !this.isValidEmail(participant.email)) {
+        issues.push(this.createIssue('invalid_format', 'high', 'email', 'Invalid email format', participant.id));
+        isValid = false;
+      }
+
+      // Name validation
+      if (!participant.name && !participant.display_name) {
+        issues.push(this.createIssue('missing_field', 'medium', 'name', 'Participant missing name', participant.id));
+        isValid = false;
+      }
+
+      // Join time validation
+      if (participant.join_time && !this.isValidDate(participant.join_time)) {
+        issues.push(this.createIssue('invalid_format', 'medium', 'join_time', 'Invalid join time format', participant.id));
+        isValid = false;
+      }
+
+      // Duration consistency check
+      if (participant.join_time && participant.leave_time) {
+        const duration = new Date(participant.leave_time).getTime() - new Date(participant.join_time).getTime();
+        if (duration < 0) {
+          issues.push(this.createIssue('inconsistent_data', 'high', 'duration', 'Leave time before join time', participant.id));
+          isValid = false;
         }
-      } catch (error) {
-        errors.push({
-          issueId: issue.id,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-        skipped++;
+      }
+
+      if (isValid) validRecords++;
+    }
+
+    return {
+      totalRecords: participants.length,
+      validRecords,
+      invalidRecords: participants.length - validRecords,
+      qualityScore: participants.length > 0 ? validRecords / participants.length : 1,
+      issues
+    };
+  }
+
+  /**
+   * Check registrant data quality
+   */
+  private async checkRegistrantDataQuality(registrants: any[]): Promise<DataQualityMetrics> {
+    const issues: DataQualityIssue[] = [];
+    let validRecords = 0;
+
+    for (const registrant of registrants) {
+      let isValid = true;
+
+      // Email validation (required for registrants)
+      if (!registrant.email || !this.isValidEmail(registrant.email)) {
+        issues.push(this.createIssue('invalid_format', 'critical', 'email', 'Invalid or missing email for registrant', registrant.id));
+        isValid = false;
+      }
+
+      // Registration time validation
+      if (registrant.create_time && !this.isValidDate(registrant.create_time)) {
+        issues.push(this.createIssue('invalid_format', 'medium', 'create_time', 'Invalid registration time format', registrant.id));
+        isValid = false;
+      }
+
+      if (isValid) validRecords++;
+    }
+
+    return {
+      totalRecords: registrants.length,
+      validRecords,
+      invalidRecords: registrants.length - validRecords,
+      qualityScore: registrants.length > 0 ? validRecords / registrants.length : 1,
+      issues
+    };
+  }
+
+  /**
+   * Detect data drift by comparing with baseline
+   */
+  private async detectDataDrift(
+    entityType: string,
+    entityId: string,
+    currentData: any,
+    issues: DataQualityIssue[]
+  ): Promise<void> {
+    const baselineKey = `${entityType}:${entityId}`;
+    const baseline = this.baselineData.get(baselineKey);
+
+    if (baseline) {
+      // Check for significant changes in key fields
+      const criticalFields = this.getCriticalFields(entityType);
+      
+      for (const field of criticalFields) {
+        if (baseline[field] !== undefined && currentData[field] !== undefined) {
+          if (baseline[field] !== currentData[field]) {
+            issues.push(this.createIssue(
+              'data_drift',
+              'medium',
+              field,
+              `Field value changed from "${baseline[field]}" to "${currentData[field]}"`,
+              entityId,
+              'Review data consistency'
+            ));
+          }
+        }
       }
     }
-    
-    return { fixed, skipped, errors };
+
+    // Update baseline with current data
+    this.baselineData.set(baselineKey, { ...currentData });
   }
 
   /**
-   * Get current data quality score
+   * Calculate overall quality score
    */
-  calculateQualityScore(): DataQualityScore {
-    const activeIssues = this.qualityIssues.filter(issue => !issue.resolved);
-    const totalRecordsAffected = new Set(
-      activeIssues.flatMap(issue => issue.affectedRecords)
-    ).size;
+  calculateQualityScore(): {
+    overall: number;
+    issueCount: number;
+    recordsAffected: number;
+    lastCalculated: string;
+  } {
+    const recentIssues = this.qualityIssues.filter(
+      issue => issue.timestamp > Date.now() - (24 * 60 * 60 * 1000) // Last 24 hours
+    );
+
+    const criticalIssues = recentIssues.filter(issue => issue.severity === 'critical').length;
+    const highIssues = recentIssues.filter(issue => issue.severity === 'high').length;
+    const mediumIssues = recentIssues.filter(issue => issue.severity === 'medium').length;
+    const lowIssues = recentIssues.filter(issue => issue.severity === 'low').length;
+
+    // Calculate weighted quality score
+    const totalWeight = criticalIssues * 4 + highIssues * 3 + mediumIssues * 2 + lowIssues * 1;
+    const maxWeight = recentIssues.length * 4; // If all were critical
     
-    // Calculate category scores
-    const categoryScores = {
-      consistency: this.calculateCategoryScore('consistency', activeIssues),
-      completeness: this.calculateCategoryScore('completeness', activeIssues),
-      accuracy: this.calculateCategoryScore('accuracy', activeIssues),
-      freshness: this.calculateCategoryScore('freshness', activeIssues)
-    };
-    
-    const overall = Object.values(categoryScores).reduce((sum, score) => sum + score, 0) / 4;
-    
+    const overall = maxWeight > 0 ? Math.max(0, 1 - (totalWeight / maxWeight)) : 1;
+
     return {
-      overall: Math.round(overall * 100) / 100,
-      consistency: categoryScores.consistency,
-      completeness: categoryScores.completeness,
-      accuracy: categoryScores.accuracy,
-      freshness: categoryScores.freshness,
-      issueCount: activeIssues.length,
-      recordsAffected: totalRecordsAffected
+      overall,
+      issueCount: recentIssues.length,
+      recordsAffected: new Set(recentIssues.map(i => i.recordId).filter(Boolean)).size,
+      lastCalculated: new Date().toISOString()
     };
-  }
-
-  /**
-   * Get quality issues with filtering
-   */
-  getQualityIssues(filters?: {
-    severity?: string[];
-    category?: string[];
-    resolved?: boolean;
-  }): QualityIssue[] {
-    let issues = [...this.qualityIssues];
-    
-    if (filters?.severity) {
-      issues = issues.filter(issue => filters.severity!.includes(issue.severity));
-    }
-    
-    if (filters?.category) {
-      issues = issues.filter(issue => filters.category!.includes(issue.category));
-    }
-    
-    if (filters?.resolved !== undefined) {
-      issues = issues.filter(issue => issue.resolved === filters.resolved);
-    }
-    
-    return issues.sort((a, b) => b.detectedAt - a.detectedAt);
   }
 
   /**
    * Subscribe to quality issue notifications
    */
-  onQualityIssue(listener: (issue: QualityIssue) => void): () => void {
+  onQualityIssue(listener: (issue: DataQualityIssue) => void): () => void {
     this.issueListeners.push(listener);
     return () => {
       this.issueListeners = this.issueListeners.filter(l => l !== listener);
     };
   }
 
-  private initializeQualityChecks(): void {
-    // Webinar quality checks
-    this.qualityChecks.set('webinar_missing_title', {
-      checkName: 'webinar_missing_title',
-      description: 'Webinar has missing or empty title',
-      severity: 'high',
-      category: 'completeness'
-    });
-    
-    this.qualityChecks.set('webinar_invalid_duration', {
-      checkName: 'webinar_invalid_duration',
-      description: 'Webinar duration is invalid or unrealistic',
-      severity: 'medium',
-      category: 'accuracy'
-    });
-    
-    this.qualityChecks.set('webinar_future_start_time', {
-      checkName: 'webinar_future_start_time',
-      description: 'Past webinar has future start time',
-      severity: 'high',
-      category: 'consistency'
-    });
-    
-    // Participant quality checks
-    this.qualityChecks.set('participant_missing_email', {
-      checkName: 'participant_missing_email',
-      description: 'Participant has missing or invalid email',
-      severity: 'critical',
-      category: 'completeness'
-    });
-    
-    this.qualityChecks.set('participant_duplicate_entry', {
-      checkName: 'participant_duplicate_entry',
-      description: 'Duplicate participant entries found',
-      severity: 'medium',
-      category: 'consistency'
-    });
-    
-    this.qualityChecks.set('participant_invalid_duration', {
-      checkName: 'participant_invalid_duration',
-      description: 'Participant duration exceeds webinar duration',
-      severity: 'medium',
-      category: 'accuracy'
-    });
+  /**
+   * Get recent quality issues
+   */
+  getRecentIssues(hours: number = 24): DataQualityIssue[] {
+    const cutoff = Date.now() - (hours * 60 * 60 * 1000);
+    return this.qualityIssues.filter(issue => issue.timestamp >= cutoff);
   }
 
-  private async checkWebinarQuality(webinars: any[]): Promise<QualityIssue[]> {
-    const issues: QualityIssue[] = [];
-    
-    webinars.forEach((webinar, index) => {
-      const recordId = webinar.id || `webinar_${index}`;
-      
-      // Check missing title
-      if (!webinar.topic || webinar.topic.trim() === '') {
-        issues.push(this.createQualityIssue(
-          'webinar_missing_title',
-          [recordId],
-          { webinarId: recordId, topic: webinar.topic }
-        ));
-      }
-      
-      // Check invalid duration
-      if (webinar.duration && (webinar.duration < 0 || webinar.duration > 1440)) {
-        issues.push(this.createQualityIssue(
-          'webinar_invalid_duration',
-          [recordId],
-          { webinarId: recordId, duration: webinar.duration }
-        ));
-      }
-      
-      // Check future start time for past webinars
-      if (webinar.start_time && webinar.status === 'ended') {
-        const startTime = new Date(webinar.start_time).getTime();
-        if (startTime > Date.now()) {
-          issues.push(this.createQualityIssue(
-            'webinar_future_start_time',
-            [recordId],
-            { webinarId: recordId, startTime: webinar.start_time, status: webinar.status }
-          ));
-        }
-      }
-    });
-    
-    return issues;
-  }
-
-  private async checkParticipantQuality(participants: any[]): Promise<QualityIssue[]> {
-    const issues: QualityIssue[] = [];
-    const emailsSeen = new Set<string>();
-    
-    participants.forEach((participant, index) => {
-      const recordId = participant.id || `participant_${index}`;
-      
-      // Check missing email
-      if (!participant.email || !this.isValidEmail(participant.email)) {
-        issues.push(this.createQualityIssue(
-          'participant_missing_email',
-          [recordId],
-          { participantId: recordId, email: participant.email }
-        ));
-      }
-      
-      // Check duplicate email
-      if (participant.email) {
-        const emailKey = `${participant.webinar_id}_${participant.email.toLowerCase()}`;
-        if (emailsSeen.has(emailKey)) {
-          issues.push(this.createQualityIssue(
-            'participant_duplicate_entry',
-            [recordId],
-            { participantId: recordId, email: participant.email, webinarId: participant.webinar_id }
-          ));
-        }
-        emailsSeen.add(emailKey);
-      }
-      
-      // Check invalid duration
-      if (participant.duration && participant.duration < 0) {
-        issues.push(this.createQualityIssue(
-          'participant_invalid_duration',
-          [recordId],
-          { participantId: recordId, duration: participant.duration }
-        ));
-      }
-    });
-    
-    return issues;
-  }
-
-  private async checkRegistrantQuality(registrants: any[]): Promise<QualityIssue[]> {
-    const issues: QualityIssue[] = [];
-    
-    registrants.forEach((registrant, index) => {
-      const recordId = registrant.id || `registrant_${index}`;
-      
-      // Check missing email
-      if (!registrant.email || !this.isValidEmail(registrant.email)) {
-        issues.push(this.createQualityIssue(
-          'participant_missing_email', // Reuse same check
-          [recordId],
-          { registrantId: recordId, email: registrant.email }
-        ));
-      }
-    });
-    
-    return issues;
-  }
-
-  private createQualityIssue(
-    checkName: string,
-    affectedRecords: string[],
-    metadata: Record<string, any>
-  ): QualityIssue {
-    const check = this.qualityChecks.get(checkName);
-    if (!check) {
-      throw new Error(`Unknown quality check: ${checkName}`);
-    }
-    
+  private createIssue(
+    type: DataQualityIssue['type'],
+    severity: DataQualityIssue['severity'],
+    field: string,
+    message: string,
+    recordId?: string,
+    suggestedFix?: string
+  ): DataQualityIssue {
     return {
-      id: `issue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      checkName,
-      severity: check.severity,
-      category: check.category,
-      description: check.description,
-      affectedRecords,
-      detectedAt: Date.now(),
-      resolved: false,
-      autoFixable: this.isAutoFixable(checkName),
-      metadata
+      id: `issue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      severity,
+      field,
+      message,
+      recordId,
+      suggestedFix,
+      timestamp: Date.now()
     };
-  }
-
-  private addQualityIssue(issue: QualityIssue): void {
-    this.qualityIssues.push(issue);
-    this.notifyIssueListeners(issue);
-    
-    // Cleanup old resolved issues
-    this.qualityIssues = this.qualityIssues.filter(
-      i => !i.resolved || i.detectedAt > Date.now() - (7 * 24 * 60 * 60 * 1000)
-    );
-  }
-
-  private notifyIssueListeners(issue: QualityIssue): void {
-    this.issueListeners.forEach(listener => {
-      try {
-        listener(issue);
-      } catch (error) {
-        console.error('Error in quality issue listener:', error);
-      }
-    });
-  }
-
-  private isAutoFixable(checkName: string): boolean {
-    const autoFixableChecks = [
-      'participant_duplicate_entry',
-      'webinar_missing_title' // Can be auto-fixed with default title
-    ];
-    return autoFixableChecks.includes(checkName);
-  }
-
-  private async applyAutoFix(issue: QualityIssue): Promise<boolean> {
-    switch (issue.checkName) {
-      case 'webinar_missing_title':
-        // Auto-fix: Set default title based on webinar ID
-        console.log(`Auto-fixing missing title for webinar ${issue.metadata.webinarId}`);
-        return true;
-        
-      case 'participant_duplicate_entry':
-        // Auto-fix: Mark duplicate for removal
-        console.log(`Auto-fixing duplicate participant ${issue.metadata.participantId}`);
-        return true;
-        
-      default:
-        return false;
-    }
-  }
-
-  private calculateCategoryScore(category: string, issues: QualityIssue[]): number {
-    const categoryIssues = issues.filter(issue => issue.category === category);
-    if (categoryIssues.length === 0) return 1.0;
-    
-    // Weight by severity
-    const severityWeights = { low: 0.1, medium: 0.3, high: 0.6, critical: 1.0 };
-    const totalWeight = categoryIssues.reduce(
-      (sum, issue) => sum + severityWeights[issue.severity], 0
-    );
-    
-    // Score decreases based on weighted issues
-    return Math.max(0, 1 - (totalWeight / 10));
-  }
-
-  private createDataSnapshot(data: any[]): any {
-    return {
-      length: data.length,
-      fields: this.extractFieldStatistics(data),
-      schema: this.extractSchema(data)
-    };
-  }
-
-  private extractFieldStatistics(data: any[]): Record<string, any> {
-    if (data.length === 0) return {};
-    
-    const stats: Record<string, any> = {};
-    const sample = data[0];
-    
-    Object.keys(sample).forEach(field => {
-      const values = data.map(item => item[field]).filter(v => v != null);
-      stats[field] = {
-        nullCount: data.length - values.length,
-        uniqueCount: new Set(values).size,
-        avgLength: values.length > 0 ? values.join('').length / values.length : 0
-      };
-    });
-    
-    return stats;
-  }
-
-  private extractSchema(data: any[]): Record<string, string> {
-    if (data.length === 0) return {};
-    
-    const schema: Record<string, string> = {};
-    const sample = data[0];
-    
-    Object.keys(sample).forEach(field => {
-      schema[field] = typeof sample[field];
-    });
-    
-    return schema;
-  }
-
-  private detectFieldValueDrift(baseline: any, current: any[]): any[] {
-    const changes: any[] = [];
-    const currentStats = this.extractFieldStatistics(current);
-    
-    Object.keys(baseline.fields).forEach(field => {
-      const baselineField = baseline.fields[field];
-      const currentField = currentStats[field];
-      
-      if (currentField) {
-        // Check null count drift
-        const nullCountChange = Math.abs(currentField.nullCount - baselineField.nullCount) / baseline.length;
-        if (nullCountChange > this.config.thresholds.fieldValueChange / 100) {
-          changes.push({
-            type: 'field_value',
-            field: `${field}_null_count`,
-            previousValue: baselineField.nullCount,
-            currentValue: currentField.nullCount,
-            changePercentage: nullCountChange * 100
-          });
-        }
-      }
-    });
-    
-    return changes;
-  }
-
-  private detectSchemaDrift(baseline: any, current: any[]): any[] {
-    const changes: any[] = [];
-    if (!this.config.thresholds.schemaChange) return changes;
-    
-    const currentSchema = this.extractSchema(current);
-    
-    // Check for new fields
-    Object.keys(currentSchema).forEach(field => {
-      if (!baseline.schema[field]) {
-        changes.push({
-          type: 'schema',
-          field,
-          previousValue: null,
-          currentValue: currentSchema[field]
-        });
-      }
-    });
-    
-    // Check for removed fields
-    Object.keys(baseline.schema).forEach(field => {
-      if (!currentSchema[field]) {
-        changes.push({
-          type: 'schema',
-          field,
-          previousValue: baseline.schema[field],
-          currentValue: null
-        });
-      }
-    });
-    
-    return changes;
   }
 
   private isValidEmail(email: string): boolean {
@@ -596,11 +344,49 @@ export class DataQualityService {
     return emailRegex.test(email);
   }
 
+  private isValidDate(dateString: string): boolean {
+    const date = new Date(dateString);
+    return !isNaN(date.getTime());
+  }
+
+  private getCriticalFields(entityType: string): string[] {
+    switch (entityType) {
+      case 'webinar':
+        return ['id', 'topic', 'start_time', 'host_id'];
+      case 'participant':
+        return ['email', 'user_id'];
+      case 'registrant':
+        return ['email', 'id'];
+      default:
+        return [];
+    }
+  }
+
+  private notifyIssueListeners(issues: DataQualityIssue[]): void {
+    issues.forEach(issue => {
+      this.issueListeners.forEach(listener => {
+        try {
+          listener(issue);
+        } catch (error) {
+          console.error('Error in quality issue listener:', error);
+        }
+      });
+    });
+  }
+
   /**
    * Update configuration
    */
-  updateConfig(config: Partial<DriftDetectionConfig>): void {
+  updateConfig(config: Partial<QualityCheckConfig>): void {
     this.config = { ...this.config, ...config };
+  }
+
+  /**
+   * Clear old issues
+   */
+  cleanup(): void {
+    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 days
+    this.qualityIssues = this.qualityIssues.filter(issue => issue.timestamp >= cutoff);
   }
 }
 

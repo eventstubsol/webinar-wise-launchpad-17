@@ -1,10 +1,10 @@
 
 /**
  * Enhanced Zoom API Client integrating all 5% components
- * Combines Circuit Breaker, Advanced Caching, Performance Monitoring, Data Quality, and Edge Cases
+ * Uses composition to wrap the standard ZoomApiClient with advanced features
  */
 
-import { ZoomApiClient } from './ZoomApiClient';
+import { zoomApiClient } from './ZoomApiClient';
 import { CircuitBreakerService, CircuitState } from '../utils/CircuitBreakerService';
 import { advancedCache } from '../utils/AdvancedCacheService';
 import { performanceMonitor } from '../utils/PerformanceMonitoringService';
@@ -22,12 +22,12 @@ interface EnhancedRequestOptions extends RequestOptions {
   cacheDependencies?: string[];
 }
 
-export class EnhancedZoomApiClient extends ZoomApiClient {
+export class EnhancedZoomApiClient {
   private static enhancedInstance: EnhancedZoomApiClient;
   private circuitBreaker: CircuitBreakerService;
+  private baseClient = zoomApiClient;
 
   private constructor() {
-    super();
     this.circuitBreaker = CircuitBreakerService.getInstance('zoom-api');
     this.setupCircuitBreakerMonitoring();
   }
@@ -84,7 +84,7 @@ export class EnhancedZoomApiClient extends ZoomApiClient {
           endpoint,
           method,
           async () => {
-            const response = await super.makeRequest<T>(method, endpoint, data, baseOptions, connectionId);
+            const response = await this.baseClient.makeRequest<T>(method, endpoint, data, baseOptions, connectionId);
             if (!response.success) {
               throw new Error(response.error || 'API request failed');
             }
@@ -93,7 +93,7 @@ export class EnhancedZoomApiClient extends ZoomApiClient {
           connectionId
         );
       } else {
-        const response = await super.makeRequest<T>(method, endpoint, data, baseOptions, connectionId);
+        const response = await this.baseClient.makeRequest<T>(method, endpoint, data, baseOptions, connectionId);
         if (!response.success) {
           throw new Error(response.error || 'API request failed');
         }
@@ -342,6 +342,39 @@ export class EnhancedZoomApiClient extends ZoomApiClient {
       components: serviceStatus,
       timestamp: new Date().toISOString()
     };
+  }
+
+  /**
+   * Delegate methods to base client for standard operations
+   */
+  async get<T = any>(endpoint: string, options?: RequestOptions, connectionId?: string): Promise<ApiResponse<T>> {
+    return this.makeEnhancedRequest<T>('GET', endpoint, undefined, options, connectionId);
+  }
+
+  async post<T = any>(endpoint: string, data?: any, options?: RequestOptions, connectionId?: string): Promise<ApiResponse<T>> {
+    return this.makeEnhancedRequest<T>('POST', endpoint, data, options, connectionId);
+  }
+
+  async put<T = any>(endpoint: string, data?: any, options?: RequestOptions, connectionId?: string): Promise<ApiResponse<T>> {
+    return this.makeEnhancedRequest<T>('PUT', endpoint, data, options, connectionId);
+  }
+
+  async delete<T = any>(endpoint: string, options?: RequestOptions, connectionId?: string): Promise<ApiResponse<T>> {
+    return this.makeEnhancedRequest<T>('DELETE', endpoint, undefined, options, connectionId);
+  }
+
+  /**
+   * Get rate limit status from base client
+   */
+  async getRateLimitStatus(connectionId?: string) {
+    return await this.baseClient.getRateLimitStatus(connectionId);
+  }
+
+  /**
+   * Get queue status from base client
+   */
+  getQueueStatus() {
+    return this.baseClient.getQueueStatus();
   }
 }
 
