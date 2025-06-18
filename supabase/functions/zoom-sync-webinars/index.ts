@@ -1,11 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0';
 import { Database } from '../../../src/types/supabase';
 import { processWebinarSyncEnhanced } from './processors/simple-sync-processor';
 import { createZoomAPIClient } from './zoom-api-client';
 import { EnhancedSyncProgressTracker } from '../../../src/services/zoom/sync/EnhancedSyncProgressTracker';
 
-const supabaseUrl = process.env.SUPABASE_URL ?? '';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? '';
+const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
 export default async function handler(req: Request): Promise<Response> {
   console.log('🚀 ZOOM SYNC WEBINARS: Starting sync operation');
