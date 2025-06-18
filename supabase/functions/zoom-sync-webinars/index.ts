@@ -1,14 +1,22 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0';
 import { processSimpleWebinarSync } from './simple-sync-processor.ts';
-import { createZoomAPIClient } from './zoom-api-client.ts';
 import { createSyncLog, updateSyncLog } from './database-operations.ts';
+
+// Deployment verification timestamp: 2025-01-28T10:30:00Z
+// Force fresh deployment to resolve import synchronization issues
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
+console.log('🚀 ZOOM SYNC WEBINARS: Edge function deployment verified at startup');
+console.log('📦 Environment check - SUPABASE_URL:', supabaseUrl ? 'Present' : 'Missing');
+console.log('🔑 Environment check - SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Present' : 'Missing');
+
 export default async function handler(req: Request): Promise<Response> {
   console.log('🚀 ZOOM SYNC WEBINARS: Starting sync operation');
+  console.log('📡 Request method:', req.method);
+  console.log('🌐 Request URL:', req.url);
   
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -29,6 +37,7 @@ export default async function handler(req: Request): Promise<Response> {
   let syncLogId: string | null = null;
   
   try {
+    console.log('🔐 Verifying authorization header...');
     const authorizationHeader = req.headers.get('Authorization');
     if (!authorizationHeader) {
       console.error('❌ Missing Authorization header');
@@ -47,6 +56,7 @@ export default async function handler(req: Request): Promise<Response> {
       });
     }
 
+    console.log('🔗 Creating Supabase client...');
     const supabaseAdmin = createClient(supabaseUrl, supabaseAnonKey, {
       global: {
         headers: {
@@ -55,6 +65,7 @@ export default async function handler(req: Request): Promise<Response> {
       },
     });
 
+    console.log('👤 Getting user information...');
     const { data: user, error: userError } = await supabaseAdmin.auth.getUser();
     if (userError) {
       console.error('❌ Error getting user:', userError);
@@ -78,6 +89,7 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`🔗 Zoom Connection ID: ${connectionId}`);
 
+    console.log('🔍 Fetching Zoom connection from database...');
     const { data: connection, error: connectionError } = await supabaseAdmin
       .from('zoom_connections')
       .select('*')
@@ -108,6 +120,7 @@ export default async function handler(req: Request): Promise<Response> {
     console.log(`🧪 Test Mode: ${testMode}`);
 
     // Create sync log entry
+    console.log('📝 Creating sync log entry...');
     syncLogId = await createSyncLog(supabaseAdmin, connectionId, 'full_sync');
     console.log(`📝 Sync Log ID: ${syncLogId}`);
 
@@ -124,6 +137,7 @@ export default async function handler(req: Request): Promise<Response> {
       }
     };
 
+    console.log('🎯 Starting webinar sync process...');
     // Start the sync process
     await processSimpleWebinarSync(
       supabaseAdmin,
@@ -132,6 +146,7 @@ export default async function handler(req: Request): Promise<Response> {
       syncLogId
     );
 
+    console.log('✅ Sync completed successfully');
     return new Response(JSON.stringify({ 
       success: true,
       data: 'Webinar sync completed successfully',
