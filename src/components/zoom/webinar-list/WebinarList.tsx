@@ -33,7 +33,7 @@ export const WebinarList: React.FC<WebinarListProps> = ({ connectionId }) => {
         .order('start_time', { ascending: false });
 
       if (searchTerm) {
-        query = query.ilike('title', `%${searchTerm}%`);
+        query = query.ilike('topic', `%${searchTerm}%`);
       }
 
       if (statusFilter !== 'all') {
@@ -41,7 +41,11 @@ export const WebinarList: React.FC<WebinarListProps> = ({ connectionId }) => {
       }
 
       if (syncStatusFilter !== 'all') {
-        query = query.eq('participant_sync_status', syncStatusFilter);
+        // Ensure we only filter by valid sync status values
+        const validSyncStatuses = ['pending', 'failed', 'not_applicable', 'synced', 'no_participants'];
+        if (validSyncStatuses.includes(syncStatusFilter)) {
+          query = query.eq('participant_sync_status', syncStatusFilter);
+        }
       }
 
       const { data, error } = await query;
@@ -158,7 +162,7 @@ export const WebinarList: React.FC<WebinarListProps> = ({ connectionId }) => {
                   <div className="flex-1 space-y-2">
                     <div className="flex items-start justify-between">
                       <div>
-                        <h3 className="font-semibold text-lg">{webinar.title}</h3>
+                        <h3 className="font-semibold text-lg">{webinar.topic}</h3>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                           <div className="flex items-center gap-1">
                             <Calendar className="h-4 w-4" />
@@ -195,7 +199,15 @@ export const WebinarList: React.FC<WebinarListProps> = ({ connectionId }) => {
                           Participant Sync:
                         </span>
                         <WebinarParticipantSyncButton
-                          webinar={webinar}
+                          webinar={{
+                            id: webinar.id,
+                            webinar_id: webinar.webinar_id,
+                            title: webinar.topic, // Map topic to title
+                            status: webinar.status || '',
+                            participant_sync_status: webinar.participant_sync_status || '',
+                            participant_sync_error: webinar.participant_sync_error || '',
+                            participant_sync_attempted_at: webinar.participant_sync_attempted_at || ''
+                          }}
                           connectionId={connectionId}
                           onSyncComplete={handleSyncComplete}
                         />
