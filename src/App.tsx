@@ -106,7 +106,7 @@ const App = () => (
               }
             />
             <Route
-              path="/csv-manager"
+              path="/csv-upload"
               element={
                 <ProtectedRoute>
                   <CSVUpload />
@@ -116,14 +116,6 @@ const App = () => (
 
             {/* Protected Routes - Analytics */}
             <Route
-              path="/analytics"
-              element={
-                <ProtectedRoute>
-                  <AdvancedAnalytics />
-                </ProtectedRoute>
-              }
-            />
-            <Route
               path="/advanced-analytics"
               element={
                 <ProtectedRoute>
@@ -132,7 +124,7 @@ const App = () => (
               }
             />
             <Route
-              path="/ai-analytics"
+              path="/ai-insights"
               element={
                 <ProtectedRoute>
                   <AIInsights />
@@ -158,18 +150,18 @@ const App = () => (
 
             {/* Protected Routes - Email & Campaigns */}
             <Route
-              path="/email-campaigns"
+              path="/templates"
               element={
                 <ProtectedRoute>
-                  <Campaigns />
+                  <EmailTemplates />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/email-templates"
+              path="/campaigns"
               element={
                 <ProtectedRoute>
-                  <EmailTemplates />
+                  <Campaigns />
                 </ProtectedRoute>
               }
             />
@@ -210,7 +202,7 @@ const App = () => (
 
             {/* Protected Routes - Reports */}
             <Route
-              path="/exports"
+              path="/reports"
               element={
                 <ProtectedRoute>
                   <Reports />
