@@ -12,6 +12,11 @@ export { ZoomWebinarTransformService } from './ZoomWebinarTransformService';
 // Enhanced API client with 5% components
 export { enhancedZoomApiClient, EnhancedZoomApiClient } from './EnhancedZoomApiClient';
 
+// Enhanced components
+export { EnhancedRequestProcessor } from './enhanced/EnhancedRequestProcessor';
+export { WebinarEnhancementService } from './enhanced/WebinarEnhancementService';
+export { ServiceHealthMonitor } from './enhanced/ServiceHealthMonitor';
+
 // Supporting services
 export { CircuitBreakerService, CircuitState } from '../utils/CircuitBreakerService';
 export { advancedCache, AdvancedCacheService } from '../utils/AdvancedCacheService';
