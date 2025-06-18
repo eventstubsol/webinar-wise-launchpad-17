@@ -1,24 +1,68 @@
 
 /**
- * SIMPLIFIED: Webinar eligibility checker for participant sync with clear logic
+ * FIXED: Status-aware webinar eligibility checker for participant sync
  */
 
 /**
- * SIMPLIFIED: Check if webinar is eligible for participant sync
+ * FIXED: Priority-based eligibility check - status takes precedence over time calculations
  */
 export function isWebinarEligibleForParticipantSync(
   webinarData: any, 
   debugMode = false
 ): { eligible: boolean; reason?: string; diagnostics?: any } {
   
-  console.log(`🔍 SIMPLIFIED ELIGIBILITY CHECK for webinar ${webinarData.id || 'UNKNOWN'}:`);
+  console.log(`🔍 FIXED ELIGIBILITY CHECK for webinar ${webinarData.id || 'UNKNOWN'}:`);
   
+  if (!webinarData) {
+    console.log(`❌ ELIGIBILITY: No webinar data provided`);
+    return {
+      eligible: false,
+      reason: `No webinar data provided`,
+      diagnostics: { hasWebinarData: false }
+    };
+  }
+
+  // PRIORITY 1: Status-based eligibility (most reliable)
+  const status = webinarData.status?.toLowerCase();
+  console.log(`📊 STATUS CHECK: webinar status = '${status}'`);
+  
+  if (status) {
+    // Finished/ended webinars are ALWAYS eligible for participant sync
+    if (['finished', 'ended', 'completed'].includes(status)) {
+      console.log(`✅ STATUS-BASED ELIGIBILITY: Webinar is ${status} - ELIGIBLE for participant sync`);
+      return {
+        eligible: true,
+        reason: `Webinar status '${status}' indicates completion - participant data available`,
+        diagnostics: { 
+          eligibilitySource: 'status',
+          webinarStatus: status,
+          isFinished: true
+        }
+      };
+    }
+    
+    // Available/scheduled webinars are not eligible (future events)
+    if (['available', 'scheduled', 'waiting'].includes(status)) {
+      console.log(`❌ STATUS-BASED ELIGIBILITY: Webinar is ${status} - NOT ELIGIBLE (future event)`);
+      return {
+        eligible: false,
+        reason: `Webinar status '${status}' indicates future event - no participant data yet`,
+        diagnostics: { 
+          eligibilitySource: 'status',
+          webinarStatus: status,
+          isFutureEvent: true
+        }
+      };
+    }
+  }
+
+  // PRIORITY 2: Time-based eligibility (fallback when status is unclear)
   if (!webinarData.start_time) {
-    console.log(`❌ ELIGIBILITY: No start_time available`);
+    console.log(`❌ ELIGIBILITY: No start_time available for time-based check`);
     return {
       eligible: false,
       reason: `No start time available for webinar ${webinarData.id} - cannot determine eligibility`,
-      diagnostics: { hasStartTime: false }
+      diagnostics: { hasStartTime: false, statusUnclear: true }
     };
   }
 
@@ -30,46 +74,51 @@ export function isWebinarEligibleForParticipantSync(
   // Add 10 minute buffer after webinar ends for data to be available
   const dataAvailableTime = new Date(estimatedEndTime.getTime() + (10 * 60 * 1000));
   
-  console.log(`⏰ TIME ANALYSIS:`);
+  console.log(`⏰ TIME-BASED ANALYSIS (fallback):`);
   console.log(`  - Start time: ${startTime.toISOString()}`);
   console.log(`  - Current time: ${now.toISOString()}`);
   console.log(`  - Estimated end: ${estimatedEndTime.toISOString()}`);
   console.log(`  - Data available after: ${dataAvailableTime.toISOString()}`);
   
-  // Simple logic: webinar must have ended + 10 minute buffer
+  // Future webinar
+  if (now < startTime) {
+    const minutesUntilStart = Math.round((startTime.getTime() - now.getTime()) / (1000 * 60));
+    console.log(`❌ TIME-BASED ELIGIBILITY: Future webinar - starts in ${minutesUntilStart} minutes`);
+    return {
+      eligible: false,
+      reason: `Webinar has not started yet. Start time: ${startTime.toISOString()}`,
+      diagnostics: { 
+        eligibilitySource: 'time',
+        isFutureWebinar: true,
+        minutesUntilStart: minutesUntilStart
+      }
+    };
+  }
+  
+  // Recently ended webinar (within buffer period)
   if (now < dataAvailableTime) {
     const minutesUntilAvailable = Math.round((dataAvailableTime.getTime() - now.getTime()) / (1000 * 60));
-    
-    if (now < startTime) {
-      console.log(`❌ FUTURE WEBINAR: Starts in ${Math.round((startTime.getTime() - now.getTime()) / (1000 * 60))} minutes`);
-      return {
-        eligible: false,
-        reason: `Webinar has not started yet. Start time: ${startTime.toISOString()}`,
-        diagnostics: { 
-          isFutureWebinar: true,
-          minutesUntilStart: Math.round((startTime.getTime() - now.getTime()) / (1000 * 60))
-        }
-      };
-    } else {
-      console.log(`❌ RECENT WEBINAR: Ended recently, data available in ${minutesUntilAvailable} minutes`);
-      return {
-        eligible: false,
-        reason: `Webinar ended recently. Participant data will be available in ${minutesUntilAvailable} minutes.`,
-        diagnostics: { 
-          isRecentWebinar: true,
-          minutesUntilDataAvailable: minutesUntilAvailable
-        }
-      };
-    }
+    console.log(`❌ TIME-BASED ELIGIBILITY: Recent webinar - data available in ${minutesUntilAvailable} minutes`);
+    return {
+      eligible: false,
+      reason: `Webinar ended recently. Participant data will be available in ${minutesUntilAvailable} minutes.`,
+      diagnostics: { 
+        eligibilitySource: 'time',
+        isRecentWebinar: true,
+        minutesUntilDataAvailable: minutesUntilAvailable
+      }
+    };
   }
   
   // Webinar ended + buffer time passed - eligible for participant sync
   const minutesSinceDataAvailable = Math.round((now.getTime() - dataAvailableTime.getTime()) / (1000 * 60));
-  console.log(`✅ WEBINAR ELIGIBLE: Data available for ${minutesSinceDataAvailable} minutes`);
+  console.log(`✅ TIME-BASED ELIGIBILITY: Webinar ended sufficiently ago - data available for ${minutesSinceDataAvailable} minutes`);
   
   return {
     eligible: true,
+    reason: `Webinar ended ${minutesSinceDataAvailable} minutes ago - participant data should be available`,
     diagnostics: { 
+      eligibilitySource: 'time',
       minutesSinceDataAvailable,
       webinarEndedAt: estimatedEndTime.toISOString()
     }
@@ -77,7 +126,7 @@ export function isWebinarEligibleForParticipantSync(
 }
 
 /**
- * SIMPLIFIED: Check registrant eligibility (for future/current webinars)
+ * ENHANCED: Check registrant eligibility with better status awareness
  */
 export function isWebinarEligibleForRegistrantSync(
   webinarData: any, 
@@ -95,14 +144,15 @@ export function isWebinarEligibleForRegistrantSync(
   console.log(`  - Approval type: ${approvalType}`);
   console.log(`  - Registration URL: ${webinarData.registration_url || 'None'}`);
   
-  if (!hasRegistrationUrl) {
-    console.log(`❌ NO REGISTRATION: Webinar does not require registration`);
+  if (!hasRegistrationUrl && approvalType === 2) {
+    console.log(`❌ NO REGISTRATION: Webinar does not require registration (approval_type = 2)`);
     return {
       eligible: false,
       reason: `Webinar does not require registration - no registrant data available`,
       diagnostics: { 
         requiresRegistration: false,
-        hasRegistrationUrl: false
+        hasRegistrationUrl: false,
+        approvalType: approvalType
       }
     };
   }
@@ -114,7 +164,7 @@ export function isWebinarEligibleForRegistrantSync(
     reason: `Webinar requires registration - attempting registrant sync`,
     diagnostics: { 
       requiresRegistration: true,
-      hasRegistrationUrl: true,
+      hasRegistrationUrl: hasRegistrationUrl,
       approvalType: approvalType
     }
   };
