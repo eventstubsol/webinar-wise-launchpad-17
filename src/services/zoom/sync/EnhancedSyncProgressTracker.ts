@@ -13,6 +13,8 @@ export interface SyncLogData {
   processed_items?: number;
   failed_items?: number;
   error_message?: string;
+  error_details?: any; // Add missing field
+  resource_id?: string; // Add missing field
   completed_at?: string;
   duration_seconds?: number;
 }
@@ -113,6 +115,46 @@ export class EnhancedSyncProgressTracker {
       }
     } catch (error) {
       console.error(`❌ Error updating sync log ${syncLogId}:`, error);
+    }
+  }
+
+  /**
+   * Update sync progress with detailed information
+   */
+  async updateProgress(syncLogId: string, progress: {
+    total: number;
+    processed: number;
+    failed: number;
+    current?: string;
+    overallProgress?: number;
+  }): Promise<void> {
+    try {
+      const updateData: Partial<SyncLogData> = {
+        total_items: progress.total,
+        processed_items: progress.processed,
+        failed_items: progress.failed
+      };
+
+      if (progress.current) {
+        updateData.sync_stage = progress.current;
+      }
+
+      if (progress.overallProgress !== undefined) {
+        updateData.stage_progress_percentage = Math.min(100, Math.max(0, progress.overallProgress));
+      }
+
+      const { error } = await supabase
+        .from('zoom_sync_logs')
+        .update(updateData)
+        .eq('id', syncLogId);
+
+      if (error) {
+        console.error(`❌ Failed to update progress for ${syncLogId}:`, error);
+      } else {
+        console.log(`📊 PROGRESS UPDATE: ${syncLogId} - ${progress.processed}/${progress.total} (${progress.failed} failed)`);
+      }
+    } catch (error) {
+      console.error(`❌ Error updating progress for ${syncLogId}:`, error);
     }
   }
 
