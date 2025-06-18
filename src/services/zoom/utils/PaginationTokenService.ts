@@ -5,7 +5,6 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { createHash, randomBytes } from 'crypto';
 
 export interface PaginationTokenData {
   webinarId?: string;
@@ -30,13 +29,16 @@ export class PaginationTokenService {
    */
   static async generateToken(data: PaginationTokenData): Promise<string> {
     try {
-      // Generate secure random token
-      const randomPart = randomBytes(32).toString('hex');
+      // Generate secure random token using Web Crypto API
+      const randomArray = new Uint8Array(32);
+      crypto.getRandomValues(randomArray);
+      const randomPart = Array.from(randomArray, byte => byte.toString(16).padStart(2, '0')).join('');
+      
       const timestamp = Date.now().toString(36);
       const token = `${this.TOKEN_PREFIX}${timestamp}_${randomPart}`;
 
-      // Create data hash for validation
-      const dataHash = this.createDataHash(data.queryParams);
+      // Create data hash for validation using Web Crypto API
+      const dataHash = await this.createDataHash(data.queryParams);
 
       // Calculate expiration time (15 minutes from now)
       const expiresAt = new Date();
@@ -169,9 +171,9 @@ export class PaginationTokenService {
   }
 
   /**
-   * Create a hash of query parameters for validation
+   * Create a hash of query parameters for validation using Web Crypto API
    */
-  private static createDataHash(queryParams: Record<string, any>): string {
+  private static async createDataHash(queryParams: Record<string, any>): Promise<string> {
     const sortedParams = Object.keys(queryParams)
       .sort()
       .reduce((result, key) => {
@@ -179,9 +181,13 @@ export class PaginationTokenService {
         return result;
       }, {} as Record<string, any>);
 
-    return createHash('sha256')
-      .update(JSON.stringify(sortedParams))
-      .digest('hex');
+    const dataString = JSON.stringify(sortedParams);
+    const encoder = new TextEncoder();
+    const data = encoder.encode(dataString);
+    
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
   /**
