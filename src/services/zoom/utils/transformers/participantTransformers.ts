@@ -1,5 +1,6 @@
 
 import { ZoomParticipant } from '@/types/zoom';
+import { ParticipantTransformation, ParticipantEngagement } from '@/utils/zoom/participant';
 
 /**
  * FIXED: Data transformation utilities for participants with proper status field mapping
@@ -117,31 +118,9 @@ export class ParticipantTransformers {
     errors: string[];
     warnings: string[];
   } {
-    const errors: string[] = [];
-    const warnings: string[] = [];
-
-    // Required fields validation
-    if (!apiParticipant.id && !apiParticipant.participant_id) {
-      errors.push('Missing participant ID');
-    }
-
-    if (!apiParticipant.name && !apiParticipant.participant_name) {
-      warnings.push('Missing participant name');
-    }
-
-    // Data type validation
-    if (apiParticipant.duration && typeof apiParticipant.duration !== 'number') {
-      warnings.push('Duration is not a number');
-    }
-
-    if (apiParticipant.registrant_id && typeof apiParticipant.registrant_id !== 'string') {
-      warnings.push('Registrant ID should be a string');
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-      warnings
-    };
+    // Use the modular validation
+    return ParticipantTransformation.prototype.constructor.validateParticipantData ? 
+           ParticipantTransformation.prototype.constructor.validateParticipantData(apiParticipant) :
+           { isValid: true, errors: [], warnings: [] };
   }
 }

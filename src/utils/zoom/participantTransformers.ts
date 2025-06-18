@@ -1,4 +1,3 @@
-
 /**
  * Enhanced participant data transformers for frontend use
  */
