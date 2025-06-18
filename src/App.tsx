@@ -67,6 +67,14 @@ const App = () => (
               }
             />
             <Route
+              path="/webinars"
+              element={
+                <ProtectedRoute>
+                  <Webinars />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/analytics"
               element={
                 <ProtectedRoute>
