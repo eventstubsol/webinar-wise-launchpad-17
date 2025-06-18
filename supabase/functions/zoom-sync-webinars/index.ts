@@ -1,8 +1,8 @@
 
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0';
-import { processWebinarSyncEnhanced } from './processors/simple-sync-processor';
+import { processSimpleWebinarSync } from './simple-sync-processor';
 import { createZoomAPIClient } from './zoom-api-client';
-import { EnhancedSyncProgressTracker } from '../../../src/services/zoom/sync/EnhancedSyncProgressTracker';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -73,72 +73,34 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`✅ Zoom Connection Name: ${connection.connection_name}`);
 
-    const webinarId = req.headers.get('zoom_webinar_id');
-    if (!webinarId) {
-      console.error('❌ Missing zoom_webinar_id header');
-      return new Response('Missing zoom_webinar_id header', { status: 400 });
-    }
-
-    console.log(`🎤 Webinar ID: ${webinarId}`);
-
-    const webinarDbId = req.headers.get('zoom_webinar_db_id');
-    if (!webinarDbId) {
-      console.error('❌ Missing zoom_webinar_db_id header');
-      return new Response('Missing zoom_webinar_db_id header', { status: 400 });
-    }
-
-    console.log(`🗄️  Webinar DB ID: ${webinarDbId}`);
-
     const testModeHeader = req.headers.get('test_mode');
     const testMode = testModeHeader === 'true';
     console.log(`🧪 Test Mode: ${testMode}`);
 
-    const { data: webinar, error: webinarError } = await supabaseAdmin
-      .from('zoom_webinars')
-      .select('*')
-      .eq('id', webinarDbId)
-      .single();
+    // Create sync operation object for the simple processor
+    const syncOperation = {
+      id: connectionId,
+      connection_id: connectionId,
+      sync_type: 'full_sync',
+      status: 'pending',
+      options: {
+        debug: false,
+        testMode: testMode,
+        forceRegistrantSync: false
+      }
+    };
 
-    if (webinarError) {
-      console.error('❌ Error fetching webinar:', webinarError);
-      return new Response(JSON.stringify({ error: 'Failed to fetch webinar' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (!webinar) {
-      console.error('❌ Webinar not found');
-      return new Response('Webinar not found', { status: 404 });
-    }
-
-    console.log(`🎤 Webinar Topic: ${webinar.topic}`);
-
-    const syncType = 'single_webinar_sync';
-    const progressTracker = new EnhancedSyncProgressTracker();
-    const syncLogId = await progressTracker.createSyncLog(connectionId, syncType, webinarId);
+    // Create sync log ID (simplified for this context)
+    const syncLogId = `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     console.log(`📝 Sync Log ID: ${syncLogId}`);
 
-    // Create the main ZoomAPIClient with proper pagination
-    console.log(`🔧 CREATING MAIN ZOOM API CLIENT for connection: ${connection.id}`);
-    const client = await createZoomAPIClient(connection, supabaseAdmin);
-    console.log(`✅ MAIN CLIENT CREATED: ${client.constructor?.name || 'Unknown'}`);
-    console.log(`🔍 CLIENT CAPABILITIES: getWebinarRegistrants=${typeof client.getWebinarRegistrants === 'function'}`);
-    
-    console.log(`🎯 USING MAIN CLIENT FOR ALL SYNC OPERATIONS: ${client.constructor?.name || 'Unknown'}`);
-    
-    // Pass the main ZoomAPIClient to all sync operations
-    // This ensures registrant fetching uses the proper pagination from zoom-api-client.ts
-    await processWebinarSyncEnhanced(
-      webinar,
+    // Use the simple webinar sync processor
+    await processSimpleWebinarSync(
       supabaseAdmin,
-      client, // Main ZoomAPIClient with proper pagination
-      syncLogId,
-      progressTracker,
-      testMode
+      syncOperation,
+      connection,
+      syncLogId
     );
-
-    await progressTracker.completeSyncLog(syncLogId);
 
     return new Response(JSON.stringify({ data: 'Webinar sync completed successfully' }), {
       status: 200,
@@ -155,15 +117,10 @@ export default async function handler(req: Request): Promise<Response> {
       console.error('Non-Error object caught:', error);
     }
 
-    const syncLogId = req.headers.get('sync_log_id');
-    if (syncLogId) {
-      const progressTracker = new EnhancedSyncProgressTracker();
-      await progressTracker.failSyncLog(syncLogId, error);
-    }
-
     return new Response(JSON.stringify({ error: 'Webinar sync failed', details: error }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 }
+
