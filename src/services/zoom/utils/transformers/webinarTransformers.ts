@@ -1,5 +1,6 @@
 
 import { ZoomWebinar, ZoomRegistrant } from '@/types/zoom';
+import { WebinarStatus } from '@/types/zoom/enums';
 
 /**
  * Data transformation utilities for webinars and registrants
@@ -20,16 +21,16 @@ export class WebinarTransformers {
     // approval_type: 0=auto, 1=manual, 2=no registration required
     const registrationRequired = settings.approval_type !== 2;
     
-    // Status mapping with proper validation
-    const statusMap: { [key: string]: 'available' | 'unavailable' | 'deleted' | 'started' | 'ended' | 'scheduled' } = {
-      'available': 'available',
-      'unavailable': 'unavailable',
-      'started': 'started',
-      'ended': 'ended',
-      'deleted': 'deleted',
-      'scheduled': 'scheduled'
+    // Status mapping with proper WebinarStatus enum values
+    const statusMap: { [key: string]: WebinarStatus } = {
+      'available': WebinarStatus.SCHEDULED,
+      'unavailable': WebinarStatus.CANCELLED,
+      'started': WebinarStatus.STARTED,
+      'ended': WebinarStatus.FINISHED,
+      'deleted': WebinarStatus.CANCELLED,
+      'scheduled': WebinarStatus.SCHEDULED
     };
-    const normalizedStatus = statusMap[apiWebinar.status?.toLowerCase()] || 'available';
+    const normalizedStatus = statusMap[apiWebinar.status?.toLowerCase()] || WebinarStatus.SCHEDULED;
     
     // Process alternative hosts properly
     const alternativeHosts = settings.alternative_hosts ? 
@@ -46,7 +47,7 @@ export class WebinarTransformers {
       
       // FIX: Don't use hardcoded defaults - use actual API data
       type: apiWebinar.type, // Don't default to 5
-      status: normalizedStatus, // Use mapped status
+      status: normalizedStatus, // Use mapped WebinarStatus enum
       
       start_time: apiWebinar.start_time || null,
       duration: apiWebinar.duration || null,
