@@ -54,16 +54,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // First, clean up any existing connections for this user
-    const { error: deleteError } = await serviceClient
-      .from('zoom_connections')
-      .delete()
-      .eq('user_id', user.id);
-
-    if (deleteError) {
-      console.error('Error cleaning up existing connections:', deleteError);
-    }
-
     // Request Server-to-Server OAuth token from Zoom
     const tokenRequestBody = new URLSearchParams({
       grant_type: 'account_credentials',
@@ -110,44 +100,97 @@ serve(async (req) => {
     }
     const accountData = await userTestResponse.json();
 
-    // Store tokens as plain text (no encryption)
+    // Check if a connection already exists for this user and zoom account
+    const { data: existingConnection, error: checkError } = await serviceClient
+      .from('zoom_connections')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('zoom_account_id', accountData.account_id || accountData.id)
+      .single();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('Error checking existing connection:', checkError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to check existing connections', details: checkError.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const connectionData = {
       user_id: user.id,
       zoom_user_id: accountData.id,
       zoom_account_id: accountData.account_id || accountData.id,
       zoom_email: accountData.email,
       zoom_account_type: accountData.plan_type || (accountData.type === 1 ? 'Basic' : 'Licensed'),
-      access_token: tokenData.access_token, // Plain text
-      refresh_token: 'SERVER_TO_SERVER_NOT_APPLICABLE', // Plain text
+      access_token: tokenData.access_token,
+      refresh_token: 'SERVER_TO_SERVER_NOT_APPLICABLE',
       token_expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
       scopes: tokenData.scope?.split(' ') || ['webinar:read:admin', 'user:read:admin'],
       connection_status: 'active',
       is_primary: true,
       auto_sync_enabled: true,
       sync_frequency_hours: 24,
+      updated_at: new Date().toISOString(),
     };
-    
-    // Insert new connection data
-    const { data: connection, error: insertError } = await serviceClient
-      .from('zoom_connections')
-      .insert(connectionData)
-      .select()
-      .single();
 
-    if (insertError) {
-      console.error('Failed to insert connection:', insertError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to save connection to database', details: insertError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    let connection;
+    let operationType;
+
+    if (existingConnection) {
+      // Update existing connection
+      console.log('Updating existing connection:', existingConnection.id);
+      operationType = 'updated';
+      
+      const { data: updatedConnection, error: updateError } = await serviceClient
+        .from('zoom_connections')
+        .update(connectionData)
+        .eq('id', existingConnection.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Failed to update connection:', updateError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to update connection in database', details: updateError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      connection = updatedConnection;
+    } else {
+      // Create new connection
+      console.log('Creating new connection for user:', user.id);
+      operationType = 'created';
+      
+      // First, set any existing connections for this user as non-primary
+      await serviceClient
+        .from('zoom_connections')
+        .update({ is_primary: false })
+        .eq('user_id', user.id);
+
+      const { data: newConnection, error: insertError } = await serviceClient
+        .from('zoom_connections')
+        .insert(connectionData)
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('Failed to insert connection:', insertError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to save connection to database', details: insertError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      connection = newConnection;
     }
 
-    console.log('Server-to-Server connection created successfully for user:', user.id);
+    console.log(`Server-to-Server connection ${operationType} successfully for user:`, user.id);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Zoom credentials validated successfully with Server-to-Server OAuth (no encryption)',
+        message: `Zoom credentials validated successfully with Server-to-Server OAuth (${operationType})`,
         connection: connection,
         accountInfo: {
           id: accountData.id,
