@@ -5061,6 +5061,7 @@ export type Database = {
           last_name: string | null
           leave_time: string | null
           no_of_employees: string | null
+          occurrence_id: string | null
           org: string | null
           phone: string | null
           purchasing_time_frame: string | null
@@ -5073,6 +5074,7 @@ export type Database = {
           state: string | null
           status: string | null
           tracking_source: string | null
+          tracking_source_id: string | null
           updated_at: string | null
           webinar_id: string
           zip: string | null
@@ -5097,6 +5099,7 @@ export type Database = {
           last_name?: string | null
           leave_time?: string | null
           no_of_employees?: string | null
+          occurrence_id?: string | null
           org?: string | null
           phone?: string | null
           purchasing_time_frame?: string | null
@@ -5109,6 +5112,7 @@ export type Database = {
           state?: string | null
           status?: string | null
           tracking_source?: string | null
+          tracking_source_id?: string | null
           updated_at?: string | null
           webinar_id: string
           zip?: string | null
@@ -5133,6 +5137,7 @@ export type Database = {
           last_name?: string | null
           leave_time?: string | null
           no_of_employees?: string | null
+          occurrence_id?: string | null
           org?: string | null
           phone?: string | null
           purchasing_time_frame?: string | null
@@ -5145,6 +5150,7 @@ export type Database = {
           state?: string | null
           status?: string | null
           tracking_source?: string | null
+          tracking_source_id?: string | null
           updated_at?: string | null
           webinar_id?: string
           zip?: string | null

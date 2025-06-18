@@ -1,9 +1,10 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { WebinarTransformers } from '../../utils/transformers/webinarTransformers';
+import { EnhancedRegistrantOperations } from './EnhancedRegistrantOperations';
+import { EnhancedRegistrantsApiClient } from '../../api/enhanced/EnhancedRegistrantsApiClient';
 
 /**
- * Database operations for webinar registrants
+ * Database operations for webinar registrants with enhanced compliance
  */
 export class RegistrantOperations {
   /**
@@ -44,6 +45,57 @@ export class RegistrantOperations {
       console.log(`Successfully upserted ${registrants.length} registrants`);
     } catch (error) {
       console.error('Error in upsertRegistrants:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Enhanced upsert registrants with full API compliance
+   */
+  static async upsertRegistrantsEnhanced(
+    registrants: any[], 
+    webinarDbId: string,
+    options: {
+      occurrenceId?: string;
+      trackingSourceId?: string;
+    } = {}
+  ): Promise<void> {
+    if (!registrants || registrants.length === 0) {
+      console.log('No registrants to upsert');
+      return;
+    }
+
+    try {
+      const transformedRegistrants = registrants.map(registrant => {
+        const transformed = WebinarTransformers.transformRegistrant(registrant, webinarDbId);
+        return {
+          ...transformed,
+          occurrence_id: options.occurrenceId || null,
+          tracking_source_id: options.trackingSourceId || null,
+          registration_time: registrant.create_time || new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      });
+
+      const { error } = await supabase
+        .from('zoom_registrants')
+        .upsert(
+          transformedRegistrants,
+          {
+            onConflict: 'webinar_id,registrant_id',
+            ignoreDuplicates: false
+          }
+        );
+
+      if (error) {
+        console.error('Failed to upsert enhanced registrants:', error);
+        throw new Error(`Failed to upsert registrants: ${error.message}`);
+      }
+
+      console.log(`Successfully upserted ${registrants.length} enhanced registrants`);
+    } catch (error) {
+      console.error('Error in upsertRegistrantsEnhanced:', error);
       throw error;
     }
   }
@@ -99,5 +151,21 @@ export class RegistrantOperations {
       console.error('Error getting registrants with attendance:', error);
       return [];
     }
+  }
+
+  /**
+   * Get registrants with enhanced filtering for full API compliance
+   */
+  static async getRegistrantsWithEnhancedFiltering(
+    webinarDbId: string,
+    filters: {
+      status?: 'pending' | 'approved' | 'denied';
+      occurrenceId?: string;
+      trackingSourceId?: string;
+      limit?: number;
+      offset?: number;
+    } = {}
+  ) {
+    return await EnhancedRegistrantOperations.getRegistrantsWithFiltering(webinarDbId, filters);
   }
 }
