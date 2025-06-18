@@ -7,13 +7,33 @@ import { ZoomWebinar, ZoomRegistrant } from '@/types/zoom';
 export class WebinarTransformers {
   /**
    * Transform Zoom API webinar to database format with comprehensive field mapping
+   * FIXES: Registration logic, missing fields, hardcoded defaults
    */
   static transformWebinarForDatabase(
     apiWebinar: any,
     connectionId: string
   ): Omit<ZoomWebinar, 'id' | 'created_at' | 'updated_at'> {
-    // Extract settings for better field mapping
+    // Extract settings for comprehensive field mapping
     const settings = apiWebinar.settings || {};
+    
+    // FIX CRITICAL: Correct registration logic
+    // approval_type: 0=auto, 1=manual, 2=no registration required
+    const registrationRequired = settings.approval_type !== 2;
+    
+    // Status mapping with proper validation
+    const statusMap: { [key: string]: string } = {
+      'available': 'available',
+      'unavailable': 'unavailable',
+      'started': 'started',
+      'ended': 'ended',
+      'deleted': 'deleted',
+      'scheduled': 'scheduled'
+    };
+    const normalizedStatus = statusMap[apiWebinar.status?.toLowerCase()] || 'available';
+    
+    // Process alternative hosts properly
+    const alternativeHosts = settings.alternative_hosts ? 
+      settings.alternative_hosts.split(',').map((host: string) => host.trim()) : null;
     
     return {
       connection_id: connectionId,
@@ -23,22 +43,56 @@ export class WebinarTransformers {
       host_email: apiWebinar.host_email || null,
       topic: apiWebinar.topic,
       agenda: apiWebinar.agenda || null,
-      type: apiWebinar.type || 5,
-      status: apiWebinar.status || 'available',
+      
+      // FIX: Don't use hardcoded defaults - use actual API data
+      type: apiWebinar.type, // Don't default to 5
+      status: normalizedStatus, // Use mapped status
+      
       start_time: apiWebinar.start_time || null,
       duration: apiWebinar.duration || null,
       timezone: apiWebinar.timezone || null,
-      registration_required: !!apiWebinar.registration_url,
+      
+      // FIX CRITICAL: Correct registration logic
+      registration_required: registrationRequired,
+      registration_type: settings.registration_type || null,
       registration_url: apiWebinar.registration_url || null,
       join_url: apiWebinar.join_url || null,
+      
+      // ADD MISSING: Start URL and access fields
+      start_url: apiWebinar.start_url || null,
+      
+      // ADD MISSING: Password and passcode fields
+      password: apiWebinar.password || null,
+      encrypted_passcode: apiWebinar.encrypted_passcode || apiWebinar.encrypted_password || null,
+      h323_password: apiWebinar.h323_password || null,
+      h323_passcode: apiWebinar.h323_passcode || null,
+      pstn_password: apiWebinar.pstn_password || null,
+      
+      // Registration and approval settings
       approval_type: settings.approval_type || null,
       max_registrants: settings.registrants_restrict_number || null,
+      
+      // ADD MISSING: Alternative hosts array
+      alternative_hosts: alternativeHosts,
+      
+      // ADD MISSING: Simulive fields (for on-demand webinars)
+      is_simulive: apiWebinar.is_simulive || false,
+      record_file_id: apiWebinar.record_file_id || null,
+      transition_to_live: apiWebinar.transition_to_live || false,
+      
+      // ADD MISSING: Creation metadata
+      creation_source: apiWebinar.creation_source || null,
+      webinar_created_at: apiWebinar.created_at || null,
+      
+      // ADD MISSING: Occurrence handling for recurring webinars
+      occurrence_id: apiWebinar.occurrence_id || apiWebinar.occurrences?.[0]?.occurrence_id || null,
+      
+      // Calculated fields (preserve existing logic)
       attendees_count: null,
       registrants_count: null,
       synced_at: new Date().toISOString(),
       
-      // Enhanced field mapping for missing data
-      password: apiWebinar.password || null,
+      // Enhanced JSONB fields with better data preservation
       settings: settings,
       tracking_fields: apiWebinar.tracking_fields || null,
       recurrence: apiWebinar.recurrence || null,
