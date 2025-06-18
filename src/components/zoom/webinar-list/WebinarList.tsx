@@ -46,7 +46,7 @@ export const WebinarList: React.FC<WebinarListProps> = ({ connectionId }) => {
         // Type guard to ensure the filter value is valid
         const validSyncStatuses: ParticipantSyncStatus[] = ['pending', 'failed', 'not_applicable', 'synced', 'no_participants'];
         if (validSyncStatuses.includes(syncStatusFilter as ParticipantSyncStatus)) {
-          query = query.eq('participant_sync_status', syncStatusFilter);
+          query = query.eq('participant_sync_status', syncStatusFilter as ParticipantSyncStatus);
         }
       }
 
