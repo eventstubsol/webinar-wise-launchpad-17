@@ -16,7 +16,6 @@ import {
   AlertTriangle, 
   Zap,
   Activity,
-  Users,
   Settings
 } from 'lucide-react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
@@ -39,7 +38,6 @@ import { SyncQueueVisualization } from '@/components/sync/SyncQueueVisualization
 import { PerformanceMetricsDashboard } from '@/components/sync/PerformanceMetricsDashboard';
 import { NotificationService } from '@/services/notifications/NotificationService';
 import { useAuth } from '@/contexts/AuthContext';
-import { ParticipantSyncDebugPanel } from '@/components/sync/ParticipantSyncDebugPanel';
 
 // Header component for consistent styling
 const SyncCenterHeader = () => {
@@ -457,14 +455,10 @@ const SyncCenterPage = () => {
               <RealTimeSyncProgress connectionId={connection?.id} />
 
               <Tabs defaultValue="overview">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="overview">
                     <Activity className="mr-2 h-4 w-4" />
                     Overview
-                  </TabsTrigger>
-                  <TabsTrigger value="participants">
-                    <Users className="mr-2 h-4 w-4" />
-                    Participants
                   </TabsTrigger>
                   <TabsTrigger value="history">
                     <Clock className="mr-2 h-4 w-4" />
@@ -480,9 +474,6 @@ const SyncCenterPage = () => {
                   <div className="mt-8">
                       <SyncQueueVisualization connectionId={connection?.id} />
                   </div>
-                </TabsContent>
-                <TabsContent value="participants" className="mt-6">
-                  <ParticipantSyncDebugPanel connectionId={connection?.id || ''} />
                 </TabsContent>
                 <TabsContent value="history" className="mt-6">
                   <SyncHistory />

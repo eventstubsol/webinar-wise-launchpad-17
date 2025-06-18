@@ -3,7 +3,7 @@ import { TestModeManager } from './test-mode-manager.ts';
 
 export interface EnhancedSyncRequest {
   connectionId: string;
-  syncType: 'initial' | 'incremental' | 'manual' | 'single'; // FIXED: Removed participants_only - mapped to manual
+  syncType: 'initial' | 'incremental' | 'manual' | 'single' | 'participants_only';
   webinarId?: string;
   webinarIds?: string[];
   options?: {
@@ -64,8 +64,7 @@ export async function validateEnhancedRequest(req: Request, supabase: any) {
     throw Object.assign(new Error('syncType is required'), { status: 400 });
   }
 
-  // FIXED: Updated valid sync types to match database constraint
-  const validSyncTypes = ['initial', 'incremental', 'manual', 'single'];
+  const validSyncTypes = ['initial', 'incremental', 'manual', 'single', 'participants_only'];
   if (!validSyncTypes.includes(requestBody.syncType)) {
     throw Object.assign(new Error(`Invalid syncType. Must be one of: ${validSyncTypes.join(', ')}`), { status: 400 });
   }
@@ -91,14 +90,18 @@ export async function validateEnhancedRequest(req: Request, supabase: any) {
     throw Object.assign(new Error('maxRetryAttempts must be between 0 and 10'), { status: 400 });
   }
 
-  // FIXED: Validate manual syncs with webinarIds (formerly participants_only)
-  if (requestBody.syncType === 'manual' && requestBody.webinarIds && Array.isArray(requestBody.webinarIds) && requestBody.webinarIds.length > 0) {
+  // Validate participants_only specific requirements
+  if (requestBody.syncType === 'participants_only') {
+    if (!requestBody.webinarIds || !Array.isArray(requestBody.webinarIds) || requestBody.webinarIds.length === 0) {
+      throw Object.assign(new Error('webinarIds array is required for participants_only sync'), { status: 400 });
+    }
+    
     const maxWebinars = requestBody.options?.testMode 
       ? (requestBody.options.maxWebinarsInTest || 1)
       : 50;
       
     if (requestBody.webinarIds.length > maxWebinars) {
-      throw Object.assign(new Error(`Maximum ${maxWebinars} webinars allowed per manual sync with specific webinar IDs`), { status: 400 });
+      throw Object.assign(new Error(`Maximum ${maxWebinars} webinars allowed per participants_only sync`), { status: 400 });
     }
   }
 

@@ -1,3 +1,4 @@
+
 import { zoomApiClient } from './ZoomApiClient';
 import type { ApiResponse } from './types';
 
@@ -44,94 +45,6 @@ interface ZoomWebinarApiResponse {
 }
 
 /**
- * Zoom API registrants response format with modern pagination
- */
-interface ZoomRegistrantsResponse {
-  page_count?: number; // Legacy field, still present
-  page_number?: number; // Legacy field, still present  
-  page_size: number;
-  total_records: number;
-  next_page_token?: string; // Modern pagination token
-  registrants: ZoomRegistrantApiResponse[];
-}
-
-/**
- * Zoom API registrant response format
- */
-interface ZoomRegistrantApiResponse {
-  id: string;
-  uuid?: string; // The missing field we now support
-  email: string;
-  first_name?: string;
-  last_name?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
-  country?: string;
-  phone?: string;
-  industry?: string;
-  org?: string;
-  job_title?: string;
-  purchasing_time_frame?: string;
-  role_in_purchase_process?: string;
-  no_of_employees?: string;
-  comments?: string;
-  custom_questions?: any[];
-  registration_time?: string;
-  create_time?: string; // Alternative timestamp field
-  source_id?: string;
-  tracking_source?: string;
-  status: string;
-  join_url?: string;
-  language?: string;
-}
-
-/**
- * ENHANCED: Zoom API participants response format for /past_webinars endpoint (now primary)
- */
-interface ZoomParticipantsResponse {
-  page_count?: number;
-  page_number?: number;
-  page_size: number;
-  total_records: number;
-  next_page_token?: string;
-  participants: ZoomParticipantApiResponse[];
-}
-
-/**
- * ENHANCED: Zoom API participant response format with all spec-compliant fields
- */
-interface ZoomParticipantApiResponse {
-  id: string;
-  user_id?: string;
-  registrant_id?: string; // Now correctly typed as string
-  name: string;
-  user_email?: string;
-  join_time?: string;
-  leave_time?: string;
-  duration?: number;
-  attentiveness_score?: number;
-  failover?: boolean; // NEW: API spec field
-  internal_user?: boolean; // NEW: API spec field
-  status?: string;
-  // Additional fields from enhanced endpoint
-  camera_on_duration?: number;
-  share_application_duration?: number;
-  share_desktop_duration?: number;
-  posted_chat?: boolean;
-  raised_hand?: boolean;
-  answered_polling?: boolean;
-  asked_question?: boolean;
-  device?: string;
-  ip_address?: string;
-  location?: string;
-  network_type?: string;
-  version?: string;
-  customer_key?: string;
-}
-
-/**
  * Options for listing webinars
  */
 interface ListWebinarsOptions {
@@ -153,31 +66,7 @@ interface SyncProgress {
 }
 
 /**
- * Participants API comparison result
- */
-interface ParticipantsComparisonResult {
-  reportEndpoint: {
-    count: number;
-    data: any[];
-    responseTime: number;
-    error?: string;
-  };
-  pastWebinarEndpoint: {
-    count: number;
-    data: any[];
-    responseTime: number;
-    error?: string;
-  };
-  comparison: {
-    countDifference: number;
-    uniqueToReport: any[];
-    uniqueToPastWebinar: any[];
-    dataStructureDifferences: string[];
-  };
-}
-
-/**
- * ENHANCED: Service for fetching webinar data from Zoom API with improved participant handling
+ * Service for fetching webinar data from Zoom API
  */
 export class ZoomWebinarDataService {
   /**
@@ -344,261 +233,51 @@ export class ZoomWebinarDataService {
     return null;
   }
 
-  /**
-   * ENHANCED: Get webinar registrants with modern next_page_token pagination
-   */
   static async getWebinarRegistrants(
     webinarId: string,
-    options: { 
-      pageSize?: number; 
-      status?: 'pending' | 'approved' | 'denied';
-      debugMode?: boolean;
-    } = {}
-  ): Promise<ZoomRegistrantApiResponse[]> {
-    const { pageSize = 300, status = 'approved', debugMode = false } = options;
-    const allRegistrants: ZoomRegistrantApiResponse[] = [];
-    let nextPageToken = '';
-    let hasMore = true;
-    let pageCount = 0;
-
-    if (debugMode) {
-      console.log(`🔄 ENHANCED REGISTRANTS FETCH: Starting for webinar ${webinarId}`);
-      console.log(`  - Page size: ${pageSize} (increased from 100 for efficiency)`);
-      console.log(`  - Status filter: ${status}`);
-      console.log(`  - Using modern next_page_token pagination`);
-    }
-
-    try {
-      while (hasMore) {
-        pageCount++;
-        const params = new URLSearchParams({
-          page_size: pageSize.toString(),
-          status,
-        });
-
-        // Use next_page_token for modern pagination (not page_number)
-        if (nextPageToken) {
-          params.append('next_page_token', nextPageToken);
-        }
-
-        const startTime = Date.now();
-        const response = await zoomApiClient.get<ZoomRegistrantsResponse>(
-          `/webinars/${webinarId}/registrants?${params}`
-        );
-        const responseTime = Date.now() - startTime;
-
-        if (debugMode) {
-          console.log(`📄 REGISTRANTS API PAGE ${pageCount}: Response time ${responseTime}ms`);
-        }
-
-        if (!response.success || !response.data) {
-          const errorMsg = `Failed to fetch registrants for webinar ${webinarId}: ${response.error}`;
-          console.error(`❌ ${errorMsg}`);
-          throw new Error(errorMsg);
-        }
-
-        const { registrants, next_page_token, total_records } = response.data;
-        
-        if (registrants && registrants.length > 0) {
-          // Process and enhance registrant data
-          const processedRegistrants = registrants.map((registrant, index) => {
-            const processed = this.processRegistrantData(registrant);
-            
-            if (debugMode && index === 0 && pageCount === 1) {
-              console.log(`📋 SAMPLE REGISTRANT DATA:`, {
-                id: processed.id,
-                uuid: processed.uuid,
-                email: processed.email,
-                registration_time: processed.registration_time,
-                create_time: processed.create_time,
-                status: processed.status,
-                availableFields: Object.keys(processed)
-              });
-            }
-            
-            return processed;
-          });
-
-          allRegistrants.push(...processedRegistrants);
-
-          if (debugMode) {
-            console.log(`📊 PAGE ${pageCount} PROCESSED: ${processedRegistrants.length} registrants`);
-            console.log(`📈 TOTAL SO FAR: ${allRegistrants.length} registrants`);
-          }
-        }
-
-        // Check for more pages using next_page_token (modern approach)
-        hasMore = !!next_page_token;
-        nextPageToken = next_page_token || '';
-
-        if (debugMode) {
-          console.log(`🔄 PAGINATION STATUS: hasMore=${hasMore}, nextToken=${nextPageToken ? 'present' : 'none'}`);
-        }
-      }
-
-      if (debugMode) {
-        console.log(`✅ REGISTRANTS FETCH COMPLETE: ${allRegistrants.length} total registrants in ${pageCount} pages`);
-      }
-
-      return allRegistrants;
-    } catch (error) {
-      console.error(`💥 REGISTRANTS FETCH ERROR for webinar ${webinarId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * NEW: Process and normalize registrant data for consistency
-   */
-  private static processRegistrantData(registrant: ZoomRegistrantApiResponse): ZoomRegistrantApiResponse {
-    // Normalize timestamp fields - prefer registration_time over create_time
-    const normalizedRegistrant = {
-      ...registrant,
-      registration_time: registrant.registration_time || registrant.create_time || new Date().toISOString(),
-      // Ensure uuid field is captured (was missing from DB schema)
-      uuid: registrant.uuid || null,
-    };
-
-    // Clean up empty string values to null for better database consistency
-    Object.keys(normalizedRegistrant).forEach(key => {
-      if (normalizedRegistrant[key as keyof ZoomRegistrantApiResponse] === '') {
-        (normalizedRegistrant as any)[key] = null;
-      }
-    });
-
-    return normalizedRegistrant;
-  }
-
-  /**
-   * ENHANCED: Get webinar participants using /past_webinars as PRIMARY endpoint (API spec compliant)
-   */
-  static async getWebinarParticipants(
-    webinarId: string,
-    options: { 
-      pageSize?: number; 
-      debugMode?: boolean;
-      useAlternativeEndpoint?: boolean; // Option to force alternative endpoint
-    } = {}
-  ): Promise<ZoomParticipantApiResponse[]> {
-    const { pageSize = 300, debugMode = false, useAlternativeEndpoint = false } = options;
-    
-    if (debugMode) {
-      console.log(`🔄 ENHANCED PARTICIPANTS FETCH: Starting for webinar ${webinarId}`);
-      console.log(`  - Page size: ${pageSize} (API maximum for efficiency)`);
-      console.log(`  - Primary endpoint: /past_webinars/${webinarId}/participants`);
-      console.log(`  - Using spec-compliant field mapping`);
-    }
-
-    // Use past_webinars endpoint as primary (API spec compliant)
-    if (!useAlternativeEndpoint) {
-      try {
-        return await this.getWebinarParticipantsPrimary(webinarId, { pageSize, debugMode });
-      } catch (primaryError) {
-        console.warn(`⚠️ Primary endpoint failed, falling back to report endpoint:`, primaryError);
-        return await this.getWebinarParticipantsReport(webinarId, { pageSize, debugMode });
-      }
-    } else {
-      return await this.getWebinarParticipantsReport(webinarId, { pageSize, debugMode });
-    }
-  }
-
-  /**
-   * NEW: Primary participant endpoint - /past_webinars/{webinarId}/participants (API spec compliant)
-   */
-  static async getWebinarParticipantsPrimary(
-    webinarId: string,
-    options: { pageSize?: number; debugMode?: boolean } = {}
-  ): Promise<ZoomParticipantApiResponse[]> {
-    const { pageSize = 300, debugMode = false } = options;
-    const allParticipants: ZoomParticipantApiResponse[] = [];
+    options: { pageSize?: number; status?: 'pending' | 'approved' | 'denied' } = {}
+  ) {
+    const { pageSize = 100, status = 'approved' } = options;
+    const allRegistrants = [];
     let pageNumber = 1;
     let hasMore = true;
-
-    if (debugMode) {
-      console.log(`📡 PRIMARY API: /past_webinars/${webinarId}/participants`);
-    }
 
     while (hasMore) {
       const params = new URLSearchParams({
         page_size: pageSize.toString(),
         page_number: pageNumber.toString(),
+        status,
       });
 
-      const startTime = Date.now();
-      const response = await zoomApiClient.get<ZoomParticipantsResponse>(
-        `/past_webinars/${webinarId}/participants?${params}`
+      const response = await zoomApiClient.get(
+        `/webinars/${webinarId}/registrants?${params}`
       );
-      const responseTime = Date.now() - startTime;
-
-      if (debugMode) {
-        console.log(`📄 PRIMARY API page ${pageNumber}: Response time ${responseTime}ms`);
-      }
 
       if (!response.success || !response.data) {
-        throw new Error(`Primary API failed: ${response.error}`);
+        console.error(`Failed to fetch registrants for webinar ${webinarId}:`, response.error);
+        break;
       }
 
-      const { participants, page_count, page_number: currentPage } = response.data;
-      
-      if (participants && participants.length > 0) {
-        // Process and enhance participant data for spec compliance
-        const processedParticipants = participants.map((participant, index) => {
-          const processed = this.processParticipantDataEnhanced(participant);
-          
-          if (debugMode && index === 0 && pageNumber === 1) {
-            console.log(`📋 PRIMARY API SAMPLE PARTICIPANT:`, {
-              id: processed.id,
-              registrant_id: processed.registrant_id, // Now string
-              name: processed.name,
-              failover: processed.failover, // NEW FIELD
-              internal_user: processed.internal_user, // NEW FIELD
-              duration: processed.duration,
-              status: processed.status,
-              availableFields: Object.keys(processed)
-            });
-          }
-          
-          return processed;
-        });
-
-        allParticipants.push(...processedParticipants);
-
-        if (debugMode) {
-          console.log(`📊 PRIMARY API PAGE ${pageNumber}: ${processedParticipants.length} participants`);
-          console.log(`📈 TOTAL SO FAR: ${allParticipants.length} participants`);
-        }
-      }
+      const { registrants, page_count, page_number: currentPage } = response.data;
+      allRegistrants.push(...registrants);
 
       hasMore = currentPage < page_count;
       pageNumber++;
     }
 
-    if (debugMode) {
-      console.log(`✅ PRIMARY API COMPLETE: ${allParticipants.length} total participants`);
-    }
-
-    return allParticipants;
+    return allRegistrants;
   }
 
-  /**
-   * ENHANCED: Report endpoint as fallback - /report/webinars/{webinarId}/participants
-   */
-  static async getWebinarParticipantsReport(
+  static async getWebinarParticipants(
     webinarId: string,
-    options: { pageSize?: number; debugMode?: boolean } = {}
-  ): Promise<ZoomParticipantApiResponse[]> {
-    const { pageSize = 100, debugMode = false } = options; // Lower page size for report endpoint
-    const allParticipants: ZoomParticipantApiResponse[] = [];
+    options: { pageSize?: number } = {}
+  ) {
+    const { pageSize = 100 } = options;
+    const allParticipants = [];
     let nextPageToken = '';
     let hasMore = true;
-    let pageCount = 0;
-
-    if (debugMode) {
-      console.log(`📡 FALLBACK API: /report/webinars/${webinarId}/participants`);
-    }
 
     while (hasMore) {
-      pageCount++;
       const params = new URLSearchParams({
         page_size: pageSize.toString(),
       });
@@ -607,283 +286,32 @@ export class ZoomWebinarDataService {
         params.append('next_page_token', nextPageToken);
       }
 
-      const startTime = Date.now();
-      const response = await zoomApiClient.get<any>(
+      const response = await zoomApiClient.get(
         `/report/webinars/${webinarId}/participants?${params}`
       );
-      const responseTime = Date.now() - startTime;
-
-      if (debugMode) {
-        console.log(`📄 FALLBACK API page ${pageCount}: Response time ${responseTime}ms`);
-      }
 
       if (!response.success || !response.data) {
-        throw new Error(`Fallback API failed: ${response.error}`);
-      }
-
-      const { participants, next_page_token } = response.data;
-      
-      if (participants && participants.length > 0) {
-        const processedParticipants = participants.map((participant: any) => 
-          this.processParticipantDataEnhanced(participant)
-        );
-
-        allParticipants.push(...processedParticipants);
-
-        if (debugMode) {
-          console.log(`📊 FALLBACK API PAGE ${pageCount}: ${processedParticipants.length} participants`);
-        }
-      }
-
-      hasMore = !!next_page_token;
-      nextPageToken = next_page_token || '';
-    }
-
-    if (debugMode) {
-      console.log(`✅ FALLBACK API COMPLETE: ${allParticipants.length} total participants`);
-    }
-
-    return allParticipants;
-  }
-
-  /**
-   * NEW: Enhanced participant data processing for API compliance
-   */
-  private static processParticipantDataEnhanced(participant: any): ZoomParticipantApiResponse {
-    // Ensure registrant_id is properly handled as string
-    const registrant_id = participant.registrant_id ? String(participant.registrant_id) : null;
-    
-    // Enhanced status normalization
-    const normalizeStatus = (status: string | undefined): string => {
-      if (!status) return 'attended';
-      
-      const statusMap: { [key: string]: string } = {
-        'in_meeting': 'in_meeting',
-        'in_waiting_room': 'in_waiting_room',
-        'attended': 'attended',
-        'not_attended': 'not_attended',
-        'left_early': 'left_early'
-      };
-      
-      return statusMap[status.toLowerCase()] || 'attended';
-    };
-
-    const normalizedParticipant: ZoomParticipantApiResponse = {
-      id: participant.id || participant.participant_id,
-      user_id: participant.user_id || null,
-      registrant_id: registrant_id, // FIXED: Properly typed as string
-      name: participant.name || participant.participant_name || 'Unknown',
-      user_email: participant.user_email || participant.participant_email || null,
-      join_time: participant.join_time || null,
-      leave_time: participant.leave_time || null,
-      duration: participant.duration || 0,
-      attentiveness_score: participant.attentiveness_score || null,
-      failover: participant.failover || false, // NEW: API spec field
-      internal_user: participant.internal_user || false, // NEW: API spec field
-      status: normalizeStatus(participant.status),
-      // Enhanced fields from report endpoint
-      camera_on_duration: participant.camera_on_duration || null,
-      share_application_duration: participant.share_application_duration || null,
-      share_desktop_duration: participant.share_desktop_duration || null,
-      posted_chat: participant.posted_chat || false,
-      raised_hand: participant.raised_hand || false,
-      answered_polling: participant.answered_polling || false,
-      asked_question: participant.asked_question || false,
-      device: participant.device || null,
-      ip_address: participant.ip_address ? String(participant.ip_address) : null,
-      location: participant.location || null,
-      network_type: participant.network_type || null,
-      version: participant.version || null,
-      customer_key: participant.customer_key || null,
-    };
-
-    // Clean up empty string values to null for better database consistency
-    Object.keys(normalizedParticipant).forEach(key => {
-      if (normalizedParticipant[key as keyof ZoomParticipantApiResponse] === '') {
-        (normalizedParticipant as any)[key] = null;
-      }
-    });
-
-    return normalizedParticipant;
-  }
-
-  /**
-   * NEW: Get webinar participants using the alternative /past_webinars/ endpoint
-   */
-  static async getWebinarParticipantsAlternative(
-    webinarId: string,
-    options: { pageSize?: number; debugMode?: boolean } = {}
-  ) {
-    const { pageSize = 300, debugMode = false } = options;
-    const allParticipants = [];
-    let pageNumber = 1;
-    let hasMore = true;
-
-    if (debugMode) {
-      console.log(`Starting alternative participants fetch for webinar ${webinarId} with pageSize=${pageSize}`);
-    }
-
-    while (hasMore) {
-      const params = new URLSearchParams({
-        page_size: pageSize.toString(),
-        page_number: pageNumber.toString(),
-      });
-
-      const startTime = Date.now();
-      const response = await zoomApiClient.get(
-        `/past_webinars/${webinarId}/participants?${params}`
-      );
-      const responseTime = Date.now() - startTime;
-
-      if (debugMode) {
-        console.log(`Alternative API page ${pageNumber} response time: ${responseTime}ms`);
-      }
-
-      if (!response.success || !response.data) {
-        console.error(`Failed to fetch participants (alternative) for webinar ${webinarId}:`, response.error);
+        console.error(`Failed to fetch participants for webinar ${webinarId}:`, response.error);
         break;
       }
 
-      const { participants, page_count, page_number: currentPage, total_records } = response.data;
+      const { participants, next_page_token } = response.data;
       
       // Calculate engagement metrics for each participant
       const enhancedParticipants = participants.map((participant: any) => ({
         ...participant,
         engagement_score: this.calculateEngagementScore(participant),
         total_duration: participant.duration || 0,
-        join_leave_count: participant.details?.length || 1,
-        _source: 'past_webinars_api'
+        join_leave_count: participant.details?.length || 1
       }));
 
       allParticipants.push(...enhancedParticipants);
 
-      if (debugMode) {
-        console.log(`Alternative API page ${pageNumber}: ${participants.length} participants, total so far: ${allParticipants.length}`);
-      }
-
-      hasMore = currentPage < page_count;
-      pageNumber++;
-    }
-
-    if (debugMode) {
-      console.log(`Alternative API total participants fetched: ${allParticipants.length}`);
+      hasMore = !!next_page_token;
+      nextPageToken = next_page_token || '';
     }
 
     return allParticipants;
-  }
-
-  /**
-   * NEW: Compare both participants API endpoints
-   */
-  static async compareParticipantsEndpoints(
-    webinarId: string,
-    options: { pageSize?: number; debugMode?: boolean } = {}
-  ): Promise<ParticipantsComparisonResult> {
-    const { pageSize = 300, debugMode = false } = options;
-
-    console.log(`Comparing participants endpoints for webinar ${webinarId}`);
-
-    // Test report endpoint
-    let reportResult = {
-      count: 0,
-      data: [],
-      responseTime: 0,
-      error: undefined as string | undefined
-    };
-
-    try {
-      const reportStartTime = Date.now();
-      reportResult.data = await this.getWebinarParticipantsReport(webinarId, { pageSize: 100 });
-      reportResult.responseTime = Date.now() - reportStartTime;
-      reportResult.count = reportResult.data.length;
-
-      if (debugMode) {
-        console.log(`Report endpoint: ${reportResult.count} participants in ${reportResult.responseTime}ms`);
-      }
-    } catch (error) {
-      reportResult.error = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Report endpoint error:', reportResult.error);
-    }
-
-    // Test past_webinars endpoint
-    let pastWebinarResult = {
-      count: 0,
-      data: [],
-      responseTime: 0,
-      error: undefined as string | undefined
-    };
-
-    try {
-      const pastStartTime = Date.now();
-      pastWebinarResult.data = await this.getWebinarParticipantsAlternative(webinarId, { pageSize, debugMode });
-      pastWebinarResult.responseTime = Date.now() - pastStartTime;
-      pastWebinarResult.count = pastWebinarResult.data.length;
-
-      if (debugMode) {
-        console.log(`Past webinars endpoint: ${pastWebinarResult.count} participants in ${pastWebinarResult.responseTime}ms`);
-      }
-    } catch (error) {
-      pastWebinarResult.error = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Past webinars endpoint error:', pastWebinarResult.error);
-    }
-
-    // Compare results
-    const comparison = this.compareParticipantData(reportResult.data, pastWebinarResult.data, debugMode);
-
-    return {
-      reportEndpoint: reportResult,
-      pastWebinarEndpoint: pastWebinarResult,
-      comparison
-    };
-  }
-
-  /**
-   * NEW: Compare participant data from both endpoints
-   */
-  private static compareParticipantData(reportData: any[], pastWebinarData: any[], debugMode = false) {
-    const countDifference = pastWebinarData.length - reportData.length;
-    
-    // Create sets of participant IDs for comparison
-    const reportIds = new Set(reportData.map(p => p.id || p.participant_id));
-    const pastWebinarIds = new Set(pastWebinarData.map(p => p.id || p.participant_id));
-
-    const uniqueToReport = reportData.filter(p => !pastWebinarIds.has(p.id || p.participant_id));
-    const uniqueToPastWebinar = pastWebinarData.filter(p => !reportIds.has(p.id || p.participant_id));
-
-    // Analyze data structure differences
-    const dataStructureDifferences = [];
-    
-    if (reportData.length > 0 && pastWebinarData.length > 0) {
-      const reportFields = Object.keys(reportData[0]);
-      const pastWebinarFields = Object.keys(pastWebinarData[0]);
-      
-      const reportOnlyFields = reportFields.filter(f => !pastWebinarFields.includes(f));
-      const pastWebinarOnlyFields = pastWebinarFields.filter(f => !reportFields.includes(f));
-      
-      if (reportOnlyFields.length > 0) {
-        dataStructureDifferences.push(`Report endpoint has exclusive fields: ${reportOnlyFields.join(', ')}`);
-      }
-      
-      if (pastWebinarOnlyFields.length > 0) {
-        dataStructureDifferences.push(`Past webinars endpoint has exclusive fields: ${pastWebinarOnlyFields.join(', ')}`);
-      }
-    }
-
-    if (debugMode) {
-      console.log('Comparison results:', {
-        countDifference,
-        uniqueToReportCount: uniqueToReport.length,
-        uniqueToPastWebinarCount: uniqueToPastWebinar.length,
-        dataStructureDifferences
-      });
-    }
-
-    return {
-      countDifference,
-      uniqueToReport,
-      uniqueToPastWebinar,
-      dataStructureDifferences
-    };
   }
 
   static async getWebinarPolls(webinarId: string) {
@@ -930,4 +358,4 @@ export class ZoomWebinarDataService {
 }
 
 // Export types for use in other services
-export type { ZoomWebinarApiResponse, ZoomRegistrantApiResponse, ZoomParticipantApiResponse, ListWebinarsOptions, SyncProgress, ParticipantsComparisonResult };
+export type { ZoomWebinarApiResponse, ListWebinarsOptions, SyncProgress };

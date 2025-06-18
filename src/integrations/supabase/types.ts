@@ -2901,33 +2901,6 @@ export type Database = {
           },
         ]
       }
-      participant_sync_debug_log: {
-        Row: {
-          created_at: string | null
-          field_issues: Json | null
-          id: string
-          processing_errors: string[] | null
-          raw_participant_data: Json
-          webinar_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          field_issues?: Json | null
-          id?: string
-          processing_errors?: string[] | null
-          raw_participant_data: Json
-          webinar_id: string
-        }
-        Update: {
-          created_at?: string | null
-          field_issues?: Json | null
-          id?: string
-          processing_errors?: string[] | null
-          raw_participant_data?: Json
-          webinar_id?: string
-        }
-        Relationships: []
-      }
       personalization_rules: {
         Row: {
           conditions: Json
@@ -4670,7 +4643,6 @@ export type Database = {
           domain: string | null
           duration: number | null
           failover: boolean | null
-          generated_participant_id: string | null
           harddisk_id: string | null
           id: string
           internal_user: boolean | null
@@ -4681,7 +4653,7 @@ export type Database = {
           mac_addr: string | null
           network_type: string | null
           participant_email: string | null
-          participant_id: string | null
+          participant_id: string
           participant_name: string
           participant_user_id: string | null
           pc_name: string | null
@@ -4709,7 +4681,6 @@ export type Database = {
           domain?: string | null
           duration?: number | null
           failover?: boolean | null
-          generated_participant_id?: string | null
           harddisk_id?: string | null
           id?: string
           internal_user?: boolean | null
@@ -4720,7 +4691,7 @@ export type Database = {
           mac_addr?: string | null
           network_type?: string | null
           participant_email?: string | null
-          participant_id?: string | null
+          participant_id: string
           participant_name: string
           participant_user_id?: string | null
           pc_name?: string | null
@@ -4748,7 +4719,6 @@ export type Database = {
           domain?: string | null
           duration?: number | null
           failover?: boolean | null
-          generated_participant_id?: string | null
           harddisk_id?: string | null
           id?: string
           internal_user?: boolean | null
@@ -4759,7 +4729,7 @@ export type Database = {
           mac_addr?: string | null
           network_type?: string | null
           participant_email?: string | null
-          participant_id?: string | null
+          participant_id?: string
           participant_name?: string
           participant_user_id?: string | null
           pc_name?: string | null
@@ -4775,6 +4745,13 @@ export type Database = {
           webinar_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "zoom_participants_registrant_id_fkey"
+            columns: ["registrant_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_registrants"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "zoom_participants_webinar_id_fkey"
             columns: ["webinar_id"]
@@ -5066,7 +5043,6 @@ export type Database = {
           purchasing_time_frame: string | null
           registrant_email: string
           registrant_id: string
-          registrant_uuid: string | null
           registration_time: string | null
           role_in_purchase_process: string | null
           source_id: string | null
@@ -5102,7 +5078,6 @@ export type Database = {
           purchasing_time_frame?: string | null
           registrant_email: string
           registrant_id: string
-          registrant_uuid?: string | null
           registration_time?: string | null
           role_in_purchase_process?: string | null
           source_id?: string | null
@@ -5138,7 +5113,6 @@ export type Database = {
           purchasing_time_frame?: string | null
           registrant_email?: string
           registrant_id?: string
-          registrant_uuid?: string | null
           registration_time?: string | null
           role_in_purchase_process?: string | null
           source_id?: string | null
@@ -5648,15 +5622,6 @@ export type Database = {
         Args: { p_profile_id: string }
         Returns: string
       }
-      generate_fallback_participant_id: {
-        Args: {
-          p_webinar_id: string
-          p_email: string
-          p_name: string
-          p_join_time: string
-        }
-        Returns: string
-      }
       invalidate_cache_dependencies: {
         Args: { dep_pattern: string }
         Returns: number
@@ -5694,12 +5659,7 @@ export type Database = {
         | "retrying"
       content_type: "transcript" | "slides" | "chat" | "audio" | "video"
       metric_data_type: "number" | "percentage" | "duration" | "count" | "ratio"
-      participant_status:
-        | "in_meeting"
-        | "in_waiting_room"
-        | "attended"
-        | "not_attended"
-        | "left_early"
+      participant_status: "in_meeting" | "in_waiting_room"
       participant_sync_status:
         | "not_applicable"
         | "pending"
@@ -5895,13 +5855,7 @@ export const Constants = {
       ],
       content_type: ["transcript", "slides", "chat", "audio", "video"],
       metric_data_type: ["number", "percentage", "duration", "count", "ratio"],
-      participant_status: [
-        "in_meeting",
-        "in_waiting_room",
-        "attended",
-        "not_attended",
-        "left_early",
-      ],
+      participant_status: ["in_meeting", "in_waiting_room"],
       participant_sync_status: [
         "not_applicable",
         "pending",

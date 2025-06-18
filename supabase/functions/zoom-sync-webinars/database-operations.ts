@@ -55,7 +55,7 @@ export async function saveWebinarToDatabase(supabase: any, webinarData: any, con
 export async function updateWebinarParticipantSyncStatus(
   supabase: any, 
   webinarDbId: string, 
-  status: 'not_applicable' | 'pending' | 'synced' | 'failed' | 'no_participants',
+  status: 'not_applicable' | 'pending' | 'synced' | 'failed' | 'no_participants' | 'validation_warning' | 'validation_error',
   errorMessage?: string,
   validationData?: {
     participantCount?: number;
@@ -92,26 +92,8 @@ export async function updateWebinarParticipantSyncStatus(
   }
 }
 
-// ENHANCED: Better initial status determination based on webinar status
 export async function determineParticipantSyncStatus(webinarData: any): Promise<'not_applicable' | 'pending'> {
-  // PRIORITY: Use webinar status first
-  const status = webinarData.status?.toLowerCase();
-  
-  if (status) {
-    // Finished webinars should be pending for participant sync
-    if (['finished', 'ended', 'completed'].includes(status)) {
-      console.log(`✅ STATUS-BASED: Webinar status '${status}' -> setting participant_sync_status to 'pending'`);
-      return 'pending';
-    }
-    
-    // Future webinars are not applicable
-    if (['available', 'scheduled', 'waiting'].includes(status)) {
-      console.log(`❌ STATUS-BASED: Webinar status '${status}' -> setting participant_sync_status to 'not_applicable'`);
-      return 'not_applicable';
-    }
-  }
-  
-  // FALLBACK: Time-based determination
+  // Determine initial status based on webinar eligibility
   if (!webinarData.start_time) {
     return 'not_applicable';
   }
@@ -122,17 +104,20 @@ export async function determineParticipantSyncStatus(webinarData: any): Promise<
 
   // Future webinars are not applicable
   if (startTime > now) {
-    console.log(`⏰ TIME-BASED: Future webinar -> setting participant_sync_status to 'not_applicable'`);
     return 'not_applicable';
   }
 
   // Very recent webinars might not have participant data ready
   if (startTime > fiveMinutesAgo) {
-    console.log(`⏰ TIME-BASED: Recent webinar -> setting participant_sync_status to 'not_applicable'`);
     return 'not_applicable';
   }
 
-  console.log(`⏰ TIME-BASED: Past webinar -> setting participant_sync_status to 'pending'`);
+  // Check if webinar has valid status for participant sync
+  const validStatuses = ['ended', 'finished', 'available'];
+  if (!validStatuses.includes(webinarData.status?.toLowerCase())) {
+    return 'not_applicable';
+  }
+
   return 'pending';
 }
 

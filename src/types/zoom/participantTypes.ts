@@ -29,11 +29,6 @@ export interface ZoomParticipant {
   network_type: string | null;
   version: string | null;
   customer_key: string | null;
-  // FIXED: Use 'status' field to match database schema
-  status: 'in_meeting' | 'in_waiting_room' | 'attended' | 'not_attended' | 'left_early';
-  // NEW: Added missing fields from API spec
-  failover: boolean | null;
-  internal_user: boolean | null;
   created_at: string | null;
   updated_at: string | null;
 }
