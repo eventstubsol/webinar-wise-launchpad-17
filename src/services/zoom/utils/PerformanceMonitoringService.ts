@@ -1,6 +1,6 @@
 /**
  * Performance monitoring service for Zoom API operations
- * Enhanced with pagination token metrics
+ * Enhanced with pagination token metrics and complete API
  */
 
 export interface PerformanceMetrics {
@@ -16,9 +16,29 @@ export interface PerformanceMetrics {
   timestamp: number;
 }
 
+export interface PerformanceStats {
+  averageResponseTime: number;
+  successRate: number;
+  totalRequests: number;
+  failedRequests: number;
+  requestsPerMinute: number;
+}
+
+export interface Alert {
+  id: string;
+  type: 'performance' | 'error_rate' | 'availability';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  message: string;
+  threshold: number;
+  currentValue: number;
+  timestamp: number;
+}
+
 export class PerformanceMonitoringService {
   private metrics: PerformanceMetrics[] = [];
   private readonly MAX_METRICS = 1000;
+  private alertListeners: Array<(alert: Alert) => void> = [];
+  private alerts: Alert[] = [];
 
   /**
    * Measure the performance of an async operation
@@ -91,6 +111,45 @@ export class PerformanceMonitoringService {
     if (this.metrics.length > this.MAX_METRICS) {
       this.metrics = this.metrics.slice(-this.MAX_METRICS);
     }
+
+    // Check for alerts
+    this.checkAlertConditions();
+  }
+
+  /**
+   * Get performance statistics for a time period
+   */
+  getStats(periodMinutes: number = 60): PerformanceStats {
+    const cutoff = Date.now() - (periodMinutes * 60 * 1000);
+    const filteredMetrics = this.metrics.filter(m => m.timestamp > cutoff);
+
+    if (filteredMetrics.length === 0) {
+      return {
+        averageResponseTime: 0,
+        successRate: 0,
+        totalRequests: 0,
+        failedRequests: 0,
+        requestsPerMinute: 0
+      };
+    }
+
+    const totalRequests = filteredMetrics.length;
+    const successfulRequests = filteredMetrics.filter(m => m.success).length;
+    const failedRequests = totalRequests - successfulRequests;
+    const averageResponseTime = filteredMetrics.reduce((sum, m) => sum + m.duration, 0) / totalRequests;
+    const successRate = successfulRequests / totalRequests;
+    
+    // Calculate requests per minute
+    const timeSpanMinutes = Math.max(periodMinutes, 1);
+    const requestsPerMinute = totalRequests / timeSpanMinutes;
+
+    return {
+      averageResponseTime,
+      successRate,
+      totalRequests,
+      failedRequests,
+      requestsPerMinute
+    };
   }
 
   /**
@@ -136,6 +195,71 @@ export class PerformanceMonitoringService {
       successRate,
       paginationMethodStats: paginationStats
     };
+  }
+
+  /**
+   * Subscribe to performance alerts
+   */
+  onAlert(listener: (alert: Alert) => void): () => void {
+    this.alertListeners.push(listener);
+    return () => {
+      this.alertListeners = this.alertListeners.filter(l => l !== listener);
+    };
+  }
+
+  /**
+   * Check for performance issues and create alerts
+   */
+  private checkAlertConditions(): void {
+    const recentStats = this.getStats(5); // Last 5 minutes
+
+    // Alert if average response time is too high
+    if (recentStats.totalRequests > 5 && recentStats.averageResponseTime > 5000) {
+      this.createAlert({
+        type: 'performance',
+        severity: 'high',
+        message: `High response time: ${recentStats.averageResponseTime.toFixed(0)}ms average`,
+        threshold: 5000,
+        currentValue: recentStats.averageResponseTime
+      });
+    }
+
+    // Alert if success rate is too low
+    if (recentStats.totalRequests > 3 && recentStats.successRate < 0.8) {
+      this.createAlert({
+        type: 'error_rate',
+        severity: 'critical',
+        message: `Low success rate: ${(recentStats.successRate * 100).toFixed(1)}%`,
+        threshold: 0.8,
+        currentValue: recentStats.successRate
+      });
+    }
+  }
+
+  /**
+   * Create and emit an alert
+   */
+  private createAlert(alertData: Omit<Alert, 'id' | 'timestamp'>): void {
+    const alert: Alert = {
+      ...alertData,
+      id: `alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now()
+    };
+
+    this.alerts.push(alert);
+    
+    // Keep only recent alerts (last 24 hours)
+    const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+    this.alerts = this.alerts.filter(a => a.timestamp > cutoff);
+
+    // Notify listeners
+    this.alertListeners.forEach(listener => {
+      try {
+        listener(alert);
+      } catch (error) {
+        console.error('Error in alert listener:', error);
+      }
+    });
   }
 
   /**
