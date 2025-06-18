@@ -62,10 +62,10 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     try {
       console.log('Invoking zoom-sync-webinars function...');
       const { data, error } = await supabase.functions.invoke('zoom-sync-webinars', {
-        body: {
-          connectionId: connection.id,
-          syncType,
-        },
+        headers: {
+          'zoom_connection_id': connection.id,
+          'test_mode': syncType === 'initial' ? 'false' : 'false'
+        }
       });
 
       console.log('Function response:', { data, error });
@@ -95,9 +95,27 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         description: `${syncType === 'initial' ? 'Full' : 'Incremental'} sync has been initiated.`,
       });
 
-      // Poll for sync status using the database-generated sync ID
-      const syncId = data.syncId;
-      pollSyncStatus(syncId);
+      // Get syncId from response
+      const syncId = data?.syncId;
+      if (syncId) {
+        pollSyncStatus(syncId);
+      } else {
+        console.warn('No syncId returned from function, attempting fallback polling');
+        // Fallback: try to find the most recent sync log for this connection
+        const { data: recentSync } = await supabase
+          .from('zoom_sync_logs')
+          .select('id')
+          .eq('connection_id', connection.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (recentSync) {
+          pollSyncStatus(recentSync.id);
+        } else {
+          throw new Error('Unable to track sync progress');
+        }
+      }
 
     } catch (error) {
       console.error('Sync start error:', error);
@@ -120,7 +138,12 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
   const pollSyncStatus = useCallback(async (syncId: string) => {
     console.log('Starting sync status polling for:', syncId);
     
+    let pollAttempts = 0;
+    const maxPollAttempts = 150; // 5 minutes with 2-second intervals
+    
     const pollInterval = setInterval(async () => {
+      pollAttempts++;
+      
       try {
         const { data: syncLogs, error } = await supabase
           .from('zoom_sync_logs')
@@ -135,8 +158,6 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
         if (syncLogs) {
           console.log('Sync status:', syncLogs.sync_status, `${syncLogs.processed_items}/${syncLogs.total_items}`);
-          console.log('Sync error message:', syncLogs.error_message);
-          console.log('Sync error details:', syncLogs.error_details);
           
           const progress = syncLogs.total_items > 0 
             ? Math.round((syncLogs.processed_items / syncLogs.total_items) * 100)
@@ -207,17 +228,27 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       } catch (error) {
         console.error('Error polling sync status:', error);
       }
+      
+      // Stop polling if max attempts reached
+      if (pollAttempts >= maxPollAttempts) {
+        console.log('Sync polling timeout reached');
+        clearInterval(pollInterval);
+        if (isSyncing) {
+          setIsSyncing(false);
+          setSyncProgress(0);
+          setCurrentOperation('');
+          toast({
+            title: "Sync Timeout",
+            description: "Sync is taking longer than expected. Please check back later.",
+            variant: "destructive",
+          });
+        }
+      }
     }, 2000);
 
-    // Stop polling after 5 minutes
+    // Also stop polling after 5 minutes as backup
     setTimeout(() => {
       clearInterval(pollInterval);
-      if (isSyncing) {
-        console.log('Sync polling timeout reached');
-        setIsSyncing(false);
-        setSyncProgress(0);
-        setCurrentOperation('');
-      }
     }, 5 * 60 * 1000);
   }, [isSyncing, queryClient, toast]);
 

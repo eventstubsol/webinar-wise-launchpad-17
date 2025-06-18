@@ -76,6 +76,39 @@ export default async function handler(req: Request): Promise<Response> {
     const testMode = testModeHeader === 'true';
     console.log(`🧪 Test Mode: ${testMode}`);
 
+    // Create sync log entry in database for frontend polling
+    const { data: syncLog, error: syncLogError } = await supabaseAdmin
+      .from('zoom_sync_logs')
+      .insert({
+        connection_id: connectionId,
+        sync_type: 'full_sync',
+        sync_status: 'started',
+        resource_type: 'webinars',
+        resource_id: null,
+        started_at: new Date().toISOString(),
+        total_items: 0,
+        processed_items: 0,
+        failed_items: 0,
+        api_calls_made: 0,
+        rate_limit_hits: 0,
+        retry_attempts: 0,
+        retry_schedule: [],
+        max_participant_retries: 3
+      })
+      .select('id')
+      .single();
+
+    if (syncLogError) {
+      console.error('❌ Failed to create sync log:', syncLogError);
+      return new Response(JSON.stringify({ error: 'Failed to initialize sync operation' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const syncLogId = syncLog.id;
+    console.log(`📝 Sync Log ID: ${syncLogId}`);
+
     // Create sync operation object for the simple processor
     const syncOperation = {
       id: connectionId,
@@ -89,10 +122,6 @@ export default async function handler(req: Request): Promise<Response> {
       }
     };
 
-    // Create sync log ID (simplified for this context)
-    const syncLogId = `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`📝 Sync Log ID: ${syncLogId}`);
-
     // Use the simple webinar sync processor
     await processSimpleWebinarSync(
       supabaseAdmin,
@@ -101,7 +130,10 @@ export default async function handler(req: Request): Promise<Response> {
       syncLogId
     );
 
-    return new Response(JSON.stringify({ data: 'Webinar sync completed successfully' }), {
+    return new Response(JSON.stringify({ 
+      data: 'Webinar sync completed successfully',
+      syncId: syncLogId 
+    }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

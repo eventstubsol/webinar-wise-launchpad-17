@@ -1,3 +1,4 @@
+
 export async function createSyncLog(supabase: any, connectionId: string, syncType: string, webinarId?: string): Promise<string> {
   const { data, error } = await supabase
     .from('zoom_sync_logs')
