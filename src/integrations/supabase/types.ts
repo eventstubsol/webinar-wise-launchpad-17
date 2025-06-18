@@ -2901,6 +2901,57 @@ export type Database = {
           },
         ]
       }
+      pagination_tokens: {
+        Row: {
+          created_at: string | null
+          data_hash: string
+          expires_at: string
+          id: string
+          last_accessed_at: string | null
+          query_params: Json
+          token: string
+          user_id: string | null
+          webinar_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          data_hash: string
+          expires_at: string
+          id?: string
+          last_accessed_at?: string | null
+          query_params?: Json
+          token: string
+          user_id?: string | null
+          webinar_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          data_hash?: string
+          expires_at?: string
+          id?: string
+          last_accessed_at?: string | null
+          query_params?: Json
+          token?: string
+          user_id?: string | null
+          webinar_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pagination_tokens_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "webinar_analytics_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagination_tokens_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       participant_sync_debug_log: {
         Row: {
           created_at: string | null
@@ -5633,6 +5684,10 @@ export type Database = {
       }
       calculate_engagement_score: {
         Args: { p_user_id: string; p_email: string }
+        Returns: number
+      }
+      cleanup_expired_pagination_tokens: {
+        Args: Record<PropertyKey, never>
         Returns: number
       }
       decrypt_token: {

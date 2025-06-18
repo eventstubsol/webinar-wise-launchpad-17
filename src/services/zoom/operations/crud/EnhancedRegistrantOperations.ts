@@ -1,38 +1,54 @@
-
 /**
- * Enhanced registrant operations with full Zoom API compliance
+ * Enhanced registrant operations with full Zoom API compliance and pagination
  */
 
 import { supabase } from '@/integrations/supabase/client';
 import { EnhancedRegistrantsApiClient, ZoomRegistrantsQueryParams } from '../../api/enhanced/EnhancedRegistrantsApiClient';
+import { PaginationTokenService } from '../../utils/PaginationTokenService';
 
 export class EnhancedRegistrantOperations {
   /**
-   * Fetch and sync registrants with full API compliance
+   * Fetch and sync registrants with enhanced pagination support
    */
   static async syncWebinarRegistrantsEnhanced(
     client: EnhancedRegistrantsApiClient,
     webinarId: string,
     webinarDbId: string,
-    params: ZoomRegistrantsQueryParams = {}
+    params: ZoomRegistrantsQueryParams = {},
+    userId: string
   ): Promise<{
     totalSynced: number;
     hasMore: boolean;
     nextPageToken?: string;
+    warnings?: string[];
   }> {
     console.log(`🎯 ENHANCED REGISTRANT SYNC starting for webinar ${webinarId}`);
     
     try {
-      // Fetch registrants from Zoom API with all parameters
+      // Check and cleanup token health
+      await client.checkTokenHealth();
+
+      // Fetch registrants from Zoom API with enhanced pagination
       const response = await client.getWebinarRegistrants(webinarId, params);
       
       if (!response.registrants || response.registrants.length === 0) {
         console.log(`📭 NO REGISTRANTS: Found 0 registrants for webinar ${webinarId}`);
-        return { totalSynced: 0, hasMore: false };
+        return { 
+          totalSynced: 0, 
+          hasMore: false,
+          warnings: response.warnings
+        };
       }
       
       console.log(`✅ REGISTRANTS FOUND: ${response.registrants.length} registrants for webinar ${webinarId}`);
       
+      // Log deprecation warnings if present
+      if (response.warnings && response.warnings.length > 0) {
+        response.warnings.forEach(warning => {
+          console.warn(`⚠️ API WARNING: ${warning}`);
+        });
+      }
+
       // Transform registrant data for database
       const transformedRegistrants = response.registrants.map(registrant => ({
         webinar_id: webinarDbId,
@@ -60,9 +76,9 @@ export class EnhancedRegistrantOperations {
         registration_time: registrant.create_time || new Date().toISOString(),
         occurrence_id: params.occurrence_id || null,
         tracking_source_id: params.tracking_source_id || null,
-        source_id: null, // Will be populated if available in future API versions
-        tracking_source: null, // Will be populated if available in future API versions
-        language: null, // Will be populated if available in future API versions
+        source_id: null,
+        tracking_source: null,
+        language: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }));
@@ -87,14 +103,83 @@ export class EnhancedRegistrantOperations {
       
       return {
         totalSynced: response.registrants.length,
-        hasMore: !!response.next_page_token,
-        nextPageToken: response.next_page_token
+        hasMore: response.pagination.has_more,
+        nextPageToken: response.pagination.next_page_token,
+        warnings: response.warnings
       };
       
     } catch (error) {
       console.error(`💥 ENHANCED REGISTRANT SYNC ERROR for webinar ${webinarId}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Sync all registrants for a webinar using enhanced pagination
+   */
+  static async syncAllWebinarRegistrants(
+    client: EnhancedRegistrantsApiClient,
+    webinarId: string,
+    webinarDbId: string,
+    userId: string,
+    initialParams: ZoomRegistrantsQueryParams = {}
+  ): Promise<{
+    totalSynced: number;
+    pagesProcessed: number;
+    warnings: string[];
+  }> {
+    let totalSynced = 0;
+    let pagesProcessed = 0;
+    const allWarnings: string[] = [];
+    let nextPageToken: string | undefined;
+    let hasMore = true;
+
+    console.log(`🔄 STARTING COMPLETE REGISTRANT SYNC for webinar ${webinarId}`);
+
+    while (hasMore) {
+      const currentParams: ZoomRegistrantsQueryParams = {
+        ...initialParams,
+        next_page_token: nextPageToken
+      };
+
+      try {
+        const result = await this.syncWebinarRegistrantsEnhanced(
+          client,
+          webinarId,
+          webinarDbId,
+          currentParams,
+          userId
+        );
+
+        totalSynced += result.totalSynced;
+        pagesProcessed++;
+        hasMore = result.hasMore;
+        nextPageToken = result.nextPageToken;
+
+        if (result.warnings) {
+          allWarnings.push(...result.warnings);
+        }
+
+        console.log(`📄 PAGE ${pagesProcessed} COMPLETE: ${result.totalSynced} registrants, hasMore: ${hasMore}`);
+
+        // Small delay between pages to be respectful to API
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+      } catch (error) {
+        console.error(`❌ ERROR on page ${pagesProcessed + 1}:`, error);
+        throw error;
+      }
+    }
+
+    console.log(`🎉 COMPLETE SYNC FINISHED: ${totalSynced} total registrants across ${pagesProcessed} pages`);
+
+    return {
+      totalSynced,
+      pagesProcessed,
+      warnings: allWarnings
+    };
   }
 
   /**

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
+import { PaginationTokenService } from '@/services/zoom/utils/PaginationTokenService';
 import { useZoomConnection } from './useZoomConnection';
 
 export const useZoomSyncOrchestrator = () => {
@@ -17,7 +18,16 @@ export const useZoomSyncOrchestrator = () => {
 
     setIsStarting(true);
     try {
+      // Clean up expired tokens before starting sync
+      await PaginationTokenService.cleanupExpiredTokens();
+      
       const result = await ZoomConnectionService.startInitialSync(connection.id);
+      
+      toast({
+        title: "Sync Started",
+        description: "Enhanced pagination system is now synchronizing your webinar data.",
+      });
+      
       return result;
     } finally {
       setIsStarting(false);
@@ -31,7 +41,16 @@ export const useZoomSyncOrchestrator = () => {
 
     setIsStarting(true);
     try {
+      // Clean up expired tokens before starting sync
+      await PaginationTokenService.cleanupExpiredTokens();
+      
       const result = await ZoomConnectionService.startIncrementalSync(connection.id);
+      
+      toast({
+        title: "Incremental Sync Started",
+        description: "Using enhanced pagination for optimal performance.",
+      });
+      
       return result;
     } finally {
       setIsStarting(false);

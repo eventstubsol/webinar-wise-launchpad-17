@@ -1,16 +1,16 @@
+
 /**
  * Enhanced Zoom API client for 100% compliant webinar registrants endpoint
  */
 
 import { performanceMonitor } from '../../utils/PerformanceMonitoringService';
+import { EnhancedPaginationHandler, PaginationParams } from './EnhancedPaginationHandler';
+import { PaginationTokenService } from '../../utils/PaginationTokenService';
 
-export interface ZoomRegistrantsQueryParams {
+export interface ZoomRegistrantsQueryParams extends PaginationParams {
   occurrence_id?: string;
   status?: 'pending' | 'approved' | 'denied';
   tracking_source_id?: string;
-  page_size?: number;
-  page_number?: number;
-  next_page_token?: string;
 }
 
 export interface ZoomRegistrantResponse {
@@ -41,35 +41,70 @@ export interface ZoomRegistrantResponse {
 }
 
 export interface ZoomRegistrantsListResponse {
-  next_page_token?: string;
-  page_count: number;
-  page_number: number;
-  page_size: number;
-  total_records: number;
   registrants: ZoomRegistrantResponse[];
+  pagination: {
+    next_page_token?: string;
+    page_count: number;
+    page_number: number;
+    page_size: number;
+    total_records: number;
+    has_more: boolean;
+  };
+  warnings?: string[];
 }
 
 export class EnhancedRegistrantsApiClient {
   constructor(
     private accessToken: string,
+    private userId: string,
     private connectionId?: string
   ) {}
 
   /**
-   * Get webinar registrants with full Zoom API compliance
+   * Get webinar registrants with full Zoom API compliance and enhanced pagination
    */
   async getWebinarRegistrants(
     webinarId: string,
     params: ZoomRegistrantsQueryParams = {}
   ): Promise<ZoomRegistrantsListResponse> {
     return performanceMonitor.measureOperation(
-      'get_webinar_registrants',
+      'get_webinar_registrants_enhanced',
       `/webinars/${webinarId}/registrants`,
       'GET',
       async () => {
+        // Validate pagination parameters
+        const validationErrors = EnhancedPaginationHandler.validatePaginationParams(params);
+        if (validationErrors.length > 0) {
+          throw new Error(`Invalid pagination parameters: ${validationErrors.join(', ')}`);
+        }
+
+        // Process pagination parameters and get warnings
+        const { processedParams, warnings } = await EnhancedPaginationHandler.processPaginationParams(
+          params,
+          this.userId,
+          webinarId
+        );
+
+        // Build query parameters for Zoom API
         const queryParams = new URLSearchParams();
         
-        // Add all supported query parameters
+        // Add pagination parameters
+        if (processedParams.page_size !== undefined) {
+          queryParams.append('page_size', Math.min(processedParams.page_size, 300).toString());
+        } else {
+          queryParams.append('page_size', '30');
+        }
+
+        // Handle pagination method
+        if (processedParams.next_page_token) {
+          queryParams.append('next_page_token', processedParams.next_page_token);
+        } else if (processedParams.page_number !== undefined) {
+          queryParams.append('page_number', processedParams.page_number.toString());
+        } else {
+          queryParams.append('page_number', '1');
+        }
+
+        // Add other supported query parameters
         if (params.occurrence_id) {
           queryParams.append('occurrence_id', params.occurrence_id);
         }
@@ -80,21 +115,6 @@ export class EnhancedRegistrantsApiClient {
         
         if (params.tracking_source_id) {
           queryParams.append('tracking_source_id', params.tracking_source_id);
-        }
-        
-        if (params.page_size !== undefined) {
-          queryParams.append('page_size', Math.min(params.page_size, 300).toString());
-        } else {
-          queryParams.append('page_size', '30');
-        }
-        
-        // Support both legacy page_number and new next_page_token
-        if (params.next_page_token) {
-          queryParams.append('next_page_token', params.next_page_token);
-        } else if (params.page_number !== undefined) {
-          queryParams.append('page_number', params.page_number.toString());
-        } else {
-          queryParams.append('page_number', '1');
         }
 
         const url = `https://api.zoom.us/v2/webinars/${webinarId}/registrants?${queryParams}`;
@@ -111,8 +131,27 @@ export class EnhancedRegistrantsApiClient {
           await this.handleApiError(response, webinarId);
         }
 
-        const data = await response.json();
-        return this.validateAndTransformResponse(data);
+        const zoomData = await response.json();
+        const transformedData = this.validateAndTransformResponse(zoomData);
+
+        // Extract pagination info from Zoom response
+        const zoomPagination = EnhancedPaginationHandler.extractZoomPaginationInfo(zoomData);
+
+        // Generate enhanced pagination response
+        const paginatedResponse = await EnhancedPaginationHandler.generatePaginationResponse(
+          transformedData.registrants,
+          zoomPagination.totalRecords,
+          processedParams,
+          this.userId,
+          webinarId,
+          zoomData
+        );
+
+        return {
+          registrants: paginatedResponse.data,
+          pagination: paginatedResponse.pagination,
+          warnings: warnings.length > 0 ? warnings : undefined
+        };
       },
       this.connectionId
     );
@@ -131,6 +170,12 @@ export class EnhancedRegistrantsApiClient {
         }
         throw new Error(`Bad Request: ${errorData.message || 'Invalid request parameters'}`);
         
+      case 401:
+        throw new Error('Unauthorized: Invalid or expired access token. Please re-authenticate your Zoom connection.');
+        
+      case 403:
+        throw new Error('Forbidden: Insufficient permissions. Check your Zoom app scopes: webinar:read:admin, webinar:read');
+        
       case 404:
         if (errorData.code === 3001) {
           throw new Error(`Webinar does not exist: ${webinarId}`);
@@ -138,7 +183,8 @@ export class EnhancedRegistrantsApiClient {
         throw new Error(`Webinar not found: ${webinarId}`);
         
       case 429:
-        throw new Error('Too Many Requests. Rate limit exceeded. Please try again later.');
+        const retryAfter = response.headers.get('Retry-After') || '60';
+        throw new Error(`Rate limit exceeded. Please try again in ${retryAfter} seconds.`);
         
       default:
         throw new Error(`Zoom API Error ${response.status}: ${errorData.message || 'Unknown error'}`);
@@ -151,12 +197,15 @@ export class EnhancedRegistrantsApiClient {
   private validateAndTransformResponse(data: any): ZoomRegistrantsListResponse {
     // Ensure required fields are present
     const response: ZoomRegistrantsListResponse = {
-      next_page_token: data.next_page_token || undefined,
-      page_count: data.page_count || 1,
-      page_number: data.page_number || 1,
-      page_size: data.page_size || 30,
-      total_records: data.total_records || 0,
-      registrants: (data.registrants || []).map(this.transformRegistrant)
+      registrants: (data.registrants || []).map(this.transformRegistrant),
+      pagination: {
+        next_page_token: data.next_page_token || undefined,
+        page_count: data.page_count || 1,
+        page_number: data.page_number || 1,
+        page_size: data.page_size || 30,
+        total_records: data.total_records || 0,
+        has_more: !!(data.next_page_token || (data.page_number < data.page_count))
+      }
     };
 
     return response;
@@ -189,5 +238,13 @@ export class EnhancedRegistrantsApiClient {
       create_time: registrant.create_time || undefined,
       join_url: registrant.join_url || undefined,
     };
+  }
+
+  /**
+   * Check token expiration and cleanup if needed
+   */
+  async checkTokenHealth(): Promise<void> {
+    // Clean up expired tokens periodically
+    await PaginationTokenService.cleanupExpiredTokens();
   }
 }

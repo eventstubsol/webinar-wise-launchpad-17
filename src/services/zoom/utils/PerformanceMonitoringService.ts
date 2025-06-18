@@ -1,203 +1,177 @@
-
 /**
- * Performance Monitoring Service for Zoom API operations
- * Main orchestration class that coordinates metrics collection, analysis, and alerting
+ * Performance monitoring service for Zoom API operations
+ * Enhanced with pagination token metrics
  */
 
-import { MetricsCollector } from './performance/MetricsCollector';
-import { PerformanceAnalyzer } from './performance/PerformanceAnalyzer';
-import { AlertManager } from './performance/AlertManager';
-import type { 
-  ApiMetric, 
-  PerformanceStats, 
-  Alert, 
-  MonitoringConfig, 
-  PerformanceReport 
-} from './performance/types';
+export interface PerformanceMetrics {
+  operation: string;
+  endpoint: string;
+  method: string;
+  duration: number;
+  success: boolean;
+  error?: string;
+  connectionId?: string;
+  paginationUsed?: 'token' | 'legacy' | 'none';
+  tokenValidation?: boolean;
+  timestamp: number;
+}
 
 export class PerformanceMonitoringService {
-  private static instance: PerformanceMonitoringService;
-  private metricsCollector: MetricsCollector;
-  private analyzer: PerformanceAnalyzer;
-  private alertManager: AlertManager;
-  private reportingTimer?: NodeJS.Timeout;
-  
-  private config: MonitoringConfig = {
-    metricsRetentionDays: 7,
-    alertThresholds: {
-      responseTime: 5000, // 5 seconds
-      errorRate: 0.1, // 10%
-      availabilityRate: 0.95 // 95%
-    },
-    reportingInterval: 300000 // 5 minutes
-  };
-
-  private constructor() {
-    this.metricsCollector = new MetricsCollector(this.config);
-    this.analyzer = new PerformanceAnalyzer();
-    this.alertManager = new AlertManager(this.config);
-    this.startReporting();
-  }
-
-  static getInstance(): PerformanceMonitoringService {
-    if (!this.instance) {
-      this.instance = new PerformanceMonitoringService();
-    }
-    return this.instance;
-  }
+  private metrics: PerformanceMetrics[] = [];
+  private readonly MAX_METRICS = 1000;
 
   /**
-   * Record API operation metrics
-   */
-  recordMetric(metric: Omit<ApiMetric, 'timestamp'>): void {
-    this.metricsCollector.recordMetric(metric);
-    
-    // Check for alerts with recent metrics
-    const recentStats = this.getStats(10); // Last 10 minutes
-    this.alertManager.checkAlertConditions(recentStats);
-  }
-
-  /**
-   * Measure and record API operation
+   * Measure the performance of an async operation
    */
   async measureOperation<T>(
     operation: string,
     endpoint: string,
     method: string,
-    apiCall: () => Promise<T>,
-    connectionId?: string
+    asyncOperation: () => Promise<T>,
+    connectionId?: string,
+    additionalMetrics?: Partial<PerformanceMetrics>
   ): Promise<T> {
-    const startTime = Date.now();
-    let success = false;
-    let statusCode = 0;
-    let error: string | undefined;
-
+    const startTime = performance.now();
+    const timestamp = Date.now();
+    
     try {
-      const result = await apiCall();
-      success = true;
-      statusCode = 200; // Assume success
-      return result;
-    } catch (err) {
-      success = false;
-      error = err instanceof Error ? err.message : 'Unknown error';
+      console.log(`🔍 PERFORMANCE: Starting ${operation} on ${endpoint}`);
       
-      // Extract status code from error if available
-      if (err && typeof err === 'object' && 'statusCode' in err) {
-        statusCode = (err as any).statusCode;
-      } else {
-        statusCode = 500;
-      }
+      const result = await asyncOperation();
       
-      throw err;
-    } finally {
-      const responseTime = Date.now() - startTime;
+      const duration = performance.now() - startTime;
       
-      this.recordMetric({
+      const metrics: PerformanceMetrics = {
         operation,
         endpoint,
         method,
-        responseTime,
-        statusCode,
-        success,
+        duration,
+        success: true,
         connectionId,
-        error
-      });
+        timestamp,
+        ...additionalMetrics
+      };
+      
+      this.recordMetrics(metrics);
+      
+      console.log(`✅ PERFORMANCE: ${operation} completed in ${duration.toFixed(2)}ms`);
+      
+      return result;
+    } catch (error) {
+      const duration = performance.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      const metrics: PerformanceMetrics = {
+        operation,
+        endpoint,
+        method,
+        duration,
+        success: false,
+        error: errorMessage,
+        connectionId,
+        timestamp,
+        ...additionalMetrics
+      };
+      
+      this.recordMetrics(metrics);
+      
+      console.error(`❌ PERFORMANCE: ${operation} failed after ${duration.toFixed(2)}ms - ${errorMessage}`);
+      
+      throw error;
     }
   }
 
   /**
-   * Get performance statistics for a time period
+   * Record performance metrics
    */
-  getStats(periodMinutes: number = 60): PerformanceStats {
-    const metrics = this.metricsCollector.getMetrics(periodMinutes);
-    return this.analyzer.calculateStats(metrics);
-  }
-
-  /**
-   * Get performance trends over time
-   */
-  getTrends(hours: number = 24): Array<{ time: string; stats: PerformanceStats }> {
-    const metrics = this.metricsCollector.getMetrics();
-    return this.analyzer.calculateTrends(metrics, hours);
-  }
-
-  /**
-   * Get operation-specific performance breakdown
-   */
-  getOperationBreakdown(periodMinutes: number = 60): Record<string, PerformanceStats> {
-    const metricsByOperation = this.metricsCollector.getMetricsByOperation(periodMinutes);
-    return this.analyzer.calculateOperationBreakdown(metricsByOperation);
-  }
-
-  /**
-   * Get current active alerts
-   */
-  getActiveAlerts(): Alert[] {
-    return this.alertManager.getActiveAlerts();
-  }
-
-  /**
-   * Acknowledge an alert
-   */
-  acknowledgeAlert(alertId: string): void {
-    this.alertManager.acknowledgeAlert(alertId);
-  }
-
-  /**
-   * Subscribe to alert notifications
-   */
-  onAlert(listener: (alert: Alert) => void): () => void {
-    return this.alertManager.onAlert(listener);
-  }
-
-  /**
-   * Generate performance report
-   */
-  generateReport(periodHours: number = 24): PerformanceReport {
-    const summary = this.getStats(periodHours * 60);
-    const trends = this.getTrends(periodHours);
-    const breakdown = this.getOperationBreakdown(periodHours * 60);
-    const alerts = this.alertManager.getAlertsForPeriod(periodHours);
-    const recommendations = this.analyzer.generateRecommendations(summary, breakdown);
+  private recordMetrics(metrics: PerformanceMetrics): void {
+    this.metrics.push(metrics);
     
+    // Keep only the most recent metrics
+    if (this.metrics.length > this.MAX_METRICS) {
+      this.metrics = this.metrics.slice(-this.MAX_METRICS);
+    }
+  }
+
+  /**
+   * Get performance statistics
+   */
+  getPerformanceStats(operation?: string): {
+    totalOperations: number;
+    averageDuration: number;
+    successRate: number;
+    paginationMethodStats?: {
+      token: number;
+      legacy: number;
+      none: number;
+    };
+  } {
+    const filteredMetrics = operation 
+      ? this.metrics.filter(m => m.operation === operation)
+      : this.metrics;
+
+    if (filteredMetrics.length === 0) {
+      return {
+        totalOperations: 0,
+        averageDuration: 0,
+        successRate: 0
+      };
+    }
+
+    const totalOperations = filteredMetrics.length;
+    const successfulOperations = filteredMetrics.filter(m => m.success).length;
+    const averageDuration = filteredMetrics.reduce((sum, m) => sum + m.duration, 0) / totalOperations;
+    const successRate = (successfulOperations / totalOperations) * 100;
+
+    // Calculate pagination method statistics
+    const paginationStats = {
+      token: filteredMetrics.filter(m => m.paginationUsed === 'token').length,
+      legacy: filteredMetrics.filter(m => m.paginationUsed === 'legacy').length,
+      none: filteredMetrics.filter(m => m.paginationUsed === 'none').length
+    };
+
     return {
-      summary,
-      trends,
-      breakdown,
-      alerts,
-      recommendations
+      totalOperations,
+      averageDuration,
+      successRate,
+      paginationMethodStats: paginationStats
     };
   }
 
   /**
-   * Update monitoring configuration
+   * Get recent error summary
    */
-  updateConfig(config: Partial<MonitoringConfig>): void {
-    this.config = { ...this.config, ...config };
+  getRecentErrors(minutes: number = 60): PerformanceMetrics[] {
+    const cutoff = Date.now() - (minutes * 60 * 1000);
+    return this.metrics
+      .filter(m => !m.success && m.timestamp > cutoff)
+      .sort((a, b) => b.timestamp - a.timestamp);
   }
 
   /**
-   * Destroy monitoring service
+   * Clear old metrics
    */
-  destroy(): void {
-    if (this.reportingTimer) {
-      clearInterval(this.reportingTimer);
-    }
-    this.metricsCollector.clearMetrics();
-    this.alertManager.clearAlerts();
+  clearOldMetrics(hoursToKeep: number = 24): void {
+    const cutoff = Date.now() - (hoursToKeep * 60 * 60 * 1000);
+    this.metrics = this.metrics.filter(m => m.timestamp > cutoff);
+    
+    console.log(`🧹 PERFORMANCE: Cleared metrics older than ${hoursToKeep} hours`);
   }
 
-  private startReporting(): void {
-    this.reportingTimer = setInterval(() => {
-      const stats = this.getStats(this.config.reportingInterval / (60 * 1000));
-      console.log('Performance Report:', {
-        timestamp: new Date().toISOString(),
-        stats,
-        activeAlerts: this.getActiveAlerts().length
-      });
-    }, this.config.reportingInterval);
+  /**
+   * Log performance summary
+   */
+  logPerformanceSummary(): void {
+    const stats = this.getPerformanceStats();
+    
+    console.log(`📊 PERFORMANCE SUMMARY:
+      Total Operations: ${stats.totalOperations}
+      Average Duration: ${stats.averageDuration.toFixed(2)}ms
+      Success Rate: ${stats.successRate.toFixed(1)}%
+      Pagination Methods: Token=${stats.paginationMethodStats?.token}, Legacy=${stats.paginationMethodStats?.legacy}, None=${stats.paginationMethodStats?.none}
+    `);
   }
 }
 
 // Export singleton instance
-export const performanceMonitor = PerformanceMonitoringService.getInstance();
+export const performanceMonitor = new PerformanceMonitoringService();
