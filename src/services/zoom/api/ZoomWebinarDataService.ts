@@ -1,3 +1,4 @@
+
 import { zoomApiClient } from './ZoomApiClient';
 import type { ApiResponse } from './types';
 
@@ -329,22 +330,6 @@ export class ZoomWebinarDataService {
       }
       throw error;
     }
-  }
-
-  /**
-   * Get detailed information about a specific webinar
-   */
-  static async getWebinar(webinarId: string): Promise<ZoomWebinarApiResponse | null> {
-    const response = await zoomApiClient.get<ZoomWebinarApiResponse>(
-      `/webinars/${webinarId}`
-    );
-
-    if (response.success) {
-      return response.data || null;
-    }
-
-    console.error(`Failed to fetch webinar ${webinarId}:`, response.error);
-    return null;
   }
 
   static async getWebinarRegistrants(

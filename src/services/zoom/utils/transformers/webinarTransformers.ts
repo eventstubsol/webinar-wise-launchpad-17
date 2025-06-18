@@ -21,7 +21,7 @@ export class WebinarTransformers {
     const registrationRequired = settings.approval_type !== 2;
     
     // Status mapping with proper validation
-    const statusMap: { [key: string]: string } = {
+    const statusMap: { [key: string]: 'available' | 'unavailable' | 'deleted' | 'started' | 'ended' | 'scheduled' } = {
       'available': 'available',
       'unavailable': 'unavailable',
       'started': 'started',
