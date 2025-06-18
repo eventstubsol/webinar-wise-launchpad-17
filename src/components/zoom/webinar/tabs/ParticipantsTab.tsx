@@ -178,7 +178,7 @@ export const ParticipantsTab: React.FC<ParticipantsTabProps> = ({
               </div>
               
               <div className="flex items-center justify-between">
-                <span className="text-sm">Low Engagement (<10 min)</span>
+                <span className="text-sm">Low Engagement (&lt;10 min)</span>
                 <div className="flex items-center gap-2">
                   <div className="w-24 h-2 bg-gray-200 rounded-full">
                     <div 
