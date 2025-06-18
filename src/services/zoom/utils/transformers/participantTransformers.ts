@@ -1,6 +1,6 @@
 
 import { ZoomParticipant } from '@/types/zoom';
-import { ParticipantTransformation, ParticipantEngagement } from '@/utils/zoom/participant';
+import { ParticipantTransformation, ParticipantEngagement, ParticipantValidation } from '@/utils/zoom/participant';
 
 /**
  * FIXED: Data transformation utilities for participants with proper status field mapping
@@ -111,16 +111,14 @@ export class ParticipantTransformers {
   }
 
   /**
-   * NEW: Validate participant data before processing
+   * FIXED: Validate participant data before processing
    */
   static validateParticipantData(apiParticipant: any): {
     isValid: boolean;
     errors: string[];
     warnings: string[];
   } {
-    // Use the modular validation
-    return ParticipantTransformation.prototype.constructor.validateParticipantData ? 
-           ParticipantTransformation.prototype.constructor.validateParticipantData(apiParticipant) :
-           { isValid: true, errors: [], warnings: [] };
+    // Use the modular validation directly
+    return ParticipantValidation.validateParticipantData(apiParticipant);
   }
 }
