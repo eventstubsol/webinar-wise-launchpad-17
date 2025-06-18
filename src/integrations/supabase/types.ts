@@ -5655,7 +5655,12 @@ export type Database = {
         | "retrying"
       content_type: "transcript" | "slides" | "chat" | "audio" | "video"
       metric_data_type: "number" | "percentage" | "duration" | "count" | "ratio"
-      participant_status: "in_meeting" | "in_waiting_room"
+      participant_status:
+        | "in_meeting"
+        | "in_waiting_room"
+        | "attended"
+        | "not_attended"
+        | "left_early"
       participant_sync_status:
         | "not_applicable"
         | "pending"
@@ -5851,7 +5856,13 @@ export const Constants = {
       ],
       content_type: ["transcript", "slides", "chat", "audio", "video"],
       metric_data_type: ["number", "percentage", "duration", "count", "ratio"],
-      participant_status: ["in_meeting", "in_waiting_room"],
+      participant_status: [
+        "in_meeting",
+        "in_waiting_room",
+        "attended",
+        "not_attended",
+        "left_early",
+      ],
       participant_sync_status: [
         "not_applicable",
         "pending",

@@ -2,11 +2,11 @@
 import { ZoomParticipant } from '@/types/zoom';
 
 /**
- * ENHANCED: Data transformation utilities for participants with API compliance fixes
+ * FIXED: Data transformation utilities for participants with proper status field mapping
  */
 export class ParticipantTransformers {
   /**
-   * ENHANCED: Transform Zoom API participant to database format with proper field mapping
+   * FIXED: Transform Zoom API participant to database format with correct status field
    */
   static transformParticipant(
     apiParticipant: any,
@@ -18,11 +18,13 @@ export class ParticipantTransformers {
       if (!status) return 'attended';
       
       const statusMap: { [key: string]: string } = {
-        'in_meeting': 'in_meeting',
+        'in_meeting': 'attended',
         'in_waiting_room': 'in_waiting_room', 
         'attended': 'attended',
         'not_attended': 'not_attended',
-        'left_early': 'left_early'
+        'left_early': 'left_early',
+        'left': 'left_early',
+        'joined': 'attended'
       };
       
       return statusMap[status.toLowerCase()] || 'attended';
@@ -31,7 +33,7 @@ export class ParticipantTransformers {
     return {
       webinar_id: webinarId,
       participant_id: apiParticipant.id || apiParticipant.participant_id,
-      registrant_id: apiParticipant.registrant_id || null, // FIXED: Now handles string values correctly
+      registrant_id: apiParticipant.registrant_id || null,
       participant_name: apiParticipant.name || apiParticipant.participant_name,
       participant_email: apiParticipant.user_email || apiParticipant.participant_email || null,
       participant_user_id: apiParticipant.user_id || null,
@@ -52,6 +54,8 @@ export class ParticipantTransformers {
       network_type: apiParticipant.network_type || null,
       version: apiParticipant.version || null,
       customer_key: apiParticipant.customer_key || null,
+      // FIXED: Use 'status' field to match database schema
+      status: normalizeStatus(apiParticipant.status),
       // NEW: Added missing fields from API spec
       failover: apiParticipant.failover || false,
       internal_user: apiParticipant.internal_user || false,
@@ -69,7 +73,7 @@ export class ParticipantTransformers {
       chat_messages: boolean;
       hand_raised: boolean;
       camera_usage_percent: number;
-      had_technical_issues: boolean; // NEW: Based on failover field
+      had_technical_issues: boolean;
     };
   } {
     const duration = participant.duration || 0;
@@ -100,7 +104,7 @@ export class ParticipantTransformers {
         chat_messages: !!participant.posted_chat,
         hand_raised: !!participant.raised_hand,
         camera_usage_percent: Math.round(cameraUsagePercent),
-        had_technical_issues: !!participant.failover, // NEW: Technical issues indicator
+        had_technical_issues: !!participant.failover,
       },
     };
   }

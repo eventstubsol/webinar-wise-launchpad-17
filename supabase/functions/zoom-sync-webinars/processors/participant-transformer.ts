@@ -1,6 +1,6 @@
 
 /**
- * Transform Zoom API participant to database format with enhanced logging
+ * FIXED: Transform Zoom API participant to database format with proper field mapping
  */
 export function transformParticipantForDatabase(apiParticipant: any, webinarDbId: string, debugMode = false): any {
   if (debugMode) {
@@ -10,24 +10,25 @@ export function transformParticipantForDatabase(apiParticipant: any, webinarDbId
     console.log(`  - Input participant email: ${apiParticipant.user_email || apiParticipant.participant_email || apiParticipant.email || 'MISSING'}`);
   }
 
-  // Map Zoom API status to database participant_status enum
-  let participantStatus = 'in_meeting'; // Default status
+  // FIXED: Map Zoom API status to database participant_status enum
+  let participantStatus = 'attended'; // Default status
   
   if (debugMode) {
     console.log(`  - Original status: ${apiParticipant.status || 'MISSING'}`);
   }
   
-  // If participant has join_time but no leave_time, they might still be in meeting
-  // If they have both join_time and leave_time, they were in meeting and left
-  // For simplicity in this sync, we'll mark all as 'in_meeting' since they participated
+  // FIXED: Enhanced status mapping to use correct enum values
   if (apiParticipant.status) {
     const statusMap: { [key: string]: string } = {
-      'in_meeting': 'in_meeting',
+      'in_meeting': 'attended',
       'in_waiting_room': 'in_waiting_room',
-      'left': 'in_meeting', // They were in meeting but left
-      'joined': 'in_meeting'
+      'left': 'left_early',
+      'joined': 'attended',
+      'attended': 'attended',
+      'not_attended': 'not_attended',
+      'left_early': 'left_early'
     };
-    participantStatus = statusMap[apiParticipant.status.toLowerCase()] || 'in_meeting';
+    participantStatus = statusMap[apiParticipant.status.toLowerCase()] || 'attended';
   }
 
   // Enhanced timing logic
@@ -43,7 +44,7 @@ export function transformParticipantForDatabase(apiParticipant: any, webinarDbId
 
   // If participant has timing data, they were definitely in the meeting
   if (hasJoinTime && hasLeaveTime) {
-    participantStatus = 'in_meeting';
+    participantStatus = 'attended';
   }
 
   const transformed = {
@@ -70,7 +71,11 @@ export function transformParticipantForDatabase(apiParticipant: any, webinarDbId
     network_type: apiParticipant.network_type || null,
     version: apiParticipant.version || null,
     customer_key: apiParticipant.customer_key || null,
-    participant_status: participantStatus
+    // FIXED: Use 'status' field to match database schema
+    status: participantStatus,
+    // NEW: Added missing fields from API spec
+    failover: apiParticipant.failover || false,
+    internal_user: apiParticipant.internal_user || false
   };
 
   if (debugMode) {
@@ -79,7 +84,7 @@ export function transformParticipantForDatabase(apiParticipant: any, webinarDbId
     console.log(`  - Required fields check:`);
     console.log(`    * webinar_id: ${transformed.webinar_id ? 'OK' : 'MISSING'}`);
     console.log(`    * participant_id: ${transformed.participant_id ? 'OK' : 'MISSING'}`);
-    console.log(`    * participant_status: ${transformed.participant_status ? 'OK' : 'MISSING'}`);
+    console.log(`    * status: ${transformed.status ? 'OK' : 'MISSING'}`);
   }
 
   return transformed;
