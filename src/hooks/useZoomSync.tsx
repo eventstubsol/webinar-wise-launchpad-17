@@ -9,6 +9,13 @@ import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
+// Extend Window interface to include our custom property
+declare global {
+  interface Window {
+    __lastSyncError?: any;
+  }
+}
+
 export const useZoomSync = (connection?: ZoomConnection | null) => {
   const { user } = useAuth();
   const { toast } = useToast();
