@@ -5503,6 +5503,7 @@ export type Database = {
           max_registrants: number | null
           occurrence_id: string | null
           occurrences: Json | null
+          participant_sync_api_used: string | null
           participant_sync_attempted_at: string | null
           participant_sync_error: string | null
           participant_sync_status:
@@ -5555,6 +5556,7 @@ export type Database = {
           max_registrants?: number | null
           occurrence_id?: string | null
           occurrences?: Json | null
+          participant_sync_api_used?: string | null
           participant_sync_attempted_at?: string | null
           participant_sync_error?: string | null
           participant_sync_status?:
@@ -5607,6 +5609,7 @@ export type Database = {
           max_registrants?: number | null
           occurrence_id?: string | null
           occurrences?: Json | null
+          participant_sync_api_used?: string | null
           participant_sync_attempted_at?: string | null
           participant_sync_error?: string | null
           participant_sync_status?:
