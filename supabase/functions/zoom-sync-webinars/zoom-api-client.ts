@@ -10,7 +10,12 @@ const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY = 1000;
 
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      clearTimeout(timer);
+      resolve();
+    }, ms);
+  });
 }
 
 class ZoomAPIClient {
@@ -87,11 +92,45 @@ class ZoomAPIClient {
     console.log('📋 Fetching webinars list...');
     
     try {
-      const response = await this.makeRequest('/users/me/webinars?page_size=300&type=all');
-      const webinars = response.webinars || [];
+      let allWebinars: any[] = [];
+      let nextPageToken: string | null = null;
+      let pageCount = 0;
+      const maxPages = 10; // Safety limit to prevent infinite loops
       
-      console.log(`📊 Retrieved ${webinars.length} webinars from Zoom API`);
-      return webinars;
+      do {
+        pageCount++;
+        console.log(`📄 Fetching webinars page ${pageCount}...`);
+        
+        // Build URL with pagination
+        let url = '/users/me/webinars?page_size=300&type=all';
+        if (nextPageToken) {
+          url += `&next_page_token=${encodeURIComponent(nextPageToken)}`;
+        }
+        
+        const response = await this.makeRequest(url);
+        const webinars = response.webinars || [];
+        allWebinars = allWebinars.concat(webinars);
+        
+        console.log(`📊 Page ${pageCount}: Retrieved ${webinars.length} webinars (total so far: ${allWebinars.length})`);
+        
+        // Check if there are more pages
+        nextPageToken = response.next_page_token || null;
+        
+        // Safety check to prevent infinite loops
+        if (pageCount >= maxPages) {
+          console.warn(`⚠️ Reached maximum page limit (${maxPages}) for webinar list`);
+          break;
+        }
+        
+        // Add delay between pages to avoid rate limiting
+        if (nextPageToken) {
+          await delay(200);
+        }
+        
+      } while (nextPageToken);
+      
+      console.log(`📊 Total webinars retrieved from Zoom API: ${allWebinars.length}`);
+      return allWebinars;
     } catch (error) {
       console.error('❌ Error fetching webinars:', error);
       throw error;
@@ -115,11 +154,45 @@ class ZoomAPIClient {
     console.log(`👥 Fetching registrants for webinar: ${webinarId}`);
     
     try {
-      const response = await this.makeRequest(`/webinars/${webinarId}/registrants?page_size=300`);
-      const registrants = response.registrants || [];
+      let allRegistrants: any[] = [];
+      let nextPageToken: string | null = null;
+      let pageCount = 0;
+      const maxPages = 20; // Safety limit to prevent infinite loops
       
-      console.log(`👥 Retrieved ${registrants.length} registrants for webinar: ${webinarId}`);
-      return registrants;
+      do {
+        pageCount++;
+        console.log(`📄 Fetching registrants page ${pageCount} for webinar ${webinarId}...`);
+        
+        // Build URL with pagination
+        let url = `/webinars/${webinarId}/registrants?page_size=300`;
+        if (nextPageToken) {
+          url += `&next_page_token=${encodeURIComponent(nextPageToken)}`;
+        }
+        
+        const response = await this.makeRequest(url);
+        const registrants = response.registrants || [];
+        allRegistrants = allRegistrants.concat(registrants);
+        
+        console.log(`📊 Page ${pageCount}: Retrieved ${registrants.length} registrants (total so far: ${allRegistrants.length})`);
+        
+        // Check if there are more pages
+        nextPageToken = response.next_page_token || null;
+        
+        // Safety check to prevent infinite loops
+        if (pageCount >= maxPages) {
+          console.warn(`⚠️ Reached maximum page limit (${maxPages}) for webinar ${webinarId}`);
+          break;
+        }
+        
+        // Add delay between pages to avoid rate limiting
+        if (nextPageToken) {
+          await delay(200);
+        }
+        
+      } while (nextPageToken);
+      
+      console.log(`👥 Total registrants retrieved for webinar ${webinarId}: ${allRegistrants.length}`);
+      return allRegistrants;
     } catch (error) {
       console.error(`❌ Error fetching registrants for webinar ${webinarId}:`, error);
       return []; // Return empty array instead of throwing to continue sync
@@ -130,11 +203,45 @@ class ZoomAPIClient {
     console.log(`👤 Fetching participants for webinar: ${webinarId}`);
     
     try {
-      const response = await this.makeRequest(`/report/webinars/${webinarId}/participants?page_size=300`);
-      const participants = response.participants || [];
+      let allParticipants: any[] = [];
+      let nextPageToken: string | null = null;
+      let pageCount = 0;
+      const maxPages = 20; // Safety limit to prevent infinite loops
       
-      console.log(`👤 Retrieved ${participants.length} participants for webinar: ${webinarId}`);
-      return participants;
+      do {
+        pageCount++;
+        console.log(`📄 Fetching participants page ${pageCount} for webinar ${webinarId}...`);
+        
+        // Build URL with pagination
+        let url = `/report/webinars/${webinarId}/participants?page_size=300`;
+        if (nextPageToken) {
+          url += `&next_page_token=${encodeURIComponent(nextPageToken)}`;
+        }
+        
+        const response = await this.makeRequest(url);
+        const participants = response.participants || [];
+        allParticipants = allParticipants.concat(participants);
+        
+        console.log(`📊 Page ${pageCount}: Retrieved ${participants.length} participants (total so far: ${allParticipants.length})`);
+        
+        // Check if there are more pages
+        nextPageToken = response.next_page_token || null;
+        
+        // Safety check to prevent infinite loops
+        if (pageCount >= maxPages) {
+          console.warn(`⚠️ Reached maximum page limit (${maxPages}) for webinar ${webinarId}`);
+          break;
+        }
+        
+        // Add delay between pages to avoid rate limiting
+        if (nextPageToken) {
+          await delay(200);
+        }
+        
+      } while (nextPageToken);
+      
+      console.log(`👤 Total participants retrieved for webinar ${webinarId}: ${allParticipants.length}`);
+      return allParticipants;
     } catch (error) {
       console.error(`❌ Error fetching participants for webinar ${webinarId}:`, error);
       return []; // Return empty array instead of throwing to continue sync

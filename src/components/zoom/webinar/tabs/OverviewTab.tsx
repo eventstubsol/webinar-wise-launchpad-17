@@ -20,21 +20,24 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   analytics
 }) => {
   // Calculate funnel data
+  const totalRegistrants = webinar?.total_registrants || registrants.length;
+  const totalAttendees = webinar?.total_attendees || participants.length;
+  
   const funnelData = [
     {
       stage: 'Registered',
-      count: registrants.length,
+      count: totalRegistrants,
       percentage: 100
     },
     {
       stage: 'Attended',
-      count: participants.length,
-      percentage: registrants.length > 0 ? (participants.length / registrants.length) * 100 : 0
+      count: totalAttendees,
+      percentage: totalRegistrants > 0 ? (totalAttendees / totalRegistrants) * 100 : 0
     },
     {
       stage: 'Engaged',
       count: analytics?.highlyEngagedCount || 0,
-      percentage: participants.length > 0 ? ((analytics?.highlyEngagedCount || 0) / participants.length) * 100 : 0
+      percentage: totalAttendees > 0 ? ((analytics?.highlyEngagedCount || 0) / totalAttendees) * 100 : 0
     }
   ];
 
@@ -129,13 +132,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {registrants.length > 0 
-                ? `${((participants.length / registrants.length) * 100).toFixed(1)}%`
+              {(webinar?.total_registrants || registrants.length) > 0 
+                ? `${(((webinar?.total_attendees || participants.length) / (webinar?.total_registrants || registrants.length)) * 100).toFixed(1)}%`
                 : 'N/A'
               }
             </div>
             <p className="text-sm text-muted-foreground">
-              {participants.length} of {registrants.length} registered
+              {webinar?.total_attendees || participants.length} of {webinar?.total_registrants || registrants.length} registered
             </p>
           </CardContent>
         </Card>

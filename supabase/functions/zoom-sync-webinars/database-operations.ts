@@ -1,24 +1,26 @@
 export async function createSyncLog(supabase: any, connectionId: string, syncType: string, webinarId?: string): Promise<string> {
   console.log(`📝 Creating sync log for connection: ${connectionId}, type: ${syncType}`);
   
+  const insertData: any = {
+    connection_id: connectionId,
+    sync_type: syncType,
+    sync_status: 'started',
+    started_at: new Date().toISOString(),
+    total_items: 0,
+    processed_items: 0
+  };
+  
+  // Only add optional fields if they have values
+  if (syncType === 'single' && webinarId) {
+    insertData.resource_type = 'webinar';
+    insertData.resource_id = webinarId;
+  } else {
+    insertData.resource_type = 'webinars';
+  }
+  
   const { data, error } = await supabase
     .from('zoom_sync_logs')
-    .insert({
-      connection_id: connectionId,
-      sync_type: syncType,
-      sync_status: 'started',
-      resource_type: syncType === 'single' ? 'webinar' : 'webinars',
-      resource_id: webinarId || null,
-      started_at: new Date().toISOString(),
-      total_items: 0,
-      processed_items: 0,
-      failed_items: 0,
-      api_calls_made: 0,
-      rate_limit_hits: 0,
-      retry_attempts: 0,
-      retry_schedule: [],
-      max_participant_retries: 3
-    })
+    .insert(insertData)
     .select('id')
     .single();
 
@@ -53,21 +55,6 @@ export async function updateSyncStage(supabase: any, syncLogId: string, webinarI
     stage_progress_percentage: Math.max(0, Math.min(100, progress)),
   });
   console.log(`📊 Sync ${syncLogId}: ${stage} (${progress}%) - Webinar: ${webinarId || 'N/A'}`);
-}
-
-export async function saveWebinarToDatabase(supabase: any, webinarData: any, connectionId: string): Promise<void> {
-  console.log(`🔄 Enhanced saveWebinarToDatabase for webinar ${webinarData.id}`);
-  
-  try {
-    // Use the same enhanced sync logic from webinar-processor
-    const { syncBasicWebinarData } = await import('./processors/webinar-processor.ts');
-    const webinarId = await syncBasicWebinarData(supabase, webinarData, connectionId);
-    
-    console.log(`✅ saveWebinarToDatabase completed - Database ID: ${webinarId}`);
-  } catch (error) {
-    console.error(`❌ saveWebinarToDatabase failed for webinar ${webinarData.id}:`, error);
-    throw error;
-  }
 }
 
 // Enhanced helper functions for participant sync status management with validation support

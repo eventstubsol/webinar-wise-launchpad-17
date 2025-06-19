@@ -19,13 +19,13 @@ export const MetricsSummary: React.FC<MetricsSummaryProps> = ({
   const metrics = [
     {
       title: 'Total Registrants',
-      value: registrants.length,
+      value: webinar?.total_registrants || registrants.length,
       icon: Target,
       description: 'People who signed up'
     },
     {
       title: 'Total Attendees',
-      value: participants.length,
+      value: webinar?.total_attendees || participants.length,
       icon: Users,
       description: 'People who joined'
     },

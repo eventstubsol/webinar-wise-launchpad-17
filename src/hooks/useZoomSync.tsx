@@ -69,6 +69,22 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
       if (error) {
         console.error('Function invocation error:', error);
+        
+        // Capture detailed error information
+        if (error.response) {
+          try {
+            const errorData = await error.response.json();
+            console.error('Edge Function Error Details:', errorData);
+            window.__lastSyncError = errorData;
+            localStorage.setItem('last_sync_error', JSON.stringify({
+              timestamp: new Date().toISOString(),
+              error: errorData
+            }));
+          } catch (e) {
+            console.error('Could not parse error response:', e);
+          }
+        }
+        
         throw new Error(error.message || 'Failed to start sync');
       }
 

@@ -93,9 +93,23 @@ export async function processSimpleWebinarSync(
         const webinarDetails = await client.getWebinar(webinar.id);
         console.log(`✅ Webinar details fetched for ${webinar.id}`);
         
-        // Store webinar in database
+        // For past webinars, try to fetch participant count
+        let totalAttendees = null;
+        if (webinarDetails.status === 'finished' || new Date(webinarDetails.start_time) < new Date()) {
+          try {
+            console.log(`👥 Fetching participant count for past webinar ${webinar.id}...`);
+            const participants = await client.getWebinarParticipants(webinar.id);
+            totalAttendees = participants.length;
+            console.log(`✅ Found ${totalAttendees} attendees for webinar ${webinar.id}`);
+          } catch (error) {
+            console.log(`⚠️ Could not fetch participants for webinar ${webinar.id}:`, error.message);
+            // Continue without attendee count
+          }
+        }
+        
+        // Store webinar in database with attendee count if available
         console.log(`💾 Storing webinar ${webinar.id} in database...`);
-        await storeWebinarInDatabase(supabase, webinarDetails, connection.id);
+        await storeWebinarInDatabase(supabase, webinarDetails, connection.id, totalAttendees);
         console.log(`✅ Webinar ${webinar.id} stored successfully`);
         
         processedCount++;
@@ -139,15 +153,20 @@ export async function processSimpleWebinarSync(
   }
 }
 
-async function storeWebinarInDatabase(supabase: any, webinar: any, connectionId: string): Promise<void> {
+async function storeWebinarInDatabase(supabase: any, webinar: any, connectionId: string, totalAttendees?: number | null): Promise<void> {
   try {
     console.log(`💾 Storing webinar ${webinar.id} in database with connection ${connectionId}...`);
+    console.log(`📊 Webinar data:`, JSON.stringify({
+      id: webinar.id,
+      registrants_count: webinar.registrants_count,
+      total_members: webinar.total_members
+    }));
     
     const { error } = await supabase
       .from('zoom_webinars')
       .upsert({
-        zoom_webinar_id: webinar.id,
-        uuid: webinar.uuid,
+        webinar_id: webinar.id,
+        webinar_uuid: webinar.uuid,
         connection_id: connectionId,
         topic: webinar.topic,
         type: webinar.type,
@@ -157,10 +176,16 @@ async function storeWebinarInDatabase(supabase: any, webinar: any, connectionId:
         status: webinar.status,
         host_id: webinar.host_id,
         host_email: webinar.host_email,
-        created_at: webinar.created_at,
+        // Store registrants count from Zoom API
+        total_registrants: webinar.registrants_count || 0,
+        // Store attendees count if available (for past webinars)
+        total_attendees: totalAttendees !== undefined ? totalAttendees : null,
+        webinar_created_at: webinar.created_at,
+        synced_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }, {
-        onConflict: 'zoom_webinar_id,connection_id'
+        onConflict: 'webinar_id,connection_id',
+        ignoreDuplicates: false
       });
 
     if (error) {

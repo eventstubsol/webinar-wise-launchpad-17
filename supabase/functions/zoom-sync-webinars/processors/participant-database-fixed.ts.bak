@@ -1,8 +1,8 @@
-
 import { updateSyncStage } from '../database-operations.ts';
 
 /**
- * Database operations for participant sync
+ * Fixed database operations for participant sync
+ * Handles duplicate participants within the same batch
  */
 export async function saveParticipantsToDatabase(
   supabase: any,
@@ -113,4 +113,36 @@ function deduplicateParticipants(participants: any[]): any[] {
   }
   
   return Array.from(seen.values());
+}
+
+/**
+ * Handle the unique constraint error more gracefully
+ * This function can be used to identify which specific participants are causing issues
+ */
+export async function identifyConflictingParticipants(
+  supabase: any,
+  participants: any[],
+  webinarId: string
+): Promise<string[]> {
+  const conflicts = [];
+  
+  // Group participants by participant_id to find duplicates
+  const participantGroups = new Map<string, any[]>();
+  
+  for (const participant of participants) {
+    const key = participant.participant_id;
+    if (!participantGroups.has(key)) {
+      participantGroups.set(key, []);
+    }
+    participantGroups.get(key)!.push(participant);
+  }
+  
+  // Find groups with more than one participant (duplicates)
+  for (const [participantId, group] of participantGroups) {
+    if (group.length > 1) {
+      conflicts.push(`Participant ${participantId} appears ${group.length} times in webinar ${webinarId}`);
+    }
+  }
+  
+  return conflicts;
 }
