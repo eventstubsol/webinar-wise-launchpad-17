@@ -1,7 +1,7 @@
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { createZoomAPIClient } from './zoom-api-client.ts';
 
-console.log('📦 ENHANCED sync processor loaded successfully');
+console.log('📦 WORKING Simple sync processor loaded successfully');
 
 export interface SyncOperation {
   id: string;
@@ -15,13 +15,13 @@ export interface SyncOperation {
   };
 }
 
-export async function processEnhancedWebinarSync(
+export async function processSimpleWebinarSync(
   supabase: any,
   syncOperation: SyncOperation,
   connection: any,
   syncLogId: string
 ): Promise<void> {
-  console.log(`🚀 Starting ENHANCED webinar sync for connection: ${connection.id}`);
+  console.log(`🚀 Starting WORKING webinar sync for connection: ${connection.id}`);
   
   let processedCount = 0;
   let totalWebinars = 0;
@@ -40,7 +40,7 @@ export async function processEnhancedWebinarSync(
     
     await updateSyncStage(supabase, syncLogId, null, 'fetching_webinars', 10);
     
-    // Fetch webinars from Zoom
+    // Fetch webinars from Zoom - SIMPLIFIED
     const webinars = await client.listWebinarsWithRange({
       type: 'all',
       page_size: 300
@@ -66,7 +66,7 @@ export async function processEnhancedWebinarSync(
     
     await updateSyncStage(supabase, syncLogId, null, 'processing_webinars', 20);
     
-    // Process webinars in smaller batches
+    // Process webinars in smaller batches - SIMPLIFIED
     for (let batchStart = 0; batchStart < webinars.length; batchStart += BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + BATCH_SIZE, webinars.length);
       const batch = webinars.slice(batchStart, batchEnd);
@@ -87,8 +87,8 @@ export async function processEnhancedWebinarSync(
           // Get detailed webinar data
           const webinarDetails = await client.getWebinar(webinar.id);
           
-          // Store webinar in database using ENHANCED extraction
-          const wasStored = await storeWebinarEnhanced(supabase, webinarDetails, connection.id);
+          // Store webinar in database - SIMPLIFIED
+          const wasStored = await storeWebinarSimple(supabase, webinarDetails, connection.id);
           
           if (wasStored) {
             processedCount++;
@@ -118,10 +118,10 @@ export async function processEnhancedWebinarSync(
       stage_progress_percentage: 100
     });
     
-    console.log(`🎉 Enhanced sync completed! Processed ${processedCount}/${totalWebinars} webinars`);
+    console.log(`🎉 Sync completed! Processed ${processedCount}/${totalWebinars} webinars`);
     
   } catch (error) {
-    console.error(`💥 Enhanced sync failed:`, error);
+    console.error(`💥 Sync failed:`, error);
     
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'failed',
@@ -134,100 +134,34 @@ export async function processEnhancedWebinarSync(
   }
 }
 
-// ENHANCED webinar storage function with comprehensive field extraction
-async function storeWebinarEnhanced(
+// SIMPLIFIED webinar storage function
+async function storeWebinarSimple(
   supabase: any, 
   webinar: any, 
   connectionId: string
 ): Promise<boolean> {
   try {
-    // Log the raw webinar data for debugging
-    console.log(`🔍 Raw webinar data for ${webinar.id}:`, JSON.stringify(webinar, null, 2));
-    
     const settings = webinar.settings || {};
     
-    // Enhanced field extraction with comprehensive fallback logic
     const webinarData: any = {
-      // Core identification fields
       webinar_id: webinar.id?.toString(),
       webinar_uuid: webinar.uuid,
       connection_id: connectionId,
-      
-      // Basic webinar information
       topic: webinar.topic,
       type: webinar.type,
       start_time: webinar.start_time,
       duration: webinar.duration,
       timezone: webinar.timezone,
       status: webinar.status,
-      
-      // Host information
       host_id: webinar.host_id,
       host_email: webinar.host_email,
-      
-      // Alternative hosts - check multiple locations and handle empty strings
-      alternative_hosts: (() => {
-        const altHosts = settings.alternative_hosts || webinar.alternative_hosts;
-        if (!altHosts || altHosts === '') return null;
-        if (typeof altHosts === 'string') {
-          return altHosts.split(',').map(h => h.trim()).filter(h => h.length > 0);
-        }
-        return Array.isArray(altHosts) ? altHosts : null;
-      })(),
-      
-      // Registration information
-      registration_required: webinar.registration_required || settings.registration_required || false,
-      registration_type: settings.registration_type || webinar.registration_type,
-      approval_type: settings.approval_type || webinar.approval_type,
-      max_registrants: settings.registrants_restrict_number || webinar.max_registrants,
-      max_attendees: webinar.max_attendees || settings.max_attendees,
-      
-      // URLs
+      total_registrants: webinar.registrants_count || 0,
       join_url: webinar.join_url || settings.join_url,
       registration_url: webinar.registration_url || settings.registration_url,
       start_url: webinar.start_url || settings.start_url,
-      
-      // Attendance data (will be null for future webinars)
-      total_registrants: webinar.registrants_count || webinar.total_registrants || 0,
-      total_attendees: webinar.total_attendees || webinar.participants_count,
-      total_minutes: webinar.total_minutes,
-      avg_attendance_duration: webinar.avg_attendance_duration,
-      
-      // Password fields - check multiple locations
       password: webinar.password || settings.password,
-      h323_password: settings.h323_password || webinar.h323_password,
-      pstn_password: settings.pstn_password || webinar.pstn_password,
-      h323_passcode: settings.h323_passcode || webinar.h323_passcode,
-      encrypted_password: webinar.encrypted_password,
-      encrypted_passcode: webinar.encrypted_passcode,
-      
-      // Description/agenda - check multiple field names
-      agenda: webinar.agenda || webinar.description,
-      
-      // JSON fields
+      agenda: webinar.agenda,
       settings: settings && Object.keys(settings).length > 0 ? settings : null,
-      tracking_fields: (() => {
-        const tf = webinar.tracking_fields;
-        return (tf && Array.isArray(tf) && tf.length > 0) ? tf : null;
-      })(),
-      recurrence: (() => {
-        const rec = webinar.recurrence;
-        return (rec && typeof rec === 'object' && Object.keys(rec).length > 0) ? rec : null;
-      })(),
-      occurrences: (() => {
-        const occ = webinar.occurrences;
-        return (occ && Array.isArray(occ) && occ.length > 0) ? occ : null;
-      })(),
-      
-      // Additional metadata
-      occurrence_id: webinar.occurrence_id,
-      creation_source: webinar.creation_source || 'api',
-      is_simulive: webinar.is_simulive || false,
-      record_file_id: webinar.record_file_id,
-      transition_to_live: webinar.transition_to_live || false,
-      webinar_created_at: webinar.created_at,
-      
-      // Sync metadata
       synced_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       participant_sync_status: 'pending'
@@ -240,7 +174,7 @@ async function storeWebinarEnhanced(
       }
     });
     
-    console.log(`💾 Enhanced webinar data for ${webinar.id}:`, JSON.stringify(webinarData, null, 2));
+    console.log(`💾 Upserting webinar ${webinar.id}...`);
     
     const { error } = await supabase
       .from('zoom_webinars')
@@ -254,11 +188,11 @@ async function storeWebinarEnhanced(
       return false;
     }
     
-    console.log(`✅ Successfully upserted enhanced webinar ${webinar.id}`);
+    console.log(`✅ Successfully upserted webinar ${webinar.id}`);
     return true;
     
   } catch (error) {
-    console.error(`💥 Exception storing enhanced webinar ${webinar.id}:`, error);
+    console.error(`💥 Exception storing webinar ${webinar.id}:`, error);
     return false;
   }
 }

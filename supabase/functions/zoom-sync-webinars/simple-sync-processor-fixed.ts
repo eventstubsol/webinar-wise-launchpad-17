@@ -1,7 +1,7 @@
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { createZoomAPIClient } from './zoom-api-client.ts';
 
-console.log('📦 Simple sync processor module loaded successfully');
+console.log('📦 Fixed Simple sync processor module loaded successfully');
 
 export interface SyncOperation {
   id: string;
@@ -27,7 +27,7 @@ export async function processSimpleWebinarSync(
   connection: any,
   syncLogId: string
 ): Promise<void> {
-  console.log(`🚀 Starting simple webinar sync for connection: ${connection.id}`);
+  console.log(`🚀 Starting FIXED simple webinar sync for connection: ${connection.id}`);
   console.log('🔧 Sync operation:', JSON.stringify(syncOperation, null, 2));
   
   const isTestMode = syncOperation.options?.testMode || false;
@@ -187,10 +187,15 @@ export async function processSimpleWebinarSync(
           
           // Store webinar in database with attendee count if available
           console.log(`💾 Storing webinar ${webinar.id} in database...`);
-          await storeWebinarInDatabase(supabase, webinarDetails, connection.id, totalAttendees, participantError);
-          console.log(`✅ Webinar ${webinar.id} stored successfully`);
+          const wasStored = await storeWebinarInDatabaseFixed(supabase, webinarDetails, connection.id, totalAttendees, participantError);
           
-          return true; // Success
+          if (wasStored) {
+            console.log(`✅ Webinar ${webinar.id} stored successfully`);
+            return true; // Success
+          } else {
+            console.error(`❌ Failed to store webinar ${webinar.id}`);
+            return false; // Failed
+          }
           
         } catch (error) {
           console.error(`❌ Error processing webinar ${webinar.id}:`, error);
@@ -221,7 +226,7 @@ export async function processSimpleWebinarSync(
         processed_items: processedCount
       });
       
-      console.log(`✅ Batch complete: ${batchProcessedCount}/${batch.length} webinars processed successfully`);
+      console.log(`✅ Batch complete: ${batchProcessedCount}/${batch.length} webinars processed successfully (total processed: ${processedCount}/${totalWebinars})`);
     }
     
     // Prepare error summary
@@ -273,13 +278,14 @@ export async function processSimpleWebinarSync(
   }
 }
 
-async function storeWebinarInDatabase(
+// FIXED: This function now properly returns a success indicator
+async function storeWebinarInDatabaseFixed(
   supabase: any, 
   webinar: any, 
   connectionId: string, 
   totalAttendees?: number | null,
   participantError?: any
-): Promise<void> {
+): Promise<boolean> {
   try {
     console.log(`💾 Storing webinar ${webinar.id} in database with connection ${connectionId}...`);
     
@@ -452,43 +458,26 @@ async function storeWebinarInDatabase(
       settings_stored: !!webinarData.settings
     });
     
-    // First try to update existing record
-    const { data: existingWebinar } = await supabase
+    // FIXED: Proper upsert logic with better error handling
+    const { data, error } = await supabase
       .from('zoom_webinars')
-      .select('id')
-      .eq('webinar_id', webinarData.webinar_id)
-      .eq('connection_id', webinarData.connection_id)
-      .single();
-
-    let error;
-    if (existingWebinar) {
-      // Update existing webinar
-      console.log(`📝 Updating existing webinar ${webinar.id}...`);
-      const { error: updateError } = await supabase
-        .from('zoom_webinars')
-        .update(webinarData)
-        .eq('id', existingWebinar.id);
-      error = updateError;
-    } else {
-      // Insert new webinar
-      console.log(`➕ Inserting new webinar ${webinar.id}...`);
-      const { error: insertError } = await supabase
-        .from('zoom_webinars')
-        .insert(webinarData);
-      error = insertError;
-    }
+      .upsert(webinarData, {
+        onConflict: 'webinar_id,connection_id',
+        returning: 'minimal'
+      });
 
     if (error) {
       console.error(`❌ Error storing webinar ${webinar.id}:`, error);
       console.error(`❌ Error details:`, JSON.stringify(error, null, 2));
       console.error(`❌ Webinar data that failed:`, JSON.stringify(webinarData, null, 2));
-      throw error;
+      return false; // Return false on failure
     }
     
     console.log(`✅ Successfully stored webinar ${webinar.id} in database (sync status: ${participantSyncStatus})`);
+    return true; // Return true on success
   } catch (error) {
     console.error(`💥 Failed to store webinar ${webinar.id} in database:`, error);
-    throw error;
+    return false; // Return false on exception
   }
 }
 
