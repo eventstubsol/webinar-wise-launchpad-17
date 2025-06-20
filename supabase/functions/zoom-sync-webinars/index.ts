@@ -118,7 +118,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Create sync log entry with correct sync_type
     try {
-      syncLogId = await createSyncLog(supabaseAdmin, connectionId, 'started');
+      syncLogId = await createSyncLog(supabaseAdmin, connectionId, 'webinar_sync');
       console.log(`Sync Log ID: ${syncLogId}`);
     } catch (logError) {
       console.error('Failed to create sync log:', logError);
@@ -129,7 +129,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const syncOperation = {
       id: connectionId,
       connection_id: connectionId,
-      sync_type: 'started',
+      sync_type: 'webinar_sync', // Use valid sync type
       status: 'pending',
       options: {
         debug: false,
