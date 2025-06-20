@@ -1,5 +1,6 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0';
-import { processEnhancedWebinarSync } from './fixed-enhanced-sync-processor.ts';
+import { processEnhancedWebinarSync } from './enhanced-sync-processor.ts';
 import { createSyncLog, updateSyncLog } from './database-operations.ts';
 
 const corsHeaders = {
@@ -23,7 +24,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const TIMEOUT_MS = 25000; // 25 seconds to stay well under the 30-second limit
   
   try {
-    console.log('🚀 ZOOM SYNC WEBINARS: Starting FIXED enhanced sync operation');
+    console.log('🚀 ZOOM SYNC WEBINARS: Starting enhanced sync operation');
     console.log(`⏱️ Function timeout set to ${TIMEOUT_MS / 1000} seconds`);
     
     // Get environment variables
@@ -117,7 +118,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Create sync log entry with correct sync_type
     try {
-      syncLogId = await createSyncLog(supabaseAdmin, connectionId, 'initial');
+      syncLogId = await createSyncLog(supabaseAdmin, connectionId, 'started');
       console.log(`Sync Log ID: ${syncLogId}`);
     } catch (logError) {
       console.error('Failed to create sync log:', logError);
@@ -128,7 +129,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const syncOperation = {
       id: connectionId,
       connection_id: connectionId,
-      sync_type: 'initial', // Use 'initial' not 'full_sync'
+      sync_type: 'started',
       status: 'pending',
       options: {
         debug: false,
@@ -137,7 +138,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
     };
 
-    console.log('Starting FIXED enhanced webinar sync process...');
+    console.log('Starting enhanced webinar sync process...');
     
     // Create a promise that will timeout
     const timeoutPromise = new Promise((_, reject) => {
@@ -156,11 +157,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         timeoutPromise
       ]);
       
-      console.log('FIXED Enhanced sync completed successfully');
+      console.log('Enhanced sync completed successfully');
       
       return new Response(JSON.stringify({ 
         success: true,
-        data: 'FIXED Enhanced webinar sync completed successfully',
+        data: 'Enhanced webinar sync completed successfully',
         syncId: syncLogId,
         executionTime: Date.now() - startTime
       }), {
@@ -172,16 +173,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
       if (timeoutError.message === 'Function timeout approaching') {
         console.log('⏱️ Function approaching timeout, gracefully returning partial results');
         
-        // Update sync log to indicate partial completion
+        // Update sync log to indicate partial completion using authenticated client
         await updateSyncLog(supabaseAdmin, syncLogId, {
           sync_status: 'partial',
           completed_at: new Date().toISOString(),
-          error_message: 'FIXED Enhanced sync partially completed due to timeout - additional syncs may be needed'
+          error_message: 'Enhanced sync partially completed due to timeout - additional syncs may be needed'
         });
         
         return new Response(JSON.stringify({ 
           success: true,
-          data: 'FIXED Enhanced webinar sync partially completed due to timeout',
+          data: 'Enhanced webinar sync partially completed due to timeout',
           syncId: syncLogId,
           executionTime: Date.now() - startTime,
           partial: true
@@ -195,9 +196,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
   } catch (error) {
-    console.error('Error during FIXED enhanced sync operation:', error);
+    console.error('Error during enhanced sync operation:', error);
     
-    // Update sync log with error if we have syncLogId
+    // Update sync log with error if we have syncLogId - use admin client
     if (syncLogId) {
       try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
@@ -221,7 +222,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     return new Response(JSON.stringify({ 
-      error: 'FIXED Enhanced webinar sync failed', 
+      error: 'Enhanced webinar sync failed', 
       details: error.message || 'Unknown error occurred',
       syncId: syncLogId,
       executionTime: Date.now() - startTime

@@ -5650,6 +5650,168 @@ export type Database = {
           },
         ]
       }
+      zoom_webinars_backup_20250620: {
+        Row: {
+          agenda: string | null
+          alternative_hosts: string[] | null
+          approval_type: number | null
+          avg_attendance_duration: number | null
+          connection_id: string | null
+          created_at: string | null
+          creation_source: string | null
+          duration: number | null
+          encrypted_passcode: string | null
+          encrypted_password: string | null
+          h323_passcode: string | null
+          h323_password: string | null
+          host_email: string | null
+          host_id: string | null
+          id: string | null
+          is_simulive: boolean | null
+          join_url: string | null
+          max_attendees: number | null
+          max_registrants: number | null
+          occurrence_id: string | null
+          occurrences: Json | null
+          participant_sync_api_used: string | null
+          participant_sync_attempted_at: string | null
+          participant_sync_error: string | null
+          participant_sync_status:
+            | Database["public"]["Enums"]["participant_sync_status"]
+            | null
+          password: string | null
+          pstn_password: string | null
+          record_file_id: string | null
+          recurrence: Json | null
+          registration_required: boolean | null
+          registration_type: number | null
+          registration_url: string | null
+          settings: Json | null
+          start_time: string | null
+          start_url: string | null
+          status: string | null
+          synced_at: string | null
+          timezone: string | null
+          topic: string | null
+          total_attendees: number | null
+          total_minutes: number | null
+          total_registrants: number | null
+          tracking_fields: Json | null
+          transition_to_live: boolean | null
+          type: number | null
+          updated_at: string | null
+          webinar_created_at: string | null
+          webinar_id: string | null
+          webinar_uuid: string | null
+        }
+        Insert: {
+          agenda?: string | null
+          alternative_hosts?: string[] | null
+          approval_type?: number | null
+          avg_attendance_duration?: number | null
+          connection_id?: string | null
+          created_at?: string | null
+          creation_source?: string | null
+          duration?: number | null
+          encrypted_passcode?: string | null
+          encrypted_password?: string | null
+          h323_passcode?: string | null
+          h323_password?: string | null
+          host_email?: string | null
+          host_id?: string | null
+          id?: string | null
+          is_simulive?: boolean | null
+          join_url?: string | null
+          max_attendees?: number | null
+          max_registrants?: number | null
+          occurrence_id?: string | null
+          occurrences?: Json | null
+          participant_sync_api_used?: string | null
+          participant_sync_attempted_at?: string | null
+          participant_sync_error?: string | null
+          participant_sync_status?:
+            | Database["public"]["Enums"]["participant_sync_status"]
+            | null
+          password?: string | null
+          pstn_password?: string | null
+          record_file_id?: string | null
+          recurrence?: Json | null
+          registration_required?: boolean | null
+          registration_type?: number | null
+          registration_url?: string | null
+          settings?: Json | null
+          start_time?: string | null
+          start_url?: string | null
+          status?: string | null
+          synced_at?: string | null
+          timezone?: string | null
+          topic?: string | null
+          total_attendees?: number | null
+          total_minutes?: number | null
+          total_registrants?: number | null
+          tracking_fields?: Json | null
+          transition_to_live?: boolean | null
+          type?: number | null
+          updated_at?: string | null
+          webinar_created_at?: string | null
+          webinar_id?: string | null
+          webinar_uuid?: string | null
+        }
+        Update: {
+          agenda?: string | null
+          alternative_hosts?: string[] | null
+          approval_type?: number | null
+          avg_attendance_duration?: number | null
+          connection_id?: string | null
+          created_at?: string | null
+          creation_source?: string | null
+          duration?: number | null
+          encrypted_passcode?: string | null
+          encrypted_password?: string | null
+          h323_passcode?: string | null
+          h323_password?: string | null
+          host_email?: string | null
+          host_id?: string | null
+          id?: string | null
+          is_simulive?: boolean | null
+          join_url?: string | null
+          max_attendees?: number | null
+          max_registrants?: number | null
+          occurrence_id?: string | null
+          occurrences?: Json | null
+          participant_sync_api_used?: string | null
+          participant_sync_attempted_at?: string | null
+          participant_sync_error?: string | null
+          participant_sync_status?:
+            | Database["public"]["Enums"]["participant_sync_status"]
+            | null
+          password?: string | null
+          pstn_password?: string | null
+          record_file_id?: string | null
+          recurrence?: Json | null
+          registration_required?: boolean | null
+          registration_type?: number | null
+          registration_url?: string | null
+          settings?: Json | null
+          start_time?: string | null
+          start_url?: string | null
+          status?: string | null
+          synced_at?: string | null
+          timezone?: string | null
+          topic?: string | null
+          total_attendees?: number | null
+          total_minutes?: number | null
+          total_registrants?: number | null
+          tracking_fields?: Json | null
+          transition_to_live?: boolean | null
+          type?: number | null
+          updated_at?: string | null
+          webinar_created_at?: string | null
+          webinar_id?: string | null
+          webinar_uuid?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       webinar_analytics_summary: {
@@ -5667,6 +5829,72 @@ export type Database = {
           total_registrants: number | null
           unique_participants: number | null
           user_id: string | null
+        }
+        Relationships: []
+      }
+      webinar_data_quality: {
+        Row: {
+          approval_type: number | null
+          avg_attendance_duration: number | null
+          has_alt_hosts: boolean | null
+          has_settings: boolean | null
+          max_registrants: number | null
+          participant_sync_error: string | null
+          participant_sync_status:
+            | Database["public"]["Enums"]["participant_sync_status"]
+            | null
+          registration_required: boolean | null
+          start_time: string | null
+          status: string | null
+          synced_at: string | null
+          time_status: string | null
+          topic: string | null
+          total_attendees: number | null
+          total_minutes: number | null
+          total_registrants: number | null
+          webinar_id: string | null
+        }
+        Insert: {
+          approval_type?: number | null
+          avg_attendance_duration?: number | null
+          has_alt_hosts?: never
+          has_settings?: never
+          max_registrants?: number | null
+          participant_sync_error?: string | null
+          participant_sync_status?:
+            | Database["public"]["Enums"]["participant_sync_status"]
+            | null
+          registration_required?: boolean | null
+          start_time?: string | null
+          status?: string | null
+          synced_at?: string | null
+          time_status?: never
+          topic?: string | null
+          total_attendees?: number | null
+          total_minutes?: number | null
+          total_registrants?: number | null
+          webinar_id?: string | null
+        }
+        Update: {
+          approval_type?: number | null
+          avg_attendance_duration?: number | null
+          has_alt_hosts?: never
+          has_settings?: never
+          max_registrants?: number | null
+          participant_sync_error?: string | null
+          participant_sync_status?:
+            | Database["public"]["Enums"]["participant_sync_status"]
+            | null
+          registration_required?: boolean | null
+          start_time?: string | null
+          status?: string | null
+          synced_at?: string | null
+          time_status?: never
+          topic?: string | null
+          total_attendees?: number | null
+          total_minutes?: number | null
+          total_registrants?: number | null
+          webinar_id?: string | null
         }
         Relationships: []
       }

@@ -1,7 +1,8 @@
+
 import { updateSyncLog, updateSyncStage } from './database-operations.ts';
 import { createZoomAPIClient } from './zoom-api-client.ts';
 
-console.log('📦 ENHANCED sync processor loaded successfully');
+console.log('📦 Enhanced sync processor with test mode support loaded successfully');
 
 export interface SyncOperation {
   id: string;
@@ -21,11 +22,13 @@ export async function processEnhancedWebinarSync(
   connection: any,
   syncLogId: string
 ): Promise<void> {
-  console.log(`🚀 Starting ENHANCED webinar sync for connection: ${connection.id}`);
+  console.log(`🚀 Starting enhanced webinar sync for connection: ${connection.id}`);
   
   let processedCount = 0;
   let totalWebinars = 0;
-  const BATCH_SIZE = 5; // Smaller batch size for reliability
+  const testMode = syncOperation.options?.testMode || false;
+  const BATCH_SIZE = testMode ? 2 : 5; // Smaller batch size for test mode
+  const TEST_MODE_LIMIT = 5; // Limit webinars in test mode
   
   try {
     // Update sync status to in_progress
@@ -34,20 +37,22 @@ export async function processEnhancedWebinarSync(
       started_at: new Date().toISOString()
     });
 
-    // Create Zoom API client
+    // Create Zoom API client with token refresh support
     const client = await createZoomAPIClient(connection, supabase);
-    console.log('✅ Zoom API client created successfully');
+    console.log('✅ Enhanced Zoom API client created successfully');
     
     await updateSyncStage(supabase, syncLogId, null, 'fetching_webinars', 10);
     
-    // Fetch webinars from Zoom
+    // Fetch webinars from Zoom - honor options parameter
     const webinars = await client.listWebinarsWithRange({
-      type: 'all',
-      page_size: 300
+      type: testMode ? 'past' : 'all', // Use past webinars for testing
+      page_size: testMode ? 50 : 300
     });
     
-    totalWebinars = webinars.length;
-    console.log(`📊 Found ${totalWebinars} webinars to process`);
+    totalWebinars = testMode ? Math.min(webinars.length, TEST_MODE_LIMIT) : webinars.length;
+    const webinarsToProcess = testMode ? webinars.slice(0, TEST_MODE_LIMIT) : webinars;
+    
+    console.log(`📊 Found ${webinars.length} webinars total, processing ${totalWebinars} ${testMode ? '(test mode)' : ''}`);
     
     await updateSyncLog(supabase, syncLogId, {
       total_items: totalWebinars,
@@ -67,11 +72,11 @@ export async function processEnhancedWebinarSync(
     await updateSyncStage(supabase, syncLogId, null, 'processing_webinars', 20);
     
     // Process webinars in smaller batches
-    for (let batchStart = 0; batchStart < webinars.length; batchStart += BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, webinars.length);
-      const batch = webinars.slice(batchStart, batchEnd);
+    for (let batchStart = 0; batchStart < webinarsToProcess.length; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, webinarsToProcess.length);
+      const batch = webinarsToProcess.slice(batchStart, batchEnd);
       
-      console.log(`📦 Processing batch ${Math.floor(batchStart / BATCH_SIZE) + 1} (webinars ${batchStart + 1}-${batchEnd})`);
+      console.log(`📦 Processing batch ${Math.floor(batchStart / BATCH_SIZE) + 1} (webinars ${batchStart + 1}-${batchEnd}) ${testMode ? '[TEST MODE]' : ''}`);
       
       // Process webinars sequentially to avoid overwhelming APIs
       for (let i = 0; i < batch.length; i++) {
@@ -80,25 +85,29 @@ export async function processEnhancedWebinarSync(
         const progressPercentage = 20 + Math.round((overallIndex / totalWebinars) * 70);
         
         try {
-          console.log(`🔄 Processing webinar ${overallIndex + 1}/${totalWebinars}: ${webinar.id}`);
+          console.log(`🔄 Processing webinar ${overallIndex + 1}/${totalWebinars}: ${webinar.id} ${testMode ? '[TEST]' : ''}`);
           
           await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'processing_webinar', progressPercentage);
           
           // Get detailed webinar data
           const webinarDetails = await client.getWebinar(webinar.id);
           
-          // Store webinar in database using ENHANCED extraction
+          // Store webinar in database using enhanced extraction
           const wasStored = await storeWebinarEnhanced(supabase, webinarDetails, connection.id);
           
           if (wasStored) {
             processedCount++;
-            console.log(`✅ Webinar ${webinar.id} stored (${processedCount}/${totalWebinars})`);
+            console.log(`✅ Webinar ${webinar.id} stored (${processedCount}/${totalWebinars}) ${testMode ? '[TEST]' : ''}`);
           } else {
             console.error(`❌ Failed to store webinar ${webinar.id}`);
           }
           
         } catch (error) {
           console.error(`❌ Error processing webinar ${webinar.id}:`, error.message);
+          // In test mode, continue processing other webinars
+          if (!testMode) {
+            throw error; // Re-throw in production mode
+          }
         }
       }
       
@@ -107,7 +116,7 @@ export async function processEnhancedWebinarSync(
         processed_items: processedCount
       });
       
-      console.log(`✅ Batch complete: processed ${processedCount}/${totalWebinars} total webinars`);
+      console.log(`✅ Batch complete: processed ${processedCount}/${totalWebinars} total webinars ${testMode ? '[TEST MODE]' : ''}`);
     }
     
     // Mark sync as completed
@@ -118,7 +127,7 @@ export async function processEnhancedWebinarSync(
       stage_progress_percentage: 100
     });
     
-    console.log(`🎉 Enhanced sync completed! Processed ${processedCount}/${totalWebinars} webinars`);
+    console.log(`🎉 Enhanced sync completed! Processed ${processedCount}/${totalWebinars} webinars ${testMode ? '[TEST MODE]' : ''}`);
     
   } catch (error) {
     console.error(`💥 Enhanced sync failed:`, error);
@@ -134,16 +143,13 @@ export async function processEnhancedWebinarSync(
   }
 }
 
-// ENHANCED webinar storage function with comprehensive field extraction
+// Enhanced webinar storage function with comprehensive field extraction
 async function storeWebinarEnhanced(
   supabase: any, 
   webinar: any, 
   connectionId: string
 ): Promise<boolean> {
   try {
-    // Log the raw webinar data for debugging
-    console.log(`🔍 Raw webinar data for ${webinar.id}:`, JSON.stringify(webinar, null, 2));
-    
     const settings = webinar.settings || {};
     
     // Enhanced field extraction with comprehensive fallback logic
@@ -239,8 +245,6 @@ async function storeWebinarEnhanced(
         delete webinarData[key];
       }
     });
-    
-    console.log(`💾 Enhanced webinar data for ${webinar.id}:`, JSON.stringify(webinarData, null, 2));
     
     const { error } = await supabase
       .from('zoom_webinars')

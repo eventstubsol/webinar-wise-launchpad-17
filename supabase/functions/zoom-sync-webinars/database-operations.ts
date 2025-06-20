@@ -1,3 +1,4 @@
+
 // Database operations for Zoom sync
 export async function createSyncLog(supabase: any, connectionId: string, syncType: string): Promise<string> {
   const { data, error } = await supabase
@@ -5,7 +6,7 @@ export async function createSyncLog(supabase: any, connectionId: string, syncTyp
     .insert({
       connection_id: connectionId,
       sync_type: syncType,
-      sync_status: 'started',
+      sync_status: 'started', // Use 'started' instead of 'pending'
       started_at: new Date().toISOString(),
       total_items: 0,
       processed_items: 0,

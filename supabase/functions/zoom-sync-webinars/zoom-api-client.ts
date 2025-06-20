@@ -1,7 +1,5 @@
-// Enhanced Zoom API Client for Edge Functions
-// This file provides the createZoomAPIClient function used by the sync processor
 
-console.log('📦 Zoom API client module loaded successfully');
+console.log('📦 Enhanced Zoom API client with token refresh loaded successfully');
 
 const ZOOM_API_BASE_URL = 'https://api.zoom.us/v2';
 const RATE_LIMIT_DELAY = 100;
@@ -22,6 +20,7 @@ interface ZoomAPIError {
   message: string;
   webinarId?: string;
   operation?: string;
+  isRetryable?: boolean;
 }
 
 class ZoomAPIClient {
@@ -44,16 +43,12 @@ class ZoomAPIClient {
     console.log('🔄 Refreshing Zoom access token...');
     
     try {
-      // Get credentials for refresh
-      const { data: credentials, error: credError } = await this.supabase
-        .from('zoom_credentials')
-        .select('client_id, client_secret')
-        .eq('user_id', (await this.supabase.auth.getUser()).data.user?.id)
-        .eq('is_active', true)
-        .single();
-
-      if (credError || !credentials) {
-        throw new Error('Failed to get Zoom credentials for token refresh');
+      // Get Zoom OAuth credentials from environment
+      const clientId = Deno.env.get('ZOOM_CLIENT_ID');
+      const clientSecret = Deno.env.get('ZOOM_CLIENT_SECRET');
+      
+      if (!clientId || !clientSecret) {
+        throw new Error('Missing Zoom OAuth credentials in environment');
       }
 
       // Refresh token with Zoom
@@ -61,7 +56,7 @@ class ZoomAPIClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${credentials.client_id}:${credentials.client_secret}`)}`,
+          'Authorization': `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
         },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
@@ -95,7 +90,11 @@ class ZoomAPIClient {
       console.log('✅ Access token refreshed successfully');
     } catch (error) {
       console.error('❌ Failed to refresh access token:', error);
-      throw new Error(`Token refresh failed: ${error.message}`);
+      throw new ZoomAPIError({
+        code: 'TOKEN_REFRESH_FAILED',
+        message: `Token refresh failed: ${error.message}`,
+        isRetryable: false
+      });
     }
   }
 
@@ -140,7 +139,11 @@ class ZoomAPIClient {
               await this.refreshAccessToken();
               continue; // Retry with new token
             }
-            throw new Error(`Authentication failed after refresh: ${response.statusText}`);
+            throw new ZoomAPIError({
+              code: 'AUTHENTICATION_FAILED',
+              message: `Authentication failed after refresh: ${response.statusText}`,
+              isRetryable: false
+            });
           }
           
           if (response.status === 429) {
@@ -149,7 +152,11 @@ class ZoomAPIClient {
             continue;
           }
           
-          throw new Error(`Zoom API error: ${response.status} ${response.statusText} - ${errorBody}`);
+          throw new ZoomAPIError({
+            code: 'API_ERROR',
+            message: `Zoom API error: ${response.status} ${response.statusText} - ${errorBody}`,
+            isRetryable: response.status >= 500
+          });
         }
 
         const data = await response.json();
@@ -183,11 +190,12 @@ class ZoomAPIClient {
       let allWebinars: any[] = [];
       let nextPageToken: string | null = null;
       let pageCount = 0;
+      const maxPages = 100; // Remove arbitrary limit, use safety limit
       
-      // Build query parameters from options
+      // Build query parameters from options - honor the type parameter
       const queryParams = new URLSearchParams({
         page_size: (options.page_size || 300).toString(),
-        type: options.type || 'all',
+        type: options.type || 'all', // Honor the options parameter
       });
       
       do {
@@ -209,6 +217,12 @@ class ZoomAPIClient {
         // Check if there are more pages
         nextPageToken = response.next_page_token || null;
         
+        // Safety check to prevent infinite loops
+        if (pageCount >= maxPages) {
+          console.warn(`⚠️ Reached maximum page limit (${maxPages})`);
+          break;
+        }
+        
         // Add delay between pages to avoid rate limiting
         if (nextPageToken) {
           await delay(200);
@@ -220,7 +234,7 @@ class ZoomAPIClient {
       return allWebinars;
     } catch (error) {
       console.error('❌ Error fetching webinars:', error);
-      throw error;
+      throw error; // Don't hide errors - surface them properly
     }
   }
 
@@ -233,24 +247,23 @@ class ZoomAPIClient {
       return webinar;
     } catch (error) {
       console.error(`❌ Error fetching webinar ${webinarId}:`, error);
-      throw error;
+      throw error; // Don't hide errors
     }
   }
 
-  async getWebinarRegistrants(webinarId: string): Promise<{ data: any[], error?: ZoomAPIError }> {
+  async getWebinarRegistrants(webinarId: string): Promise<any[]> {
     console.log(`👥 Fetching registrants for webinar: ${webinarId}`);
     
     try {
       let allRegistrants: any[] = [];
       let nextPageToken: string | null = null;
       let pageCount = 0;
-      const maxPages = 50; // Increased from 20 to handle larger webinars
+      const maxPages = 50;
       
       do {
         pageCount++;
         console.log(`📄 Fetching registrants page ${pageCount} for webinar ${webinarId}...`);
         
-        // Build URL with pagination
         let url = `/webinars/${webinarId}/registrants?page_size=300`;
         if (nextPageToken) {
           url += `&next_page_token=${encodeURIComponent(nextPageToken)}`;
@@ -262,16 +275,13 @@ class ZoomAPIClient {
         
         console.log(`📊 Page ${pageCount}: Retrieved ${registrants.length} registrants (total so far: ${allRegistrants.length})`);
         
-        // Check if there are more pages
         nextPageToken = response.next_page_token || null;
         
-        // Safety check to prevent infinite loops
         if (pageCount >= maxPages) {
           console.warn(`⚠️ Reached maximum page limit (${maxPages}) for webinar ${webinarId}`);
           break;
         }
         
-        // Add delay between pages to avoid rate limiting
         if (nextPageToken) {
           await delay(200);
         }
@@ -279,33 +289,26 @@ class ZoomAPIClient {
       } while (nextPageToken);
       
       console.log(`👥 Total registrants retrieved for webinar ${webinarId}: ${allRegistrants.length}`);
-      return { data: allRegistrants };
+      return allRegistrants;
     } catch (error) {
-      const apiError: ZoomAPIError = {
-        code: 'REGISTRANTS_FETCH_ERROR',
-        message: error.message || 'Failed to fetch registrants',
-        webinarId,
-        operation: 'getWebinarRegistrants'
-      };
       console.error(`❌ Error fetching registrants for webinar ${webinarId}:`, error);
-      return { data: [], error: apiError };
+      throw error; // Surface errors instead of returning empty array
     }
   }
 
-  async getWebinarParticipants(webinarId: string): Promise<{ data: any[], error?: ZoomAPIError }> {
+  async getWebinarParticipants(webinarId: string): Promise<any[]> {
     console.log(`👤 Fetching participants for webinar: ${webinarId}`);
     
     try {
       let allParticipants: any[] = [];
       let nextPageToken: string | null = null;
       let pageCount = 0;
-      const maxPages = 50; // Increased from 20 to handle larger webinars
+      const maxPages = 50;
       
       do {
         pageCount++;
         console.log(`📄 Fetching participants page ${pageCount} for webinar ${webinarId}...`);
         
-        // Build URL with pagination
         let url = `/report/webinars/${webinarId}/participants?page_size=300`;
         if (nextPageToken) {
           url += `&next_page_token=${encodeURIComponent(nextPageToken)}`;
@@ -317,16 +320,13 @@ class ZoomAPIClient {
         
         console.log(`📊 Page ${pageCount}: Retrieved ${participants.length} participants (total so far: ${allParticipants.length})`);
         
-        // Check if there are more pages
         nextPageToken = response.next_page_token || null;
         
-        // Safety check to prevent infinite loops
         if (pageCount >= maxPages) {
           console.warn(`⚠️ Reached maximum page limit (${maxPages}) for webinar ${webinarId}`);
           break;
         }
         
-        // Add delay between pages to avoid rate limiting
         if (nextPageToken) {
           await delay(200);
         }
@@ -334,20 +334,14 @@ class ZoomAPIClient {
       } while (nextPageToken);
       
       console.log(`👤 Total participants retrieved for webinar ${webinarId}: ${allParticipants.length}`);
-      return { data: allParticipants };
+      return allParticipants;
     } catch (error) {
-      const apiError: ZoomAPIError = {
-        code: 'PARTICIPANTS_FETCH_ERROR',
-        message: error.message || 'Failed to fetch participants',
-        webinarId,
-        operation: 'getWebinarParticipants'
-      };
       console.error(`❌ Error fetching participants for webinar ${webinarId}:`, error);
-      return { data: [], error: apiError };
+      throw error; // Surface errors instead of returning empty array
     }
   }
 
-  async getWebinarPolls(webinarId: string): Promise<{ data: any[], error?: ZoomAPIError }> {
+  async getWebinarPolls(webinarId: string): Promise<any[]> {
     console.log(`📊 Fetching polls for webinar: ${webinarId}`);
     
     try {
@@ -355,20 +349,14 @@ class ZoomAPIClient {
       const polls = response.questions || [];
       
       console.log(`📊 Retrieved ${polls.length} polls for webinar: ${webinarId}`);
-      return { data: polls };
+      return polls;
     } catch (error) {
-      const apiError: ZoomAPIError = {
-        code: 'POLLS_FETCH_ERROR',
-        message: error.message || 'Failed to fetch polls',
-        webinarId,
-        operation: 'getWebinarPolls'
-      };
       console.error(`❌ Error fetching polls for webinar ${webinarId}:`, error);
-      return { data: [], error: apiError };
+      throw error; // Surface errors instead of returning empty array
     }
   }
 
-  async getWebinarQA(webinarId: string): Promise<{ data: any[], error?: ZoomAPIError }> {
+  async getWebinarQA(webinarId: string): Promise<any[]> {
     console.log(`❓ Fetching Q&A for webinar: ${webinarId}`);
     
     try {
@@ -376,29 +364,23 @@ class ZoomAPIClient {
       const qa = response.questions || [];
       
       console.log(`❓ Retrieved ${qa.length} Q&A entries for webinar: ${webinarId}`);
-      return { data: qa };
+      return qa;
     } catch (error) {
-      const apiError: ZoomAPIError = {
-        code: 'QA_FETCH_ERROR',
-        message: error.message || 'Failed to fetch Q&A',
-        webinarId,
-        operation: 'getWebinarQA'
-      };
       console.error(`❌ Error fetching Q&A for webinar ${webinarId}:`, error);
-      return { data: [], error: apiError };
+      throw error; // Surface errors instead of returning empty array
     }
   }
 }
 
 export async function createZoomAPIClient(connection: any, supabase: any): Promise<ZoomAPIClient> {
-  console.log(`🔧 Creating Zoom API client for connection: ${connection.id}`);
+  console.log(`🔧 Creating enhanced Zoom API client for connection: ${connection.id}`);
   
   if (!connection.access_token) {
     throw new Error('No access token available for Zoom connection');
   }
   
   const client = new ZoomAPIClient(connection, supabase);
-  console.log(`✅ Zoom API client created successfully for connection: ${connection.id}`);
+  console.log(`✅ Enhanced Zoom API client created successfully for connection: ${connection.id}`);
   
   return client;
 }
