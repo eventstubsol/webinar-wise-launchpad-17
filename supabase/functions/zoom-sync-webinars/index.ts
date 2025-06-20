@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0';
 import { processEnhancedWebinarSync } from './enhanced-sync-processor.ts';
 import { createSyncLog, updateSyncLog } from './database-operations.ts';
@@ -118,7 +117,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Create sync log entry with correct sync_type
     try {
-      syncLogId = await createSyncLog(supabaseAdmin, connectionId, 'webinar_sync');
+      syncLogId = await createSyncLog(supabaseAdmin, connectionId, 'manual');
       console.log(`Sync Log ID: ${syncLogId}`);
     } catch (logError) {
       console.error('Failed to create sync log:', logError);
@@ -129,7 +128,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const syncOperation = {
       id: connectionId,
       connection_id: connectionId,
-      sync_type: 'webinar_sync', // Use valid sync type
+      sync_type: 'manual', // Use valid sync type that matches database constraint
       status: 'pending',
       options: {
         debug: false,

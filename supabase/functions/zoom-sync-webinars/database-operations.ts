@@ -1,11 +1,10 @@
-
 // Database operations for Zoom sync
 export async function createSyncLog(supabase: any, connectionId: string, syncType: string): Promise<string> {
   const { data, error } = await supabase
     .from('zoom_sync_logs')
     .insert({
       connection_id: connectionId,
-      sync_type: 'webinar_sync', // Use valid enum value instead of 'started'
+      sync_type: 'manual', // Use valid enum value that matches database constraint
       sync_status: 'started',
       started_at: new Date().toISOString(),
       total_items: 0,
