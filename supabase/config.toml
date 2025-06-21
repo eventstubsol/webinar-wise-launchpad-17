@@ -1,3 +1,4 @@
+
 # The name of your Supabase project
 project_id = "guwvvinnifypcxwbcnzz"
 
@@ -10,8 +11,12 @@ max_rows = 1000
 
 [auth]
 enabled = true
+port = 54324
 site_url = "http://localhost:3000"
 additional_redirect_urls = ["https://localhost:3000"]
+jwt_expiry = 3600
+refresh_token_rotation_enabled = true
+security_update_password_require_reauthentication = true
 
 [auth.email]
 enable_signup = true
@@ -27,6 +32,7 @@ enabled = false
 client_id = ""
 secret = ""
 redirect_uri = ""
+url_scheme = ""
 
 [auth.external.azure]
 enabled = false
@@ -146,7 +152,8 @@ max_client_conn = 100
 
 [realtime]
 enabled = true
-ip_version = "IPv4"
+port = 54323
+ip_version = "dual"
 
 [studio]
 enabled = true
@@ -161,10 +168,9 @@ pop3_port = 54326
 
 [storage]
 enabled = true
+port = 54325
 file_size_limit = "50MiB"
-
-[storage.image_transformation]
-enabled = true
+image_transformation = true
 
 [functions]
   [functions.ai-insights-generator]

@@ -1,268 +1,207 @@
 
-import { updateSyncLog, updateSyncStage } from './database-operations.ts';
+import { createSyncLog, updateSyncLog, updateSyncStage, saveWebinarToDatabase } from './database-operations.ts';
+import { validateEnhancedRequest, EnhancedSyncRequest } from './enhanced-validation.ts';
+import { TestModeManager, TestModeConfig } from './test-mode-manager.ts';
 import { createZoomAPIClient } from './zoom-api-client.ts';
-
-console.log('📦 Enhanced sync processor with test mode support loaded successfully');
-
-export interface SyncOperation {
-  id: string;
-  connection_id: string;
-  sync_type: string;
-  status: string;
-  options?: {
-    debug?: boolean;
-    testMode?: boolean;
-    forceRegistrantSync?: boolean;
-  };
-}
 
 export async function processEnhancedWebinarSync(
   supabase: any,
-  syncOperation: SyncOperation,
+  syncOperation: any,
   connection: any,
   syncLogId: string
 ): Promise<void> {
-  console.log(`🚀 Starting enhanced webinar sync for connection: ${connection.id}`);
+  console.log('=== ENHANCED SYNC PROCESSOR START ===');
   
-  let processedCount = 0;
-  let totalWebinars = 0;
-  const testMode = syncOperation.options?.testMode || false;
-  const BATCH_SIZE = testMode ? 2 : 5; // Smaller batch size for test mode
-  const TEST_MODE_LIMIT = 5; // Limit webinars in test mode
+  // Extract enhanced options
+  const options = syncOperation.options || {};
+  const testModeConfig = TestModeManager.prepareTestModeConfig(options);
+  
+  // Log configuration if verbose logging is enabled
+  if (options.verboseLogging || testModeConfig.enhancedLogging) {
+    console.log('ENHANCED SYNC: Configuration:', {
+      syncType: syncOperation.syncType,
+      testMode: testModeConfig.enabled,
+      dryRun: testModeConfig.dryRun,
+      maxWebinars: options.maxWebinars,
+      respectRateLimits: options.respectRateLimits,
+      enableAutoRetry: options.enableAutoRetry
+    });
+  }
+
+  const zoomApiClient = await createZoomAPIClient(connection);
   
   try {
-    // Update sync status to in_progress
-    await updateSyncLog(supabase, syncLogId, {
-      sync_status: 'in_progress',
-      started_at: new Date().toISOString()
-    });
-
-    // Create Zoom API client with token refresh support
-    const client = await createZoomAPIClient(connection, supabase);
-    console.log('✅ Enhanced Zoom API client created successfully');
+    await updateSyncStage(supabase, syncLogId, null, 'initializing_enhanced', 5);
     
-    await updateSyncStage(supabase, syncLogId, null, 'fetching_webinars', 10);
+    // Fetch webinars from Zoom with enhanced error handling
+    console.log('ENHANCED SYNC: Fetching webinars from Zoom API...');
+    const webinarsResponse = await zoomApiClient.makeRequest('/users/me/webinars?page_size=100');
+    let webinars = webinarsResponse.webinars || [];
     
-    // Fetch webinars from Zoom - honor options parameter
-    const webinars = await client.listWebinarsWithRange({
-      type: testMode ? 'past' : 'all', // Use past webinars for testing
-      page_size: testMode ? 50 : 300
-    });
-    
-    totalWebinars = testMode ? Math.min(webinars.length, TEST_MODE_LIMIT) : webinars.length;
-    const webinarsToProcess = testMode ? webinars.slice(0, TEST_MODE_LIMIT) : webinars;
-    
-    console.log(`📊 Found ${webinars.length} webinars total, processing ${totalWebinars} ${testMode ? '(test mode)' : ''}`);
-    
-    await updateSyncLog(supabase, syncLogId, {
-      total_items: totalWebinars,
-      processed_items: 0
-    });
-    
-    if (totalWebinars === 0) {
+    if (webinars.length === 0) {
+      console.log('ENHANCED SYNC: No webinars found');
       await updateSyncLog(supabase, syncLogId, {
         sync_status: 'completed',
         completed_at: new Date().toISOString(),
-        processed_items: 0,
-        stage_progress_percentage: 100
+        total_items: 0,
+        processed_items: 0
       });
       return;
     }
+
+    // Apply test mode limitations
+    if (testModeConfig.enabled) {
+      webinars = TestModeManager.limitWebinarsForTestMode(webinars, testModeConfig);
+      TestModeManager.logTestModeOperation('webinar_limitation', { 
+        originalCount: webinarsResponse.webinars?.length || 0,
+        limitedCount: webinars.length 
+      }, testModeConfig);
+    }
+
+    // Apply max webinars limit if specified
+    if (options.maxWebinars && webinars.length > options.maxWebinars) {
+      console.log(`ENHANCED SYNC: Limiting webinars to ${options.maxWebinars} (was ${webinars.length})`);
+      webinars = webinars.slice(0, options.maxWebinars);
+    }
+
+    await updateSyncLog(supabase, syncLogId, {
+      total_items: webinars.length,
+      processed_items: 0
+    });
     
-    await updateSyncStage(supabase, syncLogId, null, 'processing_webinars', 20);
+    console.log(`ENHANCED SYNC: Processing ${webinars.length} webinars`);
     
-    // Process webinars in smaller batches
-    for (let batchStart = 0; batchStart < webinarsToProcess.length; batchStart += BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, webinarsToProcess.length);
-      const batch = webinarsToProcess.slice(batchStart, batchEnd);
-      
-      console.log(`📦 Processing batch ${Math.floor(batchStart / BATCH_SIZE) + 1} (webinars ${batchStart + 1}-${batchEnd}) ${testMode ? '[TEST MODE]' : ''}`);
-      
-      // Process webinars sequentially to avoid overwhelming APIs
-      for (let i = 0; i < batch.length; i++) {
-        const webinar = batch[i];
-        const overallIndex = batchStart + i;
-        const progressPercentage = 20 + Math.round((overallIndex / totalWebinars) * 70);
+    let processedCount = 0;
+    const operations: Array<{ operation: string; data: any; skipped: boolean }> = [];
+    
+    // Process each webinar with enhanced error handling
+    for (const webinar of webinars) {
+      try {
+        await updateSyncStage(supabase, syncLogId, webinar.id, 'processing_webinar_enhanced', 
+          Math.round(((processedCount + 0.5) / webinars.length) * 100));
         
-        try {
-          console.log(`🔄 Processing webinar ${overallIndex + 1}/${totalWebinars}: ${webinar.id} ${testMode ? '[TEST]' : ''}`);
-          
-          await updateSyncStage(supabase, syncLogId, webinar.id?.toString(), 'processing_webinar', progressPercentage);
-          
-          // Get detailed webinar data
-          const webinarDetails = await client.getWebinar(webinar.id);
-          
-          // Store webinar in database using enhanced extraction
-          const wasStored = await storeWebinarEnhanced(supabase, webinarDetails, connection.id);
-          
-          if (wasStored) {
-            processedCount++;
-            console.log(`✅ Webinar ${webinar.id} stored (${processedCount}/${totalWebinars}) ${testMode ? '[TEST]' : ''}`);
-          } else {
-            console.error(`❌ Failed to store webinar ${webinar.id}`);
-          }
-          
-        } catch (error) {
-          console.error(`❌ Error processing webinar ${webinar.id}:`, error.message);
-          // In test mode, continue processing other webinars
-          if (!testMode) {
-            throw error; // Re-throw in production mode
-          }
+        if (options.verboseLogging || testModeConfig.enhancedLogging) {
+          console.log(`ENHANCED SYNC: Processing webinar ${processedCount + 1}/${webinars.length}: ${webinar.topic} (${webinar.id})`);
+        }
+        
+        // Check if this is a dry run
+        const shouldSkip = TestModeManager.shouldSkipDatabaseWrite(testModeConfig);
+        
+        if (!shouldSkip) {
+          // Save webinar to database
+          await saveWebinarToDatabase(supabase, webinar, connection.id);
+          operations.push({
+            operation: `Save webinar: ${webinar.topic}`,
+            data: { id: webinar.id, topic: webinar.topic },
+            skipped: false
+          });
+        } else {
+          console.log(`DRY RUN: Skipping database write for webinar: ${webinar.topic}`);
+          operations.push({
+            operation: `Save webinar: ${webinar.topic}`,
+            data: { id: webinar.id, topic: webinar.topic },
+            skipped: true
+          });
+        }
+        
+        processedCount++;
+        
+        // Update progress
+        await updateSyncLog(supabase, syncLogId, {
+          processed_items: processedCount
+        });
+        
+      } catch (webinarError) {
+        console.error(`ENHANCED SYNC: Error processing webinar ${webinar.id}:`, webinarError);
+        
+        // Log the error operation
+        operations.push({
+          operation: `ERROR - Save webinar: ${webinar.topic}`,
+          data: { id: webinar.id, error: webinarError.message },
+          skipped: false
+        });
+        
+        processedCount++;
+        
+        await updateSyncLog(supabase, syncLogId, {
+          processed_items: processedCount,
+          failed_items: processedCount - (operations.filter(op => !op.operation.startsWith('ERROR')).length)
+        });
+        
+        // Continue processing other webinars unless forceSync is disabled
+        if (!options.forceSync && !options.enableAutoRetry) {
+          console.log('ENHANCED SYNC: Stopping on error (forceSync disabled)');
+          break;
         }
       }
-      
-      // Update progress after each batch
-      await updateSyncLog(supabase, syncLogId, {
-        processed_items: processedCount
-      });
-      
-      console.log(`✅ Batch complete: processed ${processedCount}/${totalWebinars} total webinars ${testMode ? '[TEST MODE]' : ''}`);
     }
     
-    // Mark sync as completed
+    // Generate test mode report if enabled
+    if (testModeConfig.enabled) {
+      const report = this.generateTestModeReport(operations, testModeConfig);
+      console.log(report);
+    }
+    
+    // Complete sync
+    await updateSyncStage(supabase, syncLogId, null, 'completed_enhanced', 100);
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'completed',
       completed_at: new Date().toISOString(),
-      processed_items: processedCount,
-      stage_progress_percentage: 100
+      error_details: testModeConfig.enabled ? {
+        testModeReport: operations,
+        dryRun: testModeConfig.dryRun
+      } : null
     });
-    
-    console.log(`🎉 Enhanced sync completed! Processed ${processedCount}/${totalWebinars} webinars ${testMode ? '[TEST MODE]' : ''}`);
+
+    console.log('=== ENHANCED SYNC COMPLETED ===');
+    console.log(`Total webinars processed: ${processedCount}`);
+    console.log(`Operations performed: ${operations.length}`);
+    console.log(`Dry run: ${testModeConfig.dryRun ? 'YES' : 'NO'}`);
     
   } catch (error) {
-    console.error(`💥 Enhanced sync failed:`, error);
+    console.error('ENHANCED SYNC: Operation failed:', error);
     
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'failed',
+      error_message: error instanceof Error ? error.message : 'Enhanced sync failed',
       completed_at: new Date().toISOString(),
-      error_message: error.message,
-      processed_items: processedCount
+      sync_stage: 'failed',
+      stage_progress_percentage: 0
     });
-    
+
     throw error;
   }
 }
 
-// Enhanced webinar storage function with comprehensive field extraction
-async function storeWebinarEnhanced(
-  supabase: any, 
-  webinar: any, 
-  connectionId: string
-): Promise<boolean> {
-  try {
-    const settings = webinar.settings || {};
-    
-    // Enhanced field extraction with comprehensive fallback logic
-    const webinarData: any = {
-      // Core identification fields
-      webinar_id: webinar.id?.toString(),
-      webinar_uuid: webinar.uuid,
-      connection_id: connectionId,
-      
-      // Basic webinar information
-      topic: webinar.topic,
-      type: webinar.type,
-      start_time: webinar.start_time,
-      duration: webinar.duration,
-      timezone: webinar.timezone,
-      status: webinar.status,
-      
-      // Host information
-      host_id: webinar.host_id,
-      host_email: webinar.host_email,
-      
-      // Alternative hosts - check multiple locations and handle empty strings
-      alternative_hosts: (() => {
-        const altHosts = settings.alternative_hosts || webinar.alternative_hosts;
-        if (!altHosts || altHosts === '') return null;
-        if (typeof altHosts === 'string') {
-          return altHosts.split(',').map(h => h.trim()).filter(h => h.length > 0);
-        }
-        return Array.isArray(altHosts) ? altHosts : null;
-      })(),
-      
-      // Registration information
-      registration_required: webinar.registration_required || settings.registration_required || false,
-      registration_type: settings.registration_type || webinar.registration_type,
-      approval_type: settings.approval_type || webinar.approval_type,
-      max_registrants: settings.registrants_restrict_number || webinar.max_registrants,
-      max_attendees: webinar.max_attendees || settings.max_attendees,
-      
-      // URLs
-      join_url: webinar.join_url || settings.join_url,
-      registration_url: webinar.registration_url || settings.registration_url,
-      start_url: webinar.start_url || settings.start_url,
-      
-      // Attendance data (will be null for future webinars)
-      total_registrants: webinar.registrants_count || webinar.total_registrants || 0,
-      total_attendees: webinar.total_attendees || webinar.participants_count,
-      total_minutes: webinar.total_minutes,
-      avg_attendance_duration: webinar.avg_attendance_duration,
-      
-      // Password fields - check multiple locations
-      password: webinar.password || settings.password,
-      h323_password: settings.h323_password || webinar.h323_password,
-      pstn_password: settings.pstn_password || webinar.pstn_password,
-      h323_passcode: settings.h323_passcode || webinar.h323_passcode,
-      encrypted_password: webinar.encrypted_password,
-      encrypted_passcode: webinar.encrypted_passcode,
-      
-      // Description/agenda - check multiple field names
-      agenda: webinar.agenda || webinar.description,
-      
-      // JSON fields
-      settings: settings && Object.keys(settings).length > 0 ? settings : null,
-      tracking_fields: (() => {
-        const tf = webinar.tracking_fields;
-        return (tf && Array.isArray(tf) && tf.length > 0) ? tf : null;
-      })(),
-      recurrence: (() => {
-        const rec = webinar.recurrence;
-        return (rec && typeof rec === 'object' && Object.keys(rec).length > 0) ? rec : null;
-      })(),
-      occurrences: (() => {
-        const occ = webinar.occurrences;
-        return (occ && Array.isArray(occ) && occ.length > 0) ? occ : null;
-      })(),
-      
-      // Additional metadata
-      occurrence_id: webinar.occurrence_id,
-      creation_source: webinar.creation_source || 'api',
-      is_simulive: webinar.is_simulive || false,
-      record_file_id: webinar.record_file_id,
-      transition_to_live: webinar.transition_to_live || false,
-      webinar_created_at: webinar.created_at,
-      
-      // Sync metadata
-      synced_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      participant_sync_status: 'pending'
-    };
-    
-    // Remove undefined values
-    Object.keys(webinarData).forEach(key => {
-      if (webinarData[key] === undefined) {
-        delete webinarData[key];
-      }
-    });
-    
-    const { error } = await supabase
-      .from('zoom_webinars')
-      .upsert(webinarData, {
-        onConflict: 'webinar_id,connection_id',
-        returning: 'minimal'
-      });
-
-    if (error) {
-      console.error(`❌ Database error for webinar ${webinar.id}:`, error);
-      return false;
-    }
-    
-    console.log(`✅ Successfully upserted enhanced webinar ${webinar.id}`);
-    return true;
-    
-  } catch (error) {
-    console.error(`💥 Exception storing enhanced webinar ${webinar.id}:`, error);
-    return false;
+function generateTestModeReport(
+  operations: Array<{ operation: string; data: any; skipped: boolean }>,
+  config: TestModeConfig
+): string {
+  if (!config.enabled) {
+    return '';
   }
+
+  const report = [
+    '=== ENHANCED TEST MODE REPORT ===',
+    `Configuration:`,
+    `  - Test Mode: ${config.enabled ? 'ENABLED' : 'DISABLED'}`,
+    `  - Dry Run: ${config.dryRun ? 'YES' : 'NO'}`,
+    `  - Max Webinars: ${config.maxWebinars}`,
+    `  - Enhanced Logging: ${config.enhancedLogging ? 'YES' : 'NO'}`,
+    '',
+    'Operations Summary:',
+    `  - Total Operations: ${operations.length}`,
+    `  - Executed: ${operations.filter(op => !op.skipped).length}`,
+    `  - Skipped (Dry Run): ${operations.filter(op => op.skipped).length}`,
+    `  - Errors: ${operations.filter(op => op.operation.startsWith('ERROR')).length}`,
+    '',
+    'Detailed Operations:',
+    ...operations.map(op => 
+      `  - ${op.operation}: ${op.skipped ? 'SKIPPED' : 'EXECUTED'}`
+    ),
+    '',
+    '=== END ENHANCED TEST MODE REPORT ==='
+  ];
+
+  return report.join('\n');
 }

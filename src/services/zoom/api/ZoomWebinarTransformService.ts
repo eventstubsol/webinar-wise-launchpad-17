@@ -1,85 +1,48 @@
 
 import { ZoomWebinar } from '@/types/zoom';
-import { WebinarTransformers } from '../utils/transformers/webinarTransformers';
+import type { ZoomWebinarApiResponse } from './ZoomWebinarDataService';
 
 /**
- * Enhanced service for transforming Zoom API responses to database format
+ * Service for transforming Zoom API responses to database format
  */
 export class ZoomWebinarTransformService {
   /**
    * Transform Zoom API webinar response to database format
-   * Now uses the enhanced WebinarTransformers with all field mappings
    */
   static transformWebinarForDatabase(
-    apiWebinar: any,
+    apiWebinar: any, // Using any as ZoomWebinarApiResponse is not available here
     connectionId: string
   ): Omit<ZoomWebinar, 'id' | 'created_at' | 'updated_at'> {
-    return WebinarTransformers.transformWebinarForDatabase(apiWebinar, connectionId);
-  }
-
-  /**
-   * Validate transformed webinar data
-   */
-  static validateTransformedData(transformedData: any): string[] {
-    const errors: string[] = [];
-    
-    if (!transformedData.connection_id) {
-      errors.push('Missing connection_id');
-    }
-    
-    if (!transformedData.webinar_id) {
-      errors.push('Missing webinar_id');
-    }
-    
-    if (!transformedData.topic) {
-      errors.push('Missing topic');
-    }
-    
-    // Validate type is one of the allowed values
-    if (![5, 6, 9].includes(transformedData.type)) {
-      errors.push(`Invalid webinar type: ${transformedData.type}`);
-    }
-    
-    // Validate status
-    const validStatuses = ['available', 'unavailable', 'deleted', 'started', 'ended', 'scheduled'];
-    if (!validStatuses.includes(transformedData.status)) {
-      errors.push(`Invalid status: ${transformedData.status}`);
-    }
-    
-    return errors;
-  }
-  
-  /**
-   * Get field mapping report for debugging
-   */
-  static getFieldMappingReport(apiWebinar: any): {
-    mapped: string[];
-    unmapped: string[];
-    enhanced: string[];
-  } {
-    const apiFields = Object.keys(apiWebinar);
-    const settings = apiWebinar.settings || {};
-    const settingsFields = Object.keys(settings).map(key => `settings.${key}`);
-    
-    const mapped = [
-      'id', 'uuid', 'host_id', 'host_email', 'topic', 'agenda', 'type', 'status',
-      'start_time', 'duration', 'timezone', 'join_url', 'registration_url',
-      'password', 'settings', 'occurrences', 'recurrence', 'tracking_fields', 'panelists'
-    ];
-    
-    const enhanced = [
-      'start_url', 'encrypted_passcode', 'h323_password', 'h323_passcode', 'pstn_password',
-      'created_at', 'creation_source', 'is_simulive', 'record_file_id', 'transition_to_live',
-      'occurrence_id', 'alternative_hosts'
-    ];
-    
-    const allMappedFields = [...mapped, ...enhanced];
-    const unmapped = apiFields.filter(field => !allMappedFields.includes(field));
-    
     return {
-      mapped,
-      unmapped,
-      enhanced
+      connection_id: connectionId,
+      webinar_id: apiWebinar.id,
+      webinar_uuid: apiWebinar.uuid,
+      host_id: apiWebinar.host_id,
+      host_email: apiWebinar.host_email || null,
+      topic: apiWebinar.topic,
+      agenda: apiWebinar.agenda || null,
+      type: apiWebinar.type,
+      status: apiWebinar.status as any,
+      start_time: apiWebinar.start_time || null,
+      duration: apiWebinar.duration || null,
+      timezone: apiWebinar.timezone || null,
+      registration_required: !!apiWebinar.registration_url,
+      registration_url: apiWebinar.registration_url || null,
+      join_url: apiWebinar.join_url || null,
+      approval_type: apiWebinar.settings?.approval_type || null,
+      max_registrants: apiWebinar.settings?.registrants_restrict_number || null,
+      attendees_count: null, // Will be calculated after participants sync
+      registrants_count: null, // Will be calculated after registrants sync
+      synced_at: new Date().toISOString(),
+      password: apiWebinar.password || null,
+      settings: apiWebinar.settings || null,
+      tracking_fields: apiWebinar.tracking_fields || null,
+      recurrence: apiWebinar.recurrence || null,
+      occurrences: apiWebinar.occurrences || null,
+      panelists: apiWebinar.panelists || null,
+      participant_sync_status: 'pending',
+      participant_sync_attempted_at: null,
+      participant_sync_error: null,
     };
   }
 }

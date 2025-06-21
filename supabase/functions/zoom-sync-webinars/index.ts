@@ -1,233 +1,112 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0';
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { CORS_HEADERS, SYNC_PRIORITIES, SyncOperation } from './types.ts';
+import { validateEnhancedRequest } from './enhanced-validation.ts';
+import { createSyncLog } from './database-operations.ts';
+import { processSequentialSync } from './sync-processor.ts';
 import { processEnhancedWebinarSync } from './enhanced-sync-processor.ts';
-import { createSyncLog, updateSyncLog } from './database-operations.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, zoom_connection_id, test_mode',
-  'Access-Control-Max-Age': '86400',
-};
-
-Deno.serve(async (req: Request): Promise<Response> => {
-  // Handle CORS preflight requests
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      status: 200,
-      headers: corsHeaders 
-    });
+    return new Response(null, { headers: CORS_HEADERS });
   }
-  
-  let syncLogId: string | null = null;
+
+  console.log('=== ENHANCED SYNC FUNCTION START ===');
+  console.log(`Request received: ${new Date().toISOString()}`);
+  console.log('Request headers:', Object.fromEntries(req.headers.entries()));
+
   const startTime = Date.now();
-  const TIMEOUT_MS = 25000; // 25 seconds to stay well under the 30-second limit
-  
+
   try {
-    console.log('🚀 ZOOM SYNC WEBINARS: Starting enhanced sync operation');
-    console.log(`⏱️ Function timeout set to ${TIMEOUT_MS / 1000} seconds`);
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+    );
+
+    console.log('Supabase client created, validating enhanced request...');
+    const { user, connection, requestBody } = await validateEnhancedRequest(req, supabase);
+    const validationTime = Date.now();
+    console.log(`Enhanced request validated successfully in ${validationTime - startTime}ms`);
+
+    console.log('Creating sync log...');
+    const syncLogId = await createSyncLog(supabase, requestBody.connectionId, requestBody.syncType, requestBody.webinarId);
+    const syncLogTime = Date.now();
+    console.log(`Sync log created: ${syncLogId} in ${syncLogTime - validationTime}ms`);
     
-    // Get environment variables
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    
-    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
-      throw new Error('Missing environment variables');
-    }
-    
-    // Check authorization
-    const authorizationHeader = req.headers.get('Authorization');
-    if (!authorizationHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), { 
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    const bearerToken = authorizationHeader.replace('Bearer ', '');
-    if (!bearerToken) {
-      return new Response(JSON.stringify({ error: 'Invalid Authorization header format' }), { 
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Create Supabase client for user authentication
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${bearerToken}`,
-        },
-      },
-    });
-
-    // Get user
-    const { data: user, error: userError } = await supabaseAuth.auth.getUser();
-    if (userError) {
-      console.error('Error getting user:', userError);
-      return new Response(JSON.stringify({ error: 'Failed to get user' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    
-    // Create admin client with service role for database operations
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
-
-    const userId = user.user.id;
-    console.log(`User ID: ${userId}`);
-
-    // Get connection ID
-    const connectionId = req.headers.get('zoom_connection_id');
-    if (!connectionId) {
-      return new Response(JSON.stringify({ error: 'Missing zoom_connection_id header' }), { 
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    console.log(`Zoom Connection ID: ${connectionId}`);
-
-    // Fetch Zoom connection using auth client to ensure user owns it
-    const { data: connection, error: connectionError } = await supabaseAuth
-      .from('zoom_connections')
-      .select('*')
-      .eq('id', connectionId)
-      .eq('user_id', userId)
-      .single();
-
-    if (connectionError || !connection) {
-      console.error('Error fetching Zoom connection:', connectionError);
-      return new Response(JSON.stringify({ error: 'Zoom connection not found' }), { 
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    console.log(`Zoom Connection Email: ${connection.zoom_email}`);
-
-    const testModeHeader = req.headers.get('test_mode');
-    const testMode = testModeHeader === 'true';
-    console.log(`Test Mode: ${testMode}`);
-
-    // Create sync log entry with correct sync_type
-    try {
-      syncLogId = await createSyncLog(supabaseAdmin, connectionId, 'manual');
-      console.log(`Sync Log ID: ${syncLogId}`);
-    } catch (logError) {
-      console.error('Failed to create sync log:', logError);
-      throw new Error('Failed to create sync log');
-    }
-
-    // Create sync operation object
-    const syncOperation = {
-      id: connectionId,
-      connection_id: connectionId,
-      sync_type: 'manual', // Use valid sync type that matches database constraint
-      status: 'pending',
-      options: {
-        debug: false,
-        testMode: testMode,
-        forceRegistrantSync: false
-      }
+    const syncOperation: SyncOperation = {
+      id: `enhanced_sync_${Date.now()}`,
+      connectionId: requestBody.connectionId,
+      userId: user.id,
+      syncType: requestBody.syncType,
+      webinarId: requestBody.webinarId,
+      webinarIds: requestBody.webinarIds,
+      options: requestBody.options || {},
+      priority: SYNC_PRIORITIES[requestBody.syncType] || 3,
+      createdAt: new Date()
     };
-
-    console.log('Starting enhanced webinar sync process...');
     
-    // Create a promise that will timeout
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Function timeout approaching')), TIMEOUT_MS);
-    });
+    console.log('Starting enhanced background sync process...');
+    console.log('Sync options:', JSON.stringify(syncOperation.options, null, 2));
     
-    // Race between sync process and timeout
-    try {
-      await Promise.race([
-        processEnhancedWebinarSync(
-          supabaseAdmin,
-          syncOperation,
-          connection,
-          syncLogId
-        ),
-        timeoutPromise
-      ]);
-      
-      console.log('Enhanced sync completed successfully');
-      
-      return new Response(JSON.stringify({ 
-        success: true,
-        data: 'Enhanced webinar sync completed successfully',
-        syncId: syncLogId,
-        executionTime: Date.now() - startTime
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-      
-    } catch (timeoutError) {
-      if (timeoutError.message === 'Function timeout approaching') {
-        console.log('⏱️ Function approaching timeout, gracefully returning partial results');
-        
-        // Update sync log to indicate partial completion using authenticated client
-        await updateSyncLog(supabaseAdmin, syncLogId, {
-          sync_status: 'partial',
-          completed_at: new Date().toISOString(),
-          error_message: 'Enhanced sync partially completed due to timeout - additional syncs may be needed'
-        });
-        
-        return new Response(JSON.stringify({ 
-          success: true,
-          data: 'Enhanced webinar sync partially completed due to timeout',
-          syncId: syncLogId,
-          executionTime: Date.now() - startTime,
-          partial: true
-        }), {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+    // Use enhanced processor for better handling
+    queueMicrotask(() => {
+      if (syncOperation.options?.testMode || syncOperation.options?.dryRun || syncOperation.options?.verboseLogging) {
+        console.log('Using enhanced sync processor due to advanced options');
+        processEnhancedWebinarSync(supabase, syncOperation, connection, syncLogId);
+      } else {
+        console.log('Using standard sync processor');
+        processSequentialSync(supabase, syncOperation, connection, syncLogId);
       }
-      
-      throw timeoutError; // Re-throw if it's not a timeout error
-    }
+    });
+
+    console.log(`=== Enhanced Sync Request Successful (Total time: ${Date.now() - startTime}ms) ===`);
+    return new Response(
+      JSON.stringify({
+        success: true,
+        syncId: syncLogId,
+        status: 'started',
+        message: `Enhanced ${requestBody.syncType} sync initiated successfully.`,
+        configuration: {
+          testMode: syncOperation.options?.testMode || false,
+          dryRun: syncOperation.options?.dryRun || false,
+          maxWebinars: syncOperation.options?.maxWebinars || 'unlimited',
+          verboseLogging: syncOperation.options?.verboseLogging || false
+        },
+        debug: {
+          connectionId: requestBody.connectionId,
+          userId: user.id,
+          syncType: requestBody.syncType,
+          enhancedOptions: Object.keys(syncOperation.options || {})
+        }
+      }),
+      { status: 202, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+    );
 
   } catch (error) {
-    console.error('Error during enhanced sync operation:', error);
+    console.error('=== Enhanced Sync Function Error ===');
+    console.error(`Error occurred after ${Date.now() - startTime}ms`);
+    console.error('Error details:', error);
+    console.error('Error stack:', error.stack);
     
-    // Update sync log with error if we have syncLogId - use admin client
-    if (syncLogId) {
-      try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-        if (supabaseUrl && supabaseServiceKey) {
-          const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-            auth: {
-              autoRefreshToken: false,
-              persistSession: false
-            }
-          });
-          await updateSyncLog(supabaseAdmin, syncLogId, {
-            sync_status: 'failed',
-            completed_at: new Date().toISOString(),
-            error_message: error.message || 'Unknown error occurred'
-          });
-        }
-      } catch (logError) {
-        console.error('Failed to update sync log with error:', logError);
-      }
-    }
+    const status = error.status || 500;
+    const message = error.message || 'Internal server error';
 
-    return new Response(JSON.stringify({ 
-      error: 'Enhanced webinar sync failed', 
-      details: error.message || 'Unknown error occurred',
-      syncId: syncLogId,
-      executionTime: Date.now() - startTime
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    const responseBody: { error: string, isAuthError?: boolean, details?: any } = { 
+      error: message,
+      details: error.details || null
+    };
+    
+    if (error.isAuthError) {
+      responseBody.isAuthError = true;
+    }
+    
+    const body = JSON.stringify(responseBody);
+
+    return new Response(body, { 
+      status, 
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } 
     });
   }
 });

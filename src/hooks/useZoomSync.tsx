@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,13 +9,6 @@ import { TokenUtils, TokenStatus } from '@/services/zoom/utils/tokenUtils';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-
-// Extend Window interface to include our custom property
-declare global {
-  interface Window {
-    __lastSyncError?: any;
-  }
-}
 
 export const useZoomSync = (connection?: ZoomConnection | null) => {
   const { user } = useAuth();
@@ -42,6 +36,8 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
     const tokenStatus = TokenUtils.getTokenStatus(connection);
     console.log('Token status:', tokenStatus);
+    console.log('Token expires at:', connection.token_expires_at);
+    console.log('Current time:', new Date().toISOString());
 
     // Check if refresh token is expired
     if (tokenStatus === TokenStatus.REFRESH_EXPIRED || tokenStatus === TokenStatus.INVALID) {
@@ -66,37 +62,31 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     try {
       console.log('Invoking zoom-sync-webinars function...');
       const { data, error } = await supabase.functions.invoke('zoom-sync-webinars', {
-        headers: {
-          'zoom_connection_id': connection.id,
-          'test_mode': syncType === 'initial' ? 'false' : 'false'
-        }
+        body: {
+          connectionId: connection.id,
+          syncType,
+        },
       });
 
       console.log('Function response:', { data, error });
 
       if (error) {
         console.error('Function invocation error:', error);
-        
-        // Capture detailed error information
-        if (error.response) {
-          try {
-            const errorData = await error.response.json();
-            console.error('Edge Function Error Details:', errorData);
-            window.__lastSyncError = errorData;
-            localStorage.setItem('last_sync_error', JSON.stringify({
-              timestamp: new Date().toISOString(),
-              error: errorData
-            }));
-          } catch (e) {
-            console.error('Could not parse error response:', e);
-          }
+        const errorBody = error.context || {};
+        if (errorBody.isAuthError) {
+          toast({
+            title: "Authentication Failed",
+            description: error.message || "Your Zoom connection has expired. Please reconnect.",
+            variant: "destructive",
+            action: (
+              <Button asChild variant="secondary" size="sm">
+                <Link to="/settings">Go to Settings</Link>
+              </Button>
+            ),
+          });
+          throw new Error(error.message);
         }
-        
         throw new Error(error.message || 'Failed to start sync');
-      }
-
-      if (!data?.success) {
-        throw new Error(data?.error || 'Sync failed to start');
       }
 
       console.log('Sync started successfully, beginning status polling...');
@@ -105,27 +95,9 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         description: `${syncType === 'initial' ? 'Full' : 'Incremental'} sync has been initiated.`,
       });
 
-      // Get syncId from response
-      const syncId = data?.syncId;
-      if (syncId) {
-        pollSyncStatus(syncId);
-      } else {
-        console.warn('No syncId returned from function, attempting fallback polling');
-        // Fallback: try to find the most recent sync log for this connection
-        const { data: recentSync } = await supabase
-          .from('zoom_sync_logs')
-          .select('id')
-          .eq('connection_id', connection.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-        
-        if (recentSync) {
-          pollSyncStatus(recentSync.id);
-        } else {
-          throw new Error('Unable to track sync progress');
-        }
-      }
+      // Poll for sync status using the database-generated sync ID
+      const syncId = data.syncId;
+      pollSyncStatus(syncId);
 
     } catch (error) {
       console.error('Sync start error:', error);
@@ -134,24 +106,21 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       setCurrentOperation('');
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      toast({
-        title: "Sync Failed to Start",
-        description: errorMessage,
-        variant: "destructive",
-      });
+
+      if (!errorMessage.includes("Your Zoom connection has expired") && !errorMessage.includes("Authentication Failed")) {
+        toast({
+          title: "Sync Failed to Start",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     }
   }, [user, connection, toast, queryClient]);
 
   const pollSyncStatus = useCallback(async (syncId: string) => {
     console.log('Starting sync status polling for:', syncId);
     
-    let pollAttempts = 0;
-    const maxPollAttempts = 180; // 6 minutes with 2-second intervals
-    let lastKnownStatus = '';
-    
     const pollInterval = setInterval(async () => {
-      pollAttempts++;
-      
       try {
         const { data: syncLogs, error } = await supabase
           .from('zoom_sync_logs')
@@ -161,48 +130,24 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
         if (error) {
           console.error('Error polling sync status:', error);
-          if (pollAttempts > 10) { // Stop polling after multiple errors
-            clearInterval(pollInterval);
-            setIsSyncing(false);
-            setSyncProgress(0);
-            setCurrentOperation('');
-            toast({
-              title: "Sync Monitoring Failed",
-              description: "Unable to track sync progress. Please check manually.",
-              variant: "destructive",
-            });
-          }
           return;
         }
 
         if (syncLogs) {
-          const newStatus = syncLogs.sync_status;
-          console.log('Sync status:', newStatus, `${syncLogs.processed_items}/${syncLogs.total_items}`);
-          
-          // Only update if status changed to avoid unnecessary re-renders
-          if (newStatus !== lastKnownStatus) {
-            lastKnownStatus = newStatus;
-          }
+          console.log('Sync status:', syncLogs.sync_status, `${syncLogs.processed_items}/${syncLogs.total_items}`);
+          console.log('Sync error message:', syncLogs.error_message);
+          console.log('Sync error details:', syncLogs.error_details);
           
           const progress = syncLogs.total_items > 0 
             ? Math.round((syncLogs.processed_items / syncLogs.total_items) * 100)
-            : syncLogs.stage_progress_percentage || 0;
+            : 0;
           
           setSyncProgress(progress);
-          
-          if (syncLogs.sync_stage) {
-            setCurrentOperation(
-              syncLogs.sync_status === 'in_progress' 
-                ? `${syncLogs.sync_stage}: ${syncLogs.processed_items || 0}/${syncLogs.total_items || 0} items`
-                : syncLogs.sync_stage
-            );
-          } else {
-            setCurrentOperation(
-              syncLogs.sync_status === 'in_progress' 
-                ? `Processing ${syncLogs.processed_items || 0}/${syncLogs.total_items || 0} webinars...`
-                : syncLogs.sync_status
-            );
-          }
+          setCurrentOperation(
+            syncLogs.sync_status === 'in_progress' 
+              ? `Processing ${syncLogs.processed_items}/${syncLogs.total_items} webinars...`
+              : syncLogs.sync_status
+          );
 
           if (syncLogs.sync_status === 'completed') {
             console.log('Sync completed successfully');
@@ -225,7 +170,6 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
               setSyncProgress(0);
               setCurrentOperation('');
             }, 3000);
-            
           } else if (syncLogs.sync_status === 'failed') {
             console.error('Sync failed:', syncLogs.error_message);
             clearInterval(pollInterval);
@@ -233,38 +177,48 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
             setSyncProgress(0);
             setCurrentOperation('');
             
-            toast({
-              title: "Sync Failed",
-              description: syncLogs.error_message || "Unknown error occurred during sync",
-              variant: "destructive",
-            });
+            const errorDetails = syncLogs.error_details;
+            if (
+              errorDetails &&
+              typeof errorDetails === 'object' &&
+              !Array.isArray(errorDetails) &&
+              'isAuthError' in errorDetails &&
+              (errorDetails as { isAuthError?: boolean }).isAuthError
+            ) {
+              toast({
+                title: "Authentication Failed During Sync",
+                description: syncLogs.error_message || "Your Zoom authentication expired. Please reconnect your account.",
+                variant: "destructive",
+                action: (
+                  <Button asChild variant="secondary" size="sm">
+                    <Link to="/settings">Go to Settings</Link>
+                  </Button>
+                ),
+              });
+            } else {
+              toast({
+                title: "Sync Failed",
+                description: syncLogs.error_message || "Unknown error occurred during sync",
+                variant: "destructive",
+              });
+            }
           }
         }
       } catch (error) {
         console.error('Error polling sync status:', error);
       }
-      
-      // Stop polling if max attempts reached
-      if (pollAttempts >= maxPollAttempts) {
-        console.log('Sync polling timeout reached');
-        clearInterval(pollInterval);
-        if (isSyncing) {
-          setIsSyncing(false);
-          setSyncProgress(0);
-          setCurrentOperation('');
-          toast({
-            title: "Sync Timeout",
-            description: "Sync is taking longer than expected. Please check back later.",
-            variant: "destructive",
-          });
-        }
-      }
     }, 2000);
 
-    // Also stop polling after 6 minutes as backup
+    // Stop polling after 5 minutes
     setTimeout(() => {
       clearInterval(pollInterval);
-    }, 6 * 60 * 1000);
+      if (isSyncing) {
+        console.log('Sync polling timeout reached');
+        setIsSyncing(false);
+        setSyncProgress(0);
+        setCurrentOperation('');
+      }
+    }, 5 * 60 * 1000);
   }, [isSyncing, queryClient, toast]);
 
   return {

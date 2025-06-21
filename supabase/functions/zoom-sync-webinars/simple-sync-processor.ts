@@ -1,25 +1,36 @@
-import { updateSyncLog, updateSyncStage } from './database-operations.ts';
-import { createZoomAPIClient } from './zoom-api-client.ts';
+import { updateSyncLog, updateSyncStage, updateWebinarParticipantSyncStatus, determineParticipantSyncStatus } from './database-operations.ts';
+import { SyncOperation } from './types.ts';
+import { syncWebinarParticipants } from './processors/participant-processor.ts';
+import { 
+  capturePreSyncBaseline, 
+  verifySync, 
+  determineEnhancedSyncStatus, 
+  generateVerificationReport,
+  type SyncBaseline,
+  type VerificationResult 
+} from './sync-verification.ts';
 
-console.log('📦 Simple sync processor module loaded successfully');
+// Import refactored modules
+import { 
+  createValidationSummary, 
+  validateWebinarData, 
+  generateValidationReport,
+  type SyncValidationSummary 
+} from './processors/validation-summary.ts';
+import { 
+  mergeWebinarData, 
+  deriveWebinarStatus, 
+  validateDataIntegrity 
+} from './processors/status-derivation.ts';
+import { 
+  determineFinalSyncStatus, 
+  logSyncCompletion, 
+  createSyncNotes 
+} from './processors/sync-status-manager.ts';
 
-export interface SyncOperation {
-  id: string;
-  connection_id: string;
-  sync_type: string;
-  status: string;
-  options?: {
-    debug?: boolean;
-    testMode?: boolean;
-    forceRegistrantSync?: boolean;
-  };
-}
-
-interface SyncErrors {
-  webinarErrors: Array<{ webinarId: string; error: string }>;
-  participantErrors: Array<{ webinarId: string; error: string }>;
-  registrantErrors: Array<{ webinarId: string; error: string }>;
-}
+// NEW: Import registrant sync functionality
+import { syncWebinarRegistrants } from './processors/registrant-processor.ts';
+import { checkRegistrantEligibility, forceRegistrantEligibilityCheck } from './processors/registrant-eligibility.ts';
 
 export async function processSimpleWebinarSync(
   supabase: any,
@@ -27,583 +38,508 @@ export async function processSimpleWebinarSync(
   connection: any,
   syncLogId: string
 ): Promise<void> {
-  console.log(`🚀 Starting simple webinar sync for connection: ${connection.id}`);
-  console.log('🔧 Sync operation:', JSON.stringify(syncOperation, null, 2));
+  const debugMode = syncOperation.options?.debug || false;
+  const testMode = syncOperation.options?.testMode || false;
   
-  const isTestMode = syncOperation.options?.testMode || false;
-  
-  if (isTestMode) {
-    console.log('🧪 TEST MODE ENABLED - Processing limited data');
-  }
-  
+  console.log(`Starting enhanced simple webinar sync with ENHANCED registrant support for connection: ${connection.id}`);
+  console.log(`  - Debug mode: ${debugMode}`);
+  console.log(`  - Test mode: ${testMode}`);
+
+  // Initialize enhanced tracking with registrant metrics
   let processedCount = 0;
-  let totalWebinars = 0;
-  const BATCH_SIZE = isTestMode ? 2 : 10; // Smaller batch size in test mode
-  const SKIP_PARTICIPANTS = false;
-  const PARTICIPANT_FETCH_LIMIT = isTestMode ? 2 : 5; // Fewer participants in test mode
-  const syncErrors: SyncErrors = {
-    webinarErrors: [],
-    participantErrors: [],
-    registrantErrors: []
-  };
+  let successCount = 0;
+  let skippedForParticipants = 0;
+  let processedForParticipants = 0;
+  let totalParticipantsSynced = 0;
+  let insertCount = 0;
+  let updateCount = 0;
+  let preSync: SyncBaseline | null = null;
+  let verificationResult: VerificationResult | null = null;
+  
+  // NEW: Registrant sync tracking
+  let skippedForRegistrants = 0;
+  let processedForRegistrants = 0;
+  let totalRegistrantsSynced = 0;
+  
+  // Initialize comprehensive validation summary
+  const validationSummary: SyncValidationSummary = createValidationSummary();
 
   try {
-    // Update sync status to in_progress
-    console.log('📊 Updating sync status to in_progress...');
-    await updateSyncLog(supabase, syncLogId, {
-      sync_status: 'in_progress',
-      started_at: new Date().toISOString()
-    });
-
-    // Create Zoom API client
-    console.log('🔧 Creating Zoom API client...');
-    const client = await createZoomAPIClient(connection, supabase);
-    console.log('✅ Zoom API client created successfully');
+    const zoomApi = await import('./zoom-api-client.ts');
+    const client = await zoomApi.createZoomAPIClient(connection, supabase);
+    
+    // STEP 1: CAPTURE PRE-SYNC BASELINE FOR VERIFICATION
+    console.log(`🔍 VERIFICATION: Capturing pre-sync baseline...`);
+    await updateSyncStage(supabase, syncLogId, null, 'capturing_baseline', 5);
+    
+    try {
+      preSync = await capturePreSyncBaseline(supabase, connection.id);
+      console.log(`✅ VERIFICATION: Pre-sync baseline captured successfully`);
+    } catch (baselineError) {
+      console.error('Failed to capture pre-sync baseline:', baselineError);
+      // Continue with sync but log the issue
+      await updateSyncLog(supabase, syncLogId, {
+        error_message: `Baseline capture failed: ${baselineError.message}`,
+        sync_notes: JSON.stringify({
+          verification_enabled: true,
+          baseline_capture_failed: true,
+          baseline_error: baselineError.message
+        })
+      });
+    }
     
     await updateSyncStage(supabase, syncLogId, null, 'fetching_webinars', 10);
-    console.log(`📡 Fetching webinars from Zoom API...`);
     
-    // Fetch webinars from Zoom
     const webinars = await client.listWebinarsWithRange({
-      type: syncOperation.options?.debug ? 'past' : 'all',
-      page_size: isTestMode ? 10 : 300
+      type: 'all'
     });
     
-    // In test mode, limit webinars
-    const webinarsToProcess = isTestMode ? webinars.slice(0, 5) : webinars;
+    console.log(`Found ${webinars.length} webinars to sync with enhanced verification and registrant support`);
     
-    totalWebinars = webinarsToProcess.length;
-    console.log(`📊 Found ${webinars.length} webinars, processing ${totalWebinars} (test mode: ${isTestMode})`);
-    
-    // Update total items count
-    await updateSyncLog(supabase, syncLogId, {
-      total_items: totalWebinars,
-      processed_items: 0
-    });
-    
-    if (totalWebinars === 0) {
-      console.log('📭 No webinars found - completing sync');
+    if (webinars.length === 0) {
+      // Run verification even for empty sync
+      if (preSync) {
+        await updateSyncStage(supabase, syncLogId, null, 'verifying_sync', 95);
+        verificationResult = await verifySync(supabase, connection.id, preSync, syncLogId);
+      }
+      
       await updateSyncLog(supabase, syncLogId, {
         sync_status: 'completed',
-        completed_at: new Date().toISOString(),
         processed_items: 0,
-        stage_progress_percentage: 100
+        completed_at: new Date().toISOString(),
+        sync_stage: 'completed',
+        stage_progress_percentage: 100,
+        sync_notes: JSON.stringify({
+          verification_enabled: true,
+          verification_result: verificationResult || 'baseline_unavailable',
+          empty_sync: true,
+          registrant_sync_enabled: true
+        })
       });
-      console.log(`✅ Sync completed - no webinars found`);
       return;
     }
     
     await updateSyncStage(supabase, syncLogId, null, 'processing_webinars', 20);
     
-    // Process webinars in batches
-    let participantsFetched = 0;
-    for (let batchStart = 0; batchStart < webinarsToProcess.length; batchStart += BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, webinarsToProcess.length);
-      const batch = webinarsToProcess.slice(batchStart, batchEnd);
-      
-      console.log(`📦 Processing batch ${Math.floor(batchStart / BATCH_SIZE) + 1} (webinars ${batchStart + 1}-${batchEnd} of ${totalWebinars})`);
-      
-      // Process webinars in parallel within the batch
-      const batchPromises = batch.map(async (webinar, batchIndex) => {
-        const i = batchStart + batchIndex;
-        const progressPercentage = 20 + Math.round(((i) / totalWebinars) * 70);
+    const totalWebinars = webinars.length;
+    
+    // Process each webinar with enhanced validation and ENHANCED registrant sync
+    for (const webinar of webinars) {
+      try {
+        const baseProgress = 20 + Math.round(((processedCount) / totalWebinars) * 45); // Adjusted for registrant sync
         
+        await updateSyncStage(
+          supabase, 
+          syncLogId, 
+          webinar.id?.toString(), 
+          'processing_webinar', 
+          baseProgress
+        );
+        
+        console.log(`Processing webinar ${webinar.id} (${processedCount + 1}/${totalWebinars}) with enhanced validation and ENHANCED registrant sync`);
+        
+        // ENHANCED DEBUG: Log original webinar data from list
+        console.log(`📊 ORIGINAL LIST DATA for webinar ${webinar.id}:`);
+        console.log(`  - Status from list: ${webinar.status} (type: ${typeof webinar.status})`);
+        console.log(`  - Type from list: ${webinar.type}`);
+        console.log(`  - Start time from list: ${webinar.start_time}`);
+        console.log(`  - Duration from list: ${webinar.duration}`);
+        console.log(`  - Available fields: [${Object.keys(webinar).join(', ')}]`);
+        
+        // Get detailed webinar data
+        const webinarDetails = await client.getWebinar(webinar.id);
+        
+        // ENHANCED DEBUG: Log detailed API response
+        console.log(`📊 DETAILED API DATA for webinar ${webinar.id}:`);
+        console.log(`  - Status from details: ${webinarDetails.status} (type: ${typeof webinarDetails.status})`);
+        console.log(`  - Type from details: ${webinarDetails.type}`);
+        console.log(`  - Start time from details: ${webinarDetails.start_time}`);
+        console.log(`  - Duration from details: ${webinarDetails.duration}`);
+        console.log(`  - Available fields: [${Object.keys(webinarDetails).join(', ')}]`);
+        
+        // ENHANCED: Merge original list data with detailed data to preserve status
+        const mergedWebinarData = mergeWebinarData(webinar, webinarDetails);
+        
+        // ENHANCED: Derive status if still missing or invalid
+        mergedWebinarData.status = deriveWebinarStatus(mergedWebinarData);
+        
+        // NEW: Data integrity validation before proceeding
+        const isDataValid = validateDataIntegrity(mergedWebinarData, webinar.id);
+        if (!isDataValid) {
+          console.log(`❌ Data integrity check failed for webinar ${webinar.id}, skipping...`);
+          processedCount++;
+          continue;
+        }
+        
+        // ENHANCED DEBUG: Log final merged data with detailed analysis
+        console.log(`📊 FINAL MERGED DATA for webinar ${webinar.id}:`);
+        console.log(`  - Final status: ${mergedWebinarData.status} (type: ${typeof mergedWebinarData.status})`);
+        console.log(`  - Final type: ${mergedWebinarData.type}`);
+        console.log(`  - Final start_time: ${mergedWebinarData.start_time}`);
+        console.log(`  - Final duration: ${mergedWebinarData.duration}`);
+        console.log(`  - Status derivation path: ${webinar.status} → ${webinarDetails.status} → ${mergedWebinarData.status}`);
+        console.log(`  - Object keys: [${Object.keys(mergedWebinarData).join(', ')}]`);
+        
+        // Check if webinar already exists to track INSERT vs UPDATE
+        const existingCheck = await supabase
+          .from('zoom_webinars')
+          .select('id')
+          .eq('connection_id', connection.id)
+          .eq('webinar_id', mergedWebinarData.id?.toString())
+          .maybeSingle();
+        
+        const isNewWebinar = !existingCheck.data;
+        
+        // Determine initial participant sync status
+        const initialParticipantSyncStatus = await determineParticipantSyncStatus(mergedWebinarData);
+        
+        // Use enhanced sync function from webinar-processor
+        const { syncBasicWebinarData } = await import('./processors/webinar-processor.ts');
+        const webinarDbId = await syncBasicWebinarData(supabase, mergedWebinarData, connection.id);
+        
+        // Track operation type for statistics
+        if (isNewWebinar) {
+          insertCount++;
+          console.log(`✅ NEW webinar inserted: ${webinar.id} -> DB ID: ${webinarDbId}`);
+        } else {
+          updateCount++;
+          console.log(`✅ EXISTING webinar updated: ${webinar.id} -> DB ID: ${webinarDbId} (data preserved)`);
+        }
+
+        // CRITICAL FIX: Enhanced debug logging RIGHT BEFORE participant sync
+        console.log(`🚨 CRITICAL DEBUG: PRE-PARTICIPANT-SYNC VERIFICATION for webinar ${webinar.id}:`);
+        console.log(`  - webinarDbId: ${webinarDbId}`);
+        console.log(`  - mergedWebinarData is object: ${typeof mergedWebinarData === 'object'}`);
+        console.log(`  - mergedWebinarData.status FINAL CHECK: '${mergedWebinarData.status}' (type: ${typeof mergedWebinarData.status})`);
+        console.log(`  - mergedWebinarData.start_time: ${mergedWebinarData.start_time}`);
+        console.log(`  - mergedWebinarData.id: ${mergedWebinarData.id}`);
+        console.log(`  - mergedWebinarData.duration: ${mergedWebinarData.duration}`);
+        console.log(`  - mergedWebinarData.registration_url: ${mergedWebinarData.registration_url}`);
+        console.log(`  - mergedWebinarData stringified: ${JSON.stringify({ status: mergedWebinarData.status, id: mergedWebinarData.id, start_time: mergedWebinarData.start_time }, null, 2)}`);
+        console.log(`  - debugMode: ${debugMode}`);
+
+        // Create a deep clone to ensure no reference issues
+        const webinarDataForParticipants = JSON.parse(JSON.stringify(mergedWebinarData));
+        
+        console.log(`🔍 CLONED DATA CHECK: status = '${webinarDataForParticipants.status}' (type: ${typeof webinarDataForParticipants.status})`);
+
+        // Sync participants with eligibility check and enhanced validation
+        let participantResult = { skipped: true, reason: 'Not attempted', count: 0 };
         try {
-          console.log(`🔄 Processing webinar ${i + 1}/${totalWebinars}: ${webinar.id}`);
-          
           await updateSyncStage(
             supabase, 
             syncLogId, 
             webinar.id?.toString(), 
-            'processing_webinar', 
-            progressPercentage
+            'syncing_participants', 
+            baseProgress + 10
           );
           
-          // Get detailed webinar data
-          console.log(`📡 Fetching detailed data for webinar ${webinar.id}...`);
-          const webinarDetails = await client.getWebinar(webinar.id);
-          console.log(`✅ Webinar details fetched for ${webinar.id}`);
+          participantResult = await syncWebinarParticipants(
+            supabase, 
+            client, 
+            webinar.id, 
+            webinarDbId,
+            webinarDataForParticipants, // Pass cloned data with preserved status
+            debugMode
+          );
           
-          // Enhanced logging for debugging - log FULL structure for first 3 webinars
-          if (i < 3 || syncOperation.options?.debug) {
-            console.log(`🔍 Full webinar details for ${webinar.id}:`, JSON.stringify(webinarDetails, null, 2));
+          if (participantResult.skipped) {
+            skippedForParticipants++;
+            console.log(`Skipped participant sync for webinar ${webinar.id}: ${participantResult.reason}`);
+          } else {
+            processedForParticipants++;
+            totalParticipantsSynced += participantResult.count;
+            console.log(`Successfully synced ${participantResult.count} participants for webinar ${webinar.id}`);
           }
           
-          // Fetch participants for past webinars
-          let totalAttendees = null;
-          let participantError = null;
-          const shouldFetchParticipants = !SKIP_PARTICIPANTS && 
-            participantsFetched < PARTICIPANT_FETCH_LIMIT &&
-            (webinarDetails.status === 'finished' || webinarDetails.status === 'ended' || 
-             (webinarDetails.start_time && new Date(webinarDetails.start_time) < new Date()));
-          
-          if (shouldFetchParticipants) {
-            console.log(`👥 Fetching participants for webinar ${webinar.id} (${participantsFetched + 1}/${PARTICIPANT_FETCH_LIMIT})...`);
-            const participantsResult = await client.getWebinarParticipants(webinar.id);
-            
-            if (participantsResult.error) {
-              participantError = participantsResult.error;
-              syncErrors.participantErrors.push({
-                webinarId: webinar.id,
-                error: participantsResult.error.message
-              });
-              console.error(`⚠️ Participant fetch error for webinar ${webinar.id}:`, participantsResult.error);
-            } else {
-              totalAttendees = participantsResult.data.length;
-              participantsFetched++;
-              console.log(`✅ Found ${totalAttendees} attendees for webinar ${webinar.id}`);
-              
-              // Store participants in the database if we got any
-              if (participantsResult.data.length > 0) {
-                console.log(`💾 Storing ${participantsResult.data.length} participants for webinar ${webinar.id}...`);
-                await storeParticipantsInDatabase(supabase, participantsResult.data, webinar.id, connection.id);
-              }
-            }
-            
-            // Also try to fetch registrants
-            const registrantsResult = await client.getWebinarRegistrants(webinar.id);
-            
-            if (registrantsResult.error) {
-              syncErrors.registrantErrors.push({
-                webinarId: webinar.id,
-                error: registrantsResult.error.message
-              });
-              console.error(`⚠️ Registrant fetch error for webinar ${webinar.id}:`, registrantsResult.error);
-            } else {
-              webinarDetails.registrants_count = registrantsResult.data.length;
-              console.log(`✅ Found ${registrantsResult.data.length} registrants for webinar ${webinar.id}`);
-              
-              // Store registrants in the database if we got any
-              if (registrantsResult.data.length > 0) {
-                console.log(`💾 Storing ${registrantsResult.data.length} registrants for webinar ${webinar.id}...`);
-                await storeRegistrantsInDatabase(supabase, registrantsResult.data, webinar.id, connection.id);
-              }
-            }
-          } else if (SKIP_PARTICIPANTS) {
-            console.log(`⏭️ Skipping participant fetch for webinar ${webinar.id} (participants disabled)`);
-          } else if (participantsFetched >= PARTICIPANT_FETCH_LIMIT) {
-            console.log(`⏸️ Skipping participant fetch for webinar ${webinar.id} (limit reached: ${PARTICIPANT_FETCH_LIMIT})`);
-          }
-          
-          // Store webinar in database with attendee count if available
-          console.log(`💾 Storing webinar ${webinar.id} in database...`);
-          await storeWebinarInDatabase(supabase, webinarDetails, connection.id, totalAttendees, participantError);
-          console.log(`✅ Webinar ${webinar.id} stored successfully`);
-          
-          return true; // Success
-          
-        } catch (error) {
-          console.error(`❌ Error processing webinar ${webinar.id}:`, error);
-          console.error(`❌ Full error details:`, error);
-          
-          syncErrors.webinarErrors.push({
-            webinarId: webinar.id,
-            error: error.message || 'Unknown error'
-          });
-          
-          // Log the specific webinar that failed
-          console.error(`❌ Failed webinar details:`, {
-            id: webinar.id,
-            topic: webinar.topic,
-            error_message: error.message || 'Unknown error'
-          });
-          return false; // Failed
+        } catch (participantError) {
+          console.error(`Error syncing participants for webinar ${webinar.id}:`, participantError);
+          participantResult = { 
+            skipped: true, 
+            reason: `Sync error: ${participantError.message}`, 
+            count: 0 
+          };
+          // Continue with next webinar even if participant sync fails
         }
-      });
-      
-      // Wait for batch to complete
-      const results = await Promise.all(batchPromises);
-      const batchProcessedCount = results.filter(success => success).length;
-      processedCount += batchProcessedCount;
-      
-      // Update progress after each batch
-      await updateSyncLog(supabase, syncLogId, {
-        processed_items: processedCount
-      });
-      
-      console.log(`✅ Batch complete: ${batchProcessedCount}/${batch.length} webinars processed successfully`);
+
+        // NEW: ENHANCED Sync registrants with comprehensive error handling and debugging
+        let registrantResult = { skipped: true, reason: 'Not attempted', count: 0 };
+        try {
+          await updateSyncStage(
+            supabase, 
+            syncLogId, 
+            webinar.id?.toString(), 
+            'syncing_registrants', 
+            baseProgress + 15
+          );
+          
+          console.log(`🎯 ENHANCED REGISTRANT SYNC: Starting registrant sync for webinar ${webinar.id}`);
+          
+          // NEW: Enhanced registrant eligibility check
+          const { checkRegistrantEligibility, forceRegistrantEligibilityCheck } = await import('./processors/registrant-eligibility.ts');
+          
+          // Use force mode for testing or if specifically requested
+          const useForceMode = testMode || syncOperation.options?.forceRegistrantSync;
+          const registrantEligibility = useForceMode 
+            ? forceRegistrantEligibilityCheck(webinarDataForParticipants)
+            : checkRegistrantEligibility(webinarDataForParticipants);
+          
+          console.log(`📋 REGISTRANT ELIGIBILITY RESULT:`);
+          console.log(`  - Eligible: ${registrantEligibility.eligible}`);
+          console.log(`  - Reason: ${registrantEligibility.reason}`);
+          console.log(`  - Confidence: ${registrantEligibility.confidence}`);
+          console.log(`  - Warnings: ${registrantEligibility.warnings.length}`);
+          console.log(`  - Force mode: ${useForceMode}`);
+          
+          if (registrantEligibility.eligible || useForceMode) {
+            console.log(`✅ REGISTRANT ELIGIBLE: ${registrantEligibility.reason}`);
+            
+            try {
+              const { syncWebinarRegistrants } = await import('./processors/registrant-processor.ts');
+              
+              const registrantCount = await syncWebinarRegistrants(
+                supabase,
+                client,
+                webinar.id,
+                webinarDbId,
+                testMode
+              );
+              
+              registrantResult = { 
+                skipped: false, 
+                reason: 'Successfully synced', 
+                count: registrantCount 
+              };
+              
+              processedForRegistrants++;
+              totalRegistrantsSynced += registrantCount;
+              
+              console.log(`✅ ENHANCED REGISTRANT SYNC SUCCESS: ${registrantCount} registrants synced for webinar ${webinar.id}`);
+              
+              // Update validation summary
+              if (registrantCount > 0) {
+                validationSummary.webinarsWithRegistrants++;
+              } else {
+                validationSummary.webinarsWithZeroRegistrants.push(webinar.id?.toString());
+              }
+              
+            } catch (registrantSyncError) {
+              console.error(`❌ ENHANCED REGISTRANT SYNC ERROR for webinar ${webinar.id}:`, registrantSyncError);
+              
+              const errorMessage = registrantSyncError.message || 'Unknown error';
+              
+              // Enhanced error categorization
+              if (errorMessage.toLowerCase().includes('scope')) {
+                console.error(`🚨 ZOOM SCOPE ISSUE: Please add 'webinar:read:admin' scope to your Zoom app`);
+                registrantResult = { 
+                  skipped: true, 
+                  reason: `Zoom scope error: Missing 'webinar:read:admin' scope`, 
+                  count: 0 
+                };
+              } else if (errorMessage.toLowerCase().includes('permission')) {
+                console.error(`🚨 ZOOM PERMISSION ISSUE: Insufficient permissions for registrant data`);
+                registrantResult = { 
+                  skipped: true, 
+                  reason: `Permission error: ${errorMessage}`, 
+                  count: 0 
+                };
+              } else {
+                registrantResult = { 
+                  skipped: true, 
+                  reason: `Registrant sync error: ${errorMessage}`, 
+                  count: 0 
+                };
+              }
+              
+              validationSummary.failedRegistrantSyncs.push(webinar.id?.toString());
+              validationSummary.validationErrors.push({
+                webinarId: webinar.id?.toString() || 'unknown',
+                type: 'registrant_sync_failed',
+                message: `Enhanced registrant sync failed: ${errorMessage}`,
+                severity: 'error'
+              });
+            }
+            
+          } else {
+            console.log(`❌ REGISTRANT NOT ELIGIBLE: ${registrantEligibility.reason}`);
+            registrantResult = { 
+              skipped: true, 
+              reason: registrantEligibility.reason, 
+              count: 0 
+            };
+            skippedForRegistrants++;
+            
+            // Only add to zero registrants list if registration was clearly expected
+            if (registrantEligibility.debugInfo.registrationRequired) {
+              validationSummary.webinarsWithZeroRegistrants.push(webinar.id?.toString());
+            }
+          }
+          
+        } catch (registrantError) {
+          console.error(`💥 ERROR in enhanced registrant sync process for webinar ${webinar.id}:`, registrantError);
+          registrantResult = { 
+            skipped: true, 
+            reason: `Registrant process error: ${registrantError.message}`, 
+            count: 0 
+          };
+          skippedForRegistrants++;
+        }
+
+        // Log detailed registrant sync results
+        console.log(`📊 ENHANCED REGISTRANT SYNC SUMMARY for webinar ${webinar.id}:`);
+        console.log(`  - Skipped: ${registrantResult.skipped}`);
+        console.log(`  - Reason: ${registrantResult.reason}`);
+        console.log(`  - Count: ${registrantResult.count}`);
+
+        // ENHANCED VALIDATION: Validate webinar data after sync (including registrant data)
+        validateWebinarData(webinarDataForParticipants, participantResult, validationSummary);
+        
+        successCount++;
+        processedCount++;
+        
+      } catch (webinarError) {
+        console.error(`Error processing webinar ${webinar.id}:`, webinarError);
+        
+        // Add validation error for failed webinar processing
+        validationSummary.validationErrors.push({
+          webinarId: webinar.id?.toString() || 'unknown',
+          type: 'webinar_processing_failed',
+          message: `Failed to process webinar: ${webinarError.message}`,
+          severity: 'error'
+        });
+        
+        processedCount++;
+        // Continue with next webinar
+      }
     }
     
-    // Prepare error summary
-    const errorSummary = syncErrors.webinarErrors.length > 0 || 
-                        syncErrors.participantErrors.length > 0 || 
-                        syncErrors.registrantErrors.length > 0
-      ? {
-          webinar_errors: syncErrors.webinarErrors.length,
-          participant_errors: syncErrors.participantErrors.length,
-          registrant_errors: syncErrors.registrantErrors.length,
-          details: syncErrors
-        }
-      : null;
+    await updateSyncStage(supabase, syncLogId, null, 'completing', 80);
     
-    // Mark sync as completed
-    console.log('🎯 Finalizing sync operation...');
+    // STEP 2: RUN COMPREHENSIVE VERIFICATION
+    console.log(`🔍 VERIFICATION: Running comprehensive sync verification...`);
+    await updateSyncStage(supabase, syncLogId, null, 'verifying_sync', 90);
+    
+    if (preSync) {
+      try {
+        verificationResult = await verifySync(supabase, connection.id, preSync, syncLogId);
+        console.log(`✅ VERIFICATION: Sync verification completed`);
+      } catch (verificationError) {
+        console.error('Sync verification failed:', verificationError);
+        // Continue with sync completion but log verification failure
+      }
+    } else {
+      console.warn('⚠️ VERIFICATION: Skipping verification due to missing baseline');
+    }
+    
+    // STEP 3: DETERMINE ENHANCED STATUS BASED ON VERIFICATION
+    const preliminaryStatus = determineFinalSyncStatus(validationSummary, processedCount, successCount);
+    const finalStatus = verificationResult 
+      ? determineEnhancedSyncStatus(preliminaryStatus, verificationResult, processedCount, successCount)
+      : preliminaryStatus;
+    
+    // STEP 4: GENERATE COMPREHENSIVE REPORTS
+    const validationReport = generateValidationReport(validationSummary);
+    const verificationReport = verificationResult 
+      ? generateVerificationReport(verificationResult)
+      : 'Verification report unavailable - baseline capture failed';
+    
+    console.log(validationReport);
+    console.log(verificationReport);
+    
+    // Enhanced completion logging with verification summary and registrant metrics
+    logSyncCompletion(
+      totalWebinars,
+      successCount,
+      processedCount,
+      insertCount,
+      updateCount,
+      processedForParticipants,
+      skippedForParticipants,
+      totalParticipantsSynced,
+      finalStatus,
+      validationSummary,
+      verificationResult,
+      {
+        processedForRegistrants,
+        skippedForRegistrants, 
+        totalRegistrantsSynced
+      }
+    );
+    
+    // Enhanced sync log with comprehensive verification data and registrant metrics
     await updateSyncLog(supabase, syncLogId, {
-      sync_status: 'completed',
-      completed_at: new Date().toISOString(),
+      sync_status: finalStatus,
       processed_items: processedCount,
+      total_participants: totalParticipantsSynced,
+      completed_at: new Date().toISOString(),
+      sync_stage: 'completed',
       stage_progress_percentage: 100,
-      error_details: errorSummary
+      // Store enhanced verification summary in sync_notes
+      sync_notes: JSON.stringify(createSyncNotes(
+        insertCount,
+        updateCount,
+        processedForParticipants,
+        skippedForParticipants,
+        validationSummary,
+        verificationResult,
+        preSync,
+        {
+          processedForRegistrants,
+          skippedForRegistrants,
+          totalRegistrantsSynced
+        }
+      ))
     });
     
-    console.log(`🎉 Sync completed successfully! Processed ${processedCount}/${totalWebinars} webinars`);
-    console.log(`💡 Participant data fetched for ${participantsFetched} webinars (limit: ${PARTICIPANT_FETCH_LIMIT})`);
+    console.log(`✅ Enhanced sync with verification and registrant support completed. Status: ${finalStatus}`);
+    console.log(`📊 ${insertCount} new webinars inserted, ${updateCount} existing webinars updated (with data preservation), ${totalParticipantsSynced} participants synced, ${totalRegistrantsSynced} registrants synced.`);
     
-    if (errorSummary) {
-      console.log(`⚠️ Sync completed with errors:`, errorSummary);
+    if (finalStatus !== 'completed') {
+      console.log(`⚠️ Sync completed with issues. Check verification and validation reports above for details.`);
     }
     
-    if (participantsFetched < totalWebinars && !SKIP_PARTICIPANTS) {
-      console.log(`🔄 Additional syncs needed to fetch remaining participant data`);
+    if (verificationResult && !verificationResult.passed) {
+      console.log(`🚨 VERIFICATION FAILED: Data integrity issues detected!`);
+      if (verificationResult.hasDataLoss) {
+        console.log(`💥 CRITICAL: Data loss detected during sync - immediate investigation required!`);
+      }
     }
     
   } catch (error) {
-    console.error(`💥 Sync failed:`, error);
+    console.error('Enhanced simple webinar sync with verification and registrant support failed:', error);
     
-    // Mark sync as failed
+    // Add critical error to validation summary
+    validationSummary.validationErrors.push({
+      webinarId: 'sync_process',
+      type: 'critical_sync_failure',
+      message: `Critical sync failure: ${error.message}`,
+      severity: 'error'
+    });
+    
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'failed',
-      completed_at: new Date().toISOString(),
-      error_message: error.message,
       processed_items: processedCount,
-      error_details: syncErrors
+      total_participants: totalParticipantsSynced,
+      error_message: error.message,
+      completed_at: new Date().toISOString(),
+      sync_stage: 'failed',
+      stage_progress_percentage: 0,
+      sync_notes: JSON.stringify(createSyncNotes(
+        insertCount,
+        updateCount,
+        processedForParticipants,
+        skippedForParticipants,
+        validationSummary,
+        verificationResult,
+        preSync,
+        {
+          processedForRegistrants: processedForRegistrants,
+          skippedForRegistrants: skippedForRegistrants,
+          totalRegistrantsSynced: totalRegistrantsSynced
+        }
+      ))
     });
     
-    throw error;
-  }
-}
-
-async function storeWebinarInDatabase(
-  supabase: any, 
-  webinar: any, 
-  connectionId: string, 
-  totalAttendees?: number | null,
-  participantError?: any
-): Promise<void> {
-  try {
-    console.log(`💾 Storing webinar ${webinar.id} in database with connection ${connectionId}...`);
-    
-    // Log the complete webinar object structure for debugging
-    console.log(`📊 Webinar structure analysis for ${webinar.id}:`, {
-      hasSettings: !!webinar.settings,
-      settingsKeys: webinar.settings ? Object.keys(webinar.settings).slice(0, 10) : [],
-      rootLevelKeys: Object.keys(webinar).slice(0, 20),
-      hasPassword: !!webinar.password,
-      hasEncryptedPassword: !!webinar.encrypted_password,
-      passwordInSettings: webinar.settings?.password ? 'yes' : 'no',
-      registrationUrl: webinar.registration_url || 'not at root',
-      registrationUrlInSettings: webinar.settings?.registration_url || 'not in settings'
-    });
-    
-    // Determine participant sync status based on webinar state
-    let participantSyncStatus: string = 'not_applicable';
-    let participantSyncError: string | null = null;
-    
-    const now = new Date();
-    const webinarStartTime = webinar.start_time ? new Date(webinar.start_time) : null;
-    
-    if (participantError) {
-      participantSyncStatus = 'failed';
-      participantSyncError = participantError.message;
-    } else if (!webinarStartTime) {
-      participantSyncStatus = 'not_applicable';
-      participantSyncError = 'No start time available';
-    } else if (webinarStartTime > now) {
-      // Future webinar
-      participantSyncStatus = 'not_applicable';
-      participantSyncError = `Webinar has not occurred yet. Start time: ${webinarStartTime.toISOString()}, Current time: ${now.toISOString()}`;
-    } else if (webinar.status === 'finished' || webinar.status === 'ended') {
-      // Past webinar that has finished - eligible for participant sync
-      participantSyncStatus = totalAttendees !== null ? 'synced' : 'pending';
-      participantSyncError = null;
-      console.log(`🎯 Webinar ${webinar.id} marked for participant sync (status: ${webinar.status})`);
-    } else if (webinarStartTime < now) {
-      // Past webinar but not marked as finished yet
-      const hoursSinceStart = (now.getTime() - webinarStartTime.getTime()) / (1000 * 60 * 60);
-      if (hoursSinceStart > 24) {
-        // If more than 24 hours have passed, assume it's finished and needs sync
-        participantSyncStatus = totalAttendees !== null ? 'synced' : 'pending';
-        participantSyncError = null;
-        console.log(`🎯 Webinar ${webinar.id} marked for participant sync (24+ hours since start)`);
-      } else {
-        participantSyncStatus = 'not_applicable';
-        participantSyncError = 'Webinar may still be in progress';
-      }
-    }
-    
-    // Extract fields from settings object - settings contains most of the configuration
-    const settings = webinar.settings || {};
-    
-    // Extract password from the join URL if not available in response
-    let extractedPassword = null;
-    if (!webinar.password && !settings.password && webinar.join_url) {
-      const pwdMatch = webinar.join_url.match(/pwd=([^&]+)/);
-      if (pwdMatch) {
-        extractedPassword = pwdMatch[1];
-        console.log(`🔑 Extracted password from join URL for webinar ${webinar.id}`);
-      }
-    }
-    
-    // Helper function to safely truncate strings
-    const truncateString = (str: string | null | undefined, maxLength: number): string | null => {
-      if (!str) return null;
-      if (str.length <= maxLength) return str;
-      console.warn(`⚠️ Truncating string from ${str.length} to ${maxLength} chars`);
-      return str.substring(0, maxLength);
-    };
-
-    // Prepare webinar data with all available fields
-    const webinarData: any = {
-      // Basic fields
-      webinar_id: truncateString(webinar.id?.toString(), 255),
-      webinar_uuid: truncateString(webinar.uuid, 255),
-      connection_id: connectionId,
-      topic: truncateString(webinar.topic, 500),
-      type: webinar.type,
-      start_time: webinar.start_time,
-      duration: webinar.duration,
-      timezone: truncateString(webinar.timezone, 100),
-      status: truncateString(webinar.status, 50),
-      host_id: truncateString(webinar.host_id, 255),
-      host_email: truncateString(webinar.host_email, 255),
-      
-      // Registration and attendance
-      total_registrants: webinar.registrants_count || 0,
-      total_attendees: totalAttendees !== undefined ? totalAttendees : null,
-      
-      // URLs - Check multiple possible locations
-      join_url: webinar.join_url || settings.join_url || null,
-      registration_url: webinar.registration_url || settings.registration_url || settings.registrants_confirmation_email?.body || null,
-      start_url: webinar.start_url || settings.start_url || null,
-      
-      // Passwords - check all possible locations and extract from URL if needed
-      password: truncateString(webinar.password || settings.password || extractedPassword, 255),
-      h323_password: truncateString(webinar.h323_password || settings.h323_password, 255),
-      pstn_password: truncateString(webinar.pstn_password || settings.pstn_password, 255),
-      encrypted_password: truncateString(webinar.encrypted_password || settings.encrypted_password, 255),
-      h323_passcode: truncateString(webinar.h323_passcode || settings.h323_passcode, 255),
-      encrypted_passcode: truncateString(webinar.encrypted_passcode || settings.encrypted_passcode, 255),
-      
-      // Settings and configuration
-      approval_type: webinar.approval_type || settings.approval_type || null,
-      registration_type: webinar.registration_type || settings.registration_type || null,
-      registration_required: settings.approval_type !== null || settings.registration_type !== null || !!webinar.registration_url,
-      max_registrants: settings.registrants_restrict_number ? (settings.registrants_restriction || null) : null,
-      max_attendees: settings.attendees_restrict_number ? (settings.attendees_restriction || null) : null,
-      
-      // Additional fields
-      agenda: webinar.agenda,
-      alternative_hosts: settings.alternative_hosts ? 
-        (typeof settings.alternative_hosts === 'string' ? 
-          settings.alternative_hosts.split(',').map((h: string) => h.trim()) : 
-          settings.alternative_hosts) : null,
-      audio: webinar.audio || settings.audio || null,
-      auto_recording: settings.auto_recording || null,
-      
-      // Settings object - store the COMPLETE settings object, not an empty one
-      settings: settings && Object.keys(settings).length > 0 ? settings : null,
-      
-      // Tracking and recurrence
-      tracking_fields: webinar.tracking_fields || settings.tracking_fields || null,
-      recurrence: webinar.recurrence || null,
-      occurrences: webinar.occurrences || null,
-      
-      // Occurrence specific
-      occurrence_id: webinar.occurrence_id || null,
-      
-      // Creation info
-      creation_source: webinar.creation_source || null,
-      is_simulive: webinar.is_simulive || false,
-      record_file_id: webinar.record_file_id || null,
-      transition_to_live: webinar.transition_to_live || false,
-      
-      // Participant sync status
-      participant_sync_status: participantSyncStatus,
-      participant_sync_error: participantSyncError,
-      participant_sync_attempted_at: totalAttendees !== null || participantError ? new Date().toISOString() : null,
-      participant_sync_api_used: totalAttendees !== null ? 'report' : null,
-      
-      // Timestamps
-      webinar_created_at: webinar.created_at,
-      synced_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    // Calculate additional metrics if we have attendee data
-    if (totalAttendees !== null && totalAttendees > 0) {
-      // These would need to be calculated from participant data
-      // For now, we'll leave them as is
-      webinarData.total_minutes = webinar.total_minutes || null;
-      webinarData.avg_attendance_duration = webinar.avg_attendance_duration || null;
-    }
-    
-    // Remove undefined values to avoid overwriting with null
-    Object.keys(webinarData).forEach(key => {
-      if (webinarData[key] === undefined) {
-        delete webinarData[key];
-      }
-    });
-    
-    console.log(`📄 Upserting webinar with ${Object.keys(webinarData).length} fields`);
-    console.log(`🔐 Password fields populated:`, {
-      password: !!webinarData.password,
-      h323_password: !!webinarData.h323_password,
-      encrypted_password: !!webinarData.encrypted_password,
-      settings_stored: !!webinarData.settings
-    });
-    
-    // First try to update existing record
-    const { data: existingWebinar } = await supabase
-      .from('zoom_webinars')
-      .select('id')
-      .eq('webinar_id', webinarData.webinar_id)
-      .eq('connection_id', webinarData.connection_id)
-      .single();
-
-    let error;
-    if (existingWebinar) {
-      // Update existing webinar
-      console.log(`📝 Updating existing webinar ${webinar.id}...`);
-      const { error: updateError } = await supabase
-        .from('zoom_webinars')
-        .update(webinarData)
-        .eq('id', existingWebinar.id);
-      error = updateError;
-    } else {
-      // Insert new webinar
-      console.log(`➕ Inserting new webinar ${webinar.id}...`);
-      const { error: insertError } = await supabase
-        .from('zoom_webinars')
-        .insert(webinarData);
-      error = insertError;
-    }
-
-    if (error) {
-      console.error(`❌ Error storing webinar ${webinar.id}:`, error);
-      console.error(`❌ Error details:`, JSON.stringify(error, null, 2));
-      console.error(`❌ Webinar data that failed:`, JSON.stringify(webinarData, null, 2));
-      throw error;
-    }
-    
-    console.log(`✅ Successfully stored webinar ${webinar.id} in database (sync status: ${participantSyncStatus})`);
-  } catch (error) {
-    console.error(`💥 Failed to store webinar ${webinar.id} in database:`, error);
-    throw error;
-  }
-}
-
-async function storeParticipantsInDatabase(supabase: any, participants: any[], webinarId: string, connectionId: string): Promise<void> {
-  try {
-    // First, get the webinar UUID from the database
-    const { data: webinarData, error: webinarError } = await supabase
-      .from('zoom_webinars')
-      .select('id')
-      .eq('webinar_id', webinarId)
-      .eq('connection_id', connectionId)
-      .single();
-    
-    if (webinarError || !webinarData) {
-      console.error(`❌ Could not find webinar ${webinarId} in database`);
-      return;
-    }
-    
-    // Prepare participant records
-    const participantRecords = participants.map(participant => ({
-      webinar_id: webinarData.id,
-      registrant_id: participant.registrant_id || null,
-      participant_id: participant.id || participant.participant_id || null,
-      participant_user_id: participant.user_id || null,
-      participant_email: participant.email || null,
-      participant_name: participant.name || participant.display_name || 'Unknown',
-      join_time: participant.join_time,
-      leave_time: participant.leave_time,
-      duration: participant.duration || 0,
-      attentiveness_score: participant.attentiveness_score || null,
-      customer_key: participant.customer_key || null,
-      status: participant.status || 'attended',
-      failover: participant.failover || false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }));
-    
-    // Batch insert participants
-    const { error } = await supabase
-      .from('zoom_participants')
-      .upsert(participantRecords, {
-        onConflict: 'webinar_id,participant_id'
-      });
-    
-    if (error) {
-      console.error(`❌ Error storing participants for webinar ${webinarId}:`, error);
-      throw error;
-    }
-    
-    console.log(`✅ Successfully stored ${participants.length} participants for webinar ${webinarId}`);
-  } catch (error) {
-    console.error(`💥 Failed to store participants for webinar ${webinarId}:`, error);
-    throw error;
-  }
-}
-
-async function storeRegistrantsInDatabase(supabase: any, registrants: any[], webinarId: string, connectionId: string): Promise<void> {
-  try {
-    // First, get the webinar UUID from the database
-    const { data: webinarData, error: webinarError } = await supabase
-      .from('zoom_webinars')
-      .select('id')
-      .eq('webinar_id', webinarId)
-      .eq('connection_id', connectionId)
-      .single();
-    
-    if (webinarError || !webinarData) {
-      console.error(`❌ Could not find webinar ${webinarId} in database`);
-      return;
-    }
-    
-    // Prepare registrant records
-    const registrantRecords = registrants.map(registrant => ({
-      webinar_id: webinarData.id,
-      registrant_id: registrant.id || registrant.registrant_id,
-      registrant_email: registrant.email,
-      first_name: registrant.first_name || null,
-      last_name: registrant.last_name || null,
-      phone: registrant.phone || null,
-      address: registrant.address || null,
-      city: registrant.city || null,
-      country: registrant.country || null,
-      zip: registrant.zip || null,
-      state: registrant.state || null,
-      comments: registrant.comments || null,
-      custom_questions: registrant.custom_questions || {},
-      registration_time: registrant.create_time || registrant.registration_time || new Date().toISOString(),
-      status: registrant.status || 'approved',
-      job_title: registrant.job_title || null,
-      purchasing_time_frame: registrant.purchasing_time_frame || null,
-      role_in_purchase_process: registrant.role_in_purchase_process || null,
-      no_of_employees: registrant.no_of_employees || null,
-      industry: registrant.industry || null,
-      org: registrant.org || null,
-      language: registrant.language || null,
-      join_url: registrant.join_url || null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }));
-    
-    // Batch insert registrants
-    const { error } = await supabase
-      .from('zoom_registrants')
-      .upsert(registrantRecords, {
-        onConflict: 'webinar_id,registrant_id'
-      });
-    
-    if (error) {
-      console.error(`❌ Error storing registrants for webinar ${webinarId}:`, error);
-      throw error;
-    }
-    
-    console.log(`✅ Successfully stored ${registrants.length} registrants for webinar ${webinarId}`);
-  } catch (error) {
-    console.error(`💥 Failed to store registrants for webinar ${webinarId}:`, error);
     throw error;
   }
 }

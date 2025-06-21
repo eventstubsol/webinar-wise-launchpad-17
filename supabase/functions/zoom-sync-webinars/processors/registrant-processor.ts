@@ -1,50 +1,184 @@
 
 /**
- * Registrant processor that delegates to the enhanced implementation
- * Now properly uses the main ZoomAPIClient with fixed pagination
+ * Enhanced registrant processor with proper error handling and scope detection
  */
 
-import { syncWebinarRegistrantsFullCompliance, testRegistrantAPIAccess } from './enhanced-registrant-processor.ts';
+/**
+ * NEW: Test Zoom API registrant access and scopes
+ */
+export async function testRegistrantAPIAccess(client: any, webinarId: string): Promise<{
+  hasAccess: boolean;
+  error?: string;
+  scopeIssue?: boolean;
+}> {
+  console.log(`🧪 TESTING registrant API access for webinar ${webinarId}...`);
+  
+  try {
+    // Try to fetch registrants - this will reveal scope issues
+    const registrants = await client.getWebinarRegistrants(webinarId);
+    
+    if (Array.isArray(registrants)) {
+      console.log(`✅ REGISTRANT API ACCESS: Success - found ${registrants.length} registrants`);
+      return { hasAccess: true };
+    } else {
+      console.log(`⚠️ REGISTRANT API ACCESS: Unexpected response format:`, registrants);
+      return { hasAccess: false, error: 'Unexpected API response format' };
+    }
+  } catch (error) {
+    console.error(`❌ REGISTRANT API ACCESS ERROR:`, error);
+    
+    // Check for specific scope/permission errors
+    const errorMessage = error.message?.toLowerCase() || '';
+    const isScopeIssue = errorMessage.includes('scope') || 
+                        errorMessage.includes('permission') || 
+                        errorMessage.includes('unauthorized') ||
+                        errorMessage.includes('forbidden');
+    
+    if (isScopeIssue) {
+      console.error(`🚨 SCOPE ISSUE DETECTED: Missing webinar:read:admin scope or insufficient permissions`);
+      return { 
+        hasAccess: false, 
+        error: error.message, 
+        scopeIssue: true 
+      };
+    }
+    
+    return { hasAccess: false, error: error.message };
+  }
+}
 
 /**
- * Enhanced registrant sync with full Zoom API compliance - delegates to enhanced processor
- * The key change: ensures the main ZoomAPIClient with proper pagination is used
+ * Enhanced sync registrants with proper error handling and debugging
  */
 export async function syncWebinarRegistrants(
   supabase: any,
-  client: any, // This should be the main ZoomAPIClient from zoom-api-client.ts
+  client: any,
   webinarId: string,
   webinarDbId: string,
   testMode: boolean = false
 ): Promise<number> {
-  console.log(`🎯 DELEGATING to enhanced registrant sync for webinar ${webinarId} (DB: ${webinarDbId})`);
+  console.log(`🎯 ENHANCED REGISTRANT SYNC starting for webinar ${webinarId} (DB: ${webinarDbId})`);
   console.log(`  - Test mode: ${testMode}`);
-  console.log(`  - Client type: ${client.constructor?.name || 'Unknown'}`);
-  console.log(`  - Client has getWebinarRegistrants: ${typeof client.getWebinarRegistrants === 'function'}`);
   
   try {
-    const result = await syncWebinarRegistrantsFullCompliance(
-      supabase,
-      client, // Pass through the main ZoomAPIClient
-      webinarId,
-      webinarDbId,
-      {
-        syncAllPages: true, // Always sync all pages for complete data
-        status: 'approved', // Default to approved registrants
-        maxPages: 50 // Safety limit
-      }
-    );
-
-    console.log(`✅ ENHANCED SYNC COMPLETED: ${result.totalSynced} registrants synced across ${result.pagesProcessed} pages`);
+    // STEP 1: Test API access first
+    console.log(`🧪 STEP 1: Testing registrant API access...`);
+    const accessTest = await testRegistrantAPIAccess(client, webinarId);
     
-    if (result.errors && result.errors.length > 0) {
-      console.error(`⚠️ SYNC WARNINGS: ${result.errors.join(', ')}`);
+    if (!accessTest.hasAccess) {
+      if (accessTest.scopeIssue) {
+        const errorMsg = `❌ ZOOM SCOPE ERROR: Missing 'webinar:read:admin' scope. Please update your Zoom app configuration to include this scope.`;
+        console.error(errorMsg);
+        throw new Error(`Scope Error: ${accessTest.error}`);
+      } else {
+        const errorMsg = `❌ REGISTRANT API ACCESS FAILED: ${accessTest.error}`;
+        console.error(errorMsg);
+        throw new Error(`API Access Error: ${accessTest.error}`);
+      }
+    }
+    
+    // STEP 2: Fetch registrants from Zoom API
+    console.log(`📥 STEP 2: Fetching registrants from Zoom API...`);
+    const registrants = await client.getWebinarRegistrants(webinarId);
+    
+    // ENHANCED: Better validation and logging
+    if (!registrants) {
+      console.log(`⚠️ REGISTRANTS NULL: API returned null/undefined for webinar ${webinarId}`);
+      return 0;
+    }
+    
+    if (!Array.isArray(registrants)) {
+      console.log(`⚠️ REGISTRANTS NOT ARRAY: API returned non-array for webinar ${webinarId}:`, typeof registrants);
+      return 0;
+    }
+    
+    if (registrants.length === 0) {
+      console.log(`📭 NO REGISTRANTS: API returned empty array for webinar ${webinarId}`);
+      console.log(`  - This could mean: no registrations, or webinar doesn't require registration`);
+      return 0;
+    }
+    
+    console.log(`✅ REGISTRANTS FOUND: ${registrants.length} registrants for webinar ${webinarId}`);
+    
+    // Log sample registrant data for debugging
+    if (registrants.length > 0) {
+      const sampleRegistrant = registrants[0];
+      console.log(`📋 SAMPLE REGISTRANT DATA:`, {
+        id: sampleRegistrant.id,
+        email: sampleRegistrant.email,
+        firstName: sampleRegistrant.first_name,
+        lastName: sampleRegistrant.last_name,
+        status: sampleRegistrant.status,
+        registrationTime: sampleRegistrant.registration_time,
+        availableFields: Object.keys(sampleRegistrant)
+      });
+    }
+    
+    // STEP 3: Transform registrant data
+    console.log(`🔄 STEP 3: Transforming ${registrants.length} registrants for database...`);
+    const transformedRegistrants = registrants.map((registrant, index) => {
+      const transformed = transformRegistrantForDatabase(registrant, webinarDbId);
+      
+      if (index === 0) {
+        console.log(`📋 SAMPLE TRANSFORMED DATA:`, {
+          webinar_id: transformed.webinar_id,
+          registrant_id: transformed.registrant_id,
+          registrant_email: transformed.registrant_email,
+          status: transformed.status,
+          registration_time: transformed.registration_time
+        });
+      }
+      
+      return {
+        ...transformed,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    });
+    
+    if (testMode) {
+      console.log(`🧪 TEST MODE: Skipping database insert, would have inserted ${transformedRegistrants.length} registrants`);
+      return transformedRegistrants.length;
+    }
+    
+    // STEP 4: Upsert registrants to database
+    console.log(`💾 STEP 4: Upserting ${transformedRegistrants.length} registrants to database...`);
+    const { error } = await supabase
+      .from('zoom_registrants')
+      .upsert(
+        transformedRegistrants,
+        {
+          onConflict: 'webinar_id,registrant_id',
+          ignoreDuplicates: false
+        }
+      );
+
+    if (error) {
+      console.error(`❌ DATABASE UPSERT ERROR:`, error);
+      throw new Error(`Failed to upsert registrants: ${error.message}`);
     }
 
-    return result.totalSynced;
+    console.log(`✅ REGISTRANT SYNC SUCCESS: ${registrants.length} registrants synced for webinar ${webinarId}`);
+    return registrants.length;
     
   } catch (error) {
-    console.error(`💥 DELEGATED REGISTRANT SYNC ERROR for webinar ${webinarId}:`, error);
+    console.error(`💥 REGISTRANT SYNC ERROR for webinar ${webinarId}:`, error);
+    
+    // Enhanced error categorization
+    const errorMessage = error.message?.toLowerCase() || '';
+    
+    if (errorMessage.includes('scope') || errorMessage.includes('permission')) {
+      console.error(`🚨 ZOOM PERMISSION ERROR: Check your Zoom app scopes and permissions`);
+      console.error(`   Required scope: webinar:read:admin`);
+      console.error(`   Please visit: https://marketplace.zoom.us/develop/apps`);
+    } else if (errorMessage.includes('rate limit')) {
+      console.error(`⏱️ ZOOM RATE LIMIT: API rate limit exceeded`);
+    } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+      console.error(`🌐 NETWORK ERROR: Connection to Zoom API failed`);
+    } else {
+      console.error(`❓ UNKNOWN ERROR: ${error.message}`);
+    }
+    
     throw error;
   }
 }
@@ -108,6 +242,3 @@ function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string)
     attended: false // Will be updated from participant data if available
   };
 }
-
-// Export the test function for backward compatibility
-export { testRegistrantAPIAccess };

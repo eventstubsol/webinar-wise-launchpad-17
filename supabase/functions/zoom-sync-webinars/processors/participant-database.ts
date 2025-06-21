@@ -21,96 +21,41 @@ export async function saveParticipantsToDatabase(
   }
 
   try {
-    // CRITICAL FIX: Deduplicate participants before insertion
-    // This prevents "ON CONFLICT DO UPDATE command cannot affect row a second time" error
-    const uniqueParticipants = deduplicateParticipants(transformedParticipants);
-    
-    console.log(`ENHANCED: Deduplication complete - ${transformedParticipants.length} → ${uniqueParticipants.length} participants`);
-    
-    if (uniqueParticipants.length < transformedParticipants.length) {
-      console.warn(`WARNING: Found ${transformedParticipants.length - uniqueParticipants.length} duplicate participants in batch`);
-    }
-
-    // Batch insert in smaller chunks to avoid database limits
-    const BATCH_SIZE = 500; // Supabase recommends smaller batches
-    let totalInserted = 0;
-    const errors = [];
-
-    for (let i = 0; i < uniqueParticipants.length; i += BATCH_SIZE) {
-      const batch = uniqueParticipants.slice(i, i + BATCH_SIZE);
-      console.log(`ENHANCED: Processing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(uniqueParticipants.length / BATCH_SIZE)} (${batch.length} participants)`);
-
-      const { error, data } = await supabase
-        .from('zoom_participants')
-        .upsert(
-          batch,
-          {
-            onConflict: 'webinar_id,participant_id',
-            ignoreDuplicates: false
-          }
-        )
-        .select('id');
-
-      if (error) {
-        console.error(`ENHANCED: Batch ${Math.floor(i / BATCH_SIZE) + 1} failed:`, error);
-        errors.push({ batch: Math.floor(i / BATCH_SIZE) + 1, error, count: batch.length });
-        
-        if (debugMode) {
-          console.log(`DEBUG: Failed batch details:`, JSON.stringify(error, null, 2));
-          console.log(`DEBUG: Failed batch sample:`, JSON.stringify(batch[0], null, 2));
+    // Upsert participants to database
+    const { error, data } = await supabase
+      .from('zoom_participants')
+      .upsert(
+        transformedParticipants,
+        {
+          onConflict: 'webinar_id,participant_id',
+          ignoreDuplicates: false
         }
-      } else {
-        totalInserted += batch.length;
+      )
+      .select('id');
+
+    if (error) {
+      console.error('ENHANCED: Database insertion failed for participants:', {
+        error: error,
+        webinarId: webinarId,
+        participantCount: transformedParticipants.length
+      });
+      
+      if (debugMode) {
+        console.log(`DEBUG: Database error details:`, JSON.stringify(error, null, 2));
+        console.log(`DEBUG: Failed payload sample:`, JSON.stringify(transformedParticipants[0], null, 2));
       }
-    }
-
-    if (errors.length > 0) {
-      console.error(`ENHANCED: ${errors.length} batches failed during insertion`);
-      return { 
-        success: false, 
-        count: totalInserted, 
-        error: {
-          message: `Partial failure: ${errors.length} batches failed`,
-          details: errors
-        }
-      };
+      
+      return { success: false, count: 0, error };
     }
 
     return { 
       success: true, 
-      count: totalInserted
+      count: transformedParticipants.length,
+      data
     };
 
   } catch (error) {
     console.error(`ENHANCED: Exception during database insertion:`, error);
     return { success: false, count: 0, error };
   }
-}
-
-/**
- * Deduplicate participants based on webinar_id and participant_id
- * This prevents the "ON CONFLICT DO UPDATE command cannot affect row a second time" error
- */
-function deduplicateParticipants(participants: any[]): any[] {
-  const seen = new Map<string, any>();
-  
-  for (const participant of participants) {
-    // Create a unique key based on webinar_id and participant_id
-    const key = `${participant.webinar_id}-${participant.participant_id}`;
-    
-    if (!seen.has(key)) {
-      seen.set(key, participant);
-    } else {
-      // If we've seen this participant before, keep the most recent one
-      const existing = seen.get(key);
-      if (participant.join_time && existing.join_time) {
-        // Keep the participant with the later join time
-        if (new Date(participant.join_time) > new Date(existing.join_time)) {
-          seen.set(key, participant);
-        }
-      }
-    }
-  }
-  
-  return Array.from(seen.values());
 }

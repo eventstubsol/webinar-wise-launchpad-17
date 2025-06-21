@@ -1,9 +1,20 @@
+
 import { zoomApiClient } from './ZoomApiClient';
-import { ZoomErrorRecovery } from '../utils/transformers/validationUtils';
 import type { ApiResponse } from './types';
 
 /**
- * Enhanced Zoom API response for webinar with all missing fields
+ * Zoom API response for webinar list
+ */
+interface ZoomWebinarListResponse {
+  page_count: number;
+  page_number: number;
+  page_size: number;
+  total_records: number;
+  webinars: ZoomWebinarApiResponse[];
+}
+
+/**
+ * Zoom API webinar response format
  */
 interface ZoomWebinarApiResponse {
   id: string;
@@ -19,35 +30,10 @@ interface ZoomWebinarApiResponse {
   timezone: string;
   join_url: string;
   registration_url?: string;
-  
-  // ADD MISSING: Start URL and access fields
-  start_url?: string;
-  
-  // ADD MISSING: Password and security fields
-  password?: string;
-  encrypted_passcode?: string;
-  encrypted_password?: string; // Alternative field name
-  h323_password?: string;
-  h323_passcode?: string;
-  pstn_password?: string;
-  
-  // ADD MISSING: Creation metadata
-  created_at?: string;
-  creation_source?: 'other' | 'open_api' | 'web_portal';
-  
-  // ADD MISSING: Simulive fields
-  is_simulive?: boolean;
-  record_file_id?: string;
-  transition_to_live?: boolean;
-  
-  // ADD MISSING: Occurrence for recurring webinars
-  occurrence_id?: string;
-  
   settings: {
     approval_type: number;
-    registration_type?: number;
+    registration_type: number;
     alternative_hosts?: string;
-    registrants_restrict_number?: number;
     [key: string]: any;
   };
   occurrences?: Array<{
@@ -56,39 +42,17 @@ interface ZoomWebinarApiResponse {
     duration: number;
     status: string;
   }>;
-  recurrence?: any;
-  tracking_fields?: any;
-  panelists?: any[];
 }
 
 /**
- * Zoom API response for webinar list
- */
-interface ZoomWebinarListResponse {
-  page_count: number;
-  page_number: number;
-  page_size: number;
-  total_records: number;
-  webinars: ZoomWebinarApiResponse[];
-}
-
-/**
- * Enhanced options for listing webinars
+ * Options for listing webinars
  */
 interface ListWebinarsOptions {
   from?: Date;
   to?: Date;
   type?: 'past' | 'upcoming' | 'live';
   pageSize?: number;
-  dayRange?: number;
-}
-
-/**
- * Enhanced options for getting single webinar
- */
-interface GetWebinarOptions {
-  occurrence_id?: string;
-  show_previous_occurrences?: boolean;
+  dayRange?: number; // New option for configurable range
 }
 
 /**
@@ -102,111 +66,9 @@ interface SyncProgress {
 }
 
 /**
- * Enhanced Zoom-specific error for better error handling
- */
-class ZoomApiError extends Error {
-  constructor(
-    message: string,
-    public code?: number,
-    public details?: any,
-    public isRetryable?: boolean
-  ) {
-    super(message);
-    this.name = 'ZoomApiError';
-  }
-}
-
-/**
- * Enhanced service for fetching webinar data from Zoom API
+ * Service for fetching webinar data from Zoom API
  */
 export class ZoomWebinarDataService {
-  /**
-   * Enhanced get webinar with query parameters support and error recovery
-   */
-  static async getWebinar(
-    webinarId: string,
-    options?: GetWebinarOptions
-  ): Promise<ZoomWebinarApiResponse | null> {
-    const params = new URLSearchParams();
-    
-    // ADD MISSING: Query parameter support
-    if (options?.occurrence_id) {
-      params.append('occurrence_id', options.occurrence_id);
-    }
-    if (options?.show_previous_occurrences) {
-      params.append('show_previous_occurrences', 'true');
-    }
-    
-    const url = `/webinars/${webinarId}${params.toString() ? `?${params}` : ''}`;
-    
-    let retryCount = 0;
-    const maxRetries = 3;
-    
-    while (retryCount <= maxRetries) {
-      try {
-        const response = await zoomApiClient.get<ZoomWebinarApiResponse>(url);
-        
-        if (response.success) {
-          return response.data || null;
-        }
-        
-        // Enhanced error handling with recovery strategies
-        const recoveryStrategy = await ZoomErrorRecovery.handleApiError(response.error, {
-          operation: 'getWebinar',
-          webinarId,
-          retryCount,
-          maxRetries
-        });
-        
-        if (recoveryStrategy.shouldRetry && retryCount < maxRetries) {
-          retryCount++;
-          console.log(`Retrying getWebinar for ${webinarId} (attempt ${retryCount}/${maxRetries}) after ${recoveryStrategy.delayMs}ms`);
-          await new Promise(resolve => setTimeout(resolve, recoveryStrategy.delayMs));
-          continue;
-        }
-        
-        this.handleZoomApiError(response.error, webinarId);
-        return null;
-        
-      } catch (error) {
-        ZoomErrorRecovery.logError(error, { operation: 'getWebinar', webinarId, retryCount });
-        
-        if (retryCount >= maxRetries) {
-          console.error(`Failed to fetch webinar ${webinarId} after ${maxRetries} retries:`, error);
-          throw error;
-        }
-        
-        retryCount++;
-        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-      }
-    }
-    
-    return null;
-  }
-
-  /**
-   * Enhanced Zoom API error handling with specific error categorization
-   */
-  private static handleZoomApiError(error: any, webinarId: string): void {
-    const errorCode = error?.code;
-    
-    switch (errorCode) {
-      case 300:
-        throw new ZoomApiError(`Invalid webinar ID: ${webinarId}`, 300, error, false);
-      case 200:
-        throw new ZoomApiError('Webinar plan missing or no permission', 200, error, false);
-      case 3001:
-        throw new ZoomApiError(`Webinar does not exist: ${webinarId}`, 3001, error, false);
-      case 429:
-        throw new ZoomApiError('Rate limit exceeded - please retry later', 429, error, true);
-      case 124:
-        throw new ZoomApiError('Invalid access token', 124, error, false);
-      default:
-        console.error(`Zoom API error ${errorCode}:`, error);
-        throw new ZoomApiError(`Zoom API error: ${error?.message || 'Unknown error'}`, errorCode, error, errorCode >= 500);
-    }
-  }
-
   /**
    * List webinars with extended range support (past + upcoming)
    */
@@ -291,7 +153,7 @@ export class ZoomWebinarDataService {
   }
 
   /**
-   * List webinars with automatic pagination and enhanced error handling
+   * List webinars with automatic pagination and date filtering
    */
   static async listWebinars(
     userId: string, 
@@ -329,8 +191,7 @@ export class ZoomWebinarDataService {
         );
 
         if (!response.success || !response.data) {
-          this.handleZoomApiError(response.error, 'webinar list');
-          break;
+          throw new Error(response.error || 'Failed to fetch webinars');
         }
 
         const { webinars, page_count, page_number: currentPage } = response.data;
@@ -352,12 +213,24 @@ export class ZoomWebinarDataService {
 
       return allWebinars;
     } catch (error) {
-      if (error instanceof ZoomApiError && error.isRetryable) {
-        console.warn(`Retryable error encountered: ${error.message}`);
-        // Could implement retry logic here
-      }
       throw error;
     }
+  }
+
+  /**
+   * Get detailed information about a specific webinar
+   */
+  static async getWebinar(webinarId: string): Promise<ZoomWebinarApiResponse | null> {
+    const response = await zoomApiClient.get<ZoomWebinarApiResponse>(
+      `/webinars/${webinarId}`
+    );
+
+    if (response.success) {
+      return response.data || null;
+    }
+
+    console.error(`Failed to fetch webinar ${webinarId}:`, response.error);
+    return null;
   }
 
   static async getWebinarRegistrants(
@@ -467,9 +340,6 @@ export class ZoomWebinarDataService {
     return null;
   }
 
-  /**
-   * Calculate engagement score with enhanced metrics
-   */
   private static calculateEngagementScore(participant: any): number {
     let score = 0;
     
@@ -487,6 +357,5 @@ export class ZoomWebinarDataService {
   }
 }
 
-// Export enhanced types for use in other services
-export type { ZoomWebinarApiResponse, ListWebinarsOptions, SyncProgress, GetWebinarOptions };
-export { ZoomApiError };
+// Export types for use in other services
+export type { ZoomWebinarApiResponse, ListWebinarsOptions, SyncProgress };
