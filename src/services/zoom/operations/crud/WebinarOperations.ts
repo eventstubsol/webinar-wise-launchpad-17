@@ -18,7 +18,7 @@ export class WebinarOperations {
         {
           ...transformedWebinar,
           // Ensure uuid field is present (required by database schema)
-          uuid: transformedWebinar.uuid || transformedWebinar.webinar_uuid || null,
+          uuid: transformedWebinar.webinar_uuid || webinarData.uuid || null,
           updated_at_db: new Date().toISOString()
         },
         {
