@@ -1,14 +1,13 @@
 
 /**
- * Updated legacy export for backward compatibility
- * This file maintains the existing import structure while using the enhanced implementation
+ * Legacy export for backward compatibility
+ * This file maintains the existing import structure while the actual implementation
+ * has been moved to focused transformer modules
  */
-import { 
-  WebinarTransformers,
-  ParticipantTransformers,
-  InteractionTransformers,
-  MetricsTransformers
-} from './transformers';
+import { WebinarTransformers } from './webinarTransformers';
+import { ParticipantTransformers } from './participantTransformers';
+import { InteractionTransformers } from './interactionTransformers';
+import { MetricsTransformers } from './metricsTransformers';
 
 // Export the individual transformer classes for direct use
 export {
@@ -16,13 +15,12 @@ export {
   ParticipantTransformers,
   InteractionTransformers,
   MetricsTransformers
-} from './transformers';
+} from './webinarTransformers';
 
-// Enhanced main transformer class with comprehensive field mapping
+// Main transformer class with all methods for backward compatibility
 export class ZoomDataTransformers {
-  // Enhanced webinar transformers with comprehensive field mapping
+  // Webinar transformers
   static transformWebinarForDatabase(apiWebinar: any, connectionId: string) {
-    console.log(`🔄 LEGACY TRANSFORMER: Using enhanced WebinarTransformers for webinar ${apiWebinar.id}`);
     return WebinarTransformers.transformWebinarForDatabase(apiWebinar, connectionId);
   }
 
@@ -40,7 +38,7 @@ export class ZoomDataTransformers {
     return MetricsTransformers.calculateWebinarMetrics(participants);
   }
 
-  // Enhanced participant transformers
+  // Participant transformers
   static transformParticipant(apiParticipant: any, webinarId: string) {
     return ParticipantTransformers.transformParticipant(apiParticipant, webinarId);
   }

@@ -1,32 +1,49 @@
-
-import { ZoomWebinar, ZoomRegistrant } from '@/types/zoom';
+import { ZoomWebinar, ZoomRegistrant, WebinarStatus } from '@/types/zoom';
 
 /**
  * Enhanced data transformation utilities for webinars and registrants
- * with comprehensive field mapping and validation logging
+ * FIXED: Complete field mapping and type safety
  */
 export class WebinarTransformers {
   /**
-   * Transform Zoom API webinar to database format with comprehensive field mapping
-   * Maps all 39 database fields with proper validation and logging
+   * Transform Zoom API webinar to database format with ALL 39 database fields
+   * FIXED: Proper type conversion and complete field mapping
    */
   static transformWebinarForDatabase(
     apiWebinar: any,
     connectionId: string
   ): Omit<ZoomWebinar, 'id' | 'created_at' | 'updated_at'> {
+    console.log(`🔧 ENHANCED TRANSFORMER: Processing webinar ${apiWebinar.id} with complete field mapping`);
+    
+    // FIXED: Proper status conversion to WebinarStatus enum
+    const normalizeStatus = (status: any): WebinarStatus => {
+      if (!status) return 'available' as WebinarStatus;
+      
+      const statusMap: Record<string, WebinarStatus> = {
+        'available': 'available' as WebinarStatus,
+        'unavailable': 'unavailable' as WebinarStatus,
+        'started': 'started' as WebinarStatus,
+        'ended': 'ended' as WebinarStatus,
+        'deleted': 'deleted' as WebinarStatus,
+        'scheduled': 'scheduled' as WebinarStatus,
+        'finished': 'finished' as WebinarStatus,
+        'cancelled': 'cancelled' as WebinarStatus
+      };
+      
+      const result = statusMap[status.toLowerCase()] || ('available' as WebinarStatus);
+      console.log(`🔧 STATUS CONVERSION: ${status} -> ${result}`);
+      return result;
+    };
+
     // Extract settings for comprehensive field mapping
     const settings = apiWebinar.settings || {};
     
-    // Log API fields received for debugging
-    const apiFields = Object.keys(apiWebinar);
-    console.log(`🔍 FIELD EXTRACTION: Webinar ${apiWebinar.id} - API fields received:`, apiFields);
-    
-    // Core webinar data with comprehensive mapping
+    // FIXED: Complete transformation with ALL 39 fields mapped correctly
     const transformedData = {
       // Connection and identification
       connection_id: connectionId,
       webinar_id: apiWebinar.id?.toString() || apiWebinar.webinar_id?.toString(),
-      uuid: apiWebinar.uuid || null, // Map to database 'uuid' field
+      uuid: apiWebinar.uuid || null,
       webinar_uuid: apiWebinar.uuid || null, // Keep for backward compatibility
       occurrence_id: apiWebinar.occurrence_id || apiWebinar.occurrences?.[0]?.occurrence_id || null,
       
@@ -36,7 +53,7 @@ export class WebinarTransformers {
       topic: apiWebinar.topic || '',
       agenda: apiWebinar.agenda || null,
       type: apiWebinar.type || 5,
-      status: this.normalizeWebinarStatus(apiWebinar.status),
+      status: normalizeStatus(apiWebinar.status), // FIXED: Proper enum conversion
       start_time: apiWebinar.start_time || null,
       duration: apiWebinar.duration || null,
       timezone: apiWebinar.timezone || null,
@@ -48,43 +65,39 @@ export class WebinarTransformers {
       
       // Access and registration
       registration_required: !!apiWebinar.registration_url,
+      registration_type: apiWebinar.registration_type || settings.registration_type || null,
       registration_url: apiWebinar.registration_url || null,
       join_url: apiWebinar.join_url || null,
       start_url: apiWebinar.start_url || null,
-      password: apiWebinar.password || null,
       approval_type: settings.approval_type || null,
       max_registrants: settings.registrants_restrict_number || null,
       max_attendees: settings.max_attendees || null,
       
-      // Updated field names to match Zoom API and database schema
+      // Security and access
+      password: apiWebinar.password || null,
       h323_passcode: apiWebinar.h323_passcode || null,
       pstn_password: apiWebinar.pstn_password || null,
       encrypted_passcode: apiWebinar.encrypted_passcode || null,
-      
-      // New Zoom API fields
-      registration_type: apiWebinar.registration_type || settings.registration_type || null,
-      pmi: apiWebinar.pmi || null,
       webinar_passcode: apiWebinar.webinar_passcode || null,
+      pmi: apiWebinar.pmi || null,
+      
+      // Simulive and special features
+      is_simulive: apiWebinar.is_simulive || false,
+      simulive_webinar_id: apiWebinar.record_file_id || null,
       
       // Computed metrics (will be calculated separately)
-      attendees_count: null,
-      registrants_count: null,
       total_registrants: null,
       total_attendees: null,
       total_absentees: null,
       total_minutes: null,
       avg_attendance_duration: null,
       
-      // JSONB fields with comprehensive extraction
+      // JSONB fields with enhanced extraction
       settings: this.extractSettingsData(apiWebinar.settings, apiWebinar),
       recurrence: apiWebinar.recurrence || null,
       occurrences: apiWebinar.occurrences || null,
       tracking_fields: apiWebinar.tracking_fields || null,
       panelists: apiWebinar.panelists || null,
-      
-      // Simulive and recording
-      is_simulive: apiWebinar.is_simulive || false,
-      simulive_webinar_id: apiWebinar.record_file_id || null, // Map to correct field
       
       // Sync tracking
       synced_at: new Date().toISOString(),
@@ -95,14 +108,10 @@ export class WebinarTransformers {
       participant_sync_error: null,
     };
     
-    // Log field mapping success/failure
-    const mappedFields = Object.keys(transformedData).filter(key => transformedData[key as keyof typeof transformedData] !== null);
-    const unmappedFields = Object.keys(transformedData).filter(key => transformedData[key as keyof typeof transformedData] === null);
-    
-    console.log(`📊 FIELD MAPPING STATS: Webinar ${apiWebinar.id}`);
-    console.log(`  ✅ Mapped fields (${mappedFields.length}):`, mappedFields);
-    console.log(`  ❌ Unmapped fields (${unmappedFields.length}):`, unmappedFields);
-    console.log(`  📈 Success rate: ${((mappedFields.length / Object.keys(transformedData).length) * 100).toFixed(1)}%`);
+    // Log field mapping success
+    const populatedFields = Object.entries(transformedData).filter(([key, value]) => value !== null).length;
+    const totalFields = Object.keys(transformedData).length;
+    console.log(`📊 TRANSFORMER SUCCESS: ${populatedFields}/${totalFields} fields populated (${((populatedFields/totalFields)*100).toFixed(1)}%)`);
     
     return transformedData;
   }
@@ -132,6 +141,7 @@ export class WebinarTransformers {
 
   /**
    * Extract comprehensive settings data including alternative hosts handling
+   * FIXED: Proper string handling for alternative_hosts
    */
   private static extractSettingsData(apiSettings: any, fullApiResponse: any): any {
     if (!apiSettings && !fullApiResponse) {
@@ -140,18 +150,21 @@ export class WebinarTransformers {
     
     const settings = apiSettings || {};
     
-    // FIXED: Properly handle alternative_hosts without array conversion
-    // Alternative hosts should be stored as a comma-separated string in settings
-    if (settings.alternative_hosts) {
-      console.log(`🔧 ALTERNATIVE HOSTS: Found in settings: ${settings.alternative_hosts}`);
-    } else if (fullApiResponse.alternative_hosts) {
-      // If it's an array, convert to comma-separated string
+    // FIXED: Properly handle alternative_hosts as string
+    if (settings.alternative_hosts !== undefined) {
+      if (Array.isArray(settings.alternative_hosts)) {
+        settings.alternative_hosts = settings.alternative_hosts.join(',');
+      } else {
+        settings.alternative_hosts = String(settings.alternative_hosts || '');
+      }
+      console.log(`🔧 ALTERNATIVE HOSTS: Processed as string: "${settings.alternative_hosts}"`);
+    } else if (fullApiResponse.alternative_hosts !== undefined) {
       if (Array.isArray(fullApiResponse.alternative_hosts)) {
         settings.alternative_hosts = fullApiResponse.alternative_hosts.join(',');
       } else {
-        settings.alternative_hosts = String(fullApiResponse.alternative_hosts);
+        settings.alternative_hosts = String(fullApiResponse.alternative_hosts || '');
       }
-      console.log(`🔧 ALTERNATIVE HOSTS: Extracted from API: ${settings.alternative_hosts}`);
+      console.log(`🔧 ALTERNATIVE HOSTS: Extracted from root API: "${settings.alternative_hosts}"`);
     }
     
     // Extract additional settings fields that might be at the root level
@@ -162,7 +175,6 @@ export class WebinarTransformers {
       hd_video: fullApiResponse.hd_video,
       auto_recording: fullApiResponse.auto_recording,
       enforce_login: fullApiResponse.enforce_login,
-      // Add more settings as needed
     };
     
     // Filter out null/undefined values
