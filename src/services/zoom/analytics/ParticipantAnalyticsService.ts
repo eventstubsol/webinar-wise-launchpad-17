@@ -40,17 +40,20 @@ export class ParticipantAnalyticsService {
       webinarId,
       totalParticipants: 0, // Will be calculated in the service
       averageEngagementScore: engagement.averageEngagementScore,
-      averageAttentionScore: engagement.averageAttentionScore,
-      pollParticipationRate: engagement.pollParticipationRate,
-      qaParticipationRate: engagement.qaParticipationRate,
-      averageSessionDuration: engagement.averageSessionDuration,
       averageAttendanceDuration: engagement.averageSessionDuration,
       averageAttendancePercentage: 100 - engagement.dropoffRate,
-      dropoffRate: engagement.dropoffRate,
-      peakEngagementTime: engagement.peakEngagementTime,
-      engagementTrend: 'stable',
-      topEngagedParticipants: [],
-      engagementDistribution: { high: 0, medium: 0, low: 0 }
+      highlyEngagedCount: 0,
+      moderatelyEngagedCount: 0,
+      lowEngagedCount: 0,
+      peakAttendanceTime: engagement.peakEngagementTime,
+      dropOffAnalysis: {
+        early: 0,
+        middle: 0,
+        late: 0,
+        completed: 0
+      },
+      deviceDistribution: {},
+      locationDistribution: {}
     };
   }
 
@@ -69,17 +72,14 @@ export class ParticipantAnalyticsService {
       averageEngagementScore: historyData.summary.averageAttentionScore,
       totalTimeSpent: historyData.summary.totalTimeSpent,
       averageAttendanceDuration: historyData.summary.averageTimePerWebinar,
-      firstWebinarDate: historyData.summary.firstWebinarDate,
-      lastWebinarDate: historyData.summary.lastWebinarDate,
       engagementTrend: 'stable',
-      webinarHistory: historyData.participantHistory.map(h => ({
+      isHighlyEngaged: historyData.summary.engagementRate > 50,
+      recentWebinars: historyData.participantHistory.map(h => ({
         webinarId: h.webinarId,
-        webinarTitle: h.webinarTitle,
-        attendanceDate: h.webinarDate,
-        attendanceDuration: h.duration,
+        title: h.webinarTitle,
+        date: h.webinarDate,
         engagementScore: h.attentionScore,
-        pollParticipation: h.answeredPolling,
-        qaParticipation: h.askedQuestion
+        attendanceDuration: h.duration
       }))
     };
   }

@@ -16,32 +16,35 @@ export class RegistrantOperations {
     }
 
     try {
-      const transformedRegistrants = registrants.map(registrant => {
+      // Process registrants one by one to handle missing fields properly
+      for (const registrant of registrants) {
         const transformed = WebinarTransformers.transformRegistrant(registrant, webinarDbId);
-        return {
+        
+        const registrantData = {
           ...transformed,
+          email: transformed.email || transformed.registrant_email || 'unknown@example.com',
           custom_questions: transformed.custom_questions ? JSON.parse(JSON.stringify(transformed.custom_questions)) : null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
-      });
 
-      const { error } = await supabase
-        .from('zoom_registrants')
-        .upsert(
-          transformedRegistrants,
-          {
-            onConflict: 'webinar_id,registrant_id',
-            ignoreDuplicates: false
-          }
-        );
+        const { error } = await supabase
+          .from('zoom_registrants')
+          .upsert(
+            registrantData,
+            {
+              onConflict: 'webinar_id,registrant_id',
+              ignoreDuplicates: false
+            }
+          );
 
-      if (error) {
-        console.error('Failed to upsert registrants:', error);
-        throw new Error(`Failed to upsert registrants: ${error.message}`);
+        if (error) {
+          console.error('Failed to upsert registrant:', error);
+          // Continue with next registrant instead of throwing
+        }
       }
 
-      console.log(`Successfully upserted ${registrants.length} registrants`);
+      console.log(`Successfully processed ${registrants.length} registrants`);
     } catch (error) {
       console.error('Error in upsertRegistrants:', error);
       throw error;

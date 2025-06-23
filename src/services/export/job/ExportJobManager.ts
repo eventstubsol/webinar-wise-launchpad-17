@@ -124,7 +124,7 @@ export class ExportJobManager {
           fileBlob = await EnhancedPowerPointGenerator.generateAnalyticsPresentation({
             totalWebinars: processedData.summary.totalWebinars,
             totalParticipants: processedData.participants.length,
-            avgEngagement: processedData.engagement.averagePollParticipationRate || 0,
+            avgEngagement: processedData.engagement.pollParticipation?.participationRate || 0,
             webinars: processedData.webinars
           }, config);
           fileName = `${config.title.replace(/\s+/g, '_')}_presentation.pptx`;
@@ -180,7 +180,7 @@ export class ExportJobManager {
         })
         .eq('id', jobId);
 
-      // Add to report history with enhanced metadata
+      // Add to report history with enhanced data structure
       await supabase
         .from('report_history')
         .insert({

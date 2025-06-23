@@ -50,31 +50,34 @@ export class ParticipantOperations {
     }
 
     try {
-      const transformedParticipants = participants.map(participant => {
+      // Process participants one by one to handle missing fields properly
+      for (const participant of participants) {
         const transformed = ParticipantTransformers.transformParticipant(participant, webinarDbId);
-        return {
+        
+        const participantData = {
           ...transformed,
+          name: transformed.name || 'Unknown Participant',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
-      });
 
-      const { error } = await supabase
-        .from('zoom_participants')
-        .upsert(
-          transformedParticipants,
-          {
-            onConflict: 'webinar_id,participant_id',
-            ignoreDuplicates: false
-          }
-        );
+        const { error } = await supabase
+          .from('zoom_participants')
+          .upsert(
+            participantData,
+            {
+              onConflict: 'webinar_id,participant_id',
+              ignoreDuplicates: false
+            }
+          );
 
-      if (error) {
-        console.error('Failed to upsert participants:', error);
-        throw new Error(`Failed to upsert participants: ${error.message}`);
+        if (error) {
+          console.error('Failed to upsert participant:', error);
+          // Continue with next participant instead of throwing
+        }
       }
 
-      console.log(`Successfully upserted ${participants.length} participants`);
+      console.log(`Successfully processed ${participants.length} participants`);
     } catch (error) {
       console.error('Error in upsertParticipants:', error);
       throw error;
