@@ -33,7 +33,7 @@ export class ZoomWebinarTransformService {
       return statusMap[status.toLowerCase()] || ('available' as WebinarStatus);
     };
 
-    // FIXED: Complete mapping of ALL 39 database fields
+    // FIXED: Complete mapping of ALL 39 database fields including missing ones
     return {
       // Core identification - FIXED: Added all missing fields
       connection_id: connectionId,
@@ -80,12 +80,14 @@ export class ZoomWebinarTransformService {
       is_simulive: apiWebinar.is_simulive || false,
       simulive_webinar_id: apiWebinar.record_file_id || null,
       
-      // FIXED: Computed metrics fields (null for new records)
+      // FIXED: Added missing computed metrics fields (including attendees_count and registrants_count)
       total_registrants: null,
       total_attendees: null,
       total_absentees: null,
       total_minutes: null,
       avg_attendance_duration: null,
+      attendees_count: null, // FIXED: Added missing field
+      registrants_count: null, // FIXED: Added missing field
       
       // JSONB fields - FIXED: Complete extraction
       settings: apiWebinar.settings || null,

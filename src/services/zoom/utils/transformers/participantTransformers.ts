@@ -16,4 +16,18 @@ export class ParticipantTransformers {
       updated_at: new Date().toISOString()
     };
   }
+
+  // FIXED: Added missing normalizeEngagementData method
+  static normalizeEngagementData(participant: any) {
+    return {
+      engagement_score: participant.attentiveness_score || 0,
+      interaction_count: (participant.posted_chat ? 1 : 0) + 
+                        (participant.answered_polling ? 1 : 0) + 
+                        (participant.asked_question ? 1 : 0),
+      total_participation_time: participant.duration || 0,
+      camera_usage: participant.camera_on_duration || 0,
+      screen_share_usage: (participant.share_application_duration || 0) + 
+                          (participant.share_desktop_duration || 0)
+    };
+  }
 }

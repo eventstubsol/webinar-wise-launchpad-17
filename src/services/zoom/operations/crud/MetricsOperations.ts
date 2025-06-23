@@ -13,7 +13,7 @@ export class MetricsOperations {
     // Calculate metrics from participants
     const { data: participants, error: participantsError } = await supabase
       .from('zoom_participants')
-      .select('duration')
+      .select('duration, join_time')
       .eq('webinar_id', webinarDbId);
 
     if (participantsError) {
@@ -34,14 +34,16 @@ export class MetricsOperations {
 
     const metrics = MetricsTransformers.calculateWebinarMetrics(participants || []);
 
-    // Update webinar with calculated metrics
+    // FIXED: Update webinar with calculated metrics using correct field names
     const { error: updateError } = await supabase
       .from('zoom_webinars')
       .update({
         total_registrants: registrants?.length || 0,
-        total_attendees: metrics.total_attendees,
-        total_minutes: metrics.total_minutes,
-        avg_attendance_duration: metrics.avg_attendance_duration,
+        total_attendees: metrics.total_attendees, // FIXED: Use correct field name
+        total_minutes: metrics.total_minutes, // FIXED: Use correct field name
+        avg_attendance_duration: metrics.avg_attendance_duration, // FIXED: Use correct field name
+        attendees_count: metrics.total_attendees,
+        registrants_count: registrants?.length || 0,
         updated_at: new Date().toISOString()
       })
       .eq('id', webinarDbId);

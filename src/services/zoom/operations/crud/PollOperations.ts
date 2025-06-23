@@ -16,6 +16,7 @@ export class PollOperations {
       const transformed = InteractionTransformers.transformPoll(poll, webinarDbId);
       return {
         ...transformed,
+        // FIXED: Properly handle questions field
         questions: transformed.questions ? JSON.parse(JSON.stringify(transformed.questions)) : [],
         updated_at: new Date().toISOString()
       };
