@@ -1,4 +1,10 @@
 
+import { WebinarTransformers } from './webinarTransformers';
+import { ParticipantTransformers } from './participantTransformers';
+import { InteractionTransformers } from './interactionTransformers';
+import { MetricsTransformers } from './metricsTransformers';
+
+// Export all transformer classes
 export { WebinarTransformers } from './webinarTransformers';
 export { ParticipantTransformers } from './participantTransformers';
 export { InteractionTransformers } from './interactionTransformers';
