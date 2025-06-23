@@ -5,10 +5,16 @@ export async function createSyncLog(supabase: any, connectionId: string, syncTyp
     .insert({
       connection_id: connectionId,
       sync_type: syncType,
-      status: 'started', // Changed from sync_status to status
+      status: 'started',
+      sync_status: 'started', // Use sync_status for consistency
       resource_type: syncType === 'single' ? 'webinar' : 'webinars',
       resource_id: webinarId || null,
       started_at: new Date().toISOString(),
+      sync_notes: JSON.stringify({
+        enhanced_sync: true,
+        verification_enabled: true,
+        created_at: new Date().toISOString()
+      })
     })
     .select('id')
     .single();
@@ -21,11 +27,23 @@ export async function createSyncLog(supabase: any, connectionId: string, syncTyp
 }
 
 export async function updateSyncLog(supabase: any, syncLogId: string, updates: Record<string, any>): Promise<void> {
+  // Ensure sync_notes is properly handled
+  if (updates.sync_notes && typeof updates.sync_notes === 'string') {
+    try {
+      updates.sync_notes = JSON.parse(updates.sync_notes);
+    } catch (e) {
+      console.warn('Failed to parse sync_notes as JSON, storing as-is');
+    }
+  }
+
   const { error } = await supabase
     .from('zoom_sync_logs')
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', syncLogId);
-  if (error) console.error(`Failed to update sync log ${syncLogId}:`, error);
+    
+  if (error) {
+    console.error(`Failed to update sync log ${syncLogId}:`, error);
+  }
 }
 
 export async function updateSyncStage(supabase: any, syncLogId: string, webinarId: string | null, stage: string, progress: number): Promise<void> {
@@ -34,20 +52,19 @@ export async function updateSyncStage(supabase: any, syncLogId: string, webinarI
     sync_stage: stage,
     stage_progress_percentage: Math.max(0, Math.min(100, progress)),
   });
-  console.log(`Sync ${syncLogId}: ${stage} (${progress}%) - Webinar: ${webinarId || 'N/A'}`);
+  console.log(`Enhanced Sync ${syncLogId}: ${stage} (${progress}%) - Webinar: ${webinarId || 'N/A'}`);
 }
 
 export async function saveWebinarToDatabase(supabase: any, webinarData: any, connectionId: string): Promise<void> {
   console.log(`🔄 Enhanced saveWebinarToDatabase for webinar ${webinarData.id}`);
   
   try {
-    // Use the same enhanced sync logic from webinar-processor
     const { syncBasicWebinarData } = await import('./processors/webinar-processor.ts');
     const webinarId = await syncBasicWebinarData(supabase, webinarData, connectionId);
     
-    console.log(`✅ saveWebinarToDatabase completed - Database ID: ${webinarId}`);
+    console.log(`✅ Enhanced saveWebinarToDatabase completed - Database ID: ${webinarId}`);
   } catch (error) {
-    console.error(`❌ saveWebinarToDatabase failed for webinar ${webinarData.id}:`, error);
+    console.error(`❌ Enhanced saveWebinarToDatabase failed for webinar ${webinarData.id}:`, error);
     throw error;
   }
 }
@@ -94,7 +111,6 @@ export async function updateWebinarParticipantSyncStatus(
 }
 
 export async function determineParticipantSyncStatus(webinarData: any): Promise<'not_applicable' | 'pending'> {
-  // Determine initial status based on webinar eligibility
   if (!webinarData.start_time) {
     return 'not_applicable';
   }
@@ -122,7 +138,7 @@ export async function determineParticipantSyncStatus(webinarData: any): Promise<
   return 'pending';
 }
 
-// New validation helper function
+// Enhanced validation helper function
 export async function validateSyncResults(
   supabase: any,
   webinarDbId: string,
@@ -158,7 +174,7 @@ export async function validateSyncResults(
     }
   }
 
-  // Validate registrant count (when implemented)
+  // Validate registrant count
   if (syncResults.registrantCount === 0 && isPastWebinar) {
     hasWarnings = true;
     validationMessages.push(`WARNING: Past webinar has no registrants - may indicate registration issues`);

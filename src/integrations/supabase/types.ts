@@ -5435,6 +5435,7 @@ export type Database = {
           stage_progress_percentage: number | null
           started_at: string
           status: string
+          sync_notes: Json | null
           sync_stage: string | null
           sync_status: string | null
           sync_type: string
@@ -5466,6 +5467,7 @@ export type Database = {
           stage_progress_percentage?: number | null
           started_at?: string
           status: string
+          sync_notes?: Json | null
           sync_stage?: string | null
           sync_status?: string | null
           sync_type: string
@@ -5497,6 +5499,7 @@ export type Database = {
           stage_progress_percentage?: number | null
           started_at?: string
           status?: string
+          sync_notes?: Json | null
           sync_stage?: string | null
           sync_status?: string | null
           sync_type?: string
