@@ -224,7 +224,7 @@ serve(async (req) => {
         result = await handleGeneratePDFReport(req);
         break;
       case 'update-models':
-        result = await handleUpdateP redictiveModels(req);
+        result = await handleUpdatePredictiveModels(req);
         break;
       case 'optimize':
         result = await handleOptimizationAlgorithms(req);
