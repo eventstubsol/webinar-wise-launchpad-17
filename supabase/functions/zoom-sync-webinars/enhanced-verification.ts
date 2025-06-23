@@ -84,8 +84,8 @@ export async function captureEnhancedBaseline(
         console.warn('Field stats query failed, using basic stats:', fieldError);
       }
 
-      // Get basic counts with timeout protection
-      const [webinarStats, participantCount, registrantCount] = await Promise.all([
+      // Phase 1: Get webinars and participants (both have connection_id)
+      const [webinarStats, participantCount] = await Promise.all([
         supabase
           .from('zoom_webinars')
           .select('id, start_time, status, total_attendees, total_registrants, topic, duration, host_email, settings')
@@ -93,18 +93,31 @@ export async function captureEnhancedBaseline(
         supabase
           .from('zoom_participants')
           .select('id', { count: 'exact' })
-          .eq('connection_id', connectionId),
-        supabase
-          .from('zoom_registrants')
-          .select('id', { count: 'exact' })
           .eq('connection_id', connectionId)
       ]);
 
       if (webinarStats.error) throw new Error(`Webinar stats error: ${webinarStats.error.message}`);
       if (participantCount.error) throw new Error(`Participant count error: ${participantCount.error.message}`);
-      if (registrantCount.error) throw new Error(`Registrant count error: ${registrantCount.error.message}`);
 
       const webinars = webinarStats.data || [];
+      
+      // Phase 2: Get registrant count using webinar IDs (since zoom_registrants doesn't have connection_id)
+      let registrantCount = { count: 0 };
+      if (webinars.length > 0) {
+        const webinarIds = webinars.map(w => w.id);
+        const registrantQuery = await supabase
+          .from('zoom_registrants')
+          .select('id', { count: 'exact' })
+          .in('webinar_id', webinarIds);
+        
+        if (registrantQuery.error) {
+          console.warn('Registrant count query failed, using 0:', registrantQuery.error.message);
+          registrantCount = { count: 0 };
+        } else {
+          registrantCount = registrantQuery;
+        }
+      }
+
       const now = new Date();
       
       // Calculate field population statistics
