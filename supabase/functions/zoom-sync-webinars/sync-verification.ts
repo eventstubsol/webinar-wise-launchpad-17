@@ -1,3 +1,4 @@
+
 import { updateSyncLog } from './database-operations.ts';
 
 // Types for verification data
@@ -47,40 +48,47 @@ export async function capturePreSyncBaseline(
   console.log(`📊 Capturing pre-sync baseline for connection: ${connectionId}`);
   
   try {
-    // Get webinar counts and status breakdown
-    const { data: webinarStats, error: webinarError } = await supabase
-      .from('zoom_webinars')
-      .select('id, start_time, status, total_attendees, total_registrants')
-      .eq('connection_id', connectionId);
+    // Phase 1: Get webinars and participants (both have connection_id)
+    const [webinarStats, participantCount] = await Promise.all([
+      supabase
+        .from('zoom_webinars')
+        .select('id, start_time, status, total_attendees, total_registrants')
+        .eq('connection_id', connectionId),
+      supabase
+        .from('zoom_participants')
+        .select('id', { count: 'exact' })
+        .eq('connection_id', connectionId)
+    ]);
 
-    if (webinarError) {
-      console.error('Error fetching webinar stats for baseline:', webinarError);
-      throw new Error(`Failed to capture webinar baseline: ${webinarError.message}`);
+    if (webinarStats.error) {
+      console.error('Error fetching webinar stats for baseline:', webinarStats.error);
+      throw new Error(`Failed to capture webinar baseline: ${webinarStats.error.message}`);
     }
 
-    // Get participant count
-    const { count: participantCount, error: participantError } = await supabase
-      .from('zoom_participants')
-      .select('id', { count: 'exact' })
-      .eq('connection_id', connectionId);
-
-    if (participantError) {
-      console.error('Error fetching participant count for baseline:', participantError);
-      throw new Error(`Failed to capture participant baseline: ${participantError.message}`);
+    if (participantCount.error) {
+      console.error('Error fetching participant count for baseline:', participantCount.error);
+      throw new Error(`Failed to capture participant baseline: ${participantCount.error.message}`);
     }
 
-    // Get registrant count  
-    const { count: registrantCount, error: registrantError } = await supabase
-      .from('zoom_registrants')
-      .select('id', { count: 'exact' })
-      .eq('connection_id', connectionId);
-
-    if (registrantError) {
-      console.error('Error fetching registrant count for baseline:', registrantError);
-      throw new Error(`Failed to capture registrant baseline: ${registrantError.message}`);
+    const webinars = webinarStats.data || [];
+    
+    // Phase 2: Get registrant count using webinar IDs (since zoom_registrants doesn't have connection_id)
+    let registrantCount = { count: 0 };
+    if (webinars.length > 0) {
+      const webinarIds = webinars.map(w => w.id);
+      const registrantQuery = await supabase
+        .from('zoom_registrants')
+        .select('id', { count: 'exact' })
+        .in('webinar_id', webinarIds);
+      
+      if (registrantQuery.error) {
+        console.warn('Registrant count query failed, using 0:', registrantQuery.error.message);
+        registrantCount = { count: 0 };
+      } else {
+        registrantCount = registrantQuery;
+      }
     }
 
-    const webinars = webinarStats || [];
     const now = new Date();
     
     // Calculate breakdown metrics
@@ -91,8 +99,8 @@ export async function capturePreSyncBaseline(
 
     const baseline: SyncBaseline = {
       totalWebinars: webinars.length,
-      totalParticipants: participantCount || 0,
-      totalRegistrants: registrantCount || 0,
+      totalParticipants: participantCount.count || 0,
+      totalRegistrants: registrantCount.count || 0,
       pastWebinars,
       endedWebinars,
       webinarsWithParticipants,
