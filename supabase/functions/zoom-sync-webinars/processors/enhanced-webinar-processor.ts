@@ -1,8 +1,7 @@
-
 import { updateSyncStage } from '../database-operations.ts';
 
 /**
- * Enhanced webinar sync with detailed data capture
+ * Enhanced webinar sync with detailed data capture and updated field names
  */
 export async function syncWebinarWithDetails(
   supabase: any,
@@ -83,7 +82,7 @@ export async function updateWebinarTotals(
 }
 
 /**
- * Transform Zoom API webinar with enhanced field mapping
+ * Transform Zoom API webinar with enhanced field mapping and updated field names
  */
 function transformEnhancedWebinarForDatabase(apiWebinar: any, connectionId: string): any {
   const settings = apiWebinar.settings || {};
@@ -117,7 +116,7 @@ function transformEnhancedWebinarForDatabase(apiWebinar: any, connectionId: stri
     duration: apiWebinar.duration || null,
     timezone: apiWebinar.timezone || null,
     registration_required: !!apiWebinar.registration_url,
-    registration_type: settings.registration_type || null,
+    registration_type: apiWebinar.registration_type || settings.registration_type || null,
     registration_url: apiWebinar.registration_url || null,
     join_url: apiWebinar.join_url || null,
     approval_type: settings.approval_type || null,
@@ -133,17 +132,22 @@ function transformEnhancedWebinarForDatabase(apiWebinar: any, connectionId: stri
     avg_attendance_duration: 0,
     synced_at: new Date().toISOString(),
     
-    // Enhanced field mapping
+    // Updated field names to match Zoom API
     password: apiWebinar.password || null,
-    h323_password: apiWebinar.h323_password || apiWebinar.h323_passcode || null,
-    pstn_password: apiWebinar.pstn_password || null,
-    encrypted_password: apiWebinar.encrypted_password || apiWebinar.encrypted_passcode || null,
+    h323_passcode: apiWebinar.h323_passcode || null, // Updated field name
+    pstn_password: apiWebinar.pstn_password || null, // Updated field name
+    encrypted_passcode: apiWebinar.encrypted_passcode || null, // Updated field name
+    
+    // New Zoom API fields
+    start_url: apiWebinar.start_url || null,
+    pmi: apiWebinar.pmi || null,
+    webinar_passcode: apiWebinar.webinar_passcode || null,
+    
+    // Enhanced field mapping
     settings: settings,
     tracking_fields: apiWebinar.tracking_fields || null,
     recurrence: apiWebinar.recurrence || null,
     occurrences: apiWebinar.occurrences || null,
-    start_url: apiWebinar.start_url || null,
-    encrypted_passcode: apiWebinar.encrypted_passcode || apiWebinar.encrypted_password || null,
     creation_source: apiWebinar.creation_source || null,
     is_simulive: apiWebinar.is_simulive || false,
     record_file_id: apiWebinar.record_file_id || null,

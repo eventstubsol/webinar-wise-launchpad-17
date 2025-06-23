@@ -37,8 +37,18 @@ export class WebinarTransformers {
       registrants_count: null,
       synced_at: new Date().toISOString(),
       
-      // Enhanced field mapping for missing data
+      // Updated field mapping with correct Zoom API names
       password: apiWebinar.password || null,
+      h323_passcode: apiWebinar.h323_passcode || null, // Updated field name
+      pstn_password: apiWebinar.pstn_password || null, // Updated field name
+      encrypted_passcode: apiWebinar.encrypted_passcode || null, // Updated field name
+      
+      // New Zoom API fields
+      start_url: apiWebinar.start_url || null,
+      registration_type: apiWebinar.registration_type || settings.registration_type || null,
+      pmi: apiWebinar.pmi || null,
+      webinar_passcode: apiWebinar.webinar_passcode || null,
+      
       settings: settings,
       tracking_fields: apiWebinar.tracking_fields || null,
       recurrence: apiWebinar.recurrence || null,

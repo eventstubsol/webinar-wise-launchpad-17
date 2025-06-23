@@ -13,3 +13,10 @@ export {
   InteractionTransformers,
   MetricsTransformers
 } from './transformers';
+
+// Export the main transformer with updated field mappings
+export class ZoomDataTransformers {
+  static transformWebinarForDatabase(apiWebinar: any, connectionId: string) {
+    return WebinarTransformers.transformWebinarForDatabase(apiWebinar, connectionId);
+  }
+}

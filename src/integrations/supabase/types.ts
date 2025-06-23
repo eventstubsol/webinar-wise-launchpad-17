@@ -5596,8 +5596,8 @@ export type Database = {
           created_at: string | null
           created_at_db: string | null
           duration: number | null
-          encrypted_password: string | null
-          h323_password: string | null
+          encrypted_passcode: string | null
+          h323_passcode: string | null
           host_email: string | null
           host_id: string
           id: string
@@ -5612,8 +5612,10 @@ export type Database = {
             | Database["public"]["Enums"]["participant_sync_status"]
             | null
           password: string | null
-          pstn_passcode: string | null
+          pmi: number | null
+          pstn_password: string | null
           recurrence: Json | null
+          registration_type: number | null
           registration_url: string | null
           settings: Json | null
           simulive_webinar_id: string | null
@@ -5631,6 +5633,7 @@ export type Database = {
           updated_at_db: string | null
           uuid: string
           webinar_id: string
+          webinar_passcode: string | null
         }
         Insert: {
           agenda?: string | null
@@ -5639,8 +5642,8 @@ export type Database = {
           created_at?: string | null
           created_at_db?: string | null
           duration?: number | null
-          encrypted_password?: string | null
-          h323_password?: string | null
+          encrypted_passcode?: string | null
+          h323_passcode?: string | null
           host_email?: string | null
           host_id: string
           id?: string
@@ -5655,8 +5658,10 @@ export type Database = {
             | Database["public"]["Enums"]["participant_sync_status"]
             | null
           password?: string | null
-          pstn_passcode?: string | null
+          pmi?: number | null
+          pstn_password?: string | null
           recurrence?: Json | null
+          registration_type?: number | null
           registration_url?: string | null
           settings?: Json | null
           simulive_webinar_id?: string | null
@@ -5674,6 +5679,7 @@ export type Database = {
           updated_at_db?: string | null
           uuid: string
           webinar_id: string
+          webinar_passcode?: string | null
         }
         Update: {
           agenda?: string | null
@@ -5682,8 +5688,8 @@ export type Database = {
           created_at?: string | null
           created_at_db?: string | null
           duration?: number | null
-          encrypted_password?: string | null
-          h323_password?: string | null
+          encrypted_passcode?: string | null
+          h323_passcode?: string | null
           host_email?: string | null
           host_id?: string
           id?: string
@@ -5698,8 +5704,10 @@ export type Database = {
             | Database["public"]["Enums"]["participant_sync_status"]
             | null
           password?: string | null
-          pstn_passcode?: string | null
+          pmi?: number | null
+          pstn_password?: string | null
           recurrence?: Json | null
+          registration_type?: number | null
           registration_url?: string | null
           settings?: Json | null
           simulive_webinar_id?: string | null
@@ -5717,6 +5725,7 @@ export type Database = {
           updated_at_db?: string | null
           uuid?: string
           webinar_id?: string
+          webinar_passcode?: string | null
         }
         Relationships: [
           {

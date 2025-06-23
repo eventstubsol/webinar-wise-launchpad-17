@@ -37,7 +37,19 @@ export interface ZoomWebinar {
   synced_at: string | null;
   created_at: string | null;
   updated_at: string | null;
-  // New participant sync tracking fields
+  
+  // Updated field names to match Zoom API
+  h323_passcode: string | null; // Renamed from h323_password
+  pstn_password: string | null; // Renamed from pstn_passcode
+  encrypted_passcode: string | null; // Renamed from encrypted_password
+  
+  // New Zoom API fields
+  start_url: string | null;
+  registration_type: number | null;
+  pmi: number | null;
+  webinar_passcode: string | null;
+  
+  // Participant sync tracking fields
   participant_sync_status: 'not_applicable' | 'pending' | 'synced' | 'failed' | 'no_participants' | null;
   participant_sync_attempted_at: string | null;
   participant_sync_error: string | null;

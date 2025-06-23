@@ -34,7 +34,19 @@ export class ZoomWebinarTransformService {
       attendees_count: null, // Will be calculated after participants sync
       registrants_count: null, // Will be calculated after registrants sync
       synced_at: new Date().toISOString(),
+      
+      // Updated field names to match Zoom API
       password: apiWebinar.password || null,
+      h323_passcode: apiWebinar.h323_passcode || null, // Updated field name
+      pstn_password: apiWebinar.pstn_password || null, // Updated field name  
+      encrypted_passcode: apiWebinar.encrypted_passcode || null, // Updated field name
+      
+      // New Zoom API fields
+      start_url: apiWebinar.start_url || null,
+      registration_type: apiWebinar.registration_type || apiWebinar.settings?.registration_type || null,
+      pmi: apiWebinar.pmi || null,
+      webinar_passcode: apiWebinar.webinar_passcode || null,
+      
       settings: apiWebinar.settings || null,
       tracking_fields: apiWebinar.tracking_fields || null,
       recurrence: apiWebinar.recurrence || null,
