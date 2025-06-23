@@ -1,73 +1,145 @@
 
-import { ConnectionCrud } from './operations/connectionCrud';
-import { ConnectionStatusOperations } from './operations/connectionStatus';
-import { TokenUtils } from './utils/tokenUtils';
-import { zoomSyncOrchestrator } from './sync/ZoomSyncOrchestrator';
-import { ZoomConnection, ZoomConnectionInsert, ZoomConnectionUpdate, ConnectionStatus } from '@/types/zoom';
 import { supabase } from '@/integrations/supabase/client';
+import { ZoomConnection } from '@/types/zoom';
 
-/**
- * Main service for managing Zoom connections - simplified for plain text tokens
- */
 export class ZoomConnectionService {
-  // CRUD Operations
-  static createConnection = ConnectionCrud.createConnection;
-  static getConnection = ConnectionCrud.getConnection;
-  static getUserConnections = ConnectionCrud.getUserConnections;
-  static updateConnection = ConnectionCrud.updateConnection;
-  static deleteConnection = ConnectionCrud.deleteConnection;
+  static async validateCredentials(): Promise<{ success: boolean; connection?: ZoomConnection; error?: string }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('zoom-api-gateway', {
+        body: {},
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }, {
+        searchParams: { action: 'validate-credentials' }
+      });
 
-  // Connection Status Operations
-  static setPrimaryConnection = ConnectionStatusOperations.setPrimaryConnection;
-  static updateConnectionStatus = ConnectionStatusOperations.updateConnectionStatus;
-  static checkConnectionStatus = ConnectionStatusOperations.checkConnectionStatus;
-  static refreshToken = ConnectionStatusOperations.refreshToken;
-  static getPrimaryConnection = ConnectionStatusOperations.getPrimaryConnection;
+      if (error) {
+        throw new Error(error.message);
+      }
 
-  // Token Utilities (simplified)
-  static isTokenExpired = TokenUtils.isTokenExpired;
-  static getTokenStatus = TokenUtils.getTokenStatus;
-  static isValidToken = TokenUtils.isValidToken;
+      return data;
+    } catch (error) {
+      console.error('Error validating credentials:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to validate credentials'
+      };
+    }
+  }
 
-  // Sync Operations
-  static async startInitialSync(connectionId: string, options?: { batchSize?: number }) {
-    return await zoomSyncOrchestrator.startInitialSync(connectionId, options);
+  static async exchangeOAuthCode(code: string, state: string, redirectUri?: string): Promise<{ success: boolean; connection?: ZoomConnection; error?: string }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('zoom-api-gateway', {
+        body: { code, state, redirectUri },
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }, {
+        searchParams: { action: 'oauth-exchange' }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error exchanging OAuth code:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to exchange OAuth code'
+      };
+    }
+  }
+
+  static async testConnection(): Promise<{ success: boolean; userData?: any; connection?: any; error?: string }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('zoom-api-gateway', {
+        body: {},
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }, {
+        searchParams: { action: 'test' }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error testing connection:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to test connection'
+      };
+    }
+  }
+
+  static async startSync(connectionId: string, syncType: string, webinarId?: string): Promise<{ success: boolean; syncId?: string; error?: string }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('zoom-api-gateway', {
+        body: { connectionId, syncType, webinarId },
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }, {
+        searchParams: { action: 'sync' }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error starting sync:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to start sync'
+      };
+    }
+  }
+
+  static async getPrimaryConnection(userId: string): Promise<ZoomConnection | null> {
+    try {
+      const { data, error } = await supabase
+        .from('zoom_connections')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_primary', true)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      return data || null;
+    } catch (error) {
+      console.error('Error fetching primary connection:', error);
+      return null;
+    }
+  }
+
+  static async deleteConnection(connectionId: string): Promise<void> {
+    const { error } = await supabase
+      .from('zoom_connections')
+      .delete()
+      .eq('id', connectionId);
+
+    if (error) {
+      throw new Error(`Failed to delete connection: ${error.message}`);
+    }
+  }
+
+  // Legacy method aliases for backward compatibility
+  static async startInitialSync(connectionId: string) {
+    return this.startSync(connectionId, 'initial');
   }
 
   static async startIncrementalSync(connectionId: string) {
-    return await zoomSyncOrchestrator.startIncrementalSync(connectionId);
-  }
-
-  static async syncSingleWebinar(webinarId: string, connectionId: string) {
-    return await zoomSyncOrchestrator.syncSingleWebinar(webinarId, connectionId);
-  }
-
-  static async scheduleAutomaticSync(connectionId: string) {
-    return await zoomSyncOrchestrator.scheduleAutomaticSync(connectionId);
-  }
-
-  static async cancelSync(operationId: string) {
-    return await zoomSyncOrchestrator.cancelSync(operationId);
-  }
-
-  static async getSyncStatus() {
-    return await zoomSyncOrchestrator.getSyncStatus();
-  }
-
-  // Clear all connections (for migration)
-  static async clearAllConnections(userId: string): Promise<boolean> {
-    try {
-      const { data, error } = await supabase.functions.invoke('clear-zoom-connections');
-
-      if (error) {
-        console.error('Failed to clear connections:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error clearing connections:', error);
-      return false;
-    }
+    return this.startSync(connectionId, 'incremental');
   }
 }
