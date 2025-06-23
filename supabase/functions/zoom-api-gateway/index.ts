@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -29,105 +30,12 @@ const authenticateUser = async (supabase: any) => {
   return user;
 };
 
-const handleOAuthExchange = async (requestBody: any, authHeader: string) => {
-  const { code, state, redirectUri } = requestBody;
-  
-  if (!code) {
-    throw new Error('Authorization code is required');
-  }
-
-  const supabaseClient = createSupabaseClient(authHeader);
-  const user = await authenticateUser(supabaseClient);
-  
-  const serviceClient = createSupabaseClient();
-
-  // Get user's Zoom credentials
-  const { data: credentials } = await serviceClient
-    .from('zoom_credentials')
-    .select('client_id, client_secret')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single();
-
-  if (!credentials) {
-    throw new Error('No active Zoom credentials found');
-  }
-
-  // Exchange code for tokens
-  const tokenResponse = await fetch('https://zoom.us/oauth/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': `Basic ${btoa(`${credentials.client_id}:${credentials.client_secret}`)}`,
-    },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: code,
-      redirect_uri: redirectUri || Deno.env.get('ZOOM_REDIRECT_URI') || '',
-    }),
-  });
-
-  if (!tokenResponse.ok) {
-    const errorText = await tokenResponse.text();
-    console.error('Token exchange failed:', errorText);
-    throw new Error('Failed to exchange authorization code');
-  }
-
-  const tokenData = await tokenResponse.json();
-
-  // Get user info from Zoom
-  const userResponse = await fetch('https://api.zoom.us/v2/users/me', {
-    headers: { 'Authorization': `Bearer ${tokenData.access_token}` },
-  });
-
-  if (!userResponse.ok) {
-    throw new Error('Failed to get user information');
-  }
-
-  const zoomUser = await userResponse.json();
-  const tokenExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
-
-  // Store connection
-  const connectionData = {
-    user_id: user.id,
-    zoom_user_id: zoomUser.id,
-    zoom_account_id: zoomUser.account_id || zoomUser.id,
-    zoom_email: zoomUser.email,
-    zoom_account_type: zoomUser.type === 2 ? 'Licensed' : 'Basic',
-    access_token: tokenData.access_token,
-    refresh_token: tokenData.refresh_token,
-    token_expires_at: tokenExpiresAt,
-    scopes: tokenData.scope.split(' '),
-    connection_status: 'active',
-    is_primary: true,
-  };
-
-  // Delete existing connections and insert new one
-  await serviceClient
-    .from('zoom_connections')
-    .delete()
-    .eq('user_id', user.id);
-
-  const { data: connection, error: insertError } = await serviceClient
-    .from('zoom_connections')
-    .insert(connectionData)
-    .select()
-    .single();
-
-  if (insertError) {
-    throw new Error('Failed to save connection');
-  }
-
-  return {
-    success: true,
-    message: "Zoom account connected successfully",
-    connection,
-  };
-};
-
 const handleCredentialsValidation = async (authHeader: string) => {
+  console.log('Starting credentials validation');
+  
   const supabaseClient = createSupabaseClient(authHeader);
   const user = await authenticateUser(supabaseClient);
+  console.log('User authenticated:', user.id);
 
   const { data: credentials, error: credentialsError } = await supabaseClient
     .from('zoom_credentials')
@@ -137,9 +45,11 @@ const handleCredentialsValidation = async (authHeader: string) => {
     .single();
 
   if (credentialsError || !credentials) {
+    console.log('No credentials found:', credentialsError);
     throw new Error('No active Zoom credentials configured');
   }
 
+  console.log('Found credentials for validation');
   const serviceClient = createSupabaseClient();
 
   // Request Server-to-Server OAuth token
@@ -148,6 +58,7 @@ const handleCredentialsValidation = async (authHeader: string) => {
     account_id: credentials.account_id
   });
 
+  console.log('Requesting Zoom token...');
   const tokenResponse = await fetch('https://zoom.us/oauth/token', {
     method: 'POST',
     headers: {
@@ -159,21 +70,25 @@ const handleCredentialsValidation = async (authHeader: string) => {
 
   if (!tokenResponse.ok) {
     const errorText = await tokenResponse.text();
+    console.log('Token request failed:', errorText);
     throw new Error('Invalid Zoom credentials');
   }
   
   const tokenData = await tokenResponse.json();
+  console.log('Got token, testing API...');
 
-  // Validate token
+  // Validate token with Zoom API
   const userTestResponse = await fetch('https://api.zoom.us/v2/users/me', {
     headers: { 'Authorization': `Bearer ${tokenData.access_token}` },
   });
 
   if (!userTestResponse.ok) {
-    throw new Error('Failed to validate token');
+    console.log('API test failed:', userTestResponse.status, userTestResponse.statusText);
+    throw new Error('Failed to validate token with Zoom API');
   }
   
   const accountData = await userTestResponse.json();
+  console.log('API test successful, creating/updating connection...');
 
   // Check for existing connection
   const { data: existingConnection } = await serviceClient
@@ -213,6 +128,7 @@ const handleCredentialsValidation = async (authHeader: string) => {
       .single();
 
     if (updateError) {
+      console.log('Update error:', updateError);
       throw new Error('Failed to update connection');
     }
     connection = updatedConnection;
@@ -230,11 +146,13 @@ const handleCredentialsValidation = async (authHeader: string) => {
       .single();
 
     if (insertError) {
+      console.log('Insert error:', insertError);
       throw new Error('Failed to save connection');
     }
     connection = newConnection;
   }
 
+  console.log('Connection saved successfully');
   return {
     success: true,
     message: `Zoom credentials validated successfully with Server-to-Server OAuth (${operationType})`,
@@ -244,55 +162,6 @@ const handleCredentialsValidation = async (authHeader: string) => {
       email: accountData.email,
       plan_type: accountData.plan_type || accountData.type,
     }
-  };
-};
-
-const handleZoomSync = async (requestBody: any, authHeader: string) => {
-  const supabase = createSupabaseClient(authHeader);
-  
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  if (userError || !user) {
-    throw new Error('User not authenticated');
-  }
-
-  const { data: connection, error: connError } = await supabase
-    .from('zoom_connections')
-    .select('*')
-    .eq('id', requestBody.connectionId)
-    .eq('user_id', user.id)
-    .single();
-
-  if (connError || !connection) {
-    throw new Error('Connection not found');
-  }
-
-  // Create sync log
-  const { data: syncLog, error: syncError } = await supabase
-    .from('zoom_sync_logs')
-    .insert({
-      connection_id: requestBody.connectionId,
-      sync_type: requestBody.syncType || 'manual',
-      status: 'started',
-      sync_status: 'started',
-      resource_type: requestBody.syncType === 'single' ? 'webinar' : 'webinars',
-      resource_id: requestBody.webinarId || null,
-      started_at: new Date().toISOString(),
-    })
-    .select('id')
-    .single();
-
-  if (syncError) {
-    throw new Error('Failed to initialize sync operation');
-  }
-
-  // Queue the actual sync processing (simplified for now)
-  console.log(`Starting sync process for connection ${connection.id}, sync log ${syncLog.id}`);
-  
-  return {
-    success: true,
-    syncId: syncLog.id,
-    status: 'started',
-    message: `${requestBody.syncType} sync initiated successfully.`,
   };
 };
 
@@ -368,7 +237,6 @@ serve(async (req) => {
   }
 
   try {
-    // Simple request body parsing
     const requestBody = await req.json();
     const action = requestBody?.action;
     
@@ -381,18 +249,16 @@ serve(async (req) => {
     let result;
     const authHeader = req.headers.get('Authorization');
 
+    if (!authHeader) {
+      throw new Error('Missing authorization header');
+    }
+
     switch (action) {
-      case 'oauth-exchange':
-        result = await handleOAuthExchange(requestBody, authHeader!);
-        break;
       case 'validate-credentials':
-        result = await handleCredentialsValidation(authHeader!);
-        break;
-      case 'sync':
-        result = await handleZoomSync(requestBody, authHeader!);
+        result = await handleCredentialsValidation(authHeader);
         break;
       case 'test':
-        result = await handleZoomTest(authHeader!);
+        result = await handleZoomTest(authHeader);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
@@ -404,7 +270,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Zoom API Gateway error:', error);
+    console.error('Edge function error:', error);
     
     const status = error.message === 'Unauthorized' ? 401 : 500;
     
