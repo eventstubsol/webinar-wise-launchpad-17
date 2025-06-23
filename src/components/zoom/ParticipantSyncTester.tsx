@@ -51,7 +51,7 @@ export function ParticipantSyncTester() {
         .limit(50);
 
       if (error) throw error;
-      return data as WebinarForSync[];
+      return (data || []) as WebinarForSync[];
     },
     enabled: !!connection?.id,
   });

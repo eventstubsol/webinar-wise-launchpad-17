@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 export class CRMSyncOrchestrator {
@@ -105,8 +106,8 @@ export class CRMSyncOrchestrator {
         .insert({
           webinar_id: webinarId,
           participant_id: participant.participant_id,
-          name: participant.participant_name,
-          email: participant.participant_email,
+          name: participant.participant_name || participant.name,
+          email: participant.participant_email || participant.email,
           join_time: participant.join_time,
           connection_id: connectionId,
         });

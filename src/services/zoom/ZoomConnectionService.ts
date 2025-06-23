@@ -6,12 +6,10 @@ export class ZoomConnectionService {
   static async validateCredentials(): Promise<{ success: boolean; connection?: ZoomConnection; error?: string }> {
     try {
       const { data, error } = await supabase.functions.invoke('zoom-api-gateway', {
-        body: {},
+        body: { action: 'validate-credentials' },
         headers: {
           'Content-Type': 'application/json',
         },
-      }, {
-        searchParams: { action: 'validate-credentials' }
       });
 
       if (error) {
@@ -31,12 +29,10 @@ export class ZoomConnectionService {
   static async exchangeOAuthCode(code: string, state: string, redirectUri?: string): Promise<{ success: boolean; connection?: ZoomConnection; error?: string }> {
     try {
       const { data, error } = await supabase.functions.invoke('zoom-api-gateway', {
-        body: { code, state, redirectUri },
+        body: { action: 'oauth-exchange', code, state, redirectUri },
         headers: {
           'Content-Type': 'application/json',
         },
-      }, {
-        searchParams: { action: 'oauth-exchange' }
       });
 
       if (error) {
@@ -56,12 +52,10 @@ export class ZoomConnectionService {
   static async testConnection(): Promise<{ success: boolean; userData?: any; connection?: any; error?: string }> {
     try {
       const { data, error } = await supabase.functions.invoke('zoom-api-gateway', {
-        body: {},
+        body: { action: 'test' },
         headers: {
           'Content-Type': 'application/json',
         },
-      }, {
-        searchParams: { action: 'test' }
       });
 
       if (error) {
@@ -81,12 +75,10 @@ export class ZoomConnectionService {
   static async startSync(connectionId: string, syncType: string, webinarId?: string): Promise<{ success: boolean; syncId?: string; error?: string }> {
     try {
       const { data, error } = await supabase.functions.invoke('zoom-api-gateway', {
-        body: { connectionId, syncType, webinarId },
+        body: { action: 'sync', connectionId, syncType, webinarId },
         headers: {
           'Content-Type': 'application/json',
         },
-      }, {
-        searchParams: { action: 'sync' }
       });
 
       if (error) {
@@ -116,10 +108,35 @@ export class ZoomConnectionService {
         throw error;
       }
 
-      return data || null;
+      return data ? {
+        ...data,
+        connection_status: data.connection_status as any
+      } : null;
     } catch (error) {
       console.error('Error fetching primary connection:', error);
       return null;
+    }
+  }
+
+  static async getUserConnections(userId: string): Promise<ZoomConnection[]> {
+    try {
+      const { data, error } = await supabase
+        .from('zoom_connections')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      return data?.map(connection => ({
+        ...connection,
+        connection_status: connection.connection_status as any
+      })) || [];
+    } catch (error) {
+      console.error('Error fetching user connections:', error);
+      return [];
     }
   }
 

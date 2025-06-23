@@ -10,8 +10,10 @@ export class AnalyticsService {
 
     // Interaction rate (30% of score)
     // Ensure total_attendees is not zero to prevent division by zero
+    const pollsCount = Array.isArray(webinar.zoom_polls) ? webinar.zoom_polls.length : 0;
+    const qnaCount = Array.isArray(webinar.zoom_qna) ? webinar.zoom_qna.length : 0;
     const interactionRate = webinar.total_attendees > 0 
-        ? (((webinar.zoom_polls?.length || 0) + (webinar.zoom_qna?.length || 0)) / webinar.total_attendees)
+        ? ((pollsCount + qnaCount) / webinar.total_attendees)
         : 0;
     score += Math.min(interactionRate * 10, 30);
 
@@ -33,8 +35,8 @@ export class AnalyticsService {
         total_registrants,
         avg_attendance_duration,
         duration,
-        zoom_polls(count),
-        zoom_qna(count)
+        zoom_polls(id),
+        zoom_qna(id)
       `)
       .in('id', webinarIds);
 
@@ -49,12 +51,11 @@ export class AnalyticsService {
       engagementScore: this.calculateEngagementScore(webinar),
       participantCount: webinar.total_attendees,
       duration: webinar.duration,
-      pollsCount: webinar.zoom_polls?.[0]?.count || 0, // Adjusted to access count correctly
-      questionsCount: webinar.zoom_qna?.[0]?.count || 0 // Adjusted to access count correctly
+      pollsCount: Array.isArray(webinar.zoom_polls) ? webinar.zoom_polls.length : 0,
+      questionsCount: Array.isArray(webinar.zoom_qna) ? webinar.zoom_qna.length : 0
     }));
     
     const validAnalytics = analytics.filter(w => w.engagementScore !== null && !isNaN(w.engagementScore));
-
 
     return {
       webinars: analytics,

@@ -19,7 +19,7 @@ export class ParticipantHistoryService {
           *,
           zoom_webinars!inner(id, topic, start_time, duration)
         `)
-        .eq('email', participantEmail) // Use 'email' instead of 'participant_email'
+        .eq('email', participantEmail)
         .order('join_time', { ascending: false });
 
       if (error) {
@@ -34,7 +34,28 @@ export class ParticipantHistoryService {
       // Calculate engagement for each participation
       const engagementHistory = participations.map(p => {
         const webinar = (p as any).zoom_webinars;
-        const engagement = EngagementCalculator.calculateEngagementScore(p, webinar.duration || 0);
+        // Create a properly typed participant object
+        const participant = {
+          participant_name: p.name || '',
+          participant_email: p.email || '',
+          participant_user_id: p.participant_id || '',
+          duration: p.duration || 0,
+          join_time: p.join_time,
+          leave_time: p.leave_time,
+          attentiveness_score: p.attentiveness_score,
+          // Add other required fields
+          answered_polling: p.answered_polling || false,
+          asked_question: p.asked_question || false,
+          camera_on_duration: p.camera_on_duration || 0,
+          connection_id: p.connection_id || '',
+          connection_type: p.connection_type || '',
+          created_at: p.created_at || '',
+          customer_key: p.customer_key || '',
+          id: p.id,
+          webinar_id: p.webinar_id
+        };
+        
+        const engagement = EngagementCalculator.calculateEngagementScore(participant, webinar.duration || 0);
         
         return {
           webinarId: webinar.id,
@@ -60,7 +81,7 @@ export class ParticipantHistoryService {
 
       const history: ParticipantHistory = {
         participantEmail,
-        participantName: participations[0].name, // Use 'name' instead of 'participant_name'
+        participantName: participations[0].name || '',
         totalWebinarsAttended,
         averageEngagementScore: Math.round(averageEngagementScore * 100) / 100,
         averageAttendanceDuration: Math.round(averageAttendanceDuration),

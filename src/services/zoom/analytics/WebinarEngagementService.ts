@@ -43,15 +43,36 @@ export class WebinarEngagementService {
       }
 
       const webinarDuration = webinar.duration || 0;
-      const engagementData = participants.map(p => ({
+      
+      // Convert raw participant data to properly typed ZoomParticipant objects
+      const typedParticipants: ZoomParticipant[] = participants.map(p => ({
+        participant_name: p.name || '',
+        participant_email: p.email || '',
+        participant_user_id: p.participant_id || '',
+        duration: p.duration || 0,
+        join_time: p.join_time,
+        leave_time: p.leave_time,
+        attentiveness_score: p.attentiveness_score,
+        answered_polling: p.answered_polling || false,
+        asked_question: p.asked_question || false,
+        camera_on_duration: p.camera_on_duration || 0,
+        connection_id: p.connection_id || '',
+        connection_type: p.connection_type || '',
+        created_at: p.created_at || '',
+        customer_key: p.customer_key || '',
+        id: p.id,
+        webinar_id: p.webinar_id
+      }));
+
+      const engagementData = typedParticipants.map(p => ({
         participant: p,
         engagement: EngagementCalculator.calculateEngagementScore(p, webinarDuration)
       }));
 
       // Calculate summary metrics
-      const totalParticipants = participants.length;
+      const totalParticipants = typedParticipants.length;
       const averageEngagementScore = engagementData.reduce((sum, p) => sum + p.engagement.totalScore, 0) / totalParticipants;
-      const averageAttendanceDuration = participants.reduce((sum, p) => sum + (p.duration || 0), 0) / totalParticipants;
+      const averageAttendanceDuration = typedParticipants.reduce((sum, p) => sum + (p.duration || 0), 0) / totalParticipants;
       const averageAttendancePercentage = webinarDuration > 0 ? (averageAttendanceDuration / webinarDuration) * 100 : 0;
 
       // Engagement distribution
@@ -60,14 +81,14 @@ export class WebinarEngagementService {
       const lowEngagedCount = engagementData.filter(p => p.engagement.totalScore < 40).length;
 
       // Drop-off analysis
-      const dropOffAnalysis = AnalyticsHelpers.analyzeDropOffPatterns(participants, webinarDuration);
+      const dropOffAnalysis = AnalyticsHelpers.analyzeDropOffPatterns(typedParticipants, webinarDuration);
       
       // Device and location distribution
-      const deviceDistribution = AnalyticsHelpers.calculateDeviceDistribution(participants);
-      const locationDistribution = AnalyticsHelpers.calculateLocationDistribution(participants);
+      const deviceDistribution = AnalyticsHelpers.calculateDeviceDistribution(typedParticipants);
+      const locationDistribution = AnalyticsHelpers.calculateLocationDistribution(typedParticipants);
       
       // Peak attendance time
-      const peakAttendanceTime = AnalyticsHelpers.calculatePeakAttendanceTime(participants, webinar);
+      const peakAttendanceTime = AnalyticsHelpers.calculatePeakAttendanceTime(typedParticipants, webinar);
 
       const summary: WebinarEngagementSummary = {
         webinarId,
