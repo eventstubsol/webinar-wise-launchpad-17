@@ -15,6 +15,7 @@ export class EnhancedSyncProgressTracker {
       .insert({
         connection_id: connectionId,
         sync_type: syncType,
+        status: SyncStatus.STARTED,
         sync_status: SyncStatus.STARTED,
         resource_type: resourceId ? 'webinar' : 'webinars',
         resource_id: resourceId,

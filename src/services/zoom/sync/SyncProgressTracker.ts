@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { SyncStatus, ZoomSyncLog, SyncErrorDetails } from '@/types/zoom';
 
@@ -15,6 +14,7 @@ export class SyncProgressTracker {
       .insert({
         connection_id: connectionId,
         sync_type: syncType,
+        status: SyncStatus.STARTED,
         sync_status: SyncStatus.STARTED,
         resource_type: resourceId ? 'webinar' : 'webinars',
         resource_id: resourceId,

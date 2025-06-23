@@ -56,7 +56,7 @@ export class ParticipantOperations {
         
         const participantData = {
           ...transformed,
-          name: transformed.name || 'Unknown Participant',
+          name: transformed.participant_name || 'Unknown Participant',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };

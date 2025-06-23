@@ -22,7 +22,7 @@ export class RegistrantOperations {
         
         const registrantData = {
           ...transformed,
-          email: transformed.email || transformed.registrant_email || 'unknown@example.com',
+          email: transformed.registrant_email || 'unknown@example.com',
           custom_questions: transformed.custom_questions ? JSON.parse(JSON.stringify(transformed.custom_questions)) : null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()

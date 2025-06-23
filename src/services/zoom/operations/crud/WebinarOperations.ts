@@ -17,7 +17,7 @@ export class WebinarOperations {
       .upsert(
         {
           ...transformedWebinar,
-          updated_at: new Date().toISOString()
+          updated_at_db: new Date().toISOString()
         },
         {
           onConflict: 'connection_id,webinar_id',
@@ -40,7 +40,7 @@ export class WebinarOperations {
   static async getWebinarByZoomId(zoomWebinarId: string, connectionId: string): Promise<any> {
     const { data, error } = await supabase
       .from('zoom_webinars')
-      .select('id, webinar_id, updated_at')
+      .select('id, webinar_id, updated_at_db')
       .eq('webinar_id', zoomWebinarId)
       .eq('connection_id', connectionId)
       .single();
