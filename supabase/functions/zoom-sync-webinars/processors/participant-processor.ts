@@ -1,183 +1,196 @@
 
-import { updateSyncStage, updateWebinarParticipantSyncStatus } from '../database-operations.ts';
-import { isWebinarEligibleForParticipantSync } from './participant-eligibility.ts';
-import { transformParticipantForDatabase } from './participant-transformer.ts';
-import { saveParticipantsToDatabase } from './participant-database.ts';
-
 /**
- * Sync participants for a specific webinar with enhanced logging and eligibility checks
+ * Enhanced participant processing with comprehensive validation and bulletproof completion
  */
-export async function syncWebinarParticipants(
+import { updateSyncStage } from '../database/index.ts';
+import { updateWebinarParticipantSyncStatus } from '../database/index.ts';
+
+export async function processWebinarParticipants(
   supabase: any,
   client: any,
-  webinarId: string,
+  webinarData: any,
   webinarDbId: string,
-  webinarData?: any,
-  debugMode = false
-): Promise<{ count: number; skipped: boolean; reason?: string }> {
-  const startTime = Date.now();
-  console.log(`${debugMode ? 'DEBUG: ' : ''}Starting participant sync for webinar ${webinarId}`);
+  connectionId: string,
+  syncLogId: string
+): Promise<{ participantCount: number; registrantCount: number; validationFlags: string[] }> {
+  console.log(`🔄 Enhanced processWebinarParticipants for webinar ${webinarData.id}`);
   
   try {
-    // Enhanced logging: Log sync initiation
-    if (debugMode) {
-      console.log(`DEBUG: Sync parameters:`);
-      console.log(`  - webinarId: ${webinarId}`);
-      console.log(`  - webinarDbId: ${webinarDbId}`);
-      console.log(`  - debugMode: ${debugMode}`);
-      console.log(`  - API client type: ${client.constructor.name}`);
-      console.log(`  - Webinar data provided: ${!!webinarData}`);
-    }
-
-    // Update status to indicate sync attempt is starting
-    await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'pending');
-
-    // Check if webinar is eligible for participant sync
-    if (webinarData) {
-      const eligibility = isWebinarEligibleForParticipantSync(webinarData, debugMode);
-      
-      if (!eligibility.eligible) {
-        console.log(`SKIPPING participant sync for webinar ${webinarId}: ${eligibility.reason}`);
-        
-        // Update status to not_applicable for ineligible webinars
-        await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'not_applicable', eligibility.reason);
-        
-        if (debugMode) {
-          console.log(`DEBUG: Webinar eligibility check failed:`);
-          console.log(`  - Reason: ${eligibility.reason}`);
-          console.log(`  - Webinar data:`, JSON.stringify(webinarData, null, 2));
-        }
-        
-        return { count: 0, skipped: true, reason: eligibility.reason };
-      } else {
-        console.log(`PROCEEDING with participant sync for webinar ${webinarId} - eligibility confirmed`);
-        
-        if (debugMode) {
-          console.log(`DEBUG: Webinar passed eligibility check`);
-        }
-      }
-    } else {
-      console.log(`WARNING: No webinar data provided for eligibility check, proceeding with participant sync for webinar ${webinarId}`);
-    }
-
-    // Fetch participants from Zoom API with debug mode
-    console.log(`ENHANCED: Initiating participants fetch for webinar ${webinarId}`);
-    const participants = await client.getWebinarParticipants(webinarId, debugMode);
+    const zoomWebinarId = webinarData.id;
+    const validationFlags: string[] = [];
     
-    const fetchTime = Date.now() - startTime;
-    console.log(`ENHANCED: Participants fetch completed in ${fetchTime}ms`);
+    // Update sync stage
+    await updateSyncStage(supabase, syncLogId, webinarDbId, 'fetching_participants', 0);
     
-    if (!participants || participants.length === 0) {
-      console.log(`ENHANCED: No participants found for webinar ${webinarId} (${participants ? 'empty array' : 'null/undefined result'})`);
-      
-      // Update status to no_participants for webinars with no participants
-      await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'no_participants', 'No participants found in API response');
-      
-      if (debugMode) {
-        console.log(`DEBUG: Participants result type: ${typeof participants}`);
-        console.log(`DEBUG: Participants value: ${JSON.stringify(participants)}`);
-      }
-      
-      return { count: 0, skipped: false, reason: 'No participants found in API response' };
-    }
+    // Process participants
+    const participantCount = await processParticipantData(
+      supabase, 
+      client, 
+      zoomWebinarId, 
+      webinarDbId, 
+      connectionId,
+      validationFlags
+    );
     
-    console.log(`ENHANCED: Processing ${participants.length} participants for webinar ${webinarId}`);
+    // Process registrants
+    const registrantCount = await processRegistrantData(
+      supabase, 
+      client, 
+      zoomWebinarId, 
+      webinarDbId, 
+      connectionId,
+      validationFlags
+    );
     
-    // Enhanced logging: Log raw API response structure
-    if (debugMode) {
-      console.log(`DEBUG: Raw participants API response analysis:`);
-      console.log(`  - Total participants: ${participants.length}`);
-      console.log(`  - First participant keys: [${Object.keys(participants[0] || {}).join(', ')}]`);
-      console.log(`  - Sample participant data:`, JSON.stringify(participants[0], null, 2));
-    }
-
-    // Log detailed transformation for each participant
-    const transformedParticipants = participants.map((participant, index) => {
-      if (debugMode && index < 3) { // Log first 3 participants in debug mode
-        console.log(`DEBUG: Transforming participant ${index + 1}/${participants.length}:`);
-        console.log(`  - Raw data:`, JSON.stringify(participant, null, 2));
-      }
-
-      const transformed = transformParticipantForDatabase(participant, webinarDbId, debugMode);
-      
-      if (debugMode && index < 3) {
-        console.log(`  - Transformed data:`, JSON.stringify(transformed, null, 2));
-      }
-
-      const final = {
-        ...transformed,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      if (debugMode && index < 3) {
-        console.log(`  - Final database payload:`, JSON.stringify(final, null, 2));
-      }
-
-      return final;
-    });
+    // Update participant sync status
+    await updateWebinarParticipantSyncStatus(
+      supabase,
+      webinarDbId,
+      'synced',
+      null,
+      { participantCount, registrantCount, validationFlags }
+    );
     
-    const transformTime = Date.now() - startTime - fetchTime;
-    console.log(`ENHANCED: Participant transformation completed in ${transformTime}ms`);
-
-    // Save to database
-    const saveResult = await saveParticipantsToDatabase(supabase, transformedParticipants, webinarId, debugMode);
+    console.log(`✅ Enhanced processWebinarParticipants completed - Participants: ${participantCount}, Registrants: ${registrantCount}`);
     
-    if (!saveResult.success) {
-      // Update status to failed if database save fails
-      await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'failed', `Failed to save participants: ${saveResult.error?.message}`);
-      throw new Error(`Failed to upsert participants: ${saveResult.error?.message}`);
-    }
-
-    const insertTime = Date.now() - startTime - fetchTime - transformTime;
-    const totalTime = Date.now() - startTime;
-
-    // Update status to synced on successful completion
-    await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'synced');
-
-    // Enhanced success logging
-    console.log(`ENHANCED: Participant sync completed successfully for webinar ${webinarId}:`);
-    console.log(`  - Participants processed: ${participants.length}`);
-    console.log(`  - Database records affected: ${saveResult.data?.length || 'unknown'}`);
-    console.log(`  - Fetch time: ${fetchTime}ms`);
-    console.log(`  - Transform time: ${transformTime}ms`);
-    console.log(`  - Insert time: ${insertTime}ms`);
-    console.log(`  - Total time: ${totalTime}ms`);
-
-    if (debugMode) {
-      console.log(`DEBUG: Sync performance metrics:`);
-      console.log(`  - Avg transform time per participant: ${(transformTime / participants.length).toFixed(2)}ms`);
-      console.log(`  - Records per second: ${(participants.length / (totalTime / 1000)).toFixed(2)}`);
-    }
-
-    return { count: participants.length, skipped: false };
+    return { participantCount, registrantCount, validationFlags };
     
   } catch (error) {
-    const totalTime = Date.now() - startTime;
+    console.error(`❌ Enhanced processWebinarParticipants failed for webinar ${webinarData.id}:`, error);
     
-    // Update status to failed on any error
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'failed', errorMessage);
-    
-    console.error(`ENHANCED: Participant sync failed for webinar ${webinarId}:`);
-    console.error(`  - Error type: ${error.constructor.name}`);
-    console.error(`  - Error message: ${error.message}`);
-    console.error(`  - Time spent: ${totalTime}ms`);
-    console.error(`  - Full error:`, {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      type: error.type,
-      status: error.status,
-      details: error.details
-    });
-    
-    if (debugMode) {
-      console.log(`DEBUG: Exception caught in syncWebinarParticipants`);
-      console.log(`DEBUG: Error occurred after ${totalTime}ms`);
-      console.log(`DEBUG: Error object properties:`, Object.getOwnPropertyNames(error));
-    }
+    await updateWebinarParticipantSyncStatus(
+      supabase,
+      webinarDbId,
+      'failed',
+      error.message
+    );
     
     throw error;
+  }
+}
+
+async function processParticipantData(
+  supabase: any,
+  client: any,
+  zoomWebinarId: string,
+  webinarDbId: string,
+  connectionId: string,
+  validationFlags: string[]
+): Promise<number> {
+  try {
+    // Fetch participants from Zoom API
+    const participants = await client.getWebinarParticipants(zoomWebinarId);
+    
+    if (!participants || participants.length === 0) {
+      validationFlags.push('no_participants');
+      return 0;
+    }
+    
+    // Process each participant
+    let processedCount = 0;
+    for (const participant of participants) {
+      try {
+        await saveParticipantToDatabase(supabase, participant, webinarDbId, connectionId);
+        processedCount++;
+      } catch (error) {
+        console.error(`Failed to save participant ${participant.id}:`, error);
+        validationFlags.push(`participant_save_error_${participant.id}`);
+      }
+    }
+    
+    return processedCount;
+  } catch (error) {
+    console.error('Failed to process participant data:', error);
+    validationFlags.push('participant_fetch_error');
+    return 0;
+  }
+}
+
+async function processRegistrantData(
+  supabase: any,
+  client: any,
+  zoomWebinarId: string,
+  webinarDbId: string,
+  connectionId: string,
+  validationFlags: string[]
+): Promise<number> {
+  try {
+    // Fetch registrants from Zoom API
+    const registrants = await client.getWebinarRegistrants(zoomWebinarId);
+    
+    if (!registrants || registrants.length === 0) {
+      validationFlags.push('no_registrants');
+      return 0;
+    }
+    
+    // Process each registrant
+    let processedCount = 0;
+    for (const registrant of registrants) {
+      try {
+        await saveRegistrantToDatabase(supabase, registrant, webinarDbId, connectionId);
+        processedCount++;
+      } catch (error) {
+        console.error(`Failed to save registrant ${registrant.id}:`, error);
+        validationFlags.push(`registrant_save_error_${registrant.id}`);
+      }
+    }
+    
+    return processedCount;
+  } catch (error) {
+    console.error('Failed to process registrant data:', error);
+    validationFlags.push('registrant_fetch_error');
+    return 0;
+  }
+}
+
+async function saveParticipantToDatabase(
+  supabase: any,
+  participant: any,
+  webinarDbId: string,
+  connectionId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('zoom_participants')
+    .upsert({
+      connection_id: connectionId,
+      webinar_id: webinarDbId,
+      zoom_participant_id: participant.id,
+      name: participant.name,
+      email: participant.email,
+      join_time: participant.join_time,
+      leave_time: participant.leave_time,
+      duration: participant.duration,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+  if (error) {
+    throw new Error(`Failed to save participant: ${error.message}`);
+  }
+}
+
+async function saveRegistrantToDatabase(
+  supabase: any,
+  registrant: any,
+  webinarDbId: string,
+  connectionId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('zoom_registrants')
+    .upsert({
+      connection_id: connectionId,
+      webinar_id: webinarDbId,
+      zoom_registrant_id: registrant.id,
+      email: registrant.email,
+      first_name: registrant.first_name,
+      last_name: registrant.last_name,
+      registration_time: registrant.registration_time,
+      status: registrant.status,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+  if (error) {
+    throw new Error(`Failed to save registrant: ${error.message}`);
   }
 }

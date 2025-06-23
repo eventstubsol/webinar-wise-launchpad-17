@@ -49,3 +49,34 @@ export async function updateSyncStageEnhanced(
   
   console.log(`Enhanced Sync ${syncLogId}: ${stage} (${progress}%) - Webinar: ${webinarId || 'N/A'}`);
 }
+
+// Basic sync stage update function for backward compatibility
+export async function updateSyncStage(
+  supabase: any, 
+  syncLogId: string, 
+  webinarId: string | null, 
+  stage: string, 
+  progress: number
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('zoom_sync_logs')
+      .update({
+        current_webinar_id: webinarId,
+        sync_stage: stage,
+        stage_progress_percentage: Math.max(0, Math.min(100, progress)),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', syncLogId);
+
+    if (error) {
+      console.error('Failed to update sync stage:', error);
+      throw new Error(`Failed to update sync stage: ${error.message}`);
+    }
+
+    console.log(`Sync ${syncLogId}: ${stage} (${progress}%) - Webinar: ${webinarId || 'N/A'}`);
+  } catch (error) {
+    console.error('Error updating sync stage:', error);
+    throw error;
+  }
+}
