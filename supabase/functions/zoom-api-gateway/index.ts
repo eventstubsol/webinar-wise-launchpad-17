@@ -30,14 +30,14 @@ const authenticateUser = async (supabase: any) => {
   return user;
 };
 
-const handleOAuthExchange = async (req: Request) => {
-  const { code, state, redirectUri } = await req.json();
+const handleOAuthExchange = async (requestBody: any, authHeader: string) => {
+  const { code, state, redirectUri } = requestBody;
   
   if (!code) {
     throw new Error('Authorization code is required');
   }
 
-  const supabaseClient = createSupabaseClient(req.headers.get('Authorization')!);
+  const supabaseClient = createSupabaseClient(authHeader);
   const user = await authenticateUser(supabaseClient);
   
   const serviceClient = createSupabaseClient();
@@ -126,8 +126,8 @@ const handleOAuthExchange = async (req: Request) => {
   };
 };
 
-const handleCredentialsValidation = async (req: Request) => {
-  const supabaseClient = createSupabaseClient(req.headers.get('Authorization')!);
+const handleCredentialsValidation = async (authHeader: string) => {
+  const supabaseClient = createSupabaseClient(authHeader);
   const user = await authenticateUser(supabaseClient);
 
   const { data: credentials, error: credentialsError } = await supabaseClient
@@ -248,9 +248,8 @@ const handleCredentialsValidation = async (req: Request) => {
   };
 };
 
-const handleZoomSync = async (req: Request) => {
-  const requestBody = await req.json();
-  const supabase = createSupabaseClient(req.headers.get('Authorization')!);
+const handleZoomSync = async (requestBody: any, authHeader: string) => {
+  const supabase = createSupabaseClient(authHeader);
   
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
@@ -274,6 +273,7 @@ const handleZoomSync = async (req: Request) => {
     .insert({
       connection_id: requestBody.connectionId,
       sync_type: requestBody.syncType || 'manual',
+      status: 'started',
       sync_status: 'started',
       resource_type: requestBody.syncType === 'single' ? 'webinar' : 'webinars',
       resource_id: requestBody.webinarId || null,
@@ -297,8 +297,8 @@ const handleZoomSync = async (req: Request) => {
   };
 };
 
-const handleZoomTest = async (req: Request) => {
-  const supabase = createSupabaseClient(req.headers.get('Authorization')!);
+const handleZoomTest = async (authHeader: string) => {
+  const supabase = createSupabaseClient(authHeader);
   const user = await authenticateUser(supabase);
 
   const { data: connections } = await supabase
@@ -369,22 +369,50 @@ serve(async (req) => {
   }
 
   try {
-    const url = new URL(req.url);
-    const action = url.searchParams.get('action');
+    let requestBody;
+    let action;
+
+    // Parse request body for all non-GET requests
+    if (req.method !== 'GET') {
+      try {
+        const bodyText = await req.text();
+        if (bodyText) {
+          requestBody = JSON.parse(bodyText);
+          action = requestBody.action;
+        }
+      } catch (error) {
+        console.error('Failed to parse request body:', error);
+        throw new Error('Invalid JSON in request body');
+      }
+    }
+
+    // Fallback to URL parameters if action not found in body
+    if (!action) {
+      const url = new URL(req.url);
+      action = url.searchParams.get('action');
+    }
+
+    if (!action) {
+      throw new Error('Missing action parameter');
+    }
 
     let result;
+    const authHeader = req.headers.get('Authorization');
+
     switch (action) {
       case 'oauth-exchange':
-        result = await handleOAuthExchange(req);
+        if (!requestBody) throw new Error('Request body required for OAuth exchange');
+        result = await handleOAuthExchange(requestBody, authHeader!);
         break;
       case 'validate-credentials':
-        result = await handleCredentialsValidation(req);
+        result = await handleCredentialsValidation(authHeader!);
         break;
       case 'sync':
-        result = await handleZoomSync(req);
+        if (!requestBody) throw new Error('Request body required for sync');
+        result = await handleZoomSync(requestBody, authHeader!);
         break;
       case 'test':
-        result = await handleZoomTest(req);
+        result = await handleZoomTest(authHeader!);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
