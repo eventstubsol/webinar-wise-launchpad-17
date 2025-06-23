@@ -17,6 +17,8 @@ export class WebinarOperations {
       .upsert(
         {
           ...transformedWebinar,
+          // Ensure uuid field is present (required by database schema)
+          uuid: transformedWebinar.uuid || transformedWebinar.webinar_uuid || null,
           updated_at_db: new Date().toISOString()
         },
         {
