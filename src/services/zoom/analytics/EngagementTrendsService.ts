@@ -41,7 +41,7 @@ export class EngagementTrendsService {
       // Calculate engagement for all webinars
       const webinarEngagements = await Promise.all(
         webinars.map(async (webinar) => {
-          const engagement = await WebinarEngagementService.calculateWebinarEngagement(webinar.id);
+          const engagement = await WebinarEngagementService.calculateEngagementMetrics(webinar.id);
           return {
             webinar,
             engagement
@@ -53,7 +53,7 @@ export class EngagementTrendsService {
       const totalWebinars = webinars.length;
       const allParticipants = webinars.flatMap((w: any) => w.zoom_participants || []);
       const totalParticipants = allParticipants.length;
-      const uniqueParticipants = new Set(allParticipants.map(p => p.participant_email).filter(Boolean)).size;
+      const uniqueParticipants = new Set(allParticipants.map(p => p.email).filter(Boolean)).size;
 
       const averageEngagementScore = webinarEngagements
         .filter(we => we.engagement)
@@ -75,7 +75,9 @@ export class EngagementTrendsService {
           title: we.webinar.topic,
           date: we.webinar.start_time,
           engagementScore: we.engagement!.averageEngagementScore,
-          attendanceRate: we.engagement!.averageAttendancePercentage
+          attendanceRate: we.webinar.total_attendees && we.webinar.total_registrants 
+            ? (we.webinar.total_attendees / we.webinar.total_registrants) * 100 
+            : 0
         }));
 
       const trends: EngagementTrends = {

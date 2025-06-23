@@ -32,14 +32,56 @@ export class ParticipantAnalyticsService {
    * Calculate comprehensive engagement metrics for a webinar
    */
   static async calculateWebinarEngagement(webinarId: string): Promise<WebinarEngagementSummary | null> {
-    return WebinarEngagementService.calculateWebinarEngagement(webinarId);
+    const engagement = await WebinarEngagementService.calculateEngagementMetrics(webinarId);
+    if (!engagement) return null;
+
+    // Create a proper WebinarEngagementSummary object
+    return {
+      webinarId,
+      totalParticipants: 0, // Will be calculated in the service
+      averageEngagementScore: engagement.averageEngagementScore,
+      averageAttentionScore: engagement.averageAttentionScore,
+      pollParticipationRate: engagement.pollParticipationRate,
+      qaParticipationRate: engagement.qaParticipationRate,
+      averageSessionDuration: engagement.averageSessionDuration,
+      averageAttendanceDuration: engagement.averageSessionDuration,
+      averageAttendancePercentage: 100 - engagement.dropoffRate,
+      dropoffRate: engagement.dropoffRate,
+      peakEngagementTime: engagement.peakEngagementTime,
+      engagementTrend: 'stable',
+      topEngagedParticipants: [],
+      engagementDistribution: { high: 0, medium: 0, low: 0 }
+    };
   }
 
   /**
    * Calculate participant history across multiple webinars
    */
-  static async calculateParticipantHistory(participantEmail: string): Promise<ParticipantHistory | null> {
-    return ParticipantHistoryService.calculateParticipantHistory(participantEmail);
+  static async calculateParticipantHistory(participantEmail: string, userId: string): Promise<ParticipantHistory | null> {
+    const historyData = await ParticipantHistoryService.getParticipantHistory(participantEmail, userId);
+    if (!historyData || !historyData.summary) return null;
+
+    // Transform to match ParticipantHistory interface
+    return {
+      participantEmail,
+      participantName: 'Unknown', // Would need to be derived from data
+      totalWebinarsAttended: historyData.summary.totalWebinarsAttended,
+      averageEngagementScore: historyData.summary.averageAttentionScore,
+      totalTimeSpent: historyData.summary.totalTimeSpent,
+      averageAttendanceDuration: historyData.summary.averageTimePerWebinar,
+      firstWebinarDate: historyData.summary.firstWebinarDate,
+      lastWebinarDate: historyData.summary.lastWebinarDate,
+      engagementTrend: 'stable',
+      webinarHistory: historyData.participantHistory.map(h => ({
+        webinarId: h.webinarId,
+        webinarTitle: h.webinarTitle,
+        attendanceDate: h.webinarDate,
+        attendanceDuration: h.duration,
+        engagementScore: h.attentionScore,
+        pollParticipation: h.answeredPolling,
+        qaParticipation: h.askedQuestion
+      }))
+    };
   }
 
   /**

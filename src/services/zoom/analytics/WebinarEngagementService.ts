@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 interface EngagementMetrics {
@@ -7,6 +8,7 @@ interface EngagementMetrics {
   averageSessionDuration: number;
   dropoffRate: number;
   peakEngagementTime: string | null;
+  averageEngagementScore: number;
 }
 
 export class WebinarEngagementService {
@@ -43,12 +45,13 @@ export class WebinarEngagementService {
           averageSessionDuration: 0,
           dropoffRate: 0,
           peakEngagementTime: null,
+          averageEngagementScore: 0,
         };
       }
 
       // Calculate metrics using the actual database fields
       const validParticipants = participants.filter(p => 
-        p.name || p.participant_email || p.participant_id // Basic validation with correct field name
+        p.name || p.email || p.participant_id // Basic validation with correct field names
       );
 
       const averageAttentionScore = this.calculateAverageAttentionScore(validParticipants);
@@ -57,6 +60,14 @@ export class WebinarEngagementService {
       const averageSessionDuration = this.calculateAverageSessionDuration(validParticipants);
       const dropoffRate = this.calculateDropoffRate(validParticipants, webinar.duration || 0);
 
+      // Calculate overall engagement score
+      const averageEngagementScore = (
+        averageAttentionScore * 0.3 +
+        pollParticipationRate * 0.25 +
+        qaParticipationRate * 0.25 +
+        (100 - dropoffRate) * 0.2
+      );
+
       return {
         averageAttentionScore,
         pollParticipationRate,
@@ -64,6 +75,7 @@ export class WebinarEngagementService {
         averageSessionDuration,
         dropoffRate,
         peakEngagementTime: null, // Would need more detailed timing data
+        averageEngagementScore: Math.max(0, Math.min(100, averageEngagementScore)),
       };
     } catch (error) {
       console.error('Error calculating engagement metrics:', error);
@@ -75,18 +87,7 @@ export class WebinarEngagementService {
     const metrics = await this.calculateEngagementMetrics(webinarId);
     if (!metrics) return null;
 
-    // Calculate overall engagement score
-    const engagementScore = (
-      metrics.averageAttentionScore * 0.3 +
-      metrics.pollParticipationRate * 0.25 +
-      metrics.qaParticipationRate * 0.25 +
-      (100 - metrics.dropoffRate) * 0.2
-    );
-
-    return {
-      ...metrics,
-      averageEngagementScore: Math.max(0, Math.min(100, engagementScore))
-    };
+    return metrics;
   }
 
   private static calculateAverageAttentionScore(participants: any[]): number {

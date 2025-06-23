@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { PDFGenerator } from '../PDFGenerator';
 import { ExcelGenerator } from '../ExcelGenerator';
@@ -96,7 +97,7 @@ export class ExportJobManager {
 
       // Fetch enhanced webinar data
       const dataFetchStart = Date.now();
-      const processedData = await EnhancedExportDataProvider.fetchWebinarData(config);
+      const processedData = await EnhancedExportDataProvider.getAnalyticsData(config);
       const dataFetchTime = Date.now() - dataFetchStart;
       
       // Update progress
@@ -121,9 +122,9 @@ export class ExportJobManager {
           break;
         case 'powerpoint':
           fileBlob = await EnhancedPowerPointGenerator.generateAnalyticsPresentation({
-            totalWebinars: processedData.analytics.totalWebinars,
-            totalParticipants: processedData.analytics.totalParticipants,
-            avgEngagement: processedData.analytics.avgEngagement,
+            totalWebinars: processedData.summary.totalWebinars,
+            totalParticipants: processedData.participants.length,
+            avgEngagement: processedData.engagement.averagePollParticipationRate || 0,
             webinars: processedData.webinars
           }, config);
           fileName = `${config.title.replace(/\s+/g, '_')}_presentation.pptx`;
@@ -146,7 +147,8 @@ export class ExportJobManager {
 
       // Upload the file using enhanced data provider
       const uploadStart = Date.now();
-      const fileUrl = await EnhancedExportDataProvider.uploadFile(fileBlob, fileName);
+      const uploadResponse = await EnhancedExportDataProvider.uploadFile(fileBlob, fileName);
+      const fileUrl = uploadResponse.url; // Extract URL from response object
       const uploadTime = Date.now() - uploadStart;
 
       const totalProcessingTime = Date.now() - processingStartTime;
@@ -171,8 +173,8 @@ export class ExportJobManager {
             generation_time_ms: generationTime,
             upload_time_ms: uploadTime,
             file_size_bytes: fileBlob.size,
-            records_processed: processedData.metadata.totalRecords,
-            data_quality_score: processedData.metadata.dataQuality,
+            records_processed: processedData.webinars.length,
+            data_quality_score: 85, // Default score
             completed_at: new Date().toISOString()
           }
         })

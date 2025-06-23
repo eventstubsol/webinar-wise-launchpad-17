@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 export class ParticipantHistoryService {
@@ -15,7 +16,7 @@ export class ParticipantHistoryService {
 
       const connectionIds = connections.map(c => c.id);
 
-      // Fetch participant data with webinar info, using correct field name
+      // Fetch participant data with webinar info, using correct field names
       const { data: participants, error: participantsError } = await supabase
         .from('zoom_participants')
         .select(`
@@ -28,7 +29,7 @@ export class ParticipantHistoryService {
             connection_id
           )
         `)
-        .eq('participant_email', participantEmail) // Use correct field name
+        .eq('email', participantEmail) // Use correct field name
         .in('zoom_webinars.connection_id', connectionIds)
         .order('zoom_webinars.start_time', { ascending: false });
 
@@ -89,7 +90,7 @@ export class ParticipantHistoryService {
       const { data: participants } = await supabase
         .from('zoom_participants')
         .select(`
-          participant_email,
+          email,
           name,
           duration,
           attentiveness_score,
@@ -107,7 +108,7 @@ export class ParticipantHistoryService {
       participants
         .filter(p => p.zoom_webinars && !Array.isArray(p.zoom_webinars)) // Filter valid data
         .forEach(participant => {
-          const email = participant.participant_email;
+          const email = participant.email;
           if (!email) return;
 
           if (!participantMap.has(email)) {
