@@ -19,11 +19,11 @@ export class RegistrantOperations {
       const transformedRegistrants = registrants.map(registrant => {
         const transformed = WebinarTransformers.transformRegistrant(registrant, webinarDbId);
         return {
-          // Map to correct database field names
+          // Map to correct database field names based on actual schema
           webinar_id: webinarDbId,
           registrant_id: transformed.registrant_id,
           registrant_uuid: transformed.registrant_uuid,
-          registrant_email: transformed.registrant_email,
+          email: transformed.registrant_email, // Use 'email' not 'registrant_email'
           first_name: transformed.first_name,
           last_name: transformed.last_name,
           address: transformed.address,

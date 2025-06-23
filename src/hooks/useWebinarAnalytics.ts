@@ -61,7 +61,7 @@ interface WebinarTableData {
   status: string;
 }
 
-// Updated to match actual database schema
+// Updated to match actual database schema without relationships
 interface DatabaseWebinarData {
   id: string;
   topic: string;
@@ -70,17 +70,6 @@ interface DatabaseWebinarData {
   total_attendees: number | null;
   total_registrants: number | null;
   status: string | null;
-  zoom_participants: Array<{
-    id: string;
-    name: string | null;
-    email: string | null;
-    duration: number | null;
-    join_time: string | null;
-    leave_time: string | null;
-    attentiveness_score: number | null;
-    answered_polling: boolean | null;
-    asked_question: boolean | null;
-  }>;
 }
 
 export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
@@ -96,7 +85,7 @@ export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
     queryFn: async () => {
       if (!connection?.id) return null;
 
-      // Fetch webinars with filters - using correct table name
+      // Fetch webinars without relationships to avoid schema errors
       let webinarsQuery = supabase
         .from('zoom_webinars')
         .select(`
@@ -106,18 +95,7 @@ export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
           duration,
           total_attendees,
           total_registrants,
-          status,
-          zoom_participants(
-            id,
-            name,
-            email,
-            duration,
-            join_time,
-            leave_time,
-            attentiveness_score,
-            answered_polling,
-            asked_question
-          )
+          status
         `)
         .eq('connection_id', connection.id)
         .gte('start_time', filters.dateRange.from.toISOString())
