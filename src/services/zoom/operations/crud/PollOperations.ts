@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomDataTransformers } from '../../utils/dataTransformers';
+import { InteractionTransformers } from '../../utils/transformers/interactionTransformers';
 
 /**
  * Database operations for webinar polls
@@ -13,7 +13,7 @@ export class PollOperations {
     if (!polls || polls.length === 0) return;
 
     const transformedPolls = polls.map(poll => {
-      const transformed = ZoomDataTransformers.transformPoll(poll, webinarDbId);
+      const transformed = InteractionTransformers.transformPoll(poll, webinarDbId);
       return {
         ...transformed,
         questions: transformed.questions ? JSON.parse(JSON.stringify(transformed.questions)) : [],

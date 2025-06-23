@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomDataTransformers } from '../../utils/dataTransformers';
+import { MetricsTransformers } from '../../utils/transformers/metricsTransformers';
 
 /**
  * Database operations for metrics calculations
@@ -32,7 +32,7 @@ export class MetricsOperations {
       return;
     }
 
-    const metrics = ZoomDataTransformers.calculateWebinarMetrics(participants || []);
+    const metrics = MetricsTransformers.calculateWebinarMetrics(participants || []);
 
     // Update webinar with calculated metrics
     const { error: updateError } = await supabase

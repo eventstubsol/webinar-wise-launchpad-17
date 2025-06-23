@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomDataTransformers } from '../../utils/dataTransformers';
+import { InteractionTransformers } from '../../utils/transformers/interactionTransformers';
 
 /**
  * Database operations for polls and Q&A interactions
@@ -13,7 +13,7 @@ export class InteractionOperations {
     if (!polls || polls.length === 0) return;
 
     const transformedPolls = polls.map(poll => {
-      const transformed = ZoomDataTransformers.transformPoll(poll, webinarDbId);
+      const transformed = InteractionTransformers.transformPoll(poll, webinarDbId);
       return {
         ...transformed,
         // Convert PollQuestion[] to Json format
@@ -44,7 +44,7 @@ export class InteractionOperations {
     if (!qnaData || qnaData.length === 0) return;
 
     const transformedQnA = qnaData.map(qna => {
-      const transformed = ZoomDataTransformers.transformQnA(qna, webinarDbId);
+      const transformed = InteractionTransformers.transformQnA(qna, webinarDbId);
       return {
         ...transformed,
         updated_at: new Date().toISOString()
