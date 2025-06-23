@@ -46,22 +46,32 @@ export class WebinarEngagementService {
       
       // Convert raw participant data to properly typed ZoomParticipant objects
       const typedParticipants: ZoomParticipant[] = participants.map(p => ({
+        id: p.id,
+        webinar_id: p.webinar_id,
+        participant_id: p.participant_id || '',
+        registrant_id: p.registrant_id || null,
         participant_name: p.name || '',
         participant_email: p.email || '',
         participant_user_id: p.participant_id || '',
-        duration: p.duration || 0,
         join_time: p.join_time,
         leave_time: p.leave_time,
+        duration: p.duration || 0,
         attentiveness_score: p.attentiveness_score,
+        camera_on_duration: p.camera_on_duration || 0,
+        share_application_duration: p.share_application_duration || 0,
+        share_desktop_duration: p.share_desktop_duration || 0,
+        posted_chat: p.posted_chat || false,
+        raised_hand: p.raised_hand || false,
         answered_polling: p.answered_polling || false,
         asked_question: p.asked_question || false,
-        camera_on_duration: p.camera_on_duration || 0,
-        connection_id: p.connection_id || '',
-        connection_type: p.connection_type || '',
+        device: p.device || null,
+        ip_address: p.ip_address || null,
+        location: p.location || null,
+        network_type: p.network_type || null,
+        version: p.version || null,
+        customer_key: p.customer_key || null,
         created_at: p.created_at || '',
-        customer_key: p.customer_key || '',
-        id: p.id,
-        webinar_id: p.webinar_id
+        updated_at: p.updated_at || ''
       }));
 
       const engagementData = typedParticipants.map(p => ({

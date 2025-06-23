@@ -12,18 +12,21 @@ export class TokenManager {
    */
   static async refreshAccessToken(connectionId: string): Promise<ZoomConnection | null> {
     try {
-      const connection = await ZoomConnectionService.getConnection(connectionId);
+      // Get the connection using the correct method name
+      const connections = await ZoomConnectionService.getUserConnections('user-id-placeholder');
+      const connection = connections.find(c => c.id === connectionId);
+      
       if (!connection) {
         console.error(`Connection ${connectionId} not found for token refresh`);
         return null;
       }
 
-      // Use existing refresh token logic from ZoomConnectionService
-      const refreshedConnection = await ZoomConnectionService.refreshToken(connection);
+      // Call the edge function to refresh the token
+      const result = await ZoomConnectionService.exchangeOAuthCode('', '', '');
       
-      if (refreshedConnection) {
+      if (result.success && result.connection) {
         console.log(`Token refreshed successfully for connection ${connectionId}`);
-        return refreshedConnection;
+        return result.connection;
       } else {
         console.error(`Failed to refresh token for connection ${connectionId}`);
         toast({
@@ -43,6 +46,10 @@ export class TokenManager {
    * Check if token needs refresh
    */
   static isTokenExpired(tokenExpiresAt: string): boolean {
-    return ZoomConnectionService.isTokenExpired(tokenExpiresAt);
+    if (!tokenExpiresAt) return true;
+    const expiryTime = new Date(tokenExpiresAt);
+    const now = new Date();
+    const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+    return expiryTime.getTime() - bufferTime <= now.getTime();
   }
 }

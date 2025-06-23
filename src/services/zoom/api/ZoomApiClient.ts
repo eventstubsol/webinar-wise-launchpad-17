@@ -1,4 +1,5 @@
 
+import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection } from '@/types/zoom';
 import { ZoomConnectionService } from '../ZoomConnectionService';
 import { ApiResponse, RequestOptions, QueuedRequest, RateLimitConfig } from './types';
