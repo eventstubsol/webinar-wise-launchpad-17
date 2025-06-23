@@ -1,10 +1,11 @@
+
 export async function createSyncLog(supabase: any, connectionId: string, syncType: string, webinarId?: string): Promise<string> {
   const { data, error } = await supabase
     .from('zoom_sync_logs')
     .insert({
       connection_id: connectionId,
       sync_type: syncType,
-      sync_status: 'started',
+      status: 'started', // Changed from sync_status to status
       resource_type: syncType === 'single' ? 'webinar' : 'webinars',
       resource_id: webinarId || null,
       started_at: new Date().toISOString(),

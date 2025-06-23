@@ -158,20 +158,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "ai_insights_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_insights_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
         ]
       }
       analytics_cache: {
@@ -259,6 +245,81 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      audit_log: {
+        Row: {
+          action: string
+          change_context: string | null
+          changed_at: string | null
+          changed_by: string | null
+          id: string
+          ip_address: unknown | null
+          new_data: Json | null
+          old_data: Json | null
+          record_id: string
+          table_name: string
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          change_context?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          id?: string
+          ip_address?: unknown | null
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id: string
+          table_name: string
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          change_context?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          id?: string
+          ip_address?: unknown | null
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id?: string
+          table_name?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
+      backup_metadata: {
+        Row: {
+          backup_name: string
+          created_at: string
+          created_by: string | null
+          id: string
+          reason: string | null
+          removed_at: string | null
+          row_count: number | null
+          table_name: string
+        }
+        Insert: {
+          backup_name: string
+          created_at: string
+          created_by?: string | null
+          id?: string
+          reason?: string | null
+          removed_at?: string | null
+          row_count?: number | null
+          table_name: string
+        }
+        Update: {
+          backup_name?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reason?: string | null
+          removed_at?: string | null
+          row_count?: number | null
+          table_name?: string
+        }
+        Relationships: []
       }
       behavioral_events: {
         Row: {
@@ -909,20 +970,6 @@ export type Database = {
             referencedRelation: "zoom_recordings"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "content_analysis_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "content_analysis_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
         ]
       }
       content_personalization_rules: {
@@ -1255,20 +1302,6 @@ export type Database = {
             columns: ["participant_id"]
             isOneToOne: false
             referencedRelation: "zoom_participants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "crm_sync_logs_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "crm_sync_logs_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
             referencedColumns: ["id"]
           },
         ]
@@ -2546,20 +2579,6 @@ export type Database = {
             referencedRelation: "zoom_participants"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "engagement_predictions_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "engagement_predictions_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
         ]
       }
       engagement_scoring_models: {
@@ -2901,6 +2920,69 @@ export type Database = {
           },
         ]
       }
+      pagination_tokens: {
+        Row: {
+          created_at: string | null
+          data_hash: string
+          expires_at: string
+          id: string
+          last_accessed_at: string | null
+          query_params: Json
+          token: string
+          user_id: string | null
+          webinar_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          data_hash: string
+          expires_at: string
+          id?: string
+          last_accessed_at?: string | null
+          query_params?: Json
+          token: string
+          user_id?: string | null
+          webinar_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          data_hash?: string
+          expires_at?: string
+          id?: string
+          last_accessed_at?: string | null
+          query_params?: Json
+          token?: string
+          user_id?: string | null
+          webinar_id?: string | null
+        }
+        Relationships: []
+      }
+      participant_sync_debug_log: {
+        Row: {
+          created_at: string | null
+          field_issues: Json | null
+          id: string
+          processing_errors: string[] | null
+          raw_participant_data: Json
+          webinar_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          field_issues?: Json | null
+          id?: string
+          processing_errors?: string[] | null
+          raw_participant_data: Json
+          webinar_id: string
+        }
+        Update: {
+          created_at?: string | null
+          field_issues?: Json | null
+          id?: string
+          processing_errors?: string[] | null
+          raw_participant_data?: Json
+          webinar_id?: string
+        }
+        Relationships: []
+      }
       personalization_rules: {
         Row: {
           conditions: Json
@@ -3071,22 +3153,7 @@ export type Database = {
           user_id?: string | null
           webinar_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "processing_queue_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "processing_queue_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -3365,6 +3432,57 @@ export type Database = {
           },
         ]
       }
+      scheduled_syncs: {
+        Row: {
+          connection_id: string | null
+          created_at: string | null
+          error_message: string | null
+          executed_at: string | null
+          id: string
+          scheduled_for: string
+          status: string
+          sync_config: Json
+          sync_log_id: string | null
+        }
+        Insert: {
+          connection_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          scheduled_for: string
+          status?: string
+          sync_config?: Json
+          sync_log_id?: string | null
+        }
+        Update: {
+          connection_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          scheduled_for?: string
+          status?: string
+          sync_config?: Json
+          sync_log_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_syncs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_syncs_sync_log_id_fkey"
+            columns: ["sync_log_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_sync_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       send_time_analytics: {
         Row: {
           click_rate: number | null
@@ -3550,6 +3668,44 @@ export type Database = {
           },
         ]
       }
+      sync_progress_updates: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          id: string
+          message: string
+          progress_percentage: number | null
+          sync_id: string | null
+          update_type: string
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          message: string
+          progress_percentage?: number | null
+          sync_id?: string | null
+          update_type: string
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          message?: string
+          progress_percentage?: number | null
+          sync_id?: string | null
+          update_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_progress_updates_sync_id_fkey"
+            columns: ["sync_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_sync_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_queue: {
         Row: {
           completed_at: string | null
@@ -3596,6 +3752,92 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "sync_queue_sync_id_fkey"
+            columns: ["sync_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_sync_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_schedules: {
+        Row: {
+          config: Json
+          connection_id: string | null
+          created_at: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          config?: Json
+          connection_id?: string | null
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          config?: Json
+          connection_id?: string | null
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_schedules_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: true
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_state: {
+        Row: {
+          connection_id: string | null
+          created_at: string | null
+          id: string
+          last_processed_item: string | null
+          processed_items: number | null
+          state_data: Json
+          state_type: string
+          sync_id: string | null
+          total_items: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          connection_id?: string | null
+          created_at?: string | null
+          id?: string
+          last_processed_item?: string | null
+          processed_items?: number | null
+          state_data?: Json
+          state_type: string
+          sync_id?: string | null
+          total_items?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          connection_id?: string | null
+          created_at?: string | null
+          id?: string
+          last_processed_item?: string | null
+          processed_items?: number | null
+          state_data?: Json
+          state_type?: string
+          sync_id?: string | null
+          total_items?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_state_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_state_sync_id_fkey"
             columns: ["sync_id"]
             isOneToOne: false
             referencedRelation: "zoom_sync_logs"
@@ -3786,6 +4028,59 @@ export type Database = {
           webhook_source?: string
         }
         Relationships: []
+      }
+      webinar_sync_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          priority: number | null
+          processing_status: string | null
+          retry_count: number | null
+          scheduled_at: string | null
+          started_at: string | null
+          sync_id: string | null
+          webinar_id: string
+          webinar_type: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          priority?: number | null
+          processing_status?: string | null
+          retry_count?: number | null
+          scheduled_at?: string | null
+          started_at?: string | null
+          sync_id?: string | null
+          webinar_id: string
+          webinar_type: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          priority?: number | null
+          processing_status?: string | null
+          retry_count?: number | null
+          scheduled_at?: string | null
+          started_at?: string | null
+          sync_id?: string | null
+          webinar_id?: string
+          webinar_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webinar_sync_queue_sync_id_fkey"
+            columns: ["sync_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_sync_logs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workflow_action_executions: {
         Row: {
@@ -4453,22 +4748,7 @@ export type Database = {
           sent_at?: string | null
           webinar_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_chat_messages_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "zoom_chat_messages_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       zoom_connections: {
         Row: {
@@ -4612,22 +4892,7 @@ export type Database = {
           panelist_id?: string | null
           webinar_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_panelists_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "zoom_panelists_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       zoom_participants: {
         Row: {
@@ -4635,6 +4900,7 @@ export type Database = {
           asked_question: boolean | null
           attentiveness_score: number | null
           camera_on_duration: number | null
+          connection_id: string | null
           connection_type: string | null
           created_at: string | null
           customer_key: string | null
@@ -4642,7 +4908,9 @@ export type Database = {
           device: string | null
           domain: string | null
           duration: number | null
+          email: string | null
           failover: boolean | null
+          generated_participant_id: string | null
           harddisk_id: string | null
           id: string
           internal_user: boolean | null
@@ -4651,11 +4919,9 @@ export type Database = {
           leave_time: string | null
           location: string | null
           mac_addr: string | null
+          name: string
           network_type: string | null
-          participant_email: string | null
-          participant_id: string
-          participant_name: string
-          participant_user_id: string | null
+          participant_id: string | null
           pc_name: string | null
           posted_chat: boolean | null
           raised_hand: boolean | null
@@ -4665,6 +4931,7 @@ export type Database = {
           share_desktop_duration: number | null
           status: Database["public"]["Enums"]["participant_status"] | null
           updated_at: string | null
+          user_id: string | null
           version: string | null
           webinar_id: string
         }
@@ -4673,6 +4940,7 @@ export type Database = {
           asked_question?: boolean | null
           attentiveness_score?: number | null
           camera_on_duration?: number | null
+          connection_id?: string | null
           connection_type?: string | null
           created_at?: string | null
           customer_key?: string | null
@@ -4680,7 +4948,9 @@ export type Database = {
           device?: string | null
           domain?: string | null
           duration?: number | null
+          email?: string | null
           failover?: boolean | null
+          generated_participant_id?: string | null
           harddisk_id?: string | null
           id?: string
           internal_user?: boolean | null
@@ -4689,11 +4959,9 @@ export type Database = {
           leave_time?: string | null
           location?: string | null
           mac_addr?: string | null
+          name: string
           network_type?: string | null
-          participant_email?: string | null
-          participant_id: string
-          participant_name: string
-          participant_user_id?: string | null
+          participant_id?: string | null
           pc_name?: string | null
           posted_chat?: boolean | null
           raised_hand?: boolean | null
@@ -4703,6 +4971,7 @@ export type Database = {
           share_desktop_duration?: number | null
           status?: Database["public"]["Enums"]["participant_status"] | null
           updated_at?: string | null
+          user_id?: string | null
           version?: string | null
           webinar_id: string
         }
@@ -4711,6 +4980,7 @@ export type Database = {
           asked_question?: boolean | null
           attentiveness_score?: number | null
           camera_on_duration?: number | null
+          connection_id?: string | null
           connection_type?: string | null
           created_at?: string | null
           customer_key?: string | null
@@ -4718,7 +4988,9 @@ export type Database = {
           device?: string | null
           domain?: string | null
           duration?: number | null
+          email?: string | null
           failover?: boolean | null
+          generated_participant_id?: string | null
           harddisk_id?: string | null
           id?: string
           internal_user?: boolean | null
@@ -4727,11 +4999,9 @@ export type Database = {
           leave_time?: string | null
           location?: string | null
           mac_addr?: string | null
+          name?: string
           network_type?: string | null
-          participant_email?: string | null
-          participant_id?: string
-          participant_name?: string
-          participant_user_id?: string | null
+          participant_id?: string | null
           pc_name?: string | null
           posted_chat?: boolean | null
           raised_hand?: boolean | null
@@ -4741,29 +5011,16 @@ export type Database = {
           share_desktop_duration?: number | null
           status?: Database["public"]["Enums"]["participant_status"] | null
           updated_at?: string | null
+          user_id?: string | null
           version?: string | null
           webinar_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "zoom_participants_registrant_id_fkey"
-            columns: ["registrant_id"]
+            foreignKeyName: "fk_zoom_participants_connection"
+            columns: ["connection_id"]
             isOneToOne: false
-            referencedRelation: "zoom_registrants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "zoom_participants_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "zoom_participants_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
+            referencedRelation: "zoom_connections"
             referencedColumns: ["id"]
           },
         ]
@@ -4853,22 +5110,7 @@ export type Database = {
           updated_at?: string | null
           webinar_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_polls_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "zoom_polls_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       zoom_qna: {
         Row: {
@@ -4922,22 +5164,7 @@ export type Database = {
           upvote_count?: number | null
           webinar_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_qna_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "zoom_qna_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       zoom_recordings: {
         Row: {
@@ -5000,145 +5227,109 @@ export type Database = {
           updated_at?: string | null
           webinar_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_recordings_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "zoom_recordings_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       zoom_registrants: {
         Row: {
           address: string | null
-          attended: boolean | null
           city: string | null
           comments: string | null
           country: string | null
           create_time: string | null
           created_at: string | null
           custom_questions: Json | null
-          duration: number | null
+          email: string
           first_name: string | null
           id: string
           industry: string | null
           job_title: string | null
-          join_time: string | null
           join_url: string | null
           language: string | null
           last_name: string | null
-          leave_time: string | null
           no_of_employees: string | null
+          occurrence_id: string | null
           org: string | null
           phone: string | null
           purchasing_time_frame: string | null
-          registrant_email: string
           registrant_id: string
-          registration_time: string | null
+          registrant_uuid: string | null
           role_in_purchase_process: string | null
           source_id: string | null
           state: string | null
           status: string | null
           tracking_source: string | null
+          tracking_source_id: string | null
           updated_at: string | null
           webinar_id: string
           zip: string | null
         }
         Insert: {
           address?: string | null
-          attended?: boolean | null
           city?: string | null
           comments?: string | null
           country?: string | null
           create_time?: string | null
           created_at?: string | null
           custom_questions?: Json | null
-          duration?: number | null
+          email: string
           first_name?: string | null
           id?: string
           industry?: string | null
           job_title?: string | null
-          join_time?: string | null
           join_url?: string | null
           language?: string | null
           last_name?: string | null
-          leave_time?: string | null
           no_of_employees?: string | null
+          occurrence_id?: string | null
           org?: string | null
           phone?: string | null
           purchasing_time_frame?: string | null
-          registrant_email: string
           registrant_id: string
-          registration_time?: string | null
+          registrant_uuid?: string | null
           role_in_purchase_process?: string | null
           source_id?: string | null
           state?: string | null
           status?: string | null
           tracking_source?: string | null
+          tracking_source_id?: string | null
           updated_at?: string | null
           webinar_id: string
           zip?: string | null
         }
         Update: {
           address?: string | null
-          attended?: boolean | null
           city?: string | null
           comments?: string | null
           country?: string | null
           create_time?: string | null
           created_at?: string | null
           custom_questions?: Json | null
-          duration?: number | null
+          email?: string
           first_name?: string | null
           id?: string
           industry?: string | null
           job_title?: string | null
-          join_time?: string | null
           join_url?: string | null
           language?: string | null
           last_name?: string | null
-          leave_time?: string | null
           no_of_employees?: string | null
+          occurrence_id?: string | null
           org?: string | null
           phone?: string | null
           purchasing_time_frame?: string | null
-          registrant_email?: string
           registrant_id?: string
-          registration_time?: string | null
+          registrant_uuid?: string | null
           role_in_purchase_process?: string | null
           source_id?: string | null
           state?: string | null
           status?: string | null
           tracking_source?: string | null
+          tracking_source_id?: string | null
           updated_at?: string | null
           webinar_id?: string
           zip?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_registrants_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "zoom_registrants_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       zoom_segmentation_rules: {
         Row: {
@@ -5227,12 +5418,15 @@ export type Database = {
           created_at: string | null
           current_webinar_id: string | null
           duration_seconds: number | null
+          ended_at: string | null
           error_details: Json | null
           error_message: string | null
           failed_items: number | null
           id: string
           max_participant_retries: number | null
+          metadata: Json | null
           processed_items: number | null
+          progress: Json | null
           rate_limit_hits: number | null
           resource_id: string | null
           resource_type: string | null
@@ -5240,11 +5434,13 @@ export type Database = {
           retry_schedule: Json | null
           stage_progress_percentage: number | null
           started_at: string
+          status: string
           sync_stage: string | null
-          sync_status: string
+          sync_status: string | null
           sync_type: string
           total_items: number | null
           updated_at: string | null
+          webinars_synced: number | null
         }
         Insert: {
           api_calls_made?: number | null
@@ -5253,12 +5449,15 @@ export type Database = {
           created_at?: string | null
           current_webinar_id?: string | null
           duration_seconds?: number | null
+          ended_at?: string | null
           error_details?: Json | null
           error_message?: string | null
           failed_items?: number | null
           id?: string
           max_participant_retries?: number | null
+          metadata?: Json | null
           processed_items?: number | null
+          progress?: Json | null
           rate_limit_hits?: number | null
           resource_id?: string | null
           resource_type?: string | null
@@ -5266,11 +5465,13 @@ export type Database = {
           retry_schedule?: Json | null
           stage_progress_percentage?: number | null
           started_at?: string
+          status: string
           sync_stage?: string | null
-          sync_status: string
+          sync_status?: string | null
           sync_type: string
           total_items?: number | null
           updated_at?: string | null
+          webinars_synced?: number | null
         }
         Update: {
           api_calls_made?: number | null
@@ -5279,12 +5480,15 @@ export type Database = {
           created_at?: string | null
           current_webinar_id?: string | null
           duration_seconds?: number | null
+          ended_at?: string | null
           error_details?: Json | null
           error_message?: string | null
           failed_items?: number | null
           id?: string
           max_participant_retries?: number | null
+          metadata?: Json | null
           processed_items?: number | null
+          progress?: Json | null
           rate_limit_hits?: number | null
           resource_id?: string | null
           resource_type?: string | null
@@ -5292,11 +5496,13 @@ export type Database = {
           retry_schedule?: Json | null
           stage_progress_percentage?: number | null
           started_at?: string
+          status?: string
           sync_stage?: string | null
-          sync_status?: string
+          sync_status?: string | null
           sync_type?: string
           total_items?: number | null
           updated_at?: string | null
+          webinars_synced?: number | null
         }
         Relationships: [
           {
@@ -5380,34 +5586,16 @@ export type Database = {
           visitor_count?: number | null
           webinar_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_webinar_tracking_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "webinar_analytics_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "zoom_webinar_tracking_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       zoom_webinars: {
         Row: {
           agenda: string | null
-          alternative_hosts: string[] | null
-          approval_type: number | null
           avg_attendance_duration: number | null
           connection_id: string
           created_at: string | null
-          creation_source: string | null
+          created_at_db: string | null
           duration: number | null
-          encrypted_passcode: string | null
           encrypted_password: string | null
           h323_password: string | null
           host_email: string | null
@@ -5415,50 +5603,42 @@ export type Database = {
           id: string
           is_simulive: boolean | null
           join_url: string | null
-          max_attendees: number | null
-          max_registrants: number | null
+          last_synced_at: string | null
           occurrence_id: string | null
           occurrences: Json | null
-          participant_sync_attempted_at: string | null
+          participant_sync_completed_at: string | null
           participant_sync_error: string | null
           participant_sync_status:
             | Database["public"]["Enums"]["participant_sync_status"]
             | null
           password: string | null
-          pstn_password: string | null
-          record_file_id: string | null
+          pstn_passcode: string | null
           recurrence: Json | null
-          registration_required: boolean | null
-          registration_type: number | null
           registration_url: string | null
           settings: Json | null
+          simulive_webinar_id: string | null
           start_time: string | null
           start_url: string | null
           status: string | null
-          synced_at: string | null
           timezone: string | null
           topic: string
+          total_absentees: number | null
           total_attendees: number | null
           total_minutes: number | null
           total_registrants: number | null
           tracking_fields: Json | null
-          transition_to_live: boolean | null
           type: number
-          updated_at: string | null
-          webinar_created_at: string | null
+          updated_at_db: string | null
+          uuid: string
           webinar_id: string
-          webinar_uuid: string
         }
         Insert: {
           agenda?: string | null
-          alternative_hosts?: string[] | null
-          approval_type?: number | null
           avg_attendance_duration?: number | null
           connection_id: string
           created_at?: string | null
-          creation_source?: string | null
+          created_at_db?: string | null
           duration?: number | null
-          encrypted_passcode?: string | null
           encrypted_password?: string | null
           h323_password?: string | null
           host_email?: string | null
@@ -5466,50 +5646,42 @@ export type Database = {
           id?: string
           is_simulive?: boolean | null
           join_url?: string | null
-          max_attendees?: number | null
-          max_registrants?: number | null
+          last_synced_at?: string | null
           occurrence_id?: string | null
           occurrences?: Json | null
-          participant_sync_attempted_at?: string | null
+          participant_sync_completed_at?: string | null
           participant_sync_error?: string | null
           participant_sync_status?:
             | Database["public"]["Enums"]["participant_sync_status"]
             | null
           password?: string | null
-          pstn_password?: string | null
-          record_file_id?: string | null
+          pstn_passcode?: string | null
           recurrence?: Json | null
-          registration_required?: boolean | null
-          registration_type?: number | null
           registration_url?: string | null
           settings?: Json | null
+          simulive_webinar_id?: string | null
           start_time?: string | null
           start_url?: string | null
           status?: string | null
-          synced_at?: string | null
           timezone?: string | null
           topic: string
+          total_absentees?: number | null
           total_attendees?: number | null
           total_minutes?: number | null
           total_registrants?: number | null
           tracking_fields?: Json | null
-          transition_to_live?: boolean | null
-          type: number
-          updated_at?: string | null
-          webinar_created_at?: string | null
+          type?: number
+          updated_at_db?: string | null
+          uuid: string
           webinar_id: string
-          webinar_uuid: string
         }
         Update: {
           agenda?: string | null
-          alternative_hosts?: string[] | null
-          approval_type?: number | null
           avg_attendance_duration?: number | null
           connection_id?: string
           created_at?: string | null
-          creation_source?: string | null
+          created_at_db?: string | null
           duration?: number | null
-          encrypted_passcode?: string | null
           encrypted_password?: string | null
           h323_password?: string | null
           host_email?: string | null
@@ -5517,43 +5689,38 @@ export type Database = {
           id?: string
           is_simulive?: boolean | null
           join_url?: string | null
-          max_attendees?: number | null
-          max_registrants?: number | null
+          last_synced_at?: string | null
           occurrence_id?: string | null
           occurrences?: Json | null
-          participant_sync_attempted_at?: string | null
+          participant_sync_completed_at?: string | null
           participant_sync_error?: string | null
           participant_sync_status?:
             | Database["public"]["Enums"]["participant_sync_status"]
             | null
           password?: string | null
-          pstn_password?: string | null
-          record_file_id?: string | null
+          pstn_passcode?: string | null
           recurrence?: Json | null
-          registration_required?: boolean | null
-          registration_type?: number | null
           registration_url?: string | null
           settings?: Json | null
+          simulive_webinar_id?: string | null
           start_time?: string | null
           start_url?: string | null
           status?: string | null
-          synced_at?: string | null
           timezone?: string | null
           topic?: string
+          total_absentees?: number | null
           total_attendees?: number | null
           total_minutes?: number | null
           total_registrants?: number | null
           tracking_fields?: Json | null
-          transition_to_live?: boolean | null
           type?: number
-          updated_at?: string | null
-          webinar_created_at?: string | null
+          updated_at_db?: string | null
+          uuid?: string
           webinar_id?: string
-          webinar_uuid?: string
         }
         Relationships: [
           {
-            foreignKeyName: "zoom_webinars_connection_id_fkey"
+            foreignKeyName: "zoom_webinars_new_connection_id_fkey"
             columns: ["connection_id"]
             isOneToOne: false
             referencedRelation: "zoom_connections"
@@ -5563,21 +5730,14 @@ export type Database = {
       }
     }
     Views: {
-      webinar_analytics_summary: {
+      recent_audit_activity: {
         Row: {
-          attendance_rate: number | null
-          avg_attendance_duration: number | null
-          duration: number | null
+          action: string | null
+          changed_at: string | null
+          changed_by_email: string | null
           id: string | null
-          start_time: string | null
-          topic: string | null
-          total_attendees: number | null
-          total_polls: number | null
-          total_questions: number | null
-          total_recordings: number | null
-          total_registrants: number | null
-          unique_participants: number | null
-          user_id: string | null
+          record_description: string | null
+          table_name: string | null
         }
         Relationships: []
       }
@@ -5599,6 +5759,14 @@ export type Database = {
       calculate_engagement_score: {
         Args: { p_user_id: string; p_email: string }
         Returns: number
+      }
+      cleanup_expired_pagination_tokens: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      cleanup_old_sync_data: {
+        Args: { days_to_keep?: number }
+        Returns: undefined
       }
       decrypt_token: {
         Args: { encrypted_token: string }
@@ -5622,9 +5790,47 @@ export type Database = {
         Args: { p_profile_id: string }
         Returns: string
       }
+      generate_fallback_participant_id: {
+        Args: {
+          p_webinar_id: string
+          p_email: string
+          p_name: string
+          p_join_time: string
+        }
+        Returns: string
+      }
+      get_record_history: {
+        Args: { p_table_name: string; p_record_id: string }
+        Returns: {
+          audit_id: string
+          action: string
+          changed_at: string
+          changed_by: string
+          changes: Json
+        }[]
+      }
       invalidate_cache_dependencies: {
         Args: { dep_pattern: string }
         Returns: number
+      }
+      migrate_zoom_webinars_data: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          migrated_count: number
+          failed_count: number
+        }[]
+      }
+      populate_performance_metrics_from_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      process_scheduled_syncs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      test_zoom_sync: {
+        Args: { p_connection_id: string; p_user_id: string }
+        Returns: Json
       }
       update_all_webinar_statuses: {
         Args: Record<PropertyKey, never>
@@ -5636,6 +5842,24 @@ export type Database = {
       }
       update_segment_size: {
         Args: { p_segment_id: string }
+        Returns: undefined
+      }
+      update_webinar_computed_fields: {
+        Args: {
+          p_webinar_id: string
+          p_total_registrants: number
+          p_total_attendees: number
+          p_total_minutes: number
+          p_avg_duration: number
+        }
+        Returns: undefined
+      }
+      update_webinar_sync_status: {
+        Args: {
+          p_webinar_id: string
+          p_sync_status: string
+          p_error_message?: string
+        }
         Returns: undefined
       }
       user_owns_connection: {
@@ -5659,7 +5883,12 @@ export type Database = {
         | "retrying"
       content_type: "transcript" | "slides" | "chat" | "audio" | "video"
       metric_data_type: "number" | "percentage" | "duration" | "count" | "ratio"
-      participant_status: "in_meeting" | "in_waiting_room"
+      participant_status:
+        | "in_meeting"
+        | "in_waiting_room"
+        | "attended"
+        | "not_attended"
+        | "left_early"
       participant_sync_status:
         | "not_applicable"
         | "pending"
@@ -5855,7 +6084,13 @@ export const Constants = {
       ],
       content_type: ["transcript", "slides", "chat", "audio", "video"],
       metric_data_type: ["number", "percentage", "duration", "count", "ratio"],
-      participant_status: ["in_meeting", "in_waiting_room"],
+      participant_status: [
+        "in_meeting",
+        "in_waiting_room",
+        "attended",
+        "not_attended",
+        "left_early",
+      ],
       participant_sync_status: [
         "not_applicable",
         "pending",
