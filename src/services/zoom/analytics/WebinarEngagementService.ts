@@ -1,19 +1,17 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomParticipant } from '@/types/zoom';
-import { WebinarEngagementSummary } from './types';
-import { EngagementCalculator } from './EngagementCalculator';
-import { AnalyticsHelpers } from './AnalyticsHelpers';
-import { DatabaseOperations } from './DatabaseOperations';
 
-/**
- * Service for calculating webinar-level engagement metrics
- */
+interface EngagementMetrics {
+  averageAttentionScore: number;
+  pollParticipationRate: number;
+  qaParticipationRate: number;
+  averageSessionDuration: number;
+  dropoffRate: number;
+  peakEngagementTime: string | null;
+}
+
 export class WebinarEngagementService {
-  /**
-   * Calculate comprehensive engagement metrics for a webinar
-   */
-  static async calculateWebinarEngagement(webinarId: string): Promise<WebinarEngagementSummary | null> {
+  static async calculateEngagementMetrics(webinarId: string): Promise<EngagementMetrics | null> {
     try {
       // Get webinar details
       const { data: webinar, error: webinarError } = await supabase
@@ -27,7 +25,7 @@ export class WebinarEngagementService {
         return null;
       }
 
-      // Get all participants for this webinar
+      // Get participants for this webinar
       const { data: participants, error: participantsError } = await supabase
         .from('zoom_participants')
         .select('*')
@@ -39,58 +37,120 @@ export class WebinarEngagementService {
       }
 
       if (!participants || participants.length === 0) {
-        return null;
+        return {
+          averageAttentionScore: 0,
+          pollParticipationRate: 0,
+          qaParticipationRate: 0,
+          averageSessionDuration: 0,
+          dropoffRate: 0,
+          peakEngagementTime: null,
+        };
       }
 
-      const webinarDuration = webinar.duration || 0;
-      const engagementData = participants.map(p => ({
-        participant: p,
-        engagement: EngagementCalculator.calculateEngagementScore(p, webinarDuration)
-      }));
+      // Calculate metrics using the actual database fields
+      const validParticipants = participants.filter(p => 
+        p.name || p.participant_email // Basic validation
+      );
 
-      // Calculate summary metrics
-      const totalParticipants = participants.length;
-      const averageEngagementScore = engagementData.reduce((sum, p) => sum + p.engagement.totalScore, 0) / totalParticipants;
-      const averageAttendanceDuration = participants.reduce((sum, p) => sum + (p.duration || 0), 0) / totalParticipants;
-      const averageAttendancePercentage = webinarDuration > 0 ? (averageAttendanceDuration / webinarDuration) * 100 : 0;
+      const averageAttentionScore = this.calculateAverageAttentionScore(validParticipants);
+      const pollParticipationRate = this.calculatePollParticipationRate(validParticipants);
+      const qaParticipationRate = this.calculateQAParticipationRate(validParticipants);
+      const averageSessionDuration = this.calculateAverageSessionDuration(validParticipants);
+      const dropoffRate = this.calculateDropoffRate(validParticipants, webinar.duration || 0);
 
-      // Engagement distribution
-      const highlyEngagedCount = engagementData.filter(p => p.engagement.totalScore >= 70).length;
-      const moderatelyEngagedCount = engagementData.filter(p => p.engagement.totalScore >= 40 && p.engagement.totalScore < 70).length;
-      const lowEngagedCount = engagementData.filter(p => p.engagement.totalScore < 40).length;
-
-      // Drop-off analysis
-      const dropOffAnalysis = AnalyticsHelpers.analyzeDropOffPatterns(participants, webinarDuration);
-      
-      // Device and location distribution
-      const deviceDistribution = AnalyticsHelpers.calculateDeviceDistribution(participants);
-      const locationDistribution = AnalyticsHelpers.calculateLocationDistribution(participants);
-      
-      // Peak attendance time
-      const peakAttendanceTime = AnalyticsHelpers.calculatePeakAttendanceTime(participants, webinar);
-
-      const summary: WebinarEngagementSummary = {
-        webinarId,
-        totalParticipants,
-        averageEngagementScore: Math.round(averageEngagementScore * 100) / 100,
-        averageAttendanceDuration: Math.round(averageAttendanceDuration),
-        averageAttendancePercentage: Math.round(averageAttendancePercentage * 100) / 100,
-        highlyEngagedCount,
-        moderatelyEngagedCount,
-        lowEngagedCount,
-        peakAttendanceTime,
-        dropOffAnalysis,
-        deviceDistribution,
-        locationDistribution
+      return {
+        averageAttentionScore,
+        pollParticipationRate,
+        qaParticipationRate,
+        averageSessionDuration,
+        dropoffRate,
+        peakEngagementTime: null, // Would need more detailed timing data
       };
-
-      // Update webinar record with calculated metrics
-      await DatabaseOperations.updateWebinarMetrics(webinarId, summary);
-
-      return summary;
     } catch (error) {
-      console.error('Error calculating webinar engagement:', error);
+      console.error('Error calculating engagement metrics:', error);
       return null;
+    }
+  }
+
+  private static calculateAverageAttentionScore(participants: any[]): number {
+    if (participants.length === 0) return 0;
+    
+    const validScores = participants
+      .map(p => p.attentiveness_score)
+      .filter(score => score !== null && score !== undefined && !isNaN(score));
+    
+    if (validScores.length === 0) return 0;
+    
+    return validScores.reduce((sum, score) => sum + score, 0) / validScores.length;
+  }
+
+  private static calculatePollParticipationRate(participants: any[]): number {
+    if (participants.length === 0) return 0;
+    
+    const pollParticipants = participants.filter(p => p.answered_polling === true);
+    return (pollParticipants.length / participants.length) * 100;
+  }
+
+  private static calculateQAParticipationRate(participants: any[]): number {
+    if (participants.length === 0) return 0;
+    
+    const qaParticipants = participants.filter(p => p.asked_question === true);
+    return (qaParticipants.length / participants.length) * 100;
+  }
+
+  private static calculateAverageSessionDuration(participants: any[]): number {
+    if (participants.length === 0) return 0;
+    
+    const validDurations = participants
+      .map(p => p.duration)
+      .filter(duration => duration !== null && duration !== undefined && !isNaN(duration));
+    
+    if (validDurations.length === 0) return 0;
+    
+    return validDurations.reduce((sum, duration) => sum + duration, 0) / validDurations.length;
+  }
+
+  private static calculateDropoffRate(participants: any[], webinarDuration: number): number {
+    if (participants.length === 0 || webinarDuration === 0) return 0;
+    
+    const averageDuration = this.calculateAverageSessionDuration(participants);
+    return Math.max(0, ((webinarDuration - averageDuration) / webinarDuration) * 100);
+  }
+
+  static async getEngagementTrends(webinarIds: string[]): Promise<any[]> {
+    try {
+      const trends = await Promise.all(
+        webinarIds.map(async (webinarId) => {
+          const metrics = await this.calculateEngagementMetrics(webinarId);
+          
+          // Get webinar basic info
+          const { data: webinar } = await supabase
+            .from('zoom_webinars')
+            .select('topic, start_time')
+            .eq('id', webinarId)
+            .single();
+
+          return {
+            webinarId,
+            title: webinar?.topic || 'Unknown',
+            date: webinar?.start_time || null,
+            metrics: metrics || {
+              averageAttentionScore: 0,
+              pollParticipationRate: 0,
+              qaParticipationRate: 0,
+              averageSessionDuration: 0,
+              dropoffRate: 0,
+            },
+          };
+        })
+      );
+
+      return trends.filter(trend => trend.date).sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+    } catch (error) {
+      console.error('Error getting engagement trends:', error);
+      return [];
     }
   }
 }
