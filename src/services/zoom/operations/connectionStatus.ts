@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection, ConnectionStatus } from '@/types/zoom';
 import { toast } from '@/hooks/use-toast';
@@ -10,7 +9,7 @@ import { ConnectionCleanup } from '../utils/connectionCleanup';
  */
 export class ConnectionStatusOperations {
   /**
-   * Get the primary connection for a user with automatic token refresh
+   * Get the primary connection for a user - simplified for plain text tokens
    */
   static async getPrimaryConnection(userId: string): Promise<ZoomConnection | null> {
     try {
@@ -39,19 +38,6 @@ export class ConnectionStatusOperations {
         ...data,
         connection_status: data.connection_status as ConnectionStatus,
       } as ZoomConnection;
-
-      // Check if connection needs token refresh
-      if (TokenUtils.needsTokenRefresh(connection)) {
-        console.log('Connection token is expired, attempting refresh...');
-        const refreshedConnection = await this.refreshToken(connection);
-        if (refreshedConnection) {
-          return refreshedConnection;
-        } else {
-          // If refresh failed, mark connection as expired
-          await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
-          return null;
-        }
-      }
 
       // Validate connection based on type
       if (TokenUtils.isServerToServerConnection(connection)) {
@@ -169,8 +155,15 @@ export class ConnectionStatusOperations {
       // Check if token needs refresh
       if (TokenUtils.needsTokenRefresh(connection)) {
         if (TokenUtils.canRefreshToken(connection)) {
-          const refreshedConnection = await this.refreshToken(connection);
-          if (refreshedConnection) return 'active' as ConnectionStatus;
+          // For Server-to-Server connections, refresh silently without UI indication
+          if (TokenUtils.isServerToServerConnection(connection)) {
+            const refreshedConnection = await this.refreshTokenSilently(connection);
+            if (refreshedConnection) return 'active' as ConnectionStatus;
+          } else {
+            // For OAuth connections, use the regular refresh with UI feedback
+            const refreshedConnection = await this.refreshToken(connection);
+            if (refreshedConnection) return 'active' as ConnectionStatus;
+          }
         }
 
         await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
@@ -190,46 +183,44 @@ export class ConnectionStatusOperations {
   }
 
   /**
-   * Refresh an expired access token using the zoom-api-gateway
+   * Refresh an expired access token with proper Server-to-Server support
    */
   static async refreshToken(connection: ZoomConnection): Promise<ZoomConnection | null> {
     try {
       console.log('Starting token refresh for connection:', connection.id, 'type:', connection.connection_type);
 
-      // For Server-to-Server connections, use validate-credentials action
-      if (TokenUtils.isServerToServerConnection(connection)) {
-        const { data, error } = await supabase.functions.invoke('zoom-api-gateway', {
-          body: { action: 'validate-credentials' }
+      // Don't show refreshing toast for Server-to-Server as it's usually fast
+      if (!TokenUtils.isServerToServerConnection(connection)) {
+        toast({
+          title: "Refreshing Connection",
+          description: "Your Zoom connection is being refreshed...",
         });
-
-        if (error) {
-          throw new Error(error.message || 'Unknown error during Server-to-Server token refresh.');
-        }
-
-        if (data?.success && data?.connection) {
-          console.log('Server-to-Server token refreshed successfully');
-          return data.connection;
-        }
-      } else {
-        // For OAuth connections, use the token refresh function
-        const { data, error } = await supabase.functions.invoke('zoom-token-refresh', {
-          body: { connectionId: connection.id }
-        });
-
-        if (error) {
-          throw new Error(error.message || 'Unknown error during OAuth token refresh.');
-        }
-
-        if (data?.success && data?.connection) {
-          toast({
-            title: "Connection Refreshed",
-            description: "Your Zoom token has been successfully refreshed.",
-          });
-          return data.connection;
-        }
       }
 
-      throw new Error('Token refresh failed');
+      let functionName = 'zoom-token-refresh';
+      let body = { connectionId: connection.id };
+
+      // For Server-to-Server connections, use the validation function which handles S2S properly
+      if (TokenUtils.isServerToServerConnection(connection)) {
+        functionName = 'validate-zoom-credentials';
+        body = { connectionId: connection.id }; // Include connectionId for Server-to-Server validation
+      }
+
+      const { data, error } = await supabase.functions.invoke(functionName, { body });
+
+      if (error) {
+        throw new Error(error.message || 'Unknown error during token refresh.');
+      }
+      
+      // Only show success toast for OAuth connections
+      if (!TokenUtils.isServerToServerConnection(connection)) {
+        toast({
+          title: "Connection Refreshed",
+          description: "Your Zoom token has been successfully refreshed.",
+        });
+      }
+
+      return data.connection;
     } catch (error) {
       console.error('Error refreshing token:', error);
       
@@ -255,8 +246,8 @@ export class ConnectionStatusOperations {
     try {
       console.log('Silently refreshing Server-to-Server token for connection:', connection.id);
 
-      const { data, error } = await supabase.functions.invoke('zoom-api-gateway', {
-        body: { action: 'validate-credentials' }
+      const { data, error } = await supabase.functions.invoke('validate-zoom-credentials', { 
+        body: { connectionId: connection.id } 
       });
 
       if (error) {
@@ -264,12 +255,8 @@ export class ConnectionStatusOperations {
         return null;
       }
 
-      if (data?.success && data?.connection) {
-        console.log('Server-to-Server token refreshed silently');
-        return data.connection;
-      }
-
-      return null;
+      console.log('Server-to-Server token refreshed silently');
+      return data.connection;
     } catch (error) {
       console.error('Error during silent token refresh:', error);
       return null;

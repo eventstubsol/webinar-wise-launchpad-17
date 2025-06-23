@@ -1,4 +1,5 @@
 
+# The name of your Supabase project
 project_id = "guwvvinnifypcxwbcnzz"
 
 [api]
@@ -172,22 +173,53 @@ file_size_limit = "50MiB"
 image_transformation = true
 
 [functions]
-  # Core consolidated functions
-  [functions.zoom-api-gateway]
+  [functions.ai-insights-generator]
     verify_jwt = true
-  [functions.email-campaign-manager]
+  [functions.campaign-scheduler]
     verify_jwt = true
-  [functions.analytics-processor]
+  [functions.crm-oauth-callback]
     verify_jwt = true
-  [functions.webhook-handler]
+  [functions.crm-webhook-receiver]
     verify_jwt = false
-  
-  # Essential utility functions
   [functions.delete-account]
+    verify_jwt = true
+  [functions.email-tracking]
+    verify_jwt = false
+  [functions.enhanced-email-sender]
     verify_jwt = true
   [functions.export-user-data]
     verify_jwt = true
+  [functions.generate-pdf-report]
+    verify_jwt = true
+  [functions.launch-campaign]
+    verify_jwt = true
   [functions.manage-email-preferences]
+    verify_jwt = false
+  [functions.process-behavioral-events]
+    verify_jwt = true
+  [functions.process-email-queue]
+    verify_jwt = true
+  [functions.realtime-analytics-processor]
+    verify_jwt = true
+  [functions.resend-webhook]
+    verify_jwt = false
+  [functions.run-optimization-algorithms]
+    verify_jwt = true
+  [functions.send-scheduled-report]
+    verify_jwt = true
+  [functions.update-predictive-models]
+    verify_jwt = true
+  [functions.validate-zoom-credentials]
+    verify_jwt = true
+  [functions.zoom-oauth-exchange]
+    verify_jwt = true
+  [functions.zoom-sync-webinars]
+    verify_jwt = true
+  [functions.zoom-test-fetch]
+    verify_jwt = true
+  [functions.zoom-token-refresh]
+    verify_jwt = true
+  [functions.zoom-webhook]
     verify_jwt = false
 
 [analytics]

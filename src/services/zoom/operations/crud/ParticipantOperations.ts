@@ -53,24 +53,7 @@ export class ParticipantOperations {
       const transformedParticipants = participants.map(participant => {
         const transformed = ParticipantTransformers.transformParticipant(participant, webinarDbId);
         return {
-          // Map to correct database field names
-          webinar_id: webinarDbId,
-          participant_id: transformed.participant_id,
-          name: transformed.participant_name, // Database uses 'name' not 'participant_name'
-          email: transformed.participant_email,
-          join_time: transformed.join_time,
-          leave_time: transformed.leave_time,
-          duration: transformed.duration,
-          attentiveness_score: transformed.attentiveness_score,
-          answered_polling: transformed.answered_polling,
-          asked_question: transformed.asked_question,
-          camera_on_duration: transformed.camera_on_duration,
-          device: transformed.device,
-          ip_address: transformed.ip_address,
-          location: transformed.location,
-          network_type: transformed.network_type,
-          version: transformed.version,
-          customer_key: transformed.customer_key,
+          ...transformed,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };

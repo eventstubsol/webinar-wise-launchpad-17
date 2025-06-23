@@ -1,5 +1,4 @@
 
-import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection } from '@/types/zoom';
 import { ZoomConnectionService } from '../ZoomConnectionService';
 import { ApiResponse, RequestOptions, QueuedRequest, RateLimitConfig } from './types';
@@ -54,20 +53,17 @@ export class ZoomApiClient {
 
     // Get connection if not provided
     if (!connectionId) {
-      // Use current user's primary connection
-      const user = await supabase.auth.getUser();
-      if (user.data.user) {
-        const connection = await ZoomConnectionService.getPrimaryConnection(user.data.user.id);
-        if (!connection) {
-          return {
-            success: false,
-            error: 'No active Zoom connection found',
-            statusCode: 401,
-            retryable: false,
-          };
-        }
-        connectionId = connection.id;
+      const connections = await ZoomConnectionService.getUserConnections('current');
+      const primaryConnection = connections.find(c => c.is_primary);
+      if (!primaryConnection) {
+        return {
+          success: false,
+          error: 'No active Zoom connection found',
+          statusCode: 401,
+          retryable: false,
+        };
       }
+      connectionId = primaryConnection.id;
     }
 
     // Determine priority based on endpoint and method
@@ -79,7 +75,7 @@ export class ZoomApiClient {
         method,
         endpoint,
         data,
-        connectionId!,
+        connectionId,
         priority,
         options.timeout || 30000
       );
@@ -152,15 +148,13 @@ export class ZoomApiClient {
    */
   async getRateLimitStatus(connectionId?: string) {
     if (!connectionId) {
-      const user = await supabase.auth.getUser();
-      if (user.data.user) {
-        const connection = await ZoomConnectionService.getPrimaryConnection(user.data.user.id);
-        if (!connection) return null;
-        connectionId = connection.id;
-      }
+      const connections = await ZoomConnectionService.getUserConnections('current');
+      const primaryConnection = connections.find(c => c.is_primary);
+      if (!primaryConnection) return null;
+      connectionId = primaryConnection.id;
     }
 
-    return await rateLimitManager.getRateLimitStatus(connectionId!);
+    return await rateLimitManager.getRateLimitStatus(connectionId);
   }
 
   /**

@@ -80,7 +80,6 @@ export class WebhookService {
         .insert({
           connection_id: 'webhook',
           sync_type: 'webhook',
-          status: 'completed', // Add required status field
           sync_status: 'completed',
           resource_type: 'webhook_event',
           resource_id: event,

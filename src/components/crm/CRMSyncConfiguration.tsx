@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Play, Square, RefreshCw, Clock } from 'lucide-react';
 import { CRMConnection } from '@/types/crm';
 import { CRMConnectionManager } from '@/services/crm/CRMConnectionManager';
-import { CRMSyncOrchestrator } from '@/services/crm/SyncOrchestrator';
+import { SyncOrchestrator } from '@/services/crm/SyncOrchestrator';
 import { useToast } from '@/hooks/use-toast';
 
 interface CRMSyncConfigurationProps {
@@ -69,7 +70,7 @@ export function CRMSyncConfiguration({ connection, onUpdate }: CRMSyncConfigurat
         setSyncProgress(prev => Math.min(prev + 10, 90));
       }, 500);
 
-      const result = await CRMSyncOrchestrator.getInstance().startSync(connection.id, {
+      const result = await SyncOrchestrator.syncConnection(connection.id, {
         direction: direction || formData.syncDirection
       });
 
@@ -78,8 +79,8 @@ export function CRMSyncConfiguration({ connection, onUpdate }: CRMSyncConfigurat
 
       toast({
         title: "Sync Complete",
-        description: `Sync completed successfully.`,
-        variant: "default"
+        description: `Processed ${result.recordsProcessed} records. ${result.recordsSuccess} successful, ${result.recordsFailed} failed.`,
+        variant: result.success ? "default" : "destructive"
       });
 
       setTimeout(() => {
@@ -104,9 +105,14 @@ export function CRMSyncConfiguration({ connection, onUpdate }: CRMSyncConfigurat
     try {
       setLoading(true);
       
+      const result = await SyncOrchestrator.syncConnection(connection.id, {
+        direction: formData.syncDirection,
+        dryRun: true
+      });
+
       toast({
         title: "Dry Run Complete",
-        description: `Dry run completed successfully.`,
+        description: `Would process ${result.recordsProcessed} records if sync was executed.`,
       });
     } catch (error) {
       toast({

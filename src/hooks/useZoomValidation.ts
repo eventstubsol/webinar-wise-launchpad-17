@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useZoomCredentials } from '@/hooks/useZoomCredentials';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
+import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection } from '@/types/zoom';
 
 interface UseZoomValidationProps {
@@ -41,7 +42,16 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      return await ZoomConnectionService.validateCredentials();
+      // Use Supabase client to call the edge function
+      const { data, error } = await supabase.functions.invoke('validate-zoom-credentials', {
+        body: {},
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to validate credentials');
+      }
+
+      return data;
     },
     onSuccess: (result) => {
       setIsValidating(false);

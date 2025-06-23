@@ -15,7 +15,6 @@ export class SyncProgressTracker {
       .insert({
         connection_id: connectionId,
         sync_type: syncType,
-        status: 'in_progress', // Add required status field
         sync_status: SyncStatus.STARTED,
         resource_type: resourceId ? 'webinar' : 'webinars',
         resource_id: resourceId,

@@ -12,14 +12,14 @@ export class ParticipantHistoryService {
    */
   static async calculateParticipantHistory(participantEmail: string): Promise<ParticipantHistory | null> {
     try {
-      // Get all participations for this email - using correct field names
+      // Get all participations for this email
       const { data: participations, error } = await supabase
         .from('zoom_participants')
         .select(`
           *,
           zoom_webinars!inner(id, topic, start_time, duration)
         `)
-        .eq('email', participantEmail)
+        .eq('participant_email', participantEmail)
         .order('join_time', { ascending: false });
 
       if (error) {
@@ -34,37 +34,7 @@ export class ParticipantHistoryService {
       // Calculate engagement for each participation
       const engagementHistory = participations.map(p => {
         const webinar = (p as any).zoom_webinars;
-        // Create a properly typed participant object with all required fields
-        const participant = {
-          id: p.id,
-          webinar_id: p.webinar_id,
-          participant_id: p.participant_id || '',
-          registrant_id: p.registrant_id || null,
-          participant_name: p.name || '',
-          participant_email: p.email || '',
-          participant_user_id: p.participant_id || '',
-          join_time: p.join_time,
-          leave_time: p.leave_time,
-          duration: p.duration || 0,
-          attentiveness_score: p.attentiveness_score,
-          camera_on_duration: p.camera_on_duration || 0,
-          share_application_duration: p.share_application_duration || 0,
-          share_desktop_duration: p.share_desktop_duration || 0,
-          posted_chat: p.posted_chat || false,
-          raised_hand: p.raised_hand || false,
-          answered_polling: p.answered_polling || false,
-          asked_question: p.asked_question || false,
-          device: p.device || null,
-          ip_address: p.ip_address || null,
-          location: p.location || null,
-          network_type: p.network_type || null,
-          version: p.version || null,
-          customer_key: p.customer_key || null,
-          created_at: p.created_at || '',
-          updated_at: p.updated_at || ''
-        };
-        
-        const engagement = EngagementCalculator.calculateEngagementScore(participant, webinar.duration || 0);
+        const engagement = EngagementCalculator.calculateEngagementScore(p, webinar.duration || 0);
         
         return {
           webinarId: webinar.id,
@@ -90,7 +60,7 @@ export class ParticipantHistoryService {
 
       const history: ParticipantHistory = {
         participantEmail,
-        participantName: participations[0].name || '',
+        participantName: participations[0].participant_name,
         totalWebinarsAttended,
         averageEngagementScore: Math.round(averageEngagementScore * 100) / 100,
         averageAttendanceDuration: Math.round(averageAttendanceDuration),

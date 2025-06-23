@@ -61,8 +61,7 @@ interface WebinarTableData {
   status: string;
 }
 
-// Updated to match actual database schema without relationships
-interface DatabaseWebinarData {
+interface WebinarData {
   id: string;
   topic: string;
   start_time: string | null;
@@ -70,6 +69,7 @@ interface DatabaseWebinarData {
   total_attendees: number | null;
   total_registrants: number | null;
   status: string | null;
+  zoom_participants: any[];
 }
 
 export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
@@ -85,17 +85,12 @@ export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
     queryFn: async () => {
       if (!connection?.id) return null;
 
-      // Fetch webinars without relationships to avoid schema errors
+      // Fetch webinars with filters
       let webinarsQuery = supabase
         .from('zoom_webinars')
         .select(`
-          id,
-          topic,
-          start_time,
-          duration,
-          total_attendees,
-          total_registrants,
-          status
+          *,
+          zoom_participants(*)
         `)
         .eq('connection_id', connection.id)
         .gte('start_time', filters.dateRange.from.toISOString())
@@ -110,10 +105,8 @@ export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
       if (webinarsError) throw webinarsError;
       if (!webinars) return null;
 
-      // Type assertion with proper type checking
-      const typedWebinars = webinars.filter(w => 
-        w && typeof w === 'object' && 'id' in w
-      ) as DatabaseWebinarData[];
+      // Type the webinars data properly
+      const typedWebinars = webinars as WebinarData[];
 
       // Calculate metrics
       const metrics: WebinarMetrics = {
@@ -206,7 +199,7 @@ export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
 };
 
 // Helper functions
-function prepareAttendanceTrends(webinars: DatabaseWebinarData[]): ChartData['attendanceTrends'] {
+function prepareAttendanceTrends(webinars: WebinarData[]): ChartData['attendanceTrends'] {
   const grouped = webinars.reduce((acc, webinar) => {
     if (!webinar.start_time) return acc;
     
@@ -250,7 +243,7 @@ function prepareEngagementDistribution(engagements: any[]): ChartData['engagemen
   ];
 }
 
-async function prepareGeographicData(webinars: DatabaseWebinarData[]): Promise<ChartData['geographicData']> {
+async function prepareGeographicData(webinars: WebinarData[]): Promise<ChartData['geographicData']> {
   const webinarIds = webinars.map(w => w.id);
   if (webinarIds.length === 0) return [];
 
@@ -277,7 +270,7 @@ async function prepareGeographicData(webinars: DatabaseWebinarData[]): Promise<C
     .slice(0, 10); // Top 10 countries
 }
 
-async function prepareDeviceData(webinars: DatabaseWebinarData[]): Promise<ChartData['deviceData']> {
+async function prepareDeviceData(webinars: WebinarData[]): Promise<ChartData['deviceData']> {
   const webinarIds = webinars.map(w => w.id);
   if (webinarIds.length === 0) return [];
 

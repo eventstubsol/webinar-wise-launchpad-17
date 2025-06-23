@@ -134,7 +134,6 @@ export class ZoomWebinarSyncService {
       .insert({
         connection_id: connections[0].id,
         sync_type: syncType,
-        status: 'in_progress', // Add the required status field
         sync_status: SyncStatus.STARTED,
         resource_type: resourceType,
         started_at: new Date().toISOString(),

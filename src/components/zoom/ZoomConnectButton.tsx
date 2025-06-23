@@ -31,7 +31,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
     onConnectionSuccess,
     onConnectionError,
   });
-  const { disconnect, isDisconnecting } = useZoomDisconnect();
+  const { handleDisconnect } = useZoomDisconnect();
 
   // Query to get current connection status
   const { data: connection, isLoading: isLoadingConnection } = useQuery({
@@ -80,7 +80,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
       if (tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED) {
         startValidation();
       } else {
-        disconnect(connection.id);
+        handleDisconnect(connection);
       }
     } else {
       startValidation();

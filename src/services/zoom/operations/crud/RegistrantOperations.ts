@@ -19,29 +19,7 @@ export class RegistrantOperations {
       const transformedRegistrants = registrants.map(registrant => {
         const transformed = WebinarTransformers.transformRegistrant(registrant, webinarDbId);
         return {
-          // Map to correct database field names based on actual schema
-          webinar_id: webinarDbId,
-          registrant_id: transformed.registrant_id,
-          registrant_uuid: transformed.registrant_uuid,
-          email: transformed.registrant_email, // Use 'email' not 'registrant_email'
-          first_name: transformed.first_name,
-          last_name: transformed.last_name,
-          address: transformed.address,
-          city: transformed.city,
-          country: transformed.country,
-          zip: transformed.zip,
-          state: transformed.state,
-          phone: transformed.phone,
-          industry: transformed.industry,
-          org: transformed.org,
-          job_title: transformed.job_title,
-          purchasing_time_frame: transformed.purchasing_time_frame,
-          role_in_purchase_process: transformed.role_in_purchase_process,
-          no_of_employees: transformed.no_of_employees,
-          comments: transformed.comments,
-          status: transformed.status,
-          create_time: transformed.create_time,
-          join_url: transformed.join_url,
+          ...transformed,
           custom_questions: transformed.custom_questions ? JSON.parse(JSON.stringify(transformed.custom_questions)) : null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -109,7 +87,7 @@ export class RegistrantOperations {
           )
         `)
         .eq('webinar_id', webinarDbId)
-        .order('create_time', { ascending: true });
+        .order('registration_time', { ascending: true });
 
       if (error) {
         console.error('Failed to get registrants with attendance:', error);

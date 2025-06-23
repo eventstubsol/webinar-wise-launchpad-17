@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 export class AnalyticsService {
@@ -10,10 +11,8 @@ export class AnalyticsService {
 
     // Interaction rate (30% of score)
     // Ensure total_attendees is not zero to prevent division by zero
-    const pollsCount = Array.isArray(webinar.zoom_polls) ? webinar.zoom_polls.length : 0;
-    const qnaCount = Array.isArray(webinar.zoom_qna) ? webinar.zoom_qna.length : 0;
     const interactionRate = webinar.total_attendees > 0 
-        ? ((pollsCount + qnaCount) / webinar.total_attendees)
+        ? (((webinar.zoom_polls?.length || 0) + (webinar.zoom_qna?.length || 0)) / webinar.total_attendees)
         : 0;
     score += Math.min(interactionRate * 10, 30);
 
@@ -35,13 +34,14 @@ export class AnalyticsService {
         total_registrants,
         avg_attendance_duration,
         duration,
-        zoom_polls(id),
-        zoom_qna(id)
+        zoom_polls(count),
+        zoom_qna(count)
       `)
       .in('id', webinarIds);
 
     if (error) throw error;
     if (!webinars) return { webinars: [], summary: {} };
+
 
     // Calculate comparative metrics
     const analytics = webinars.map(webinar => ({
@@ -51,11 +51,12 @@ export class AnalyticsService {
       engagementScore: this.calculateEngagementScore(webinar),
       participantCount: webinar.total_attendees,
       duration: webinar.duration,
-      pollsCount: Array.isArray(webinar.zoom_polls) ? webinar.zoom_polls.length : 0,
-      questionsCount: Array.isArray(webinar.zoom_qna) ? webinar.zoom_qna.length : 0
+      pollsCount: webinar.zoom_polls?.[0]?.count || 0, // Adjusted to access count correctly
+      questionsCount: webinar.zoom_qna?.[0]?.count || 0 // Adjusted to access count correctly
     }));
     
     const validAnalytics = analytics.filter(w => w.engagementScore !== null && !isNaN(w.engagementScore));
+
 
     return {
       webinars: analytics,
@@ -123,32 +124,5 @@ export class AnalyticsService {
           ((trends[trends.length - 1].webinarCount - trends[0].webinarCount) / trends[0].webinarCount) * 100 : 0
       }
     };
-  }
-
-  static async getWebinarStats(webinarIds: string[]) {
-    try {
-      const { data, error } = await supabase
-        .from('zoom_webinars')
-        .select('total_registrants, total_attendees')
-        .in('id', webinarIds);
-
-      if (error) throw error;
-
-      const totalRegistrants = data?.reduce((sum, w) => sum + (w.total_registrants || 0), 0) || 0;
-      const totalAttendees = data?.reduce((sum, w) => sum + (w.total_attendees || 0), 0) || 0;
-
-      return {
-        totalRegistrants,
-        totalAttendees,
-        conversionRate: totalRegistrants > 0 ? (totalAttendees / totalRegistrants) * 100 : 0
-      };
-    } catch (error) {
-      console.error('Error getting webinar stats:', error);
-      return {
-        totalRegistrants: 0,
-        totalAttendees: 0,
-        conversionRate: 0
-      };
-    }
   }
 }
