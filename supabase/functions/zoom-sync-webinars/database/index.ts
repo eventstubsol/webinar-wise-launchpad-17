@@ -1,24 +1,50 @@
 
 /**
- * Main database operations module - exports all database functionality
+ * Enhanced database operations with bulletproof completion
  */
 
-// Re-export all database operations
-export {
-  createSyncLog,
-  updateSyncLog,
-  updateSyncStage
-} from './sync-log-operations.ts';
+// Export all existing operations for backward compatibility
+export * from './sync-log-operations.ts';
 
-export {
-  saveWebinarToDatabase,
-  updateWebinarParticipantSyncStatus
-} from './webinar-operations.ts';
+// Export new bulletproof operations
+export { TransactionManager } from './transaction-manager.ts';
+export { BulletproofSyncOperations } from './bulletproof-sync-operations.ts';
 
-export {
-  determineParticipantSyncStatus
-} from './participant-status-utils.ts';
+// Enhanced sync log operations with transaction safety
+export async function updateSyncLogEnhanced(
+  supabase: any, 
+  syncLogId: string, 
+  updates: Record<string, any>
+): Promise<void> {
+  const { TransactionManager } = await import('./transaction-manager.ts');
+  const transactionManager = new TransactionManager(supabase);
+  
+  await transactionManager.updateSyncLogSafely(
+    syncLogId,
+    updates,
+    'Enhanced sync log update'
+  );
+}
 
-export {
-  validateSyncResults
-} from './validation-operations.ts';
+export async function updateSyncStageEnhanced(
+  supabase: any, 
+  syncLogId: string, 
+  webinarId: string | null, 
+  stage: string, 
+  progress: number
+): Promise<void> {
+  const { TransactionManager } = await import('./transaction-manager.ts');
+  const transactionManager = new TransactionManager(supabase);
+  
+  await transactionManager.updateSyncLogSafely(
+    syncLogId,
+    {
+      current_webinar_id: webinarId,
+      sync_stage: stage,
+      stage_progress_percentage: Math.max(0, Math.min(100, progress))
+    },
+    `Stage update: ${stage} (${progress}%)`
+  );
+  
+  console.log(`Enhanced Sync ${syncLogId}: ${stage} (${progress}%) - Webinar: ${webinarId || 'N/A'}`);
+}
