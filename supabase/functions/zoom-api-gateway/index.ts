@@ -368,46 +368,27 @@ serve(async (req) => {
   }
 
   try {
-    let requestBody;
-    let action;
-
-    // Try to parse request body first (for supabase.functions.invoke calls)
-    if (req.method !== 'GET') {
-      try {
-        requestBody = await req.json();
-        action = requestBody?.action;
-        console.log('Parsed request body:', { action, hasBody: !!requestBody });
-      } catch (error) {
-        console.log('Failed to parse JSON body, trying URL params:', error.message);
-      }
-    }
-
-    // Fallback to URL parameters if no action found in body
-    if (!action) {
-      const url = new URL(req.url);
-      action = url.searchParams.get('action');
-      console.log('Got action from URL params:', action);
-    }
+    // Simple request body parsing
+    const requestBody = await req.json();
+    const action = requestBody?.action;
+    
+    console.log(`Processing action: ${action}`);
 
     if (!action) {
       throw new Error('Missing action parameter');
     }
-
-    console.log(`Processing action: ${action}`);
 
     let result;
     const authHeader = req.headers.get('Authorization');
 
     switch (action) {
       case 'oauth-exchange':
-        if (!requestBody) throw new Error('Request body required for OAuth exchange');
         result = await handleOAuthExchange(requestBody, authHeader!);
         break;
       case 'validate-credentials':
         result = await handleCredentialsValidation(authHeader!);
         break;
       case 'sync':
-        if (!requestBody) throw new Error('Request body required for sync');
         result = await handleZoomSync(requestBody, authHeader!);
         break;
       case 'test':
