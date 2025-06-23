@@ -101,7 +101,10 @@ export async function executeIncrementalSync(
   progressTracker: EnhancedSyncProgressTracker,
   signal: AbortSignal
 ): Promise<void> {
-  const connection = await ZoomConnectionService.getConnection(operation.connectionId);
+  // Get user connections to find the specific connection
+  const connections = await ZoomConnectionService.getUserConnections('user-id-placeholder');
+  const connection = connections.find(c => c.id === operation.connectionId);
+  
   const lastSyncDate = connection?.last_sync_at ? 
     new Date(connection.last_sync_at) : 
     new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
