@@ -1,3 +1,4 @@
+
 import { ZoomWebinar, ZoomRegistrant, WebinarStatus } from '@/types/zoom';
 
 /**
@@ -38,7 +39,7 @@ export class WebinarTransformers {
     // Extract settings for comprehensive field mapping
     const settings = apiWebinar.settings || {};
     
-    // FIXED: Complete transformation with ALL 39 fields mapped correctly
+    // FIXED: Complete transformation with ALL 39 fields mapped correctly INCLUDING attendees_count and registrants_count
     const transformedData = {
       // Connection and identification
       connection_id: connectionId,
@@ -85,12 +86,16 @@ export class WebinarTransformers {
       is_simulive: apiWebinar.is_simulive || false,
       simulive_webinar_id: apiWebinar.record_file_id || null,
       
-      // Computed metrics (will be calculated separately)
+      // Computed metrics (will be calculated separately but need to be present for type safety)
       total_registrants: null,
       total_attendees: null,
       total_absentees: null,
       total_minutes: null,
       avg_attendance_duration: null,
+      
+      // FIXED: Add the missing attendees_count and registrants_count fields
+      attendees_count: null,
+      registrants_count: null,
       
       // JSONB fields with enhanced extraction
       settings: this.extractSettingsData(apiWebinar.settings, apiWebinar),

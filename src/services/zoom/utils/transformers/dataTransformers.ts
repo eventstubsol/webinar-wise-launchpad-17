@@ -15,7 +15,7 @@ export {
   ParticipantTransformers,
   InteractionTransformers,
   MetricsTransformers
-} from './webinarTransformers';
+};
 
 // Main transformer class with all methods for backward compatibility
 export class ZoomDataTransformers {
