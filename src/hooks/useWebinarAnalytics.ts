@@ -85,7 +85,7 @@ export const useWebinarAnalytics = (filters: WebinarAnalyticsFilters) => {
     queryFn: async () => {
       if (!connection?.id) return null;
 
-      // Fetch webinars with filters
+      // Fetch webinars with filters - using the actual zoom_webinars table
       let webinarsQuery = supabase
         .from('zoom_webinars')
         .select(`

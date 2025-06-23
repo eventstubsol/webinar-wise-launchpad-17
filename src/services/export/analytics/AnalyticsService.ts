@@ -12,7 +12,7 @@ export class AnalyticsService {
     // Interaction rate (30% of score)
     // Ensure total_attendees is not zero to prevent division by zero
     const interactionRate = webinar.total_attendees > 0 
-        ? (((webinar.zoom_polls?.length || 0) + (webinar.zoom_qna?.length || 0)) / webinar.total_attendees)
+        ? (((webinar.polls_count || 0) + (webinar.questions_count || 0)) / webinar.total_attendees)
         : 0;
     score += Math.min(interactionRate * 10, 30);
 
@@ -25,6 +25,7 @@ export class AnalyticsService {
   }
 
   static async getComparativeAnalytics(webinarIds: string[]) {
+    // Get webinar data with poll and Q&A counts
     const { data: webinars, error } = await supabase
       .from('zoom_webinars')
       .select(`
@@ -33,30 +34,53 @@ export class AnalyticsService {
         total_attendees,
         total_registrants,
         avg_attendance_duration,
-        duration,
-        zoom_polls(count),
-        zoom_qna(count)
+        duration
       `)
       .in('id', webinarIds);
 
     if (error) throw error;
     if (!webinars) return { webinars: [], summary: {} };
 
+    // Get poll counts for each webinar
+    const { data: pollCounts } = await supabase
+      .from('zoom_polls')
+      .select('webinar_id')
+      .in('webinar_id', webinarIds);
+
+    // Get Q&A counts for each webinar
+    const { data: qaCounts } = await supabase
+      .from('zoom_qna')
+      .select('webinar_id')
+      .in('webinar_id', webinarIds);
+
+    // Count polls and Q&A per webinar
+    const pollCountsByWebinar = (pollCounts || []).reduce((acc, poll) => {
+      acc[poll.webinar_id] = (acc[poll.webinar_id] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const qaCountsByWebinar = (qaCounts || []).reduce((acc, qa) => {
+      acc[qa.webinar_id] = (acc[qa.webinar_id] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
 
     // Calculate comparative metrics
     const analytics = webinars.map(webinar => ({
       id: webinar.id,
       topic: webinar.topic,
       attendanceRate: webinar.total_registrants > 0 ? (webinar.total_attendees / webinar.total_registrants) * 100 : 0,
-      engagementScore: this.calculateEngagementScore(webinar),
+      engagementScore: this.calculateEngagementScore({
+        ...webinar,
+        polls_count: pollCountsByWebinar[webinar.id] || 0,
+        questions_count: qaCountsByWebinar[webinar.id] || 0
+      }),
       participantCount: webinar.total_attendees,
       duration: webinar.duration,
-      pollsCount: webinar.zoom_polls?.[0]?.count || 0, // Adjusted to access count correctly
-      questionsCount: webinar.zoom_qna?.[0]?.count || 0 // Adjusted to access count correctly
+      pollsCount: pollCountsByWebinar[webinar.id] || 0,
+      questionsCount: qaCountsByWebinar[webinar.id] || 0
     }));
     
     const validAnalytics = analytics.filter(w => w.engagementScore !== null && !isNaN(w.engagementScore));
-
 
     return {
       webinars: analytics,

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useZoomConnection } from '@/hooks/useZoomConnection';
 
 interface WebinarMetrics {
   totalWebinars: number;
@@ -38,32 +39,48 @@ interface WebinarMetrics {
 
 export const useWebinarMetrics = () => {
   const { user } = useAuth();
+  const { connection } = useZoomConnection();
   const [metrics, setMetrics] = useState<WebinarMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !connection?.id) return;
 
     const fetchMetrics = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Fetch webinar analytics summary
+        // Fetch webinars directly from zoom_webinars table
         const { data: webinars, error: webinarsError } = await supabase
-          .from('webinar_analytics_summary')
+          .from('zoom_webinars')
           .select('*')
-          .eq('user_id', user.id);
+          .eq('connection_id', connection.id);
 
         if (webinarsError) throw webinarsError;
 
+        if (!webinars) {
+          setMetrics({
+            totalWebinars: 0,
+            totalRegistrants: 0,
+            totalAttendees: 0,
+            attendanceRate: 0,
+            totalEngagement: 0,
+            averageDuration: 0,
+            monthlyTrends: [],
+            recentWebinars: [],
+            upcomingWebinars: [],
+          });
+          return;
+        }
+
         // Calculate aggregate metrics
-        const totalWebinars = webinars?.length || 0;
-        const totalRegistrants = webinars?.reduce((sum, w) => sum + (w.total_registrants || 0), 0) || 0;
-        const totalAttendees = webinars?.reduce((sum, w) => sum + (w.total_attendees || 0), 0) || 0;
+        const totalWebinars = webinars.length;
+        const totalRegistrants = webinars.reduce((sum, w) => sum + (w.total_registrants || 0), 0);
+        const totalAttendees = webinars.reduce((sum, w) => sum + (w.total_attendees || 0), 0);
         const attendanceRate = totalRegistrants > 0 ? (totalAttendees / totalRegistrants) * 100 : 0;
-        const totalEngagement = webinars?.reduce((sum, w) => sum + (w.avg_attendance_duration || 0), 0) || 0;
+        const totalEngagement = webinars.reduce((sum, w) => sum + (w.avg_attendance_duration || 0), 0);
         const averageDuration = totalWebinars > 0 ? totalEngagement / totalWebinars : 0;
 
         // Generate monthly trends (last 6 months)
@@ -73,9 +90,9 @@ export const useWebinarMetrics = () => {
           date.setMonth(date.getMonth() - i);
           const monthKey = date.toISOString().slice(0, 7); // YYYY-MM format
           
-          const monthWebinars = webinars?.filter(w => 
+          const monthWebinars = webinars.filter(w => 
             w.start_time?.startsWith(monthKey)
-          ) || [];
+          );
           
           monthlyTrends.push({
             month: date.toLocaleDateString('en', { month: 'short' }),
@@ -90,34 +107,34 @@ export const useWebinarMetrics = () => {
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         
         const recentWebinars = webinars
-          ?.filter(w => w.start_time && new Date(w.start_time) >= thirtyDaysAgo)
-          ?.sort((a, b) => new Date(b.start_time || 0).getTime() - new Date(a.start_time || 0).getTime())
-          ?.slice(0, 5)
-          ?.map(w => ({
-            id: w.id || '',
+          .filter(w => w.start_time && new Date(w.start_time) >= thirtyDaysAgo)
+          .sort((a, b) => new Date(b.start_time || 0).getTime() - new Date(a.start_time || 0).getTime())
+          .slice(0, 5)
+          .map(w => ({
+            id: w.id,
             title: w.topic || 'Untitled Webinar',
             date: w.start_time ? new Date(w.start_time).toLocaleDateString() : '',
             duration: Math.round((w.avg_attendance_duration || 0) / 60), // Convert to minutes
             attendees: w.total_attendees || 0,
             registrants: w.total_registrants || 0,
-            attendanceRate: w.attendance_rate ? `${Math.round(w.attendance_rate)}%` : '0%',
-          })) || [];
+            attendanceRate: w.total_registrants && w.total_attendees ? `${Math.round((w.total_attendees / w.total_registrants) * 100)}%` : '0%',
+          }));
 
         // Upcoming webinars (future dates)
         const now = new Date();
         const upcomingWebinars = webinars
-          ?.filter(w => w.start_time && new Date(w.start_time) > now)
-          ?.sort((a, b) => new Date(a.start_time || 0).getTime() - new Date(b.start_time || 0).getTime())
-          ?.slice(0, 5)
-          ?.map(w => ({
-            id: w.id || '',
+          .filter(w => w.start_time && new Date(w.start_time) > now)
+          .sort((a, b) => new Date(a.start_time || 0).getTime() - new Date(b.start_time || 0).getTime())
+          .slice(0, 5)
+          .map(w => ({
+            id: w.id,
             title: w.topic || 'Untitled Webinar',
             date: w.start_time ? new Date(w.start_time).toLocaleDateString() : '',
             time: w.start_time ? new Date(w.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
             duration: Math.round((w.duration || 0) / 60), // Convert to minutes
             registrants: w.total_registrants || 0,
             status: 'upcoming',
-          })) || [];
+          }));
 
         const metricsData: WebinarMetrics = {
           totalWebinars,
@@ -141,7 +158,7 @@ export const useWebinarMetrics = () => {
     };
 
     fetchMetrics();
-  }, [user?.id]);
+  }, [user?.id, connection?.id]);
 
   return { metrics, loading, error, refetch: () => setLoading(true) };
 };
