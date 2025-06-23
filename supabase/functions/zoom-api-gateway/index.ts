@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -372,22 +371,22 @@ serve(async (req) => {
     let requestBody;
     let action;
 
-    // First try to get action from URL parameters (for simple requests like validate-credentials)
-    const url = new URL(req.url);
-    action = url.searchParams.get('action');
-
-    // If no action in URL, try to parse request body
-    if (!action && req.method !== 'GET') {
+    // Try to parse request body first (for supabase.functions.invoke calls)
+    if (req.method !== 'GET') {
       try {
         requestBody = await req.json();
-        action = requestBody.action;
+        action = requestBody?.action;
+        console.log('Parsed request body:', { action, hasBody: !!requestBody });
       } catch (error) {
-        console.error('Failed to parse request body:', error);
-        // If body parsing fails but we have no action, that's an error
-        if (!action) {
-          throw new Error('Invalid JSON in request body and no action in URL parameters');
-        }
+        console.log('Failed to parse JSON body, trying URL params:', error.message);
       }
+    }
+
+    // Fallback to URL parameters if no action found in body
+    if (!action) {
+      const url = new URL(req.url);
+      action = url.searchParams.get('action');
+      console.log('Got action from URL params:', action);
     }
 
     if (!action) {
