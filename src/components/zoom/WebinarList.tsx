@@ -1,6 +1,4 @@
-
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useWebinars } from '@/hooks/useWebinars';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import {
@@ -24,7 +22,6 @@ interface WebinarFilters {
 }
 
 const WebinarList: React.FC = () => {
-  const navigate = useNavigate();
   const { connection, isConnected } = useZoomConnection();
   const [filters, setFilters] = useState<WebinarFilters>({
     search: '',
@@ -53,7 +50,8 @@ const WebinarList: React.FC = () => {
   };
 
   const handleViewDetails = (webinarId: string) => {
-    navigate(`/webinars/${webinarId}`);
+    // TODO: Navigate to webinar details page
+    console.log('View details for webinar:', webinarId);
   };
 
   if (!isConnected) {

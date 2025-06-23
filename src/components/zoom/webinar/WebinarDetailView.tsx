@@ -42,7 +42,7 @@ const WebinarDetailView: React.FC<WebinarDetailViewProps> = ({
   };
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/webinars/${webinarId}`;
+    const url = `${window.location.origin}/dashboard/webinars/${webinarId}`;
     if (navigator.share) {
       await navigator.share({
         title: data?.webinar?.topic || 'Webinar Details',
@@ -129,11 +129,11 @@ const WebinarDetailView: React.FC<WebinarDetailViewProps> = ({
       <div className="flex items-center justify-between print:hidden">
         <Button 
           variant="ghost" 
-          onClick={() => navigate('/webinars')}
+          onClick={() => navigate('/dashboard')}
           className="flex items-center gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Webinars
+          Back to Dashboard
         </Button>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleShare}>
