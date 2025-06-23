@@ -20,6 +20,7 @@ export const ROUTES = {
 
   // Protected routes - Data Management
   WEBINARS: '/webinars',
+  WEBINAR_DETAIL: '/webinars/:webinarId',
   SYNC_CENTER: '/sync-center',
   CSV_UPLOAD: '/csv-upload',
 

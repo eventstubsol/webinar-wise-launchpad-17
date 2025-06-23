@@ -22,6 +22,7 @@ import ZoomDiagnostics from '@/pages/ZoomDiagnostics';
 
 // Protected Pages - Data Management
 import Webinars from '@/pages/Webinars';
+import WebinarDetail from '@/pages/WebinarDetail';
 import SyncCenter from '@/pages/SyncCenter';
 import CSVUpload from '@/pages/CSVUpload';
 
@@ -102,6 +103,14 @@ export const AppRoutes = () => (
       element={
         <ProtectedRoute>
           <Webinars />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path={ROUTES.WEBINAR_DETAIL}
+      element={
+        <ProtectedRoute>
+          <WebinarDetail />
         </ProtectedRoute>
       }
     />
