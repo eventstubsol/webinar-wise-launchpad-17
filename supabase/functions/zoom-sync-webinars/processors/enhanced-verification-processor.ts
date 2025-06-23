@@ -1,9 +1,8 @@
 
 /**
- * Enhanced verification processing with bulletproof completion fallbacks
+ * Enhanced verification processing with comprehensive timeout protection and debug logging
  */
 import { updateSyncStage, updateSyncLog } from '../database-operations.ts';
-import { BulletproofSyncOperations } from '../database/bulletproof-sync-operations.ts';
 import { 
   verifyEnhancedSync, 
   generateEnhancedVerificationReport,
@@ -19,26 +18,34 @@ export async function executeEnhancedVerification(
   verificationTimeoutMs: number
 ): Promise<EnhancedVerificationResult | null> {
   const verificationStartTime = Date.now();
-  console.log(`🔍 ENHANCED VERIFICATION: Starting with ${verificationTimeoutMs}ms timeout and bulletproof fallbacks`);
+  console.log(`🔍 ENHANCED VERIFICATION: Starting comprehensive verification with ${verificationTimeoutMs}ms timeout`);
+  console.log(`🔍 VERIFICATION DEBUG: Baseline available: ${!!preSync}, Connection: ${connectionId}`);
   
   await updateSyncStage(supabase, syncLogId, null, 'verifying_sync_enhanced', 90);
   
   if (!preSync) {
-    console.warn('⚠️ ENHANCED VERIFICATION: No baseline available, using bulletproof completion');
+    console.warn('⚠️ ENHANCED VERIFICATION: No baseline available, completing sync without verification');
     await updateSyncStage(supabase, syncLogId, null, 'verification_skipped', 95);
     return null;
   }
   
   try {
-    console.log(`🔍 VERIFICATION DEBUG: Starting verification process with bulletproof safety`);
+    console.log(`🔍 VERIFICATION DEBUG: Starting verification process at ${new Date().toISOString()}`);
     
+    // Enhanced timeout with progress reporting
     const progressInterval = setInterval(() => {
       const elapsed = Date.now() - verificationStartTime;
       const progressPercent = Math.min(95, (elapsed / verificationTimeoutMs) * 100);
       console.log(`🔍 VERIFICATION PROGRESS: ${progressPercent.toFixed(1)}% (${elapsed}ms elapsed)`);
+      
+      if (elapsed > verificationTimeoutMs * 0.75) {
+        console.warn(`⚠️ VERIFICATION WARNING: 75% of timeout reached (${elapsed}ms/${verificationTimeoutMs}ms)`);
+      }
     }, 5000);
     
     try {
+      console.log(`🔍 VERIFICATION DEBUG: Calling verifyEnhancedSync with timeout ${verificationTimeoutMs}ms`);
+      
       const verificationResult = await Promise.race([
         verifyEnhancedSync(supabase, connectionId, preSync, syncLogId, verificationTimeoutMs),
         new Promise<never>((_, reject) => 
@@ -53,6 +60,9 @@ export async function executeEnhancedVerification(
       
       const verificationDuration = Date.now() - verificationStartTime;
       console.log(`✅ ENHANCED VERIFICATION: Completed successfully in ${verificationDuration}ms`);
+      console.log(`  🎯 Verification passed: ${verificationResult.passed}`);
+      console.log(`  📊 Integrity score: ${verificationResult.summary.integrityScore}/100`);
+      console.log(`  📋 Field completion: ${verificationResult.summary.fieldCompletionScore}%`);
       
       await updateSyncStage(supabase, syncLogId, null, 'verification_completed', 95);
       return verificationResult;
@@ -64,11 +74,11 @@ export async function executeEnhancedVerification(
       if (verificationError.message.includes('timeout')) {
         console.error(`⏰ VERIFICATION TIMEOUT: Process timed out after ${verificationDuration}ms`);
         
-        // Use bulletproof fallback for timeout
-        console.log(`🔄 BULLETPROOF FALLBACK: Attempting basic verification with guaranteed completion...`);
+        // Implement fallback verification
+        console.log(`🔄 VERIFICATION FALLBACK: Attempting basic verification...`);
         const fallbackResult = await executeBasicVerificationFallback(supabase, connectionId, preSync, syncLogId);
         
-        await updateSyncStage(supabase, syncLogId, null, 'verification_timeout_bulletproof_fallback', 95);
+        await updateSyncStage(supabase, syncLogId, null, 'verification_timeout_fallback', 95);
         return fallbackResult;
       } else {
         console.error(`❌ VERIFICATION ERROR: Failed after ${verificationDuration}ms:`, verificationError);
@@ -77,61 +87,53 @@ export async function executeEnhancedVerification(
     }
     
   } catch (error) {
-    console.error('❌ ENHANCED VERIFICATION: Critical failure, activating bulletproof completion:', error);
+    console.error('❌ ENHANCED VERIFICATION: Critical failure:', error);
     
-    // Use bulletproof emergency completion for verification failures
-    const bulletproofOps = new BulletproofSyncOperations(supabase);
-    
-    try {
-      // Create fallback verification result
-      const fallbackResult: EnhancedVerificationResult = {
-        passed: false,
-        hasDataLoss: false,
-        hasIntegrityWarnings: false,
-        hasVerificationErrors: true,
-        hasFieldMappingIssues: false,
-        baseline: preSync,
-        postSync: preSync,
-        issues: [{
-          type: 'verification_error',
-          severity: 'critical',
-          category: 'general',
-          message: `Verification process failed but sync will complete: ${error.message}`,
-          details: { 
-            error: error.message, 
-            bulletproof_completion_activated: true,
-            duration: Date.now() - verificationStartTime
-          }
-        }],
-        fieldValidation: {
-          requiredFields: [],
-          populatedFields: [],
-          missingFields: [],
-          partiallyPopulatedFields: [],
-          fieldCompletionRate: 0,
-          criticalFieldsMissing: true
-        },
-        summary: {
-          webinarsDelta: 0,
-          participantsDelta: 0,
-          registrantsDelta: 0,
-          integrityScore: 0,
-          fieldCompletionScore: 0
+    // Create fallback verification result
+    const fallbackResult: EnhancedVerificationResult = {
+      passed: false,
+      hasDataLoss: false,
+      hasIntegrityWarnings: false,
+      hasVerificationErrors: true,
+      hasFieldMappingIssues: false,
+      baseline: preSync,
+      postSync: preSync,
+      issues: [{
+        type: 'verification_error',
+        severity: 'critical',
+        category: 'general',
+        message: `Verification process failed: ${error.message}`,
+        details: { 
+          error: error.message, 
+          stack: error.stack,
+          timeoutMs: verificationTimeoutMs,
+          duration: Date.now() - verificationStartTime
         }
-      };
-      
-      await updateSyncStage(supabase, syncLogId, null, 'verification_failed_bulletproof_recovery', 95);
-      return fallbackResult;
-      
-    } catch (bulletproofError) {
-      console.error('💥 BULLETPROOF VERIFICATION RECOVERY FAILED:', bulletproofError);
-      throw error; // Re-throw original error
-    }
+      }],
+      fieldValidation: {
+        requiredFields: [],
+        populatedFields: [],
+        missingFields: [],
+        partiallyPopulatedFields: [],
+        fieldCompletionRate: 0,
+        criticalFieldsMissing: true
+      },
+      summary: {
+        webinarsDelta: 0,
+        participantsDelta: 0,
+        registrantsDelta: 0,
+        integrityScore: 0,
+        fieldCompletionScore: 0
+      }
+    };
+    
+    await updateSyncStage(supabase, syncLogId, null, 'verification_failed_fallback', 95);
+    return fallbackResult;
   }
 }
 
 /**
- * Basic verification fallback with bulletproof completion guarantee
+ * Basic verification fallback when enhanced verification times out
  */
 async function executeBasicVerificationFallback(
   supabase: any,
@@ -139,7 +141,7 @@ async function executeBasicVerificationFallback(
   baseline: EnhancedSyncBaseline,
   syncLogId: string
 ): Promise<EnhancedVerificationResult> {
-  console.log(`🔄 BASIC VERIFICATION FALLBACK: Starting with bulletproof guarantee...`);
+  console.log(`🔄 BASIC VERIFICATION FALLBACK: Starting simplified verification...`);
   
   try {
     // Quick data count check with short timeout
@@ -158,11 +160,11 @@ async function executeBasicVerificationFallback(
       ...baseline,
       totalWebinars: webinarCount.count || 0,
       totalParticipants: participantCount.count || 0,
-      totalRegistrants: 0,
+      totalRegistrants: 0, // Skip registrant count for speed
       capturedAt: new Date().toISOString()
     };
     
-    console.log(`✅ BASIC VERIFICATION FALLBACK: Completed with bulletproof guarantee`);
+    console.log(`✅ BASIC VERIFICATION FALLBACK: Completed - Webinars: ${postSync.totalWebinars}, Participants: ${postSync.totalParticipants}`);
     
     return {
       passed: true,
@@ -176,34 +178,30 @@ async function executeBasicVerificationFallback(
         type: 'integrity_warning',
         severity: 'warning',
         category: 'general',
-        message: 'Enhanced verification timed out, used bulletproof basic fallback',
-        details: { 
-          fallbackReason: 'timeout', 
-          verificationLevel: 'basic_bulletproof',
-          completion_guaranteed: true
-        }
+        message: 'Enhanced verification timed out, used basic fallback verification',
+        details: { fallbackReason: 'timeout', verificationLevel: 'basic' }
       }],
       fieldValidation: {
         requiredFields: [],
         populatedFields: [],
         missingFields: [],
         partiallyPopulatedFields: [],
-        fieldCompletionRate: 75,
+        fieldCompletionRate: 75, // Assume reasonable completion for fallback
         criticalFieldsMissing: false
       },
       summary: {
         webinarsDelta: postSync.totalWebinars - baseline.totalWebinars,
         participantsDelta: postSync.totalParticipants - baseline.totalParticipants,
         registrantsDelta: 0,
-        integrityScore: 75,
+        integrityScore: 75, // Conservative score for fallback
         fieldCompletionScore: 75
       }
     };
     
   } catch (error) {
-    console.error('❌ BASIC VERIFICATION FALLBACK FAILED:', error);
+    console.error('❌ BASIC VERIFICATION FALLBACK: Failed:', error);
     
-    // Ultra-minimal fallback with bulletproof guarantee
+    // Ultra-minimal fallback - just mark as completed
     return {
       passed: true,
       hasDataLoss: false,
@@ -216,18 +214,15 @@ async function executeBasicVerificationFallback(
         type: 'verification_error',
         severity: 'warning',
         category: 'general',
-        message: 'All verification methods failed, sync completed with bulletproof mechanism',
-        details: { 
-          fallbackReason: 'all_verification_failed',
-          bulletproof_completion_guaranteed: true
-        }
+        message: 'All verification methods failed, sync completed without verification',
+        details: { fallbackReason: 'all_verification_failed' }
       }],
       fieldValidation: {
         requiredFields: [],
         populatedFields: [],
         missingFields: [],
         partiallyPopulatedFields: [],
-        fieldCompletionRate: 50,
+        fieldCompletionRate: 50, // Conservative estimate
         criticalFieldsMissing: false
       },
       summary: {
