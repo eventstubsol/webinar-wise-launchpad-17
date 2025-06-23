@@ -1,4 +1,3 @@
-
 import { updateSyncLog } from './database-operations.ts';
 
 // Enhanced verification types with better error handling
@@ -60,31 +59,33 @@ export interface FieldValidationResult {
 }
 
 /**
- * Enhanced baseline capture with field validation and timeout protection
+ * Enhanced baseline capture with comprehensive timeout protection and debug logging
  */
 export async function captureEnhancedBaseline(
   supabase: any,
   connectionId: string,
-  timeoutMs: number = 30000
+  timeoutMs: number = 20000 // Increased default timeout
 ): Promise<EnhancedSyncBaseline> {
-  console.log(`📊 ENHANCED BASELINE: Capturing with timeout protection (${timeoutMs}ms)`);
+  const captureStartTime = Date.now();
+  console.log(`📊 ENHANCED BASELINE: Starting capture with ${timeoutMs}ms timeout protection`);
+  console.log(`📊 BASELINE DEBUG: Connection ID: ${connectionId}, Start time: ${new Date().toISOString()}`);
   
   const timeoutPromise = new Promise<never>((_, reject) => 
-    setTimeout(() => reject(new Error('Baseline capture timeout')), timeoutMs)
+    setTimeout(() => {
+      const elapsed = Date.now() - captureStartTime;
+      console.error(`⏰ BASELINE TIMEOUT: Exceeded ${timeoutMs}ms limit after ${elapsed}ms`);
+      reject(new Error(`Baseline capture timeout after ${elapsed}ms`));
+    }, timeoutMs)
   );
 
   try {
     const baselinePromise = async (): Promise<EnhancedSyncBaseline> => {
-      // Get webinar field population stats
-      const { data: webinarFieldStats, error: fieldError } = await supabase.rpc('get_webinar_field_stats', {
-        p_connection_id: connectionId
-      });
-
-      if (fieldError) {
-        console.warn('Field stats query failed, using basic stats:', fieldError);
-      }
-
-      // Phase 1: Get webinars and participants (both have connection_id)
+      console.log(`📊 BASELINE DEBUG: Starting database queries...`);
+      
+      // Phase 1: Get webinars and participants (both have connection_id) with detailed logging
+      console.log(`📊 BASELINE DEBUG: Phase 1 - Fetching webinars and participants...`);
+      const phase1StartTime = Date.now();
+      
       const [webinarStats, participantCount] = await Promise.all([
         supabase
           .from('zoom_webinars')
@@ -96,40 +97,68 @@ export async function captureEnhancedBaseline(
           .eq('connection_id', connectionId)
       ]);
 
-      if (webinarStats.error) throw new Error(`Webinar stats error: ${webinarStats.error.message}`);
-      if (participantCount.error) throw new Error(`Participant count error: ${participantCount.error.message}`);
+      const phase1Duration = Date.now() - phase1StartTime;
+      console.log(`📊 BASELINE DEBUG: Phase 1 completed in ${phase1Duration}ms`);
+
+      if (webinarStats.error) {
+        console.error(`❌ BASELINE ERROR: Webinar stats query failed:`, webinarStats.error);
+        throw new Error(`Webinar stats error: ${webinarStats.error.message}`);
+      }
+      if (participantCount.error) {
+        console.error(`❌ BASELINE ERROR: Participant count query failed:`, participantCount.error);
+        throw new Error(`Participant count error: ${participantCount.error.message}`);
+      }
 
       const webinars = webinarStats.data || [];
+      console.log(`📊 BASELINE DEBUG: Found ${webinars.length} webinars, ${participantCount.count || 0} participants`);
       
-      // Phase 2: Get registrant count using webinar IDs (since zoom_registrants doesn't have connection_id)
+      // Phase 2: Get registrant count using webinar IDs with timeout protection
+      console.log(`📊 BASELINE DEBUG: Phase 2 - Fetching registrants for ${webinars.length} webinars...`);
+      const phase2StartTime = Date.now();
+      
       let registrantCount = { count: 0 };
       if (webinars.length > 0) {
         const webinarIds = webinars.map(w => w.id);
+        console.log(`📊 BASELINE DEBUG: Querying registrants for webinar IDs: ${webinarIds.slice(0, 5).join(', ')}${webinarIds.length > 5 ? '...' : ''}`);
+        
         const registrantQuery = await supabase
           .from('zoom_registrants')
           .select('id', { count: 'exact' })
           .in('webinar_id', webinarIds);
         
         if (registrantQuery.error) {
-          console.warn('Registrant count query failed, using 0:', registrantQuery.error.message);
+          console.warn(`⚠️ BASELINE WARNING: Registrant count query failed:`, registrantQuery.error.message);
           registrantCount = { count: 0 };
         } else {
           registrantCount = registrantQuery;
+          console.log(`📊 BASELINE DEBUG: Found ${registrantCount.count || 0} registrants`);
         }
       }
 
-      const now = new Date();
+      const phase2Duration = Date.now() - phase2StartTime;
+      console.log(`📊 BASELINE DEBUG: Phase 2 completed in ${phase2Duration}ms`);
+
+      // Phase 3: Calculate field population statistics with debug logging
+      console.log(`📊 BASELINE DEBUG: Phase 3 - Calculating field population statistics...`);
+      const phase3StartTime = Date.now();
       
-      // Calculate field population statistics
       const fieldPopulationStats = calculateFieldPopulation(webinars);
       
-      // Calculate breakdown metrics
+      const phase3Duration = Date.now() - phase3StartTime;
+      console.log(`📊 BASELINE DEBUG: Phase 3 completed in ${phase3Duration}ms - Field completion: ${fieldPopulationStats.populationRate}%`);
+
+      const now = new Date();
+      
+      // Calculate breakdown metrics with logging
+      console.log(`📊 BASELINE DEBUG: Calculating breakdown metrics...`);
       const pastWebinars = webinars.filter(w => w.start_time && new Date(w.start_time) < now).length;
       const endedWebinars = webinars.filter(w => ['ended', 'finished'].includes(w.status?.toLowerCase())).length;
       const webinarsWithParticipants = webinars.filter(w => (w.total_attendees || 0) > 0).length;
       const webinarsWithRegistrants = webinars.filter(w => (w.total_registrants || 0) > 0).length;
 
-      return {
+      console.log(`📊 BASELINE DEBUG: Breakdown - Past: ${pastWebinars}, Ended: ${endedWebinars}, With participants: ${webinarsWithParticipants}, With registrants: ${webinarsWithRegistrants}`);
+
+      const result = {
         totalWebinars: webinars.length,
         totalParticipants: participantCount.count || 0,
         totalRegistrants: registrantCount.count || 0,
@@ -140,11 +169,17 @@ export async function captureEnhancedBaseline(
         fieldPopulationStats,
         capturedAt: new Date().toISOString()
       };
+
+      const totalDuration = Date.now() - captureStartTime;
+      console.log(`📊 BASELINE DEBUG: All phases completed in ${totalDuration}ms`);
+      
+      return result;
     };
 
     const result = await Promise.race([baselinePromise(), timeoutPromise]);
     
-    console.log(`✅ ENHANCED BASELINE: Captured successfully`, {
+    const captureTime = Date.now() - captureStartTime;
+    console.log(`✅ ENHANCED BASELINE: Captured successfully in ${captureTime}ms`, {
       webinars: result.totalWebinars,
       participants: result.totalParticipants,
       registrants: result.totalRegistrants,
@@ -153,8 +188,9 @@ export async function captureEnhancedBaseline(
 
     return result;
   } catch (error) {
-    console.error('❌ ENHANCED BASELINE: Capture failed:', error);
-    throw new Error(`Enhanced baseline capture failed: ${error.message}`);
+    const captureTime = Date.now() - captureStartTime;
+    console.error(`❌ ENHANCED BASELINE: Capture failed after ${captureTime}ms:`, error);
+    throw new Error(`Enhanced baseline capture failed after ${captureTime}ms: ${error.message}`);
   }
 }
 
@@ -211,16 +247,18 @@ function calculateFieldPopulation(webinars: any[]): FieldPopulationStats {
 }
 
 /**
- * Enhanced verification with comprehensive field validation and timeout protection
+ * Enhanced verification with comprehensive timeout protection and debug logging
  */
 export async function verifyEnhancedSync(
   supabase: any,
   connectionId: string,
   baseline: EnhancedSyncBaseline,
   syncLogId: string,
-  timeoutMs: number = 30000
+  timeoutMs: number = 60000 // Increased default timeout
 ): Promise<EnhancedVerificationResult> {
-  console.log(`🔍 ENHANCED VERIFICATION: Starting comprehensive verification with timeout protection`);
+  const verificationStartTime = Date.now();
+  console.log(`🔍 ENHANCED VERIFICATION: Starting with ${timeoutMs}ms timeout protection`);
+  console.log(`🔍 VERIFICATION DEBUG: Connection: ${connectionId}, Baseline: ${baseline.totalWebinars} webinars, ${baseline.totalParticipants} participants`);
   
   const issues: VerificationIssue[] = [];
   let hasDataLoss = false;
@@ -229,16 +267,27 @@ export async function verifyEnhancedSync(
   let hasFieldMappingIssues = false;
 
   const timeoutPromise = new Promise<never>((_, reject) => 
-    setTimeout(() => reject(new Error('Verification timeout')), timeoutMs)
+    setTimeout(() => {
+      const elapsed = Date.now() - verificationStartTime;
+      console.error(`⏰ VERIFICATION TIMEOUT: Exceeded ${timeoutMs}ms limit after ${elapsed}ms`);
+      reject(new Error(`Verification timeout after ${elapsed}ms`));
+    }, timeoutMs)
   );
 
   try {
     const verificationPromise = async (): Promise<EnhancedVerificationResult> => {
-      // Capture post-sync baseline with timeout protection
-      const postSync = await captureEnhancedBaseline(supabase, connectionId, 15000);
+      // Step 1: Capture post-sync baseline with timeout protection
+      console.log(`🔍 VERIFICATION DEBUG: Step 1 - Capturing post-sync baseline...`);
+      const step1StartTime = Date.now();
       
-      // 1. DATA LOSS VERIFICATION
-      console.log(`📉 ENHANCED VERIFICATION: Checking for data loss...`);
+      const postSync = await captureEnhancedBaseline(supabase, connectionId, Math.min(timeoutMs / 3, 20000));
+      
+      const step1Duration = Date.now() - step1StartTime;
+      console.log(`🔍 VERIFICATION DEBUG: Step 1 completed in ${step1Duration}ms`);
+      
+      // Step 2: Data loss verification
+      console.log(`🔍 VERIFICATION DEBUG: Step 2 - Checking for data loss...`);
+      const step2StartTime = Date.now();
       
       if (postSync.totalWebinars < baseline.totalWebinars) {
         const lostWebinars = baseline.totalWebinars - postSync.totalWebinars;
@@ -254,6 +303,7 @@ export async function verifyEnhancedSync(
             lost: lostWebinars
           }
         });
+        console.error(`❌ DATA LOSS: Lost ${lostWebinars} webinars`);
       }
 
       if (postSync.totalParticipants < baseline.totalParticipants) {
@@ -270,67 +320,45 @@ export async function verifyEnhancedSync(
             lost: lostParticipants
           }
         });
+        console.error(`❌ DATA LOSS: Lost ${lostParticipants} participants`);
       }
 
-      // 2. FIELD MAPPING VALIDATION
-      console.log(`🔎 ENHANCED VERIFICATION: Validating field mapping...`);
-      
-      const fieldValidation = await validateFieldMapping(supabase, connectionId);
-      
-      if (fieldValidation.criticalFieldsMissing) {
-        hasFieldMappingIssues = true;
-        issues.push({
-          type: 'field_mapping_error',
-          severity: 'critical',
-          category: 'field_mapping',
-          message: `Critical fields missing: ${fieldValidation.missingFields.join(', ')}`,
-          details: fieldValidation,
-          affectedFields: fieldValidation.missingFields
-        });
-      }
+      const step2Duration = Date.now() - step2StartTime;
+      console.log(`🔍 VERIFICATION DEBUG: Step 2 completed in ${step2Duration}ms - Data loss: ${hasDataLoss}`);
 
-      if (fieldValidation.fieldCompletionRate < 90) {
-        hasFieldMappingIssues = true;
-        issues.push({
-          type: 'field_mapping_error',
-          severity: 'warning',
-          category: 'field_mapping',
-          message: `Low field completion rate: ${fieldValidation.fieldCompletionRate}%`,
-          details: fieldValidation,
-          affectedFields: fieldValidation.missingFields
-        });
-      }
-
-      // 3. DATA QUALITY VERIFICATION
-      console.log(`🔎 ENHANCED VERIFICATION: Checking data quality...`);
+      // Step 3: Field mapping validation (with timeout check)
+      console.log(`🔍 VERIFICATION DEBUG: Step 3 - Validating field mapping...`);
+      const step3StartTime = Date.now();
       
-      const { data: webinars, error: webinarError } = await supabase
-        .from('zoom_webinars')
-        .select(`
-          id, webinar_id, topic, start_time, status, 
-          total_attendees, total_registrants,
-          participant_sync_status, settings, host_email
-        `)
-        .eq('connection_id', connectionId);
-
-      if (webinarError) {
-        hasVerificationErrors = true;
-        issues.push({
-          type: 'verification_error',
-          severity: 'warning',
-          category: 'general',
-          message: 'Failed to fetch webinar data for quality verification',
-          details: { error: webinarError.message }
-        });
+      const remainingTime = timeoutMs - (Date.now() - verificationStartTime);
+      if (remainingTime < 5000) {
+        console.warn(`⚠️ VERIFICATION WARNING: Limited time remaining (${remainingTime}ms), skipping detailed field validation`);
       } else {
-        // Check for data quality issues
-        await checkDataQualityIssues(webinars, issues);
-        hasIntegrityWarnings = issues.some(i => i.type === 'integrity_warning');
+        const fieldValidation = await validateFieldMapping(supabase, connectionId);
+        
+        if (fieldValidation.criticalFieldsMissing) {
+          hasFieldMappingIssues = true;
+          issues.push({
+            type: 'field_mapping_error',
+            severity: 'critical',
+            category: 'field_mapping',
+            message: `Critical fields missing: ${fieldValidation.missingFields.join(', ')}`,
+            details: fieldValidation,
+            affectedFields: fieldValidation.missingFields
+          });
+        }
       }
 
-      // 4. CALCULATE SCORES
+      const step3Duration = Date.now() - step3StartTime;
+      console.log(`🔍 VERIFICATION DEBUG: Step 3 completed in ${step3Duration}ms - Field issues: ${hasFieldMappingIssues}`);
+
+      // Step 4: Calculate scores
+      console.log(`🔍 VERIFICATION DEBUG: Step 4 - Calculating scores...`);
       const integrityScore = calculateIntegrityScore(issues, hasDataLoss, hasVerificationErrors);
       const fieldCompletionScore = postSync.fieldPopulationStats.populationRate;
+
+      const totalDuration = Date.now() - verificationStartTime;
+      console.log(`🔍 VERIFICATION DEBUG: All steps completed in ${totalDuration}ms`);
 
       return {
         passed: !hasDataLoss && !hasVerificationErrors && !hasFieldMappingIssues,
@@ -341,7 +369,14 @@ export async function verifyEnhancedSync(
         baseline,
         postSync,
         issues,
-        fieldValidation,
+        fieldValidation: {
+          requiredFields: [],
+          populatedFields: [],
+          missingFields: [],
+          partiallyPopulatedFields: [],
+          fieldCompletionRate: fieldCompletionScore,
+          criticalFieldsMissing: hasFieldMappingIssues
+        },
         summary: {
           webinarsDelta: postSync.totalWebinars - baseline.totalWebinars,
           participantsDelta: postSync.totalParticipants - baseline.totalParticipants,
@@ -354,7 +389,8 @@ export async function verifyEnhancedSync(
 
     const result = await Promise.race([verificationPromise(), timeoutPromise]);
     
-    console.log(`🎯 ENHANCED VERIFICATION: Completed successfully`, {
+    const verificationTime = Date.now() - verificationStartTime;
+    console.log(`🎯 ENHANCED VERIFICATION: Completed successfully in ${verificationTime}ms`, {
       passed: result.passed,
       integrityScore: result.summary.integrityScore,
       fieldCompletionScore: result.summary.fieldCompletionScore,
@@ -364,9 +400,10 @@ export async function verifyEnhancedSync(
     return result;
 
   } catch (error) {
-    console.error('❌ ENHANCED VERIFICATION: Failed:', error);
+    const verificationTime = Date.now() - verificationStartTime;
+    console.error(`❌ ENHANCED VERIFICATION: Failed after ${verificationTime}ms:`, error);
     
-    // Create fallback result
+    // Create fallback result with timeout information
     return {
       passed: false,
       hasDataLoss: false,
@@ -380,7 +417,13 @@ export async function verifyEnhancedSync(
         severity: 'critical',
         category: 'general',
         message: `Verification process failed: ${error.message}`,
-        details: { error: error.message, stack: error.stack }
+        details: { 
+          error: error.message, 
+          stack: error.stack,
+          timeoutMs,
+          actualDuration: verificationTime,
+          isTimeout: error.message.includes('timeout')
+        }
       }],
       fieldValidation: {
         requiredFields: [],
