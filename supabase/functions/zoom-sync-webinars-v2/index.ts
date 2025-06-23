@@ -206,6 +206,8 @@ async function fetchWebinarList(
     ...(dateRange.to && { to: dateRange.to })
   });
 
+  console.log(`[SYNC] Fetching ${type} webinars with params:`, params.toString());
+
   const response = await fetch(`https://api.zoom.us/v2/users/me/webinars?${params}`, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -219,10 +221,47 @@ async function fetchWebinarList(
   }
 
   const data = await response.json();
+  console.log(`[SYNC] Fetched ${data.webinars?.length || 0} ${type} webinars from page`);
+  
   return {
     webinars: data.webinars || [],
     nextPageToken: data.next_page_token
   };
+}
+
+// Determine webinar status based on type and time
+function determineWebinarStatus(webinarDetails: any, webinarType: 'past' | 'upcoming'): string {
+  console.log(`[SYNC] Determining status for webinar ${webinarDetails.id}, type: ${webinarType}, API status: ${webinarDetails.status}`);
+  
+  // If it's a past webinar, it should always be finished
+  if (webinarType === 'past') {
+    console.log(`[SYNC] Setting status to 'finished' because webinar type is 'past'`);
+    return 'finished';
+  }
+  
+  // Check if start_time is in the past
+  if (webinarDetails.start_time) {
+    const startTime = new Date(webinarDetails.start_time);
+    const now = new Date();
+    
+    if (startTime < now) {
+      console.log(`[SYNC] Setting status to 'finished' because start_time (${startTime}) is in the past`);
+      return 'finished';
+    }
+  }
+  
+  // Use API status if provided and valid
+  if (webinarDetails.status) {
+    const validStatuses = ['waiting', 'started', 'finished', 'scheduled'];
+    if (validStatuses.includes(webinarDetails.status)) {
+      console.log(`[SYNC] Using API status: ${webinarDetails.status}`);
+      return webinarDetails.status;
+    }
+  }
+  
+  // Default to scheduled for upcoming webinars
+  console.log(`[SYNC] Defaulting to 'scheduled' status`);
+  return 'scheduled';
 }
 
 // Fetch complete webinar details
@@ -235,6 +274,8 @@ async function fetchWebinarDetails(
     ? `https://api.zoom.us/v2/past_webinars/${webinarId}`
     : `https://api.zoom.us/v2/webinars/${webinarId}`;
 
+  console.log(`[SYNC] Fetching details for ${type} webinar ${webinarId}`);
+
   const response = await fetch(endpoint, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -244,10 +285,106 @@ async function fetchWebinarDetails(
 
   if (!response.ok) {
     const error = await response.text();
+    console.error(`[SYNC] Failed to fetch webinar details for ${webinarId}: ${error}`);
     throw new Error(`Failed to fetch webinar details: ${error}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  console.log(`[SYNC] Successfully fetched details for webinar ${webinarId}: ${data.topic}`);
+  
+  // Log which fields are missing
+  const missingFields = [];
+  if (!data.host_email) missingFields.push('host_email');
+  if (!data.registrants_count && data.registrants_count !== 0) missingFields.push('registrants_count');
+  if (!data.participants_count && data.participants_count !== 0) missingFields.push('participants_count');
+  if (!data.settings) missingFields.push('settings');
+  
+  if (missingFields.length > 0) {
+    console.log(`[SYNC] Missing data fields for webinar ${webinarId}: ${missingFields.join(', ')}`);
+  }
+  
+  return data;
+}
+
+// Fetch registrant count for a webinar
+async function fetchRegistrantCount(
+  accessToken: string,
+  webinarId: string,
+  rateLimiter: RateLimitManager
+): Promise<number> {
+  try {
+    console.log(`[SYNC] Fetching registrant count for webinar ${webinarId}`);
+    
+    const response = await rateLimiter.executeWithRateLimit(async () => {
+      return await fetch(`https://api.zoom.us/v2/webinars/${webinarId}/registrants?page_size=1`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const count = data.total_records || 0;
+      console.log(`[SYNC] Found ${count} registrants for webinar ${webinarId}`);
+      return count;
+    }
+    
+    console.log(`[SYNC] Could not fetch registrant count for webinar ${webinarId}`);
+    return 0;
+  } catch (error) {
+    console.error(`[SYNC] Error fetching registrant count for ${webinarId}:`, error);
+    return 0;
+  }
+}
+
+// Fetch participant/attendee data for past webinars
+async function fetchParticipantData(
+  accessToken: string,
+  webinarId: string,
+  rateLimiter: RateLimitManager
+): Promise<{ count: number; avgDuration: number }> {
+  try {
+    console.log(`[SYNC] Fetching participant data for webinar ${webinarId}`);
+    
+    const response = await rateLimiter.executeWithRateLimit(async () => {
+      return await fetch(`https://api.zoom.us/v2/past_webinars/${webinarId}/participants?page_size=300`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const participants = data.participants || [];
+      const count = data.total_records || participants.length;
+      
+      // Calculate average duration
+      let totalDuration = 0;
+      let validParticipants = 0;
+      
+      participants.forEach((p: any) => {
+        if (p.duration && p.duration > 0) {
+          totalDuration += p.duration;
+          validParticipants++;
+        }
+      });
+      
+      const avgDuration = validParticipants > 0 ? Math.round(totalDuration / validParticipants) : 0;
+      
+      console.log(`[SYNC] Found ${count} participants with avg duration ${avgDuration} seconds for webinar ${webinarId}`);
+      return { count, avgDuration };
+    }
+    
+    console.log(`[SYNC] Could not fetch participant data for webinar ${webinarId}`);
+    return { count: 0, avgDuration: 0 };
+  } catch (error) {
+    console.error(`[SYNC] Error fetching participant data for ${webinarId}:`, error);
+    return { count: 0, avgDuration: 0 };
+  }
 }
 
 // Fetch additional webinar data
@@ -258,6 +395,18 @@ async function fetchAdditionalWebinarData(
   rateLimiter: RateLimitManager
 ): Promise<any> {
   const additionalData: any = {};
+
+  console.log(`[SYNC] Fetching additional data for ${type} webinar ${webinarId}`);
+
+  // Fetch registrant count for all webinars
+  additionalData.registrantCount = await fetchRegistrantCount(accessToken, webinarId, rateLimiter);
+
+  // Fetch participant data for past webinars
+  if (type === 'past') {
+    const participantData = await fetchParticipantData(accessToken, webinarId, rateLimiter);
+    additionalData.participantCount = participantData.count;
+    additionalData.avgAttendanceDuration = participantData.avgDuration;
+  }
 
   // Fetch tracking sources (only for upcoming webinars)
   if (type === 'upcoming') {
@@ -277,11 +426,11 @@ async function fetchAdditionalWebinarData(
         return [];
       });
     } catch (error) {
-      console.error(`Failed to fetch tracking sources for ${webinarId}:`, error);
+      console.error(`[SYNC] Failed to fetch tracking sources for ${webinarId}:`, error);
     }
   }
 
-  // Fetch polls, Q&A, absentees for past webinars
+  // Fetch polls, Q&A for past webinars
   if (type === 'past') {
     try {
       additionalData.polls = await rateLimiter.executeWithRateLimit(async () => {
@@ -299,7 +448,7 @@ async function fetchAdditionalWebinarData(
         return [];
       });
     } catch (error) {
-      console.error(`Failed to fetch polls for ${webinarId}:`, error);
+      console.error(`[SYNC] Failed to fetch polls for ${webinarId}:`, error);
     }
 
     try {
@@ -318,10 +467,11 @@ async function fetchAdditionalWebinarData(
         return [];
       });
     } catch (error) {
-      console.error(`Failed to fetch Q&A for ${webinarId}:`, error);
+      console.error(`[SYNC] Failed to fetch Q&A for ${webinarId}:`, error);
     }
   }
 
+  console.log(`[SYNC] Completed fetching additional data for webinar ${webinarId}`);
   return additionalData;
 }
 
@@ -335,6 +485,8 @@ async function processWebinar(
   connectionId: string
 ): Promise<void> {
   try {
+    console.log(`[SYNC] Starting to process webinar ${queueItem.webinar_id} (${queueItem.webinar_type})`);
+    
     // Mark as processing
     await supabase
       .from('webinar_sync_queue')
@@ -349,6 +501,9 @@ async function processWebinar(
       fetchWebinarDetails(accessToken, queueItem.webinar_id, queueItem.webinar_type)
     );
 
+    console.log(`[SYNC] Processing webinar ${webinarDetails.id}: ${webinarDetails.topic}`);
+    console.log(`[SYNC] Webinar type: ${queueItem.webinar_type}, Status from API: ${webinarDetails.status}`);
+
     // Fetch additional data
     const additionalData = await fetchAdditionalWebinarData(
       accessToken,
@@ -357,7 +512,10 @@ async function processWebinar(
       rateLimiter
     );
 
-    // Prepare data for upsert - Fixed to match actual database columns
+    // Determine the correct status
+    const status = determineWebinarStatus(webinarDetails, queueItem.webinar_type);
+
+    // Prepare data for upsert - Enhanced with additional data
     const webinarData = {
       webinar_id: webinarDetails.id || webinarDetails.uuid,
       webinar_uuid: webinarDetails.uuid || webinarDetails.id || `webinar-${webinarDetails.id}`,
@@ -370,28 +528,30 @@ async function processWebinar(
       webinar_created_at: webinarDetails.created_at ? new Date(webinarDetails.created_at).toISOString() : null,
       start_url: webinarDetails.start_url,
       join_url: webinarDetails.join_url,
-      status: webinarDetails.status || (queueItem.webinar_type === 'past' ? 'finished' : 'scheduled'),
+      status: status, // Use our determined status
       
       // Host information
       host_id: webinarDetails.host_id || 'unknown',
-      host_email: webinarDetails.host_email,
+      host_email: webinarDetails.host_email || webinarDetails.host?.email || null,
       alternative_hosts: webinarDetails.alternative_hosts_email ? webinarDetails.alternative_hosts_email.split(',').map((h: string) => h.trim()) : null,
       
       // Registration settings
       registration_url: webinarDetails.registration_url,
-      registration_required: webinarDetails.settings?.registrants_require_approval !== undefined,
+      registration_required: webinarDetails.settings?.registrants_require_approval !== undefined || webinarDetails.registration_required || false,
       approval_type: webinarDetails.settings?.approval_type || webinarDetails.approval_type,
       registration_type: webinarDetails.settings?.registration_type || webinarDetails.registration_type,
       max_registrants: webinarDetails.settings?.registrants_restrict_number || webinarDetails.max_registrants || null,
       max_attendees: webinarDetails.settings?.max_attendees || webinarDetails.max_attendees || null,
-      total_registrants: webinarDetails.registrants_count || 0,
-      total_attendees: webinarDetails.participants_count || 0,
-      total_minutes: webinarDetails.total_minutes || 0,
-      avg_attendance_duration: webinarDetails.avg_attendance_duration || 0,
       
-      // Meeting settings
-      audio: webinarDetails.settings?.audio,
-      auto_recording: webinarDetails.settings?.auto_recording,
+      // Use fetched data for counts
+      total_registrants: additionalData.registrantCount || webinarDetails.registrants_count || 0,
+      total_attendees: additionalData.participantCount || webinarDetails.participants_count || 0,
+      total_minutes: webinarDetails.total_minutes || 0,
+      avg_attendance_duration: additionalData.avgAttendanceDuration || webinarDetails.avg_attendance_duration || 0,
+      
+      // Meeting settings - with null checks
+      audio: webinarDetails.settings?.audio || webinarDetails.audio || 'both',
+      auto_recording: webinarDetails.settings?.auto_recording || webinarDetails.auto_recording || 'none',
       enforce_login: webinarDetails.settings?.enforce_login || false,
       hd_video: webinarDetails.settings?.hd_video || false,
       hd_video_for_attendees: webinarDetails.settings?.hd_video_for_attendees || false,
@@ -400,53 +560,53 @@ async function processWebinar(
       on_demand: webinarDetails.settings?.on_demand || false,
       panelists_video: webinarDetails.settings?.panelists_video || false,
       practice_session: webinarDetails.settings?.practice_session || false,
-      question_answer: webinarDetails.settings?.question_answer || false,
+      question_answer: webinarDetails.settings?.question_answer || webinarDetails.settings?.q_and_a || false,
       registrants_confirmation_email: webinarDetails.settings?.registrants_confirmation_email || false,
       registrants_email_notification: webinarDetails.settings?.registrants_email_notification || false,
       registrants_restrict_number: webinarDetails.settings?.registrants_restrict_number || 0,
       notify_registrants: webinarDetails.settings?.notify_registrants || false,
       post_webinar_survey: webinarDetails.settings?.post_webinar_survey || false,
-      survey_url: webinarDetails.settings?.survey_url,
+      survey_url: webinarDetails.settings?.survey_url || webinarDetails.survey_url || null,
       
       // Authentication
-      authentication_option: webinarDetails.settings?.authentication_option,
-      authentication_domains: webinarDetails.settings?.authentication_domains,
-      authentication_name: webinarDetails.settings?.authentication_name,
+      authentication_option: webinarDetails.settings?.authentication_option || null,
+      authentication_domains: webinarDetails.settings?.authentication_domains || null,
+      authentication_name: webinarDetails.settings?.authentication_name || null,
       
       // Email settings
-      email_language: webinarDetails.settings?.email_language,
+      email_language: webinarDetails.settings?.email_language || webinarDetails.settings?.language || 'en-US',
       panelists_invitation_email_notification: webinarDetails.settings?.panelists_invitation_email_notification || false,
       
       // Contact information
-      contact_name: webinarDetails.settings?.contact_name,
-      contact_email: webinarDetails.settings?.contact_email,
+      contact_name: webinarDetails.settings?.contact_name || webinarDetails.contact_name || null,
+      contact_email: webinarDetails.settings?.contact_email || webinarDetails.contact_email || null,
       
       // Q&A settings
-      attendees_and_panelists_reminder_email_notification: webinarDetails.settings?.attendees_and_panelists_reminder_email_notification,
-      follow_up_attendees_email_notification: webinarDetails.settings?.follow_up_attendees_email_notification,
-      follow_up_absentees_email_notification: webinarDetails.settings?.follow_up_absentees_email_notification,
+      attendees_and_panelists_reminder_email_notification: webinarDetails.settings?.attendees_and_panelists_reminder_email_notification || null,
+      follow_up_attendees_email_notification: webinarDetails.settings?.follow_up_attendees_email_notification || null,
+      follow_up_absentees_email_notification: webinarDetails.settings?.follow_up_absentees_email_notification || null,
       
       // Password settings
-      password: webinarDetails.password,
-      h323_password: webinarDetails.h323_password,
-      pstn_password: webinarDetails.pstn_password,
-      webinar_passcode: webinarDetails.passcode,
-      encrypted_password: webinarDetails.encrypted_password,
+      password: webinarDetails.password || null,
+      h323_password: webinarDetails.h323_password || null,
+      pstn_password: webinarDetails.pstn_password || null,
+      webinar_passcode: webinarDetails.passcode || null,
+      encrypted_password: webinarDetails.encrypted_password || null,
       
       // Agenda
-      agenda: webinarDetails.agenda,
+      agenda: webinarDetails.agenda || null,
       
       // Tracking fields
       tracking_fields: webinarDetails.tracking_fields || additionalData.trackingSources || null,
       
       // Recurrence
-      recurrence: webinarDetails.recurrence,
-      occurrences: webinarDetails.occurrences,
-      occurrence_id: webinarDetails.occurrence_id,
+      recurrence: webinarDetails.recurrence || null,
+      occurrences: webinarDetails.occurrences || null,
+      occurrence_id: webinarDetails.occurrence_id || null,
       
       // Simulive settings
       simulive: webinarDetails.is_simulive || false,
-      record_file_id: webinarDetails.record_file_id,
+      record_file_id: webinarDetails.record_file_id || null,
       
       // Settings object
       settings: webinarDetails.settings || {},
@@ -470,6 +630,15 @@ async function processWebinar(
       participant_sync_status: queueItem.webinar_type === 'past' ? 'pending' : 'not_applicable'
     };
 
+    // Log populated vs missing fields
+    const populatedFields = Object.keys(webinarData).filter(key => webinarData[key] !== null && webinarData[key] !== undefined);
+    const nullFields = Object.keys(webinarData).filter(key => webinarData[key] === null || webinarData[key] === undefined);
+    
+    console.log(`[SYNC] Populated ${populatedFields.length} fields for webinar ${queueItem.webinar_id}`);
+    if (nullFields.length > 0) {
+      console.log(`[SYNC] Fields with null/undefined values: ${nullFields.join(', ')}`);
+    }
+
     // Upsert webinar data
     const { error: upsertError } = await supabase
       .from('zoom_webinars')
@@ -478,8 +647,11 @@ async function processWebinar(
       });
 
     if (upsertError) {
+      console.error(`[SYNC] ✗ Failed to sync webinar ${queueItem.webinar_id}: ${upsertError.message}`);
       throw upsertError;
     }
+
+    console.log(`[SYNC] ✓ Successfully synced webinar ${queueItem.webinar_id}`);
 
     // Mark as completed
     await supabase
@@ -496,11 +668,16 @@ async function processWebinar(
       syncId,
       'webinar',
       `Processed webinar: ${webinarDetails.topic}`,
-      { webinar_id: queueItem.webinar_id }
+      { 
+        webinar_id: queueItem.webinar_id,
+        status: status,
+        registrants: additionalData.registrantCount || 0,
+        attendees: additionalData.participantCount || 0
+      }
     );
 
   } catch (error: any) {
-    console.error(`Failed to process webinar ${queueItem.webinar_id}:`, error);
+    console.error(`[SYNC] ✗ Failed to process webinar ${queueItem.webinar_id}:`, error);
     
     // Update queue item with error
     await supabase
@@ -533,6 +710,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log('[SYNC] ====== Starting Zoom Webinar Sync ======');
+    
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -548,6 +727,9 @@ serve(async (req) => {
     if (!connectionId) {
       throw new Error('Connection ID is required');
     }
+
+    console.log(`[SYNC] Sync request received - Connection: ${connectionId}, Mode: ${syncMode}`);
+    console.log(`[SYNC] Date range: ${dateRange.pastDays} days past, ${dateRange.futureDays} days future`);
 
     // Initialize or resume sync
     let syncId = resumeSyncId;
@@ -586,6 +768,7 @@ serve(async (req) => {
       }
 
       syncId = newSync.id;
+      console.log(`[SYNC] Created new sync with ID: ${syncId}`);
       await broadcastProgress(supabase, syncId, 'status', 'Starting new sync...', { syncMode, dateRange });
     }
 
@@ -602,12 +785,15 @@ serve(async (req) => {
     const futureDate = new Date(now);
     futureDate.setDate(futureDate.getDate() + (dateRange.futureDays || 180));
 
+    console.log(`[SYNC] Date range: ${pastDate.toISOString()} to ${futureDate.toISOString()}`);
+
     // Phase 1: Fetch webinar lists
     await broadcastProgress(supabase, syncId, 'status', 'Fetching webinar lists...', {}, 0);
 
     const allWebinars: WebinarQueueItem[] = [];
     
     // Fetch past webinars
+    console.log('[SYNC] Fetching past webinars...');
     let nextPageToken: string | undefined;
     let pageCount = 0;
     
@@ -640,7 +826,10 @@ serve(async (req) => {
       );
     } while (nextPageToken);
 
+    console.log(`[SYNC] Found ${allWebinars.length} past webinars`);
+
     // Fetch upcoming webinars
+    console.log('[SYNC] Fetching upcoming webinars...');
     nextPageToken = undefined;
     pageCount = 0;
     const upcomingStart = allWebinars.length;
@@ -673,6 +862,9 @@ serve(async (req) => {
         10
       );
     } while (nextPageToken);
+
+    console.log(`[SYNC] Found ${allWebinars.length - upcomingStart} upcoming webinars`);
+    console.log(`[SYNC] Total webinars to process: ${allWebinars.length}`);
 
     // Phase 2: Queue webinars for processing
     await broadcastProgress(
@@ -716,6 +908,8 @@ serve(async (req) => {
       });
 
     // Phase 3: Process webinars
+    console.log('[SYNC] Starting to process queued webinars...');
+    
     const { data: queuedItems } = await supabase
       .from('webinar_sync_queue')
       .select('*')
@@ -726,6 +920,7 @@ serve(async (req) => {
 
     if (queuedItems && queuedItems.length > 0) {
       let processedCount = 0;
+      let failedCount = 0;
       
       for (const item of queuedItems) {
         try {
@@ -755,10 +950,13 @@ serve(async (req) => {
             .eq('state_type', 'webinar_details');
             
         } catch (error) {
-          console.error(`Failed to process webinar ${item.webinar_id}:`, error);
+          console.error(`[SYNC] Failed to process webinar ${item.webinar_id}:`, error);
+          failedCount++;
           // Continue with next webinar
         }
       }
+      
+      console.log(`[SYNC] Processed ${processedCount} webinars successfully, ${failedCount} failed`);
     }
 
     // Phase 4: Complete sync
@@ -785,6 +983,8 @@ serve(async (req) => {
       100
     );
 
+    console.log('[SYNC] ====== Sync Completed Successfully ======');
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -799,7 +999,8 @@ serve(async (req) => {
     );
 
   } catch (error: any) {
-    console.error('Sync error:', error);
+    console.error('[SYNC] ====== Sync Failed ======');
+    console.error('[SYNC] Error:', error);
     
     return new Response(
       JSON.stringify({
