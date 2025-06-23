@@ -372,29 +372,29 @@ serve(async (req) => {
     let requestBody;
     let action;
 
-    // Parse request body for all non-GET requests
-    if (req.method !== 'GET') {
+    // First try to get action from URL parameters (for simple requests like validate-credentials)
+    const url = new URL(req.url);
+    action = url.searchParams.get('action');
+
+    // If no action in URL, try to parse request body
+    if (!action && req.method !== 'GET') {
       try {
-        const bodyText = await req.text();
-        if (bodyText) {
-          requestBody = JSON.parse(bodyText);
-          action = requestBody.action;
-        }
+        requestBody = await req.json();
+        action = requestBody.action;
       } catch (error) {
         console.error('Failed to parse request body:', error);
-        throw new Error('Invalid JSON in request body');
+        // If body parsing fails but we have no action, that's an error
+        if (!action) {
+          throw new Error('Invalid JSON in request body and no action in URL parameters');
+        }
       }
-    }
-
-    // Fallback to URL parameters if action not found in body
-    if (!action) {
-      const url = new URL(req.url);
-      action = url.searchParams.get('action');
     }
 
     if (!action) {
       throw new Error('Missing action parameter');
     }
+
+    console.log(`Processing action: ${action}`);
 
     let result;
     const authHeader = req.headers.get('Authorization');
