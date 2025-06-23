@@ -5,6 +5,7 @@
 
 // Export all existing operations for backward compatibility
 export * from './sync-log-operations.ts';
+export * from './webinar-operations.ts';
 
 // Export new bulletproof operations
 export { TransactionManager } from './transaction-manager.ts';
