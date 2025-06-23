@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 interface EngagementMetrics {
@@ -49,7 +48,7 @@ export class WebinarEngagementService {
 
       // Calculate metrics using the actual database fields
       const validParticipants = participants.filter(p => 
-        p.name || p.participant_email // Basic validation
+        p.name || p.participant_email || p.participant_id // Basic validation with correct field name
       );
 
       const averageAttentionScore = this.calculateAverageAttentionScore(validParticipants);
@@ -70,6 +69,24 @@ export class WebinarEngagementService {
       console.error('Error calculating engagement metrics:', error);
       return null;
     }
+  }
+
+  static async calculateWebinarEngagement(webinarId: string) {
+    const metrics = await this.calculateEngagementMetrics(webinarId);
+    if (!metrics) return null;
+
+    // Calculate overall engagement score
+    const engagementScore = (
+      metrics.averageAttentionScore * 0.3 +
+      metrics.pollParticipationRate * 0.25 +
+      metrics.qaParticipationRate * 0.25 +
+      (100 - metrics.dropoffRate) * 0.2
+    );
+
+    return {
+      ...metrics,
+      averageEngagementScore: Math.max(0, Math.min(100, engagementScore))
+    };
   }
 
   private static calculateAverageAttentionScore(participants: any[]): number {

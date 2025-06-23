@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export class ParticipantHistoryService {
@@ -16,7 +15,7 @@ export class ParticipantHistoryService {
 
       const connectionIds = connections.map(c => c.id);
 
-      // Fetch participant data with webinar info, handling potential query errors
+      // Fetch participant data with webinar info, using correct field name
       const { data: participants, error: participantsError } = await supabase
         .from('zoom_participants')
         .select(`
@@ -29,7 +28,7 @@ export class ParticipantHistoryService {
             connection_id
           )
         `)
-        .eq('participant_email', participantEmail)
+        .eq('participant_email', participantEmail) // Use correct field name
         .in('zoom_webinars.connection_id', connectionIds)
         .order('zoom_webinars.start_time', { ascending: false });
 
@@ -49,7 +48,7 @@ export class ParticipantHistoryService {
           webinarId: participant.webinar_id,
           webinarTitle: (participant.zoom_webinars as any)?.topic || 'Unknown',
           webinarDate: (participant.zoom_webinars as any)?.start_time || null,
-          participantName: participant.name || 'Unknown',
+          participantName: participant.name || 'Unknown', // Use correct field name
           joinTime: participant.join_time,
           leaveTime: participant.leave_time,
           duration: participant.duration || 0,
@@ -68,25 +67,8 @@ export class ParticipantHistoryService {
     }
   }
 
-  private static calculateSummary(history: any[]) {
-    if (history.length === 0) return null;
-
-    const totalDuration = history.reduce((sum, h) => sum + h.duration, 0);
-    const totalAttentionScore = history.reduce((sum, h) => sum + h.attentionScore, 0);
-    const questionsAsked = history.filter(h => h.askedQuestion).length;
-    const pollsAnswered = history.filter(h => h.answeredPolling).length;
-
-    return {
-      totalWebinarsAttended: history.length,
-      totalTimeSpent: totalDuration,
-      averageTimePerWebinar: totalDuration / history.length,
-      averageAttentionScore: totalAttentionScore / history.length,
-      totalQuestionsAsked: questionsAsked,
-      totalPollsAnswered: pollsAnswered,
-      engagementRate: ((questionsAsked + pollsAnswered) / history.length) * 100,
-      firstWebinarDate: history[history.length - 1]?.webinarDate,
-      lastWebinarDate: history[0]?.webinarDate,
-    };
+  static async calculateParticipantHistory(participantEmail: string, userId: string) {
+    return this.getParticipantHistory(participantEmail, userId);
   }
 
   static async getTopParticipants(userId: string, limit: number = 10) {
@@ -103,7 +85,7 @@ export class ParticipantHistoryService {
 
       const connectionIds = connections.map(c => c.id);
 
-      // Get participant engagement data
+      // Get participant engagement data using correct field names
       const { data: participants } = await supabase
         .from('zoom_participants')
         .select(`
@@ -164,6 +146,27 @@ export class ParticipantHistoryService {
       console.error('Error getting top participants:', error);
       return [];
     }
+  }
+
+  private static calculateSummary(history: any[]) {
+    if (history.length === 0) return null;
+
+    const totalDuration = history.reduce((sum, h) => sum + h.duration, 0);
+    const totalAttentionScore = history.reduce((sum, h) => sum + h.attentionScore, 0);
+    const questionsAsked = history.filter(h => h.askedQuestion).length;
+    const pollsAnswered = history.filter(h => h.answeredPolling).length;
+
+    return {
+      totalWebinarsAttended: history.length,
+      totalTimeSpent: totalDuration,
+      averageTimePerWebinar: totalDuration / history.length,
+      averageAttentionScore: totalAttentionScore / history.length,
+      totalQuestionsAsked: questionsAsked,
+      totalPollsAnswered: pollsAnswered,
+      engagementRate: ((questionsAsked + pollsAnswered) / history.length) * 100,
+      firstWebinarDate: history[history.length - 1]?.webinarDate,
+      lastWebinarDate: history[0]?.webinarDate,
+    };
   }
 
   private static calculateEngagementScore(participant: any): number {

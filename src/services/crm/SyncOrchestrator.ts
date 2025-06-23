@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { CRMConnection } from '@/types/crm';
 import { ZoomConnection } from '@/types/zoom';
@@ -268,7 +267,7 @@ export class SyncOrchestrator {
           sync_type: syncType,
           status,
           webinar_id: resourceId,
-          sync_details: details,
+          data_after: details,
           created_at: new Date().toISOString()
         });
 

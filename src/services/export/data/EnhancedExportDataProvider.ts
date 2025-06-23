@@ -1,6 +1,11 @@
-
 import { supabase } from '@/integrations/supabase/client';
-import { ExportFormat, ExportOptions } from '../types';
+
+export interface ExportOptions {
+  startDate?: string;
+  endDate?: string;
+  webinarIds?: string[];
+  userId?: string;
+}
 
 export class EnhancedExportDataProvider {
   static async getAnalyticsData(options: ExportOptions) {
@@ -74,6 +79,20 @@ export class EnhancedExportDataProvider {
       console.error('Error in getAnalyticsData:', error);
       throw error;
     }
+  }
+
+  static async fetchWebinarData(options: ExportOptions) {
+    return this.getAnalyticsData(options);
+  }
+
+  static async uploadFile(fileData: any, fileName: string) {
+    // Mock implementation for file upload
+    console.log('Uploading file:', fileName);
+    return {
+      success: true,
+      url: `https://example.com/uploads/${fileName}`,
+      fileName
+    };
   }
 
   private static processAnalyticsData(webinars: any[]) {
