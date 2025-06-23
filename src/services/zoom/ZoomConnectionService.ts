@@ -123,14 +123,39 @@ export class ZoomConnectionService {
     }
   }
 
-  static async deleteConnection(connectionId: string): Promise<void> {
-    const { error } = await supabase
-      .from('zoom_connections')
-      .delete()
-      .eq('id', connectionId);
+  static async updateConnection(connectionId: string, updates: Partial<ZoomConnection>): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('zoom_connections')
+        .update(updates)
+        .eq('id', connectionId);
 
-    if (error) {
-      throw new Error(`Failed to delete connection: ${error.message}`);
+      if (error) {
+        throw new Error(`Failed to update connection: ${error.message}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error updating connection:', error);
+      return false;
+    }
+  }
+
+  static async deleteConnection(connectionId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('zoom_connections')
+        .delete()
+        .eq('id', connectionId);
+
+      if (error) {
+        throw new Error(`Failed to delete connection: ${error.message}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting connection:', error);
+      return false;
     }
   }
 

@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export class AnalyticsService {
@@ -41,7 +40,6 @@ export class AnalyticsService {
 
     if (error) throw error;
     if (!webinars) return { webinars: [], summary: {} };
-
 
     // Calculate comparative metrics
     const analytics = webinars.map(webinar => ({
@@ -124,5 +122,32 @@ export class AnalyticsService {
           ((trends[trends.length - 1].webinarCount - trends[0].webinarCount) / trends[0].webinarCount) * 100 : 0
       }
     };
+  }
+
+  static async getWebinarStats(webinarIds: string[]) {
+    try {
+      const { data, error } = await supabase
+        .from('zoom_webinars')
+        .select('total_registrants, total_attendees')
+        .in('id', webinarIds);
+
+      if (error) throw error;
+
+      const totalRegistrants = data?.reduce((sum, w) => sum + (w.total_registrants || 0), 0) || 0;
+      const totalAttendees = data?.reduce((sum, w) => sum + (w.total_attendees || 0), 0) || 0;
+
+      return {
+        totalRegistrants,
+        totalAttendees,
+        conversionRate: totalRegistrants > 0 ? (totalAttendees / totalRegistrants) * 100 : 0
+      };
+    } catch (error) {
+      console.error('Error getting webinar stats:', error);
+      return {
+        totalRegistrants: 0,
+        totalAttendees: 0,
+        conversionRate: 0
+      };
+    }
   }
 }

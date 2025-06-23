@@ -16,7 +16,7 @@ interface WebinarForSync {
   topic: string;
   start_time: string;
   participant_sync_status: string;
-  participant_sync_attempted_at?: string;
+  participant_sync_completed_at?: string;
 }
 
 interface SyncReport {
@@ -45,7 +45,7 @@ export function ParticipantSyncTester() {
 
       const { data, error } = await supabase
         .from('zoom_webinars')
-        .select('id, webinar_id, topic, start_time, participant_sync_status, participant_sync_attempted_at')
+        .select('id, webinar_id, topic, start_time, participant_sync_status, participant_sync_completed_at')
         .eq('connection_id', connection.id)
         .order('start_time', { ascending: false })
         .limit(50);

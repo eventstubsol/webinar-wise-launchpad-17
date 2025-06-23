@@ -12,14 +12,14 @@ export class ParticipantHistoryService {
    */
   static async calculateParticipantHistory(participantEmail: string): Promise<ParticipantHistory | null> {
     try {
-      // Get all participations for this email
+      // Get all participations for this email - using correct field names
       const { data: participations, error } = await supabase
         .from('zoom_participants')
         .select(`
           *,
           zoom_webinars!inner(id, topic, start_time, duration)
         `)
-        .eq('participant_email', participantEmail)
+        .eq('email', participantEmail) // Use 'email' instead of 'participant_email'
         .order('join_time', { ascending: false });
 
       if (error) {
@@ -60,7 +60,7 @@ export class ParticipantHistoryService {
 
       const history: ParticipantHistory = {
         participantEmail,
-        participantName: participations[0].participant_name,
+        participantName: participations[0].name, // Use 'name' instead of 'participant_name'
         totalWebinarsAttended,
         averageEngagementScore: Math.round(averageEngagementScore * 100) / 100,
         averageAttendanceDuration: Math.round(averageAttendanceDuration),
