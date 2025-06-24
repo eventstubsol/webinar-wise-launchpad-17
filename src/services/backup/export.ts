@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import Papa from 'papaparse';
@@ -77,22 +78,15 @@ export class DataExportService {
       let file: Blob;
       let finalFileName = fileName;
 
-      switch (format) {
-        case 'csv':
-          file = await this.exportAsCSV(exportData, compress);
-          finalFileName += compress ? '.zip' : '.csv';
-          break;
-        
-        case 'excel':
-          file = await this.exportAsExcel(exportData);
-          finalFileName += '.xlsx';
-          break;
-        
-        case 'json':
-        default:
-          file = await this.exportAsJSON(exportData, compress);
-          finalFileName += compress ? '.json.gz' : '.json';
-          break;
+      if (format === 'csv') {
+        file = await this.exportAsCSV(exportData, compress);
+        finalFileName += compress ? '.zip' : '.csv';
+      } else if (format === 'excel') {
+        file = await this.exportAsExcel(exportData);
+        finalFileName += '.xlsx';
+      } else {
+        file = await this.exportAsJSON(exportData, compress);
+        finalFileName += compress ? '.json.gz' : '.json';
       }
 
       // Trigger download
@@ -323,7 +317,8 @@ export class DataExportService {
       };
 
       const timestamp = format(new Date(), 'yyyy-MM-dd_HHmmss');
-      const fileName = `webinar_${webinar.topic.replace(/[^a-z0-9]/gi, '_')}_${timestamp}`;
+      const webinarTitle = (webinar.topic as string) || 'webinar';
+      const fileName = `webinar_${webinarTitle.replace(/[^a-z0-9]/gi, '_')}_${timestamp}`;
 
       return await this.formatAndSave(exportData, fileName, options);
 
@@ -352,22 +347,15 @@ export class DataExportService {
     let file: Blob;
     let finalFileName = fileName;
 
-    switch (format) {
-      case 'csv':
-        file = await this.exportAsCSV(data, compress);
-        finalFileName += compress ? '.zip' : '.csv';
-        break;
-      
-      case 'excel':
-        file = await this.exportAsExcel(data);
-        finalFileName += '.xlsx';
-        break;
-      
-      case 'json':
-      default:
-        file = await this.exportAsJSON(data, compress);
-        finalFileName += compress ? '.json.gz' : '.json';
-        break;
+    if (format === 'csv') {
+      file = await this.exportAsCSV(data, compress);
+      finalFileName += compress ? '.zip' : '.csv';
+    } else if (format === 'excel') {
+      file = await this.exportAsExcel(data);
+      finalFileName += '.xlsx';
+    } else {
+      file = await this.exportAsJSON(data, compress);
+      finalFileName += compress ? '.json.gz' : '.json';
     }
 
     saveAs(file, finalFileName);
@@ -412,6 +400,6 @@ export class DataExportService {
 
 // Export singleton instance
 export const dataExportService = new DataExportService(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  'https://guwvvinnifypcxwbcnzz.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1d3Z2aW5uaWZ5cGN4d2Jjbnp6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MTExNjMsImV4cCI6MjA2NTE4NzE2M30.qdpRw5EtaW1HGYCkHPN1IK4_JIDPSnQuUfNTIpZwrJg'
 );

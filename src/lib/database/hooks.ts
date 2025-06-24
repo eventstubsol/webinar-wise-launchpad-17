@@ -47,7 +47,21 @@ export function useAuditLog(options: UseAuditLogOptions = {}) {
       const { data, error } = await query;
 
       if (error) throw error;
-      setLogs(data || []);
+      
+      // Type cast the data to match our interface
+      const typedLogs: AuditLogEntry[] = (data || []).map(log => ({
+        id: log.id,
+        table_name: log.table_name,
+        record_id: log.record_id,
+        action: log.action as 'INSERT' | 'UPDATE' | 'DELETE',
+        old_data: log.old_data,
+        new_data: log.new_data,
+        changed_by: log.changed_by || '',
+        changed_at: log.changed_at,
+        change_context: log.change_context
+      }));
+      
+      setLogs(typedLogs);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to fetch audit logs'));
     } finally {
@@ -70,7 +84,18 @@ export function useAuditLog(options: UseAuditLogOptions = {}) {
             filter: tableName ? `table_name=eq.${tableName}` : undefined
           },
           (payload) => {
-            setLogs(prev => [payload.new as AuditLogEntry, ...prev].slice(0, limit));
+            const newLog: AuditLogEntry = {
+              id: payload.new.id,
+              table_name: payload.new.table_name,
+              record_id: payload.new.record_id,
+              action: payload.new.action as 'INSERT' | 'UPDATE' | 'DELETE',
+              old_data: payload.new.old_data,
+              new_data: payload.new.new_data,
+              changed_by: payload.new.changed_by || '',
+              changed_at: payload.new.changed_at,
+              change_context: payload.new.change_context
+            };
+            setLogs(prev => [newLog, ...prev].slice(0, limit));
           }
         )
         .subscribe();
@@ -136,7 +161,21 @@ export function useRecordHistory(tableName: string, recordId: string) {
           });
 
         if (error) throw error;
-        setHistory(data || []);
+        
+        // Transform the RPC result to match our interface
+        const transformedHistory: AuditLogEntry[] = (data || []).map((item: any) => ({
+          id: item.audit_id,
+          table_name: tableName,
+          record_id: recordId,
+          action: item.action as 'INSERT' | 'UPDATE' | 'DELETE',
+          old_data: item.changes?.before || null,
+          new_data: item.changes?.after || item.changes,
+          changed_by: item.changed_by || '',
+          changed_at: item.changed_at,
+          change_context: undefined
+        }));
+        
+        setHistory(transformedHistory);
       } catch (error) {
         console.error('Failed to fetch record history:', error);
       } finally {
