@@ -1,6 +1,5 @@
-
 import { createClient } from '@supabase/supabase-js';
-import { format } from 'date-fns';
+import { format as formatDate } from 'date-fns';
 import Papa from 'papaparse';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -45,7 +44,7 @@ export class DataExportService {
       dateRange
     } = options;
 
-    const timestamp = format(new Date(), 'yyyy-MM-dd_HHmmss');
+    const timestamp = formatDate(new Date(), 'yyyy-MM-dd_HHmmss');
     const fileName = `webinar_wise_export_${timestamp}`;
     const recordCount: Record<string, number> = {};
 
@@ -316,7 +315,7 @@ export class DataExportService {
         qna: qna || []
       };
 
-      const timestamp = format(new Date(), 'yyyy-MM-dd_HHmmss');
+      const timestamp = formatDate(new Date(), 'yyyy-MM-dd_HHmmss');
       const webinarTitle = (webinar.topic as string) || 'webinar';
       const fileName = `webinar_${webinarTitle.replace(/[^a-z0-9]/gi, '_')}_${timestamp}`;
 
