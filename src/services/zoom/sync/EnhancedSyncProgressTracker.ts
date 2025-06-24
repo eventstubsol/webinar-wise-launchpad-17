@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { SyncStatus, ZoomSyncLog, SyncErrorDetails } from '@/types/zoom';
 
@@ -7,11 +6,31 @@ import { SyncStatus, ZoomSyncLog, SyncErrorDetails } from '@/types/zoom';
  */
 export class EnhancedSyncProgressTracker {
   /**
+   * Validate UUID format
+   */
+  private isValidUUID(uuid: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
+  }
+
+  /**
    * Create sync log entry with proper UUID
    */
   async createSyncLog(connectionId: string, syncType: string, resourceId?: string): Promise<string> {
+    // Validate connection ID format
+    if (!this.isValidUUID(connectionId)) {
+      console.error('Invalid connection ID format:', connectionId);
+      throw new Error('Invalid connection ID format');
+    }
+
     // Generate a proper UUID for the sync log
     const syncLogId = crypto.randomUUID();
+    
+    // Validate generated sync log ID
+    if (!this.isValidUUID(syncLogId)) {
+      console.error('Failed to generate valid UUID for sync log');
+      throw new Error('Failed to generate valid UUID for sync log');
+    }
     
     const { data, error } = await supabase
       .from('zoom_sync_logs')
@@ -68,14 +87,6 @@ export class EnhancedSyncProgressTracker {
   }
 
   /**
-   * Validate UUID format
-   */
-  private isValidUUID(uuid: string): boolean {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(uuid);
-  }
-
-  /**
    * Update current sync stage and webinar being processed
    */
   async updateSyncStage(
@@ -86,6 +97,12 @@ export class EnhancedSyncProgressTracker {
   ): Promise<void> {
     if (!this.isValidUUID(syncLogId)) {
       console.error('Invalid sync log ID format:', syncLogId);
+      return;
+    }
+
+    // Validate webinar ID if provided
+    if (webinarId && !this.isValidUUID(webinarId)) {
+      console.error('Invalid webinar ID format:', webinarId);
       return;
     }
 
@@ -186,6 +203,11 @@ export class EnhancedSyncProgressTracker {
    * Get current sync status for a connection
    */
   async getCurrentSyncStatus(connectionId: string): Promise<any> {
+    if (!this.isValidUUID(connectionId)) {
+      console.error('Invalid connection ID format:', connectionId);
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('zoom_sync_logs')
       .select('*')
@@ -214,6 +236,11 @@ export class EnhancedSyncProgressTracker {
   ): Promise<void> {
     if (!this.isValidUUID(syncLogId)) {
       console.error('Invalid sync log ID format:', syncLogId);
+      return;
+    }
+
+    if (!this.isValidUUID(webinarId)) {
+      console.error('Invalid webinar ID format:', webinarId);
       return;
     }
 

@@ -8,6 +8,14 @@ import { toast } from '@/hooks/use-toast';
  */
 export class ConnectionDatabase {
   /**
+   * Validate UUID format
+   */
+  private static isValidUUID(uuid: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
+  }
+
+  /**
    * Get the current authenticated user ID
    */
   private static async getCurrentUserId(): Promise<string> {
@@ -15,6 +23,12 @@ export class ConnectionDatabase {
     if (error || !user) {
       throw new Error('User not authenticated');
     }
+    
+    // Validate user ID format
+    if (!this.isValidUUID(user.id)) {
+      throw new Error('Invalid user ID format');
+    }
+    
     return user.id;
   }
 
@@ -23,6 +37,17 @@ export class ConnectionDatabase {
    */
   static async insertConnection(data: ZoomConnectionInsert): Promise<any | null> {
     try {
+      // Validate user_id if provided
+      if (data.user_id && !this.isValidUUID(data.user_id)) {
+        console.error('Invalid user_id format:', data.user_id);
+        toast({
+          title: "Validation Error",
+          description: "Invalid user ID format.",
+          variant: "destructive",
+        });
+        return null;
+      }
+
       const { data: result, error } = await supabase
         .from('zoom_connections')
         .insert(data)
@@ -56,6 +81,17 @@ export class ConnectionDatabase {
    */
   static async getConnectionById(id: string): Promise<any | null> {
     try {
+      // Validate connection ID format
+      if (!this.isValidUUID(id)) {
+        console.error('Invalid connection ID format:', id);
+        toast({
+          title: "Validation Error",
+          description: "Invalid connection ID format.",
+          variant: "destructive",
+        });
+        return null;
+      }
+
       const { data, error } = await supabase
         .from('zoom_connections')
         .select('*')
@@ -98,6 +134,17 @@ export class ConnectionDatabase {
         actualUserId = await this.getCurrentUserId();
       }
 
+      // Validate user ID format
+      if (!this.isValidUUID(actualUserId)) {
+        console.error('Invalid user ID format:', actualUserId);
+        toast({
+          title: "Validation Error",
+          description: "Invalid user ID format.",
+          variant: "destructive",
+        });
+        return [];
+      }
+
       const { data, error } = await supabase
         .from('zoom_connections')
         .select('*')
@@ -131,6 +178,28 @@ export class ConnectionDatabase {
    */
   static async updateConnectionById(id: string, updates: any): Promise<any | null> {
     try {
+      // Validate connection ID format
+      if (!this.isValidUUID(id)) {
+        console.error('Invalid connection ID format:', id);
+        toast({
+          title: "Validation Error",
+          description: "Invalid connection ID format.",
+          variant: "destructive",
+        });
+        return null;
+      }
+
+      // Validate user_id in updates if provided
+      if (updates.user_id && !this.isValidUUID(updates.user_id)) {
+        console.error('Invalid user_id in updates:', updates.user_id);
+        toast({
+          title: "Validation Error",
+          description: "Invalid user ID format in updates.",
+          variant: "destructive",
+        });
+        return null;
+      }
+
       const { data, error } = await supabase
         .from('zoom_connections')
         .update({
@@ -168,6 +237,17 @@ export class ConnectionDatabase {
    */
   static async deleteConnectionById(id: string): Promise<boolean> {
     try {
+      // Validate connection ID format
+      if (!this.isValidUUID(id)) {
+        console.error('Invalid connection ID format:', id);
+        toast({
+          title: "Validation Error",
+          description: "Invalid connection ID format.",
+          variant: "destructive",
+        });
+        return false;
+      }
+
       const { error } = await supabase
         .from('zoom_connections')
         .delete()
@@ -200,6 +280,12 @@ export class ConnectionDatabase {
    */
   static async getConnectionUserIdById(id: string): Promise<string | null> {
     try {
+      // Validate connection ID format
+      if (!this.isValidUUID(id)) {
+        console.error('Invalid connection ID format:', id);
+        return null;
+      }
+
       const { data, error } = await supabase
         .from('zoom_connections')
         .select('user_id')
@@ -208,6 +294,12 @@ export class ConnectionDatabase {
 
       if (error || !data) {
         console.error('Failed to get connection user_id:', error);
+        return null;
+      }
+
+      // Validate returned user_id format
+      if (!this.isValidUUID(data.user_id)) {
+        console.error('Retrieved user_id has invalid format:', data.user_id);
         return null;
       }
 

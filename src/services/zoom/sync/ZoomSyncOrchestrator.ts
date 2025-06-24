@@ -1,4 +1,3 @@
-
 import { ZoomConnectionService } from '../ZoomConnectionService';
 import { ZoomConnection, SyncType, SyncStatus } from '@/types/zoom';
 import { SyncOperation, SyncPriority } from './types';
@@ -37,7 +36,16 @@ export class ZoomSyncOrchestrator {
    * Generate a proper UUID for sync operations
    */
   private generateSyncId(): string {
+    // Always use crypto.randomUUID() for proper UUID generation
     return crypto.randomUUID();
+  }
+
+  /**
+   * Validate UUID format
+   */
+  private isValidUUID(uuid: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
   }
 
   /**
@@ -48,6 +56,12 @@ export class ZoomSyncOrchestrator {
     if (error || !user) {
       throw new Error('User not authenticated');
     }
+    
+    // Validate user ID is a proper UUID
+    if (!this.isValidUUID(user.id)) {
+      throw new Error('Invalid user ID format');
+    }
+    
     return user.id;
   }
 
@@ -55,7 +69,18 @@ export class ZoomSyncOrchestrator {
    * Start initial sync - fetch all historical webinars
    */
   async startInitialSync(connectionId: string, options?: { batchSize?: number }): Promise<string> {
+    // Validate connection ID format
+    if (!this.isValidUUID(connectionId)) {
+      throw new Error('Invalid connection ID format');
+    }
+
     const syncId = this.generateSyncId();
+    console.log(`Generated UUID sync ID for initial sync: ${syncId}`);
+    
+    // Validate generated sync ID
+    if (!this.isValidUUID(syncId)) {
+      throw new Error('Failed to generate valid UUID for sync operation');
+    }
     
     const operation: SyncOperation = {
       id: syncId,
@@ -78,7 +103,18 @@ export class ZoomSyncOrchestrator {
    * Start incremental sync - only fetch data since last sync
    */
   async startIncrementalSync(connectionId: string): Promise<string> {
+    // Validate connection ID format
+    if (!this.isValidUUID(connectionId)) {
+      throw new Error('Invalid connection ID format');
+    }
+
     const syncId = this.generateSyncId();
+    console.log(`Generated UUID sync ID for incremental sync: ${syncId}`);
+    
+    // Validate generated sync ID
+    if (!this.isValidUUID(syncId)) {
+      throw new Error('Failed to generate valid UUID for sync operation');
+    }
     
     const operation: SyncOperation = {
       id: syncId,
@@ -101,7 +137,18 @@ export class ZoomSyncOrchestrator {
    * Sync a single webinar with all its data
    */
   async syncSingleWebinar(webinarId: string, connectionId: string): Promise<string> {
+    // Validate connection ID format
+    if (!this.isValidUUID(connectionId)) {
+      throw new Error('Invalid connection ID format');
+    }
+
     const syncId = this.generateSyncId();
+    console.log(`Generated UUID sync ID for single webinar sync: ${syncId}`);
+    
+    // Validate generated sync ID
+    if (!this.isValidUUID(syncId)) {
+      throw new Error('Failed to generate valid UUID for sync operation');
+    }
     
     const operation: SyncOperation = {
       id: syncId,

@@ -43,6 +43,28 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       return;
     }
 
+    // Validate user ID format
+    if (!isValidUUID(user.id)) {
+      console.error('Invalid user ID format:', user.id);
+      toast({
+        title: "Authentication Error",
+        description: "Invalid user authentication. Please log in again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate connection ID format
+    if (!isValidUUID(connection.id)) {
+      console.error('Invalid connection ID format:', connection.id);
+      toast({
+        title: "Connection Error",
+        description: "Invalid connection format. Please reconnect your Zoom account.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const tokenStatus = TokenUtils.getTokenStatus(connection);
     console.log('Token status:', tokenStatus);
 

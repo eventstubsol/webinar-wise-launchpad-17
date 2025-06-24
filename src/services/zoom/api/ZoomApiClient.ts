@@ -7,6 +7,7 @@ import { ErrorHandler } from './errorHandler';
 import { TokenManager } from './tokenManager';
 import { rateLimitManager } from '../utils/RateLimitManager';
 import { RequestPriority } from '../utils/types/rateLimitTypes';
+import { supabase } from '@/integrations/supabase/client';
 
 /**
  * Zoom API Client for making authenticated requests with sophisticated rate limiting
@@ -40,6 +41,31 @@ export class ZoomApiClient {
   }
 
   /**
+   * Get the current authenticated user ID
+   */
+  private async getCurrentUserId(): Promise<string | null> {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
+        console.error('User not authenticated:', error);
+        return null;
+      }
+      return user.id;
+    } catch (error) {
+      console.error('Error getting current user:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Validate UUID format
+   */
+  private isValidUUID(uuid: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
+  }
+
+  /**
    * Make an authenticated API request to Zoom with sophisticated rate limiting
    */
   async makeRequest<T = any>(
@@ -53,7 +79,27 @@ export class ZoomApiClient {
 
     // Get connection if not provided
     if (!connectionId) {
-      const connections = await ZoomConnectionService.getUserConnections('current');
+      const currentUserId = await this.getCurrentUserId();
+      if (!currentUserId) {
+        return {
+          success: false,
+          error: 'User not authenticated',
+          statusCode: 401,
+          retryable: false,
+        };
+      }
+
+      // Validate user ID is a proper UUID
+      if (!this.isValidUUID(currentUserId)) {
+        return {
+          success: false,
+          error: 'Invalid user ID format',
+          statusCode: 400,
+          retryable: false,
+        };
+      }
+
+      const connections = await ZoomConnectionService.getUserConnections(currentUserId);
       const primaryConnection = connections.find(c => c.is_primary);
       if (!primaryConnection) {
         return {
@@ -64,6 +110,16 @@ export class ZoomApiClient {
         };
       }
       connectionId = primaryConnection.id;
+    }
+
+    // Validate connection ID is a proper UUID
+    if (!this.isValidUUID(connectionId)) {
+      return {
+        success: false,
+        error: 'Invalid connection ID format',
+        statusCode: 400,
+        retryable: false,
+      };
     }
 
     // Determine priority based on endpoint and method
@@ -148,10 +204,19 @@ export class ZoomApiClient {
    */
   async getRateLimitStatus(connectionId?: string) {
     if (!connectionId) {
-      const connections = await ZoomConnectionService.getUserConnections('current');
+      const currentUserId = await this.getCurrentUserId();
+      if (!currentUserId || !this.isValidUUID(currentUserId)) {
+        return null;
+      }
+      
+      const connections = await ZoomConnectionService.getUserConnections(currentUserId);
       const primaryConnection = connections.find(c => c.is_primary);
       if (!primaryConnection) return null;
       connectionId = primaryConnection.id;
+    }
+
+    if (!this.isValidUUID(connectionId)) {
+      return null;
     }
 
     return await rateLimitManager.getRateLimitStatus(connectionId);
