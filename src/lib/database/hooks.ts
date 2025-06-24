@@ -1,5 +1,6 @@
+
 import { useState, useEffect, useCallback } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AuditLogEntry {
   id: string;
@@ -25,8 +26,6 @@ export function useAuditLog(options: UseAuditLogOptions = {}) {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  
-  const supabase = createClientComponentClient();
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -54,7 +53,7 @@ export function useAuditLog(options: UseAuditLogOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [supabase, tableName, recordId, limit]);
+  }, [tableName, recordId, limit]);
 
   useEffect(() => {
     fetchLogs();
@@ -80,7 +79,7 @@ export function useAuditLog(options: UseAuditLogOptions = {}) {
         supabase.removeChannel(channel);
       };
     }
-  }, [fetchLogs, realtime, supabase, tableName, limit]);
+  }, [fetchLogs, realtime, tableName, limit]);
 
   const getFieldChanges = useCallback((log: AuditLogEntry) => {
     if (log.action !== 'UPDATE' || !log.old_data || !log.new_data) {
@@ -126,8 +125,6 @@ export function useAuditLog(options: UseAuditLogOptions = {}) {
 export function useRecordHistory(tableName: string, recordId: string) {
   const [history, setHistory] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  const supabase = createClientComponentClient();
 
   useEffect(() => {
     async function fetchHistory() {
@@ -148,7 +145,7 @@ export function useRecordHistory(tableName: string, recordId: string) {
     }
 
     fetchHistory();
-  }, [supabase, tableName, recordId]);
+  }, [tableName, recordId]);
 
   const getVersionAt = useCallback((date: Date) => {
     // Find the state of the record at a specific date
@@ -189,8 +186,6 @@ export function useAuditStats(dateRange?: { from: Date; to: Date }) {
     averageChangesPerDay: 0
   });
   const [loading, setLoading] = useState(true);
-  
-  const supabase = createClientComponentClient();
 
   useEffect(() => {
     async function fetchStats() {
@@ -246,7 +241,7 @@ export function useAuditStats(dateRange?: { from: Date; to: Date }) {
     }
 
     fetchStats();
-  }, [supabase, dateRange]);
+  }, [dateRange]);
 
   return { stats, loading };
 }

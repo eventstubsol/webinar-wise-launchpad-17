@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,8 +70,16 @@ export function SyncScheduler({ connectionId }: SyncSchedulerProps) {
 
   // Update config when data is loaded
   useEffect(() => {
-    if (existingSchedule) {
-      setConfig(existingSchedule.config);
+    if (existingSchedule && existingSchedule.config) {
+      // Parse the config from Json type
+      try {
+        const parsedConfig = typeof existingSchedule.config === 'string' 
+          ? JSON.parse(existingSchedule.config) 
+          : existingSchedule.config;
+        setConfig(parsedConfig as SyncScheduleConfig);
+      } catch (error) {
+        console.error('Failed to parse schedule config:', error);
+      }
     }
   }, [existingSchedule]);
 
@@ -81,7 +90,7 @@ export function SyncScheduler({ connectionId }: SyncSchedulerProps) {
         .from('sync_schedules')
         .upsert({
           connection_id: connectionId,
-          config: newConfig,
+          config: newConfig as any, // Cast to Json type
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'connection_id'

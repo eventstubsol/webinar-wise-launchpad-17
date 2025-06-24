@@ -108,11 +108,11 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           console.log('Sync operation found:', currentSync);
           
           // Update progress based on operation status
-          if (currentSync.type === 'INITIAL' || currentSync.type === 'INCREMENTAL') {
+          if (currentSync.type === 'initial' || currentSync.type === 'incremental') {
             // For now, simulate progress - this will be enhanced with real progress tracking
             const currentProgress = Math.min(syncProgress + 10, 90);
             setSyncProgress(currentProgress);
-            setCurrentOperation(`Processing ${currentSync.type.toLowerCase()} sync...`);
+            setCurrentOperation(`Processing ${currentSync.type} sync...`);
           }
         } else {
           // Operation might be completed, check database for final status

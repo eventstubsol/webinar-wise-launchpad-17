@@ -100,7 +100,7 @@ export function SyncPerformanceTest({ connectionId }: SyncPerformanceTestProps) 
     refetchInterval: 30000
   });
 
-  // Calculate performance metrics
+  // Calculate performance metrics with safe Json handling
   const metrics: PerformanceMetrics = performanceHistory ? {
     averageSyncTime: performanceHistory
       .filter(log => log.duration_seconds)
@@ -113,13 +113,25 @@ export function SyncPerformanceTest({ connectionId }: SyncPerformanceTestProps) 
       .reduce((acc, log) => acc + (log.webinars_synced || 0), 0) / 
       performanceHistory.filter(log => log.webinars_synced).length || 0,
     peakApiCallsPerMinute: Math.max(...performanceHistory
-      .map(log => log.metadata?.apiCallsPerMinute || 0)),
+      .map(log => {
+        const metadata = log.metadata as any;
+        return metadata?.apiCallsPerMinute || 0;
+      })),
     errorRate: (performanceHistory.filter(log => log.status === 'failed').length / 
       performanceHistory.length) * 100 || 0,
     dataCompleteness: performanceHistory
-      .filter(log => log.metadata?.dataCompleteness)
-      .reduce((acc, log) => acc + (log.metadata?.dataCompleteness || 0), 0) / 
-      performanceHistory.filter(log => log.metadata?.dataCompleteness).length || 95
+      .filter(log => {
+        const metadata = log.metadata as any;
+        return metadata?.dataCompleteness;
+      })
+      .reduce((acc, log) => {
+        const metadata = log.metadata as any;
+        return acc + (metadata?.dataCompleteness || 0);
+      }, 0) / 
+      performanceHistory.filter(log => {
+        const metadata = log.metadata as any;
+        return metadata?.dataCompleteness;
+      }).length || 95
   } : {
     averageSyncTime: 0,
     successRate: 0,
@@ -669,7 +681,7 @@ export function SyncPerformanceTest({ connectionId }: SyncPerformanceTestProps) 
                             </CardDescription>
                           </div>
                           {result && (
-                            <Badge variant={result.success ? "success" : "destructive"}>
+                            <Badge variant={result.success ? "default" : "destructive"}>
                               {result.success ? "Passed" : "Failed"}
                             </Badge>
                           )}
