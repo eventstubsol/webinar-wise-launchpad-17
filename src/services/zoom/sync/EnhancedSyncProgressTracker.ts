@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { SyncStatus, ZoomSyncLog, SyncErrorDetails } from '@/types/zoom';
 
@@ -14,7 +15,7 @@ export class EnhancedSyncProgressTracker {
   }
 
   /**
-   * Create sync log entry with proper UUID
+   * Create sync log entry with proper UUID and error handling
    */
   async createSyncLog(connectionId: string, syncType: string, resourceId?: string): Promise<string> {
     // Validate connection ID format
@@ -32,32 +33,37 @@ export class EnhancedSyncProgressTracker {
       throw new Error('Failed to generate valid UUID for sync log');
     }
     
-    const { data, error } = await supabase
-      .from('zoom_sync_logs')
-      .insert({
-        id: syncLogId, // Explicitly set the UUID
-        connection_id: connectionId,
-        sync_type: syncType,
-        status: SyncStatus.STARTED,
-        resource_type: resourceId ? 'webinar' : 'webinars',
-        resource_id: resourceId,
-        started_at: new Date().toISOString(),
-        total_items: 0,
-        processed_items: 0,
-        failed_items: 0,
-        current_webinar_id: null,
-        sync_stage: 'initializing',
-        stage_progress_percentage: 0
-      })
-      .select('id')
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('zoom_sync_logs')
+        .insert({
+          id: syncLogId, // Explicitly set the UUID
+          connection_id: connectionId,
+          sync_type: syncType,
+          status: SyncStatus.STARTED,
+          resource_type: resourceId ? 'webinar' : 'webinars',
+          resource_id: resourceId,
+          started_at: new Date().toISOString(),
+          total_items: 0,
+          processed_items: 0,
+          failed_items: 0,
+          current_webinar_id: null,
+          sync_stage: 'initializing',
+          stage_progress_percentage: 0
+        })
+        .select('id')
+        .single();
 
-    if (error) {
-      console.error('Failed to create sync log:', error);
-      throw error;
+      if (error) {
+        console.error('Failed to create sync log:', error);
+        throw error;
+      }
+      
+      return data.id;
+    } catch (error) {
+      console.error('Database error creating sync log:', error);
+      throw new Error(`Failed to create sync log: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    
-    return data.id;
   }
 
   /**
@@ -73,16 +79,20 @@ export class EnhancedSyncProgressTracker {
       return;
     }
 
-    const { error } = await supabase
-      .from('zoom_sync_logs')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', syncLogId);
+    try {
+      const { error } = await supabase
+        .from('zoom_sync_logs')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', syncLogId);
 
-    if (error) {
-      console.error('Failed to update sync log:', error);
+      if (error) {
+        console.error('Failed to update sync log:', error);
+      }
+    } catch (error) {
+      console.error('Database error updating sync log:', error);
     }
   }
 
@@ -106,22 +116,26 @@ export class EnhancedSyncProgressTracker {
       return;
     }
 
-    const { error } = await supabase
-      .from('zoom_sync_logs')
-      .update({
-        current_webinar_id: webinarId,
-        sync_stage: stage,
-        stage_progress_percentage: Math.max(0, Math.min(100, stageProgress)),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', syncLogId);
+    try {
+      const { error } = await supabase
+        .from('zoom_sync_logs')
+        .update({
+          current_webinar_id: webinarId,
+          sync_stage: stage,
+          stage_progress_percentage: Math.max(0, Math.min(100, stageProgress)),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', syncLogId);
 
-    if (error) {
-      console.error('Failed to update sync stage:', error);
+      if (error) {
+        console.error('Failed to update sync stage:', error);
+      }
+
+      // Log the stage update for debugging
+      console.log(`Sync ${syncLogId}: ${stage} (${stageProgress}%) - Webinar: ${webinarId || 'N/A'}`);
+    } catch (error) {
+      console.error('Database error updating sync stage:', error);
     }
-
-    // Log the stage update for debugging
-    console.log(`Sync ${syncLogId}: ${stage} (${stageProgress}%) - Webinar: ${webinarId || 'N/A'}`);
   }
 
   /**
@@ -200,7 +214,7 @@ export class EnhancedSyncProgressTracker {
   }
 
   /**
-   * Get current sync status for a connection
+   * Get current sync status for a connection with better error handling
    */
   async getCurrentSyncStatus(connectionId: string): Promise<any> {
     if (!this.isValidUUID(connectionId)) {
@@ -208,21 +222,26 @@ export class EnhancedSyncProgressTracker {
       return null;
     }
 
-    const { data, error } = await supabase
-      .from('zoom_sync_logs')
-      .select('*')
-      .eq('connection_id', connectionId)
-      .in('status', [SyncStatus.STARTED, SyncStatus.IN_PROGRESS])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from('zoom_sync_logs')
+        .select('*')
+        .eq('connection_id', connectionId)
+        .in('status', [SyncStatus.STARTED, SyncStatus.IN_PROGRESS])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    if (error) {
-      console.error('Failed to get current sync status:', error);
+      if (error) {
+        console.error('Failed to get current sync status:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Database error getting sync status:', error);
       return null;
     }
-
-    return data;
   }
 
   /**

@@ -4279,6 +4279,48 @@ export type Database = {
         }
         Relationships: []
       }
+      webinar_analytics_summary: {
+        Row: {
+          avg_attendance_rate: number | null
+          avg_engagement_score: number | null
+          created_at: string | null
+          id: string
+          last_webinar_date: string | null
+          total_duration_minutes: number | null
+          total_participants: number | null
+          total_registrants: number | null
+          total_webinars: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          avg_attendance_rate?: number | null
+          avg_engagement_score?: number | null
+          created_at?: string | null
+          id?: string
+          last_webinar_date?: string | null
+          total_duration_minutes?: number | null
+          total_participants?: number | null
+          total_registrants?: number | null
+          total_webinars?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          avg_attendance_rate?: number | null
+          avg_engagement_score?: number | null
+          created_at?: string | null
+          id?: string
+          last_webinar_date?: string | null
+          total_duration_minutes?: number | null
+          total_participants?: number | null
+          total_registrants?: number | null
+          total_webinars?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       webinar_sync_queue: {
         Row: {
           completed_at: string | null
@@ -5019,8 +5061,11 @@ export type Database = {
           created_at: string | null
           id: string
           is_primary: boolean | null
+          last_polled_at: string | null
           last_sync_at: string | null
           next_sync_at: string | null
+          polling_enabled: boolean | null
+          polling_interval_minutes: number | null
           refresh_token: string
           scopes: string[] | null
           sync_frequency_hours: number | null
@@ -5043,8 +5088,11 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_primary?: boolean | null
+          last_polled_at?: string | null
           last_sync_at?: string | null
           next_sync_at?: string | null
+          polling_enabled?: boolean | null
+          polling_interval_minutes?: number | null
           refresh_token: string
           scopes?: string[] | null
           sync_frequency_hours?: number | null
@@ -5067,8 +5115,11 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_primary?: boolean | null
+          last_polled_at?: string | null
           last_sync_at?: string | null
           next_sync_at?: string | null
+          polling_enabled?: boolean | null
+          polling_interval_minutes?: number | null
           refresh_token?: string
           scopes?: string[] | null
           sync_frequency_hours?: number | null
@@ -6374,6 +6425,10 @@ export type Database = {
       }
       update_segment_size: {
         Args: { p_segment_id: string }
+        Returns: undefined
+      }
+      update_webinar_analytics_summary: {
+        Args: { p_user_id: string }
         Returns: undefined
       }
       update_webinar_computed_fields: {

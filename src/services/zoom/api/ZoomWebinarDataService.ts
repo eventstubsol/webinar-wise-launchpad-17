@@ -118,8 +118,11 @@ export class ZoomWebinarDataService {
         pageSize
       });
 
-      // Merge and deduplicate webinars
-      const allWebinars = [...pastWebinars, ...upcomingWebinars];
+      // Safely merge and deduplicate webinars - ensure both are arrays
+      const allWebinars = [
+        ...(Array.isArray(pastWebinars) ? pastWebinars : []),
+        ...(Array.isArray(upcomingWebinars) ? upcomingWebinars : [])
+      ];
       const uniqueWebinars = this.deduplicateWebinars(allWebinars);
 
       if (onProgress) {
@@ -191,16 +194,24 @@ export class ZoomWebinarDataService {
         );
 
         if (!response.success || !response.data) {
-          throw new Error(response.error || 'Failed to fetch webinars');
+          console.error('Failed to fetch webinars:', response.error);
+          // Return what we have so far instead of throwing
+          return allWebinars;
         }
 
-        const { webinars, page_count, page_number: currentPage } = response.data;
-        allWebinars.push(...webinars);
+        const { webinars, page_count, page_number: currentPage, total_records } = response.data;
+        
+        // Ensure webinars is an array before spreading
+        if (Array.isArray(webinars)) {
+          allWebinars.push(...webinars);
+        } else {
+          console.warn('Webinars response is not an array:', webinars);
+        }
 
         // Update progress
         if (onProgress) {
           onProgress({
-            total: response.data.total_records,
+            total: total_records || allWebinars.length,
             processed: allWebinars.length,
             failed: 0,
             current: `Page ${currentPage} of ${page_count} (${type})`
@@ -213,7 +224,9 @@ export class ZoomWebinarDataService {
 
       return allWebinars;
     } catch (error) {
-      throw error;
+      console.error('Error in listWebinars:', error);
+      // Return what we have so far instead of throwing
+      return allWebinars;
     }
   }
 
@@ -221,16 +234,21 @@ export class ZoomWebinarDataService {
    * Get detailed information about a specific webinar
    */
   static async getWebinar(webinarId: string): Promise<ZoomWebinarApiResponse | null> {
-    const response = await zoomApiClient.get<ZoomWebinarApiResponse>(
-      `/webinars/${webinarId}`
-    );
+    try {
+      const response = await zoomApiClient.get<ZoomWebinarApiResponse>(
+        `/webinars/${webinarId}`
+      );
 
-    if (response.success) {
-      return response.data || null;
+      if (response.success) {
+        return response.data || null;
+      }
+
+      console.error(`Failed to fetch webinar ${webinarId}:`, response.error);
+      return null;
+    } catch (error) {
+      console.error(`Error fetching webinar ${webinarId}:`, error);
+      return null;
     }
-
-    console.error(`Failed to fetch webinar ${webinarId}:`, response.error);
-    return null;
   }
 
   static async getWebinarRegistrants(
@@ -243,26 +261,35 @@ export class ZoomWebinarDataService {
     let hasMore = true;
 
     while (hasMore) {
-      const params = new URLSearchParams({
-        page_size: pageSize.toString(),
-        page_number: pageNumber.toString(),
-        status,
-      });
+      try {
+        const params = new URLSearchParams({
+          page_size: pageSize.toString(),
+          page_number: pageNumber.toString(),
+          status,
+        });
 
-      const response = await zoomApiClient.get(
-        `/webinars/${webinarId}/registrants?${params}`
-      );
+        const response = await zoomApiClient.get(
+          `/webinars/${webinarId}/registrants?${params}`
+        );
 
-      if (!response.success || !response.data) {
-        console.error(`Failed to fetch registrants for webinar ${webinarId}:`, response.error);
+        if (!response.success || !response.data) {
+          console.error(`Failed to fetch registrants for webinar ${webinarId}:`, response.error);
+          break;
+        }
+
+        const { registrants, page_count, page_number: currentPage } = response.data;
+        
+        // Ensure registrants is an array before spreading
+        if (Array.isArray(registrants)) {
+          allRegistrants.push(...registrants);
+        }
+
+        hasMore = currentPage < page_count;
+        pageNumber++;
+      } catch (error) {
+        console.error(`Error fetching registrants for webinar ${webinarId}:`, error);
         break;
       }
-
-      const { registrants, page_count, page_number: currentPage } = response.data;
-      allRegistrants.push(...registrants);
-
-      hasMore = currentPage < page_count;
-      pageNumber++;
     }
 
     return allRegistrants;
@@ -278,66 +305,84 @@ export class ZoomWebinarDataService {
     let hasMore = true;
 
     while (hasMore) {
-      const params = new URLSearchParams({
-        page_size: pageSize.toString(),
-      });
+      try {
+        const params = new URLSearchParams({
+          page_size: pageSize.toString(),
+        });
 
-      if (nextPageToken) {
-        params.append('next_page_token', nextPageToken);
-      }
+        if (nextPageToken) {
+          params.append('next_page_token', nextPageToken);
+        }
 
-      const response = await zoomApiClient.get(
-        `/report/webinars/${webinarId}/participants?${params}`
-      );
+        const response = await zoomApiClient.get(
+          `/report/webinars/${webinarId}/participants?${params}`
+        );
 
-      if (!response.success || !response.data) {
-        console.error(`Failed to fetch participants for webinar ${webinarId}:`, response.error);
+        if (!response.success || !response.data) {
+          console.error(`Failed to fetch participants for webinar ${webinarId}:`, response.error);
+          break;
+        }
+
+        const { participants, next_page_token } = response.data;
+        
+        // Ensure participants is an array before processing
+        if (Array.isArray(participants)) {
+          // Calculate engagement metrics for each participant
+          const enhancedParticipants = participants.map((participant: any) => ({
+            ...participant,
+            engagement_score: this.calculateEngagementScore(participant),
+            total_duration: participant.duration || 0,
+            join_leave_count: participant.details?.length || 1
+          }));
+
+          allParticipants.push(...enhancedParticipants);
+        }
+
+        hasMore = !!next_page_token;
+        nextPageToken = next_page_token || '';
+      } catch (error) {
+        console.error(`Error fetching participants for webinar ${webinarId}:`, error);
         break;
       }
-
-      const { participants, next_page_token } = response.data;
-      
-      // Calculate engagement metrics for each participant
-      const enhancedParticipants = participants.map((participant: any) => ({
-        ...participant,
-        engagement_score: this.calculateEngagementScore(participant),
-        total_duration: participant.duration || 0,
-        join_leave_count: participant.details?.length || 1
-      }));
-
-      allParticipants.push(...enhancedParticipants);
-
-      hasMore = !!next_page_token;
-      nextPageToken = next_page_token || '';
     }
 
     return allParticipants;
   }
 
   static async getWebinarPolls(webinarId: string) {
-    const response = await zoomApiClient.get(
-      `/webinars/${webinarId}/polls`
-    );
+    try {
+      const response = await zoomApiClient.get(
+        `/webinars/${webinarId}/polls`
+      );
 
-    if (response.success) {
-      return response.data;
+      if (response.success) {
+        return response.data;
+      }
+
+      console.error(`Failed to fetch polls for webinar ${webinarId}:`, response.error);
+      return null;
+    } catch (error) {
+      console.error(`Error fetching polls for webinar ${webinarId}:`, error);
+      return null;
     }
-
-    console.error(`Failed to fetch polls for webinar ${webinarId}:`, response.error);
-    return null;
   }
 
   static async getWebinarQA(webinarId: string) {
-    const response = await zoomApiClient.get(
-      `/report/webinars/${webinarId}/qa`
-    );
+    try {
+      const response = await zoomApiClient.get(
+        `/report/webinars/${webinarId}/qa`
+      );
 
-    if (response.success) {
-      return response.data;
+      if (response.success) {
+        return response.data;
+      }
+
+      console.error(`Failed to fetch Q&A for webinar ${webinarId}:`, response.error);
+      return null;
+    } catch (error) {
+      console.error(`Error fetching Q&A for webinar ${webinarId}:`, error);
+      return null;
     }
-
-    console.error(`Failed to fetch Q&A for webinar ${webinarId}:`, response.error);
-    return null;
   }
 
   private static calculateEngagementScore(participant: any): number {

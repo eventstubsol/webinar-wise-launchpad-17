@@ -158,56 +158,72 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           }
         } else {
           // Operation might be completed, check database for final status
-          const { data: syncLog } = await supabase
-            .from('zoom_sync_logs')
-            .select('*')
-            .eq('id', syncId)
-            .single();
+          try {
+            const { data: syncLog, error } = await supabase
+              .from('zoom_sync_logs')
+              .select('*')
+              .eq('id', syncId)
+              .single();
 
-          if (syncLog) {
-            console.log('Sync log found:', syncLog);
-            
-            if (syncLog.status === 'completed') {
-              console.log('Sync completed successfully');
-              clearInterval(pollInterval);
-              setIsSyncing(false);
-              setSyncProgress(100);
-              setCurrentOperation('Sync completed');
-              setActiveSyncId(null);
-              
-              // Invalidate queries to refresh data
-              queryClient.invalidateQueries({ queryKey: ['webinars'] });
-              queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
-              
-              toast({
-                title: "Sync Completed",
-                description: `Successfully synced ${syncLog.processed_items || 0} webinars.`,
-              });
+            if (error) {
+              // Handle 406 error and other database errors gracefully
+              if (error.code === 'PGRST116') {
+                console.log('Sync log not found yet, continuing to poll...');
+                return;
+              }
+              console.error('Error querying sync log:', error);
+              return;
+            }
 
-              // Clear status after delay
-              setTimeout(() => {
+            if (syncLog) {
+              console.log('Sync log found:', syncLog);
+              
+              if (syncLog.status === 'completed' || syncLog.sync_status === 'completed') {
+                console.log('Sync completed successfully');
+                clearInterval(pollInterval);
+                setIsSyncing(false);
+                setSyncProgress(100);
+                setCurrentOperation('Sync completed');
+                setActiveSyncId(null);
+                
+                // Invalidate queries to refresh data
+                queryClient.invalidateQueries({ queryKey: ['webinars'] });
+                queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
+                
+                toast({
+                  title: "Sync Completed",
+                  description: `Successfully synced ${syncLog.processed_items || 0} webinars.`,
+                });
+
+                // Clear status after delay
+                setTimeout(() => {
+                  setSyncProgress(0);
+                  setCurrentOperation('');
+                }, 3000);
+                
+              } else if (syncLog.status === 'failed' || syncLog.sync_status === 'failed') {
+                console.error('Sync failed:', syncLog.error_message);
+                clearInterval(pollInterval);
+                setIsSyncing(false);
                 setSyncProgress(0);
                 setCurrentOperation('');
-              }, 3000);
-              
-            } else if (syncLog.status === 'failed') {
-              console.error('Sync failed:', syncLog.error_message);
-              clearInterval(pollInterval);
-              setIsSyncing(false);
-              setSyncProgress(0);
-              setCurrentOperation('');
-              setActiveSyncId(null);
-              
-              toast({
-                title: "Sync Failed",
-                description: syncLog.error_message || "Unknown error occurred during sync",
-                variant: "destructive",
-              });
+                setActiveSyncId(null);
+                
+                toast({
+                  title: "Sync Failed",
+                  description: syncLog.error_message || "Unknown error occurred during sync",
+                  variant: "destructive",
+                });
+              }
             }
+          } catch (dbError) {
+            console.error('Database error during polling:', dbError);
+            // Don't stop polling for database errors, just log them
           }
         }
       } catch (error) {
         console.error('Error polling sync status:', error);
+        // Don't stop polling for general errors
       }
     }, 2000);
 
