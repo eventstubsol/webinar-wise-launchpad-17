@@ -7,12 +7,16 @@ import { SyncStatus, ZoomSyncLog, SyncErrorDetails } from '@/types/zoom';
  */
 export class EnhancedSyncProgressTracker {
   /**
-   * Create sync log entry
+   * Create sync log entry with proper UUID
    */
   async createSyncLog(connectionId: string, syncType: string, resourceId?: string): Promise<string> {
+    // Generate a proper UUID for the sync log
+    const syncLogId = crypto.randomUUID();
+    
     const { data, error } = await supabase
       .from('zoom_sync_logs')
       .insert({
+        id: syncLogId, // Explicitly set the UUID
         connection_id: connectionId,
         sync_type: syncType,
         status: SyncStatus.STARTED,
@@ -29,7 +33,11 @@ export class EnhancedSyncProgressTracker {
       .select('id')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Failed to create sync log:', error);
+      throw error;
+    }
+    
     return data.id;
   }
 
@@ -40,6 +48,12 @@ export class EnhancedSyncProgressTracker {
     syncLogId: string,
     updates: Record<string, any>
   ): Promise<void> {
+    // Validate that syncLogId is a proper UUID
+    if (!this.isValidUUID(syncLogId)) {
+      console.error('Invalid sync log ID format:', syncLogId);
+      return;
+    }
+
     const { error } = await supabase
       .from('zoom_sync_logs')
       .update({
@@ -54,6 +68,14 @@ export class EnhancedSyncProgressTracker {
   }
 
   /**
+   * Validate UUID format
+   */
+  private isValidUUID(uuid: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
+  }
+
+  /**
    * Update current sync stage and webinar being processed
    */
   async updateSyncStage(
@@ -62,6 +84,11 @@ export class EnhancedSyncProgressTracker {
     stage: string,
     stageProgress: number
   ): Promise<void> {
+    if (!this.isValidUUID(syncLogId)) {
+      console.error('Invalid sync log ID format:', syncLogId);
+      return;
+    }
+
     const { error } = await supabase
       .from('zoom_sync_logs')
       .update({
@@ -93,6 +120,11 @@ export class EnhancedSyncProgressTracker {
       overallProgress?: number;
     }
   ): Promise<void> {
+    if (!this.isValidUUID(syncLogId)) {
+      console.error('Invalid sync log ID format:', syncLogId);
+      return;
+    }
+
     const overallProgress = progress.overallProgress || 
       Math.round((progress.processed / progress.total) * 100);
 
@@ -110,6 +142,11 @@ export class EnhancedSyncProgressTracker {
    * Complete sync log
    */
   async completeSyncLog(syncLogId: string): Promise<void> {
+    if (!this.isValidUUID(syncLogId)) {
+      console.error('Invalid sync log ID format:', syncLogId);
+      return;
+    }
+
     await this.updateSyncLog(syncLogId, {
       status: SyncStatus.COMPLETED,
       completed_at: new Date().toISOString(),
@@ -123,6 +160,11 @@ export class EnhancedSyncProgressTracker {
    * Mark sync log as failed
    */
   async failSyncLog(syncLogId: string, error: any): Promise<void> {
+    if (!this.isValidUUID(syncLogId)) {
+      console.error('Invalid sync log ID format:', syncLogId);
+      return;
+    }
+
     const errorDetails: SyncErrorDetails = {
       error_message: error instanceof Error ? error.message : 'Unknown error',
       error_code: error.code || 'UNKNOWN_ERROR',
@@ -170,6 +212,11 @@ export class EnhancedSyncProgressTracker {
     success: boolean,
     errorMessage?: string
   ): Promise<void> {
+    if (!this.isValidUUID(syncLogId)) {
+      console.error('Invalid sync log ID format:', syncLogId);
+      return;
+    }
+
     const stage = success ? 'webinar_completed' : 'webinar_failed';
     const progress = success ? 100 : 0;
     

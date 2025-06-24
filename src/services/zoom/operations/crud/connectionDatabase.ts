@@ -8,6 +8,17 @@ import { toast } from '@/hooks/use-toast';
  */
 export class ConnectionDatabase {
   /**
+   * Get the current authenticated user ID
+   */
+  private static async getCurrentUserId(): Promise<string> {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
+      throw new Error('User not authenticated');
+    }
+    return user.id;
+  }
+
+  /**
    * Insert a new connection into the database
    */
   static async insertConnection(data: ZoomConnectionInsert): Promise<any | null> {
@@ -77,14 +88,20 @@ export class ConnectionDatabase {
   }
 
   /**
-   * Get all connections for a user
+   * Get all connections for a user - now properly resolves current user ID
    */
-  static async getConnectionsByUserId(userId: string): Promise<any[]> {
+  static async getConnectionsByUserId(userId?: string): Promise<any[]> {
     try {
+      // If no userId provided or userId is "current", get the authenticated user ID
+      let actualUserId = userId;
+      if (!actualUserId || actualUserId === 'current') {
+        actualUserId = await this.getCurrentUserId();
+      }
+
       const { data, error } = await supabase
         .from('zoom_connections')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', actualUserId)
         .order('created_at', { ascending: false });
 
       if (error) {

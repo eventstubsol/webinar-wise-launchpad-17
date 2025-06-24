@@ -4,6 +4,7 @@ import { ZoomConnection, SyncType, SyncStatus } from '@/types/zoom';
 import { SyncOperation, SyncPriority } from './types';
 import { SyncQueueManager } from './SyncQueueManager';
 import { SyncExecutor } from './SyncExecutor';
+import { supabase } from '@/integrations/supabase/client';
 
 /**
  * Comprehensive sync orchestration service for managing Zoom data synchronization
@@ -33,11 +34,31 @@ export class ZoomSyncOrchestrator {
   }
 
   /**
+   * Generate a proper UUID for sync operations
+   */
+  private generateSyncId(): string {
+    return crypto.randomUUID();
+  }
+
+  /**
+   * Get the current authenticated user ID
+   */
+  private async getCurrentUserId(): Promise<string> {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
+      throw new Error('User not authenticated');
+    }
+    return user.id;
+  }
+
+  /**
    * Start initial sync - fetch all historical webinars
    */
   async startInitialSync(connectionId: string, options?: { batchSize?: number }): Promise<string> {
+    const syncId = this.generateSyncId();
+    
     const operation: SyncOperation = {
-      id: `initial-${Date.now()}`,
+      id: syncId,
       connectionId,
       type: SyncType.INITIAL,
       priority: SyncPriority.NORMAL,
@@ -50,15 +71,17 @@ export class ZoomSyncOrchestrator {
 
     this.queueManager.addToQueue(operation);
     this.processQueue();
-    return operation.id;
+    return syncId;
   }
 
   /**
    * Start incremental sync - only fetch data since last sync
    */
   async startIncrementalSync(connectionId: string): Promise<string> {
+    const syncId = this.generateSyncId();
+    
     const operation: SyncOperation = {
-      id: `incremental-${Date.now()}`,
+      id: syncId,
       connectionId,
       type: SyncType.INCREMENTAL,
       priority: SyncPriority.HIGH,
@@ -71,15 +94,17 @@ export class ZoomSyncOrchestrator {
 
     this.queueManager.addToQueue(operation);
     this.processQueue();
-    return operation.id;
+    return syncId;
   }
 
   /**
    * Sync a single webinar with all its data
    */
   async syncSingleWebinar(webinarId: string, connectionId: string): Promise<string> {
+    const syncId = this.generateSyncId();
+    
     const operation: SyncOperation = {
-      id: `single-${webinarId}-${Date.now()}`,
+      id: syncId,
       connectionId,
       type: SyncType.MANUAL,
       priority: SyncPriority.CRITICAL,
@@ -93,7 +118,7 @@ export class ZoomSyncOrchestrator {
 
     this.queueManager.addToQueue(operation);
     this.processQueue();
-    return operation.id;
+    return syncId;
   }
 
   /**
@@ -155,7 +180,7 @@ export class ZoomSyncOrchestrator {
     const abortController = new AbortController();
     this.activeSyncs.set(operation.id, abortController);
 
-    // Validate connection
+    // Validate connection and get user ID
     const connection = await this.validateConnection(operation.connectionId);
     if (!connection) {
       throw new Error('Invalid or expired connection');
@@ -187,9 +212,10 @@ export class ZoomSyncOrchestrator {
     if (retryCount <= this.retryAttempts) {
       const delay = Math.pow(2, retryCount) * 1000;
       setTimeout(() => {
+        // Generate new UUID for retry operation
         const retryOperation = {
           ...operation,
-          id: `${operation.id}-retry-${retryCount}`,
+          id: this.generateSyncId(),
           options: {
             ...operation.options,
             retryCount
