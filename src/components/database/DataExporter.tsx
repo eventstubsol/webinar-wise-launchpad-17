@@ -196,7 +196,13 @@ export function DataExporter() {
                   <Checkbox
                     id={table}
                     checked={selectedTables.includes(table)}
-                    onCheckedChange={() => handleTableToggle(table)}
+                    onCheckedChange={(checked) => {
+                      if (checked === true) {
+                        setSelectedTables(prev => [...prev, table]);
+                      } else {
+                        setSelectedTables(prev => prev.filter(t => t !== table));
+                      }
+                    }}
                   />
                   <Label htmlFor={table} className="text-sm font-mono">
                     {table}
@@ -237,7 +243,7 @@ export function DataExporter() {
                 <Checkbox
                   id="metadata"
                   checked={includeMetadata}
-                  onCheckedChange={setIncludeMetadata}
+                  onCheckedChange={(checked) => setIncludeMetadata(checked === true)}
                 />
                 <Label htmlFor="metadata">Include metadata and export information</Label>
               </div>
@@ -245,7 +251,7 @@ export function DataExporter() {
                 <Checkbox
                   id="compress"
                   checked={compressOutput}
-                  onCheckedChange={setCompressOutput}
+                  onCheckedChange={(checked) => setCompressOutput(checked === true)}
                 />
                 <Label htmlFor="compress">Compress output file</Label>
               </div>
