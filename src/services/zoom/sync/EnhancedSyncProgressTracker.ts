@@ -24,7 +24,7 @@ export class EnhancedSyncProgressTracker {
       throw new Error('Invalid connection ID format');
     }
 
-    // Generate a proper UUID for the sync log
+    // Generate a proper UUID for the sync log - use crypto.randomUUID for consistency
     const syncLogId = crypto.randomUUID();
     
     // Validate generated sync log ID
@@ -32,6 +32,8 @@ export class EnhancedSyncProgressTracker {
       console.error('Failed to generate valid UUID for sync log');
       throw new Error('Failed to generate valid UUID for sync log');
     }
+
+    console.log('Creating sync log with ID:', syncLogId, 'for connection:', connectionId);
     
     try {
       const { data, error } = await supabase
@@ -41,6 +43,7 @@ export class EnhancedSyncProgressTracker {
           connection_id: connectionId,
           sync_type: syncType,
           status: SyncStatus.STARTED,
+          sync_status: SyncStatus.STARTED, // Ensure both fields are set
           resource_type: resourceId ? 'webinar' : 'webinars',
           resource_id: resourceId,
           started_at: new Date().toISOString(),
@@ -56,7 +59,21 @@ export class EnhancedSyncProgressTracker {
 
       if (error) {
         console.error('Failed to create sync log:', error);
-        throw error;
+        throw new Error(`Failed to create sync log: ${error.message}`);
+      }
+      
+      console.log('Sync log created successfully:', data.id);
+      
+      // Verify the record was created
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('zoom_sync_logs')
+        .select('id')
+        .eq('id', syncLogId)
+        .maybeSingle();
+        
+      if (verifyError || !verifyData) {
+        console.error('Sync log verification failed:', verifyError);
+        throw new Error('Sync log was not properly created');
       }
       
       return data.id;
@@ -163,7 +180,8 @@ export class EnhancedSyncProgressTracker {
       total_items: progress.total,
       processed_items: progress.processed,
       failed_items: progress.failed,
-      status: SyncStatus.IN_PROGRESS
+      status: SyncStatus.IN_PROGRESS,
+      sync_status: SyncStatus.IN_PROGRESS
     });
 
     console.log(`Sync ${syncLogId}: ${progress.processed}/${progress.total} (${overallProgress}%) - ${progress.current}`);
@@ -180,6 +198,7 @@ export class EnhancedSyncProgressTracker {
 
     await this.updateSyncLog(syncLogId, {
       status: SyncStatus.COMPLETED,
+      sync_status: SyncStatus.COMPLETED,
       completed_at: new Date().toISOString(),
       current_webinar_id: null,
       sync_stage: 'completed',
@@ -205,6 +224,7 @@ export class EnhancedSyncProgressTracker {
 
     await this.updateSyncLog(syncLogId, {
       status: SyncStatus.FAILED,
+      sync_status: SyncStatus.FAILED,
       error_message: error instanceof Error ? error.message : 'Unknown error',
       error_details: errorDetails,
       completed_at: new Date().toISOString(),

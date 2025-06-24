@@ -1,3 +1,4 @@
+
 import { ZoomConnectionService } from '../ZoomConnectionService';
 import { ZoomConnection, SyncType, SyncStatus } from '@/types/zoom';
 import { SyncOperation, SyncPriority } from './types';
@@ -37,7 +38,9 @@ export class ZoomSyncOrchestrator {
    */
   private generateSyncId(): string {
     // Always use crypto.randomUUID() for proper UUID generation
-    return crypto.randomUUID();
+    const syncId = crypto.randomUUID();
+    console.log('Generated new sync ID:', syncId);
+    return syncId;
   }
 
   /**
@@ -75,7 +78,7 @@ export class ZoomSyncOrchestrator {
     }
 
     const syncId = this.generateSyncId();
-    console.log(`Generated UUID sync ID for initial sync: ${syncId}`);
+    console.log(`Starting initial sync with ID: ${syncId} for connection: ${connectionId}`);
     
     // Validate generated sync ID
     if (!this.isValidUUID(syncId)) {
@@ -96,6 +99,8 @@ export class ZoomSyncOrchestrator {
 
     this.queueManager.addToQueue(operation);
     this.processQueue();
+    
+    console.log(`Initial sync queued successfully with ID: ${syncId}`);
     return syncId;
   }
 
@@ -109,7 +114,7 @@ export class ZoomSyncOrchestrator {
     }
 
     const syncId = this.generateSyncId();
-    console.log(`Generated UUID sync ID for incremental sync: ${syncId}`);
+    console.log(`Starting incremental sync with ID: ${syncId} for connection: ${connectionId}`);
     
     // Validate generated sync ID
     if (!this.isValidUUID(syncId)) {
@@ -130,6 +135,8 @@ export class ZoomSyncOrchestrator {
 
     this.queueManager.addToQueue(operation);
     this.processQueue();
+    
+    console.log(`Incremental sync queued successfully with ID: ${syncId}`);
     return syncId;
   }
 
@@ -143,7 +150,7 @@ export class ZoomSyncOrchestrator {
     }
 
     const syncId = this.generateSyncId();
-    console.log(`Generated UUID sync ID for single webinar sync: ${syncId}`);
+    console.log(`Starting single webinar sync with ID: ${syncId} for webinar: ${webinarId}`);
     
     // Validate generated sync ID
     if (!this.isValidUUID(syncId)) {
@@ -165,6 +172,8 @@ export class ZoomSyncOrchestrator {
 
     this.queueManager.addToQueue(operation);
     this.processQueue();
+    
+    console.log(`Single webinar sync queued successfully with ID: ${syncId}`);
     return syncId;
   }
 
@@ -208,6 +217,7 @@ export class ZoomSyncOrchestrator {
     if (!operation) return;
 
     this.isProcessing = true;
+    console.log(`Processing sync operation: ${operation.id}`);
 
     try {
       await this.executeSync(operation);
@@ -233,7 +243,9 @@ export class ZoomSyncOrchestrator {
       throw new Error('Invalid or expired connection');
     }
 
+    console.log(`Executing sync operation: ${operation.id}`);
     await this.syncExecutor.executeSync(operation, abortController.signal);
+    console.log(`Sync operation completed: ${operation.id}`);
   }
 
   /**
@@ -258,6 +270,8 @@ export class ZoomSyncOrchestrator {
     
     if (retryCount <= this.retryAttempts) {
       const delay = Math.pow(2, retryCount) * 1000;
+      console.log(`Retrying sync operation ${operation.id} in ${delay}ms (attempt ${retryCount}/${this.retryAttempts})`);
+      
       setTimeout(() => {
         // Generate new UUID for retry operation
         const retryOperation = {
@@ -279,6 +293,8 @@ export class ZoomSyncOrchestrator {
    * Cancel a sync operation
    */
   async cancelSync(operationId: string): Promise<void> {
+    console.log(`Cancelling sync operation: ${operationId}`);
+    
     const controller = this.activeSyncs.get(operationId);
     if (controller) {
       controller.abort();
