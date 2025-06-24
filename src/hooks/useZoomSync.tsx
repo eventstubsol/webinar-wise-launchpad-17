@@ -8,6 +8,7 @@ import { TokenUtils, TokenStatus } from '@/services/zoom/utils/tokenUtils';
 import { zoomSyncOrchestrator } from '@/services/zoom/sync/ZoomSyncOrchestrator';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
 
 export const useZoomSync = (connection?: ZoomConnection | null) => {
   const { user } = useAuth();
@@ -116,18 +117,16 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           }
         } else {
           // Operation might be completed, check database for final status
-          const { data: syncLog } = await import('@/integrations/supabase/client').then(({ supabase }) =>
-            supabase
-              .from('zoom_sync_logs')
-              .select('*')
-              .eq('id', syncId)
-              .single()
-          );
+          const { data: syncLog } = await supabase
+            .from('zoom_sync_logs')
+            .select('*')
+            .eq('id', syncId)
+            .single();
 
           if (syncLog) {
             console.log('Sync log found:', syncLog);
             
-            if (syncLog.sync_status === 'completed') {
+            if (syncLog.status === 'completed') {
               console.log('Sync completed successfully');
               clearInterval(pollInterval);
               setIsSyncing(false);
@@ -150,7 +149,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
                 setCurrentOperation('');
               }, 3000);
               
-            } else if (syncLog.sync_status === 'failed') {
+            } else if (syncLog.status === 'failed') {
               console.error('Sync failed:', syncLog.error_message);
               clearInterval(pollInterval);
               setIsSyncing(false);

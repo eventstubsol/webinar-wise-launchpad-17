@@ -16,7 +16,6 @@ export class EnhancedSyncProgressTracker {
         connection_id: connectionId,
         sync_type: syncType,
         status: SyncStatus.STARTED,
-        sync_status: SyncStatus.STARTED,
         resource_type: resourceId ? 'webinar' : 'webinars',
         resource_id: resourceId,
         started_at: new Date().toISOString(),
@@ -101,7 +100,7 @@ export class EnhancedSyncProgressTracker {
       total_items: progress.total,
       processed_items: progress.processed,
       failed_items: progress.failed,
-      sync_status: SyncStatus.IN_PROGRESS
+      status: SyncStatus.IN_PROGRESS
     });
 
     console.log(`Sync ${syncLogId}: ${progress.processed}/${progress.total} (${overallProgress}%) - ${progress.current}`);
@@ -112,7 +111,7 @@ export class EnhancedSyncProgressTracker {
    */
   async completeSyncLog(syncLogId: string): Promise<void> {
     await this.updateSyncLog(syncLogId, {
-      sync_status: SyncStatus.COMPLETED,
+      status: SyncStatus.COMPLETED,
       completed_at: new Date().toISOString(),
       current_webinar_id: null,
       sync_stage: 'completed',
@@ -132,7 +131,7 @@ export class EnhancedSyncProgressTracker {
     };
 
     await this.updateSyncLog(syncLogId, {
-      sync_status: SyncStatus.FAILED,
+      status: SyncStatus.FAILED,
       error_message: error instanceof Error ? error.message : 'Unknown error',
       error_details: errorDetails,
       completed_at: new Date().toISOString(),
@@ -149,7 +148,7 @@ export class EnhancedSyncProgressTracker {
       .from('zoom_sync_logs')
       .select('*')
       .eq('connection_id', connectionId)
-      .in('sync_status', [SyncStatus.STARTED, SyncStatus.IN_PROGRESS])
+      .in('status', [SyncStatus.STARTED, SyncStatus.IN_PROGRESS])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
