@@ -1,11 +1,11 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { useZoomConnection } from "@/hooks/useZoomConnection";
+import { useZoomSync } from "@/hooks/useZoomSync";
 import { useQueryClient } from "@tanstack/react-query";
-import { SyncProgressModal } from "./SyncProgressModal";
 import { SyncConfiguration, SyncConfig } from "./SyncConfiguration";
 import {
   Dialog,
@@ -29,11 +29,9 @@ export function EnhancedZoomSyncButton({
   showLabel = true
 }: EnhancedZoomSyncButtonProps) {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncId, setSyncId] = useState<string | null>(null);
-  const [showProgress, setShowProgress] = useState(false);
   
   const { connection } = useZoomConnection();
+  const { startSync, cancelSync, isSyncing, syncProgress, currentOperation } = useZoomSync(connection);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -47,45 +45,12 @@ export function EnhancedZoomSyncButton({
       return;
     }
 
-    setIsSyncing(true);
     setIsConfigOpen(false);
 
     try {
-      // Always use the v2 edge function with improved error handling
-      const response = await supabase.functions.invoke('zoom-sync-webinars-v2', {
-        body: {
-          connectionId: connection.id,
-          syncMode: config.syncMode === 'smart' ? 'full' : config.syncMode, // Convert smart to full
-          dateRange: config.dateRange
-        }
-      });
-
-      if (response.error) {
-        // Check if it's a function not found error
-        if (response.error.message?.includes('not found')) {
-          toast({
-            title: "Edge Function Not Found",
-            description: "Please deploy the zoom-sync-webinars-v2 edge function",
-            variant: "destructive"
-          });
-        } else {
-          throw response.error;
-        }
-      }
-
-      const { syncId: newSyncId } = response.data || {};
-      if (newSyncId) {
-        setSyncId(newSyncId);
-        setShowProgress(true);
-
-        toast({
-          title: "Sync Started",
-          description: "Your webinar data is being synced from Zoom"
-        });
-      } else {
-        throw new Error("No sync ID returned");
-      }
-
+      // Convert config to sync type
+      const syncType = config.syncMode === 'full' ? 'initial' : 'incremental';
+      await startSync(syncType);
     } catch (error: any) {
       console.error('Sync error:', error);
       toast({
@@ -93,35 +58,59 @@ export function EnhancedZoomSyncButton({
         description: error.message || "Failed to start sync process",
         variant: "destructive"
       });
-      setIsSyncing(false);
     }
   };
 
   const handleSyncComplete = () => {
-    setIsSyncing(false);
-    setSyncId(null);
-    
     // Invalidate relevant queries
     queryClient.invalidateQueries({ queryKey: ['zoom-webinars'] });
     queryClient.invalidateQueries({ queryKey: ['zoom-sync-history'] });
     queryClient.invalidateQueries({ queryKey: ['zoom-sync-analytics'] });
     queryClient.invalidateQueries({ queryKey: ['webinar-statistics'] });
     
-    toast({
-      title: "Sync Completed",
-      description: "Your webinar data has been successfully synced",
-    });
-
     if (onSyncComplete) {
       onSyncComplete();
     }
   };
 
-  const handleProgressClose = () => {
-    setShowProgress(false);
-    if (!isSyncing) {
-      setSyncId(null);
+  const handleCancelSync = async () => {
+    try {
+      await cancelSync();
+    } catch (error) {
+      console.error('Cancel sync error:', error);
     }
+  };
+
+  const getButtonContent = () => {
+    if (isSyncing) {
+      return (
+        <>
+          <div className="flex items-center gap-2">
+            <RefreshCw className={`h-4 w-4 animate-spin`} />
+            {showLabel && (
+              <span className="flex items-center gap-2">
+                Syncing... {syncProgress > 0 && `${syncProgress}%`}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancelSync}
+                  className="h-6 w-6 p-0 hover:bg-red-100"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </span>
+            )}
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <RefreshCw className={`h-4 w-4 ${showLabel ? 'mr-2' : ''}`} />
+        {showLabel && 'Sync Webinars'}
+      </>
+    );
   };
 
   return (
@@ -130,12 +119,19 @@ export function EnhancedZoomSyncButton({
         variant={variant}
         size={size}
         onClick={() => setIsConfigOpen(true)}
-        disabled={isSyncing || !connection}
+        disabled={!connection}
         title={!connection ? "Please connect your Zoom account first" : "Sync webinars from Zoom"}
+        className="flex items-center gap-2"
       >
-        <RefreshCw className={`h-4 w-4 ${showLabel ? 'mr-2' : ''} ${isSyncing ? 'animate-spin' : ''}`} />
-        {showLabel && (isSyncing ? 'Syncing...' : 'Sync Webinars')}
+        {getButtonContent()}
       </Button>
+
+      {/* Progress display for syncing */}
+      {isSyncing && currentOperation && showLabel && (
+        <div className="text-xs text-muted-foreground mt-1">
+          {currentOperation}
+        </div>
+      )}
 
       {/* Sync Configuration Dialog */}
       <Dialog open={isConfigOpen} onOpenChange={setIsConfigOpen}>
@@ -143,25 +139,15 @@ export function EnhancedZoomSyncButton({
           <DialogHeader>
             <DialogTitle>Sync Webinars from Zoom</DialogTitle>
             <DialogDescription>
-              Choose how you want to sync your webinar data. This is a manual process triggered only when you click the sync button.
+              Choose how you want to sync your webinar data. This process fetches data directly from Zoom's API.
             </DialogDescription>
           </DialogHeader>
           <SyncConfiguration
             onStartSync={handleStartSync}
-            isLoading={isSyncing}
+            isLoading={false}
           />
         </DialogContent>
       </Dialog>
-
-      {/* Progress Modal */}
-      {syncId && (
-        <SyncProgressModal
-          syncId={syncId}
-          isOpen={showProgress}
-          onClose={handleProgressClose}
-          onComplete={handleSyncComplete}
-        />
-      )}
     </>
   );
 }

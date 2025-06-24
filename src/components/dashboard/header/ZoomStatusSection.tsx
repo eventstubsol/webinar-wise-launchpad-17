@@ -3,20 +3,18 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useZoomSync } from '@/hooks/useZoomSync';
-import { RefreshCw, Wifi, WifiOff, AlertCircle } from 'lucide-react';
+import { RefreshCw, Wifi, WifiOff, AlertCircle, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { TokenStatus } from '@/services/zoom/utils/tokenUtils';
 import { ZoomConnectionModal } from '@/components/zoom/ZoomConnectionModal';
-import { ZoomSyncModal } from '@/components/zoom/ZoomSyncModal';
 
 export function ZoomStatusSection() {
   const { connection, tokenStatus, isLoading } = useZoomConnection();
-  const { isSyncing } = useZoomSync(connection);
+  const { startSync, cancelSync, isSyncing, syncProgress, currentOperation } = useZoomSync(connection);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
-  const [showSyncModal, setShowSyncModal] = useState(false);
 
   // Get the last sync timestamp
   const { data: lastSyncData } = useQuery({
@@ -103,21 +101,32 @@ export function ZoomStatusSection() {
     }
   };
 
-  const handleConnectSyncClick = () => {
+  const handleConnectSyncClick = async () => {
     if (tokenStatus === TokenStatus.VALID) {
-      setShowSyncModal(true);
+      if (isSyncing) {
+        await cancelSync();
+      } else {
+        await startSync('incremental');
+      }
     } else {
       setShowConnectionModal(true);
     }
   };
 
   const getButtonText = () => {
-    if (isSyncing) return 'Syncing...';
+    if (isSyncing) {
+      return (
+        <div className="flex items-center gap-2">
+          <span>Syncing... {syncProgress > 0 && `${syncProgress}%`}</span>
+          <X className="w-3 h-3" />
+        </div>
+      );
+    }
     if (tokenStatus === TokenStatus.VALID) return 'Sync';
     return 'Connect';
   };
 
-  const isButtonDisabled = isLoading || isSyncing;
+  const isButtonDisabled = isLoading;
 
   return (
     <>
@@ -143,19 +152,18 @@ export function ZoomStatusSection() {
         </Button>
       </div>
 
+      {/* Progress indicator */}
+      {isSyncing && currentOperation && (
+        <div className="text-xs text-gray-500 mt-1">
+          {currentOperation}
+        </div>
+      )}
+
       <ZoomConnectionModal
         open={showConnectionModal}
         onOpenChange={setShowConnectionModal}
         onSuccess={() => {
           // Optionally refresh connection data or show success message
-        }}
-      />
-
-      <ZoomSyncModal
-        open={showSyncModal}
-        onOpenChange={setShowSyncModal}
-        onSuccess={() => {
-          // Optionally refresh data or show success message
         }}
       />
     </>
