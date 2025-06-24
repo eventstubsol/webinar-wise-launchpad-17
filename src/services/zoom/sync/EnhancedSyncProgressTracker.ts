@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { SyncStatus, ZoomSyncLog, SyncErrorDetails } from '@/types/zoom';
 
@@ -42,8 +41,7 @@ export class EnhancedSyncProgressTracker {
           id: syncLogId, // Explicitly set the UUID
           connection_id: connectionId,
           sync_type: syncType,
-          status: SyncStatus.STARTED,
-          sync_status: SyncStatus.STARTED, // Ensure both fields are set
+          status: SyncStatus.STARTED, // Only set status, sync_status is generated automatically
           resource_type: resourceId ? 'webinar' : 'webinars',
           resource_id: resourceId,
           started_at: new Date().toISOString(),
@@ -180,8 +178,7 @@ export class EnhancedSyncProgressTracker {
       total_items: progress.total,
       processed_items: progress.processed,
       failed_items: progress.failed,
-      status: SyncStatus.IN_PROGRESS,
-      sync_status: SyncStatus.IN_PROGRESS
+      status: SyncStatus.IN_PROGRESS // Only set status, sync_status is generated automatically
     });
 
     console.log(`Sync ${syncLogId}: ${progress.processed}/${progress.total} (${overallProgress}%) - ${progress.current}`);
@@ -197,8 +194,7 @@ export class EnhancedSyncProgressTracker {
     }
 
     await this.updateSyncLog(syncLogId, {
-      status: SyncStatus.COMPLETED,
-      sync_status: SyncStatus.COMPLETED,
+      status: SyncStatus.COMPLETED, // Only set status, sync_status is generated automatically
       completed_at: new Date().toISOString(),
       current_webinar_id: null,
       sync_stage: 'completed',
@@ -223,8 +219,7 @@ export class EnhancedSyncProgressTracker {
     };
 
     await this.updateSyncLog(syncLogId, {
-      status: SyncStatus.FAILED,
-      sync_status: SyncStatus.FAILED,
+      status: SyncStatus.FAILED, // Only set status, sync_status is generated automatically
       error_message: error instanceof Error ? error.message : 'Unknown error',
       error_details: errorDetails,
       completed_at: new Date().toISOString(),
