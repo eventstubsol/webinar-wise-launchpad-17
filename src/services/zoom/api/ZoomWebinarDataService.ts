@@ -51,7 +51,7 @@ interface ListWebinarsOptions {
   to?: Date;
   type?: 'past' | 'upcoming' | 'live';
   pageSize?: number;
-  dayRange?: number; // New option for configurable range
+  dayRange?: number;
 }
 
 /**
@@ -65,71 +65,192 @@ interface SyncProgress {
 }
 
 /**
+ * Enhanced API response analysis
+ */
+interface ApiResponseAnalysis {
+  hasData: boolean;
+  dataType: string;
+  isAuthenticated: boolean;
+  hasPermissions: boolean;
+  errorCategory: 'NONE' | 'AUTH' | 'PERMISSIONS' | 'RATE_LIMIT' | 'NO_DATA' | 'API_ERROR';
+  userMessage: string;
+  technicalDetails: Record<string, any>;
+}
+
+/**
  * Service for fetching webinar data from Zoom API
  */
 export class ZoomWebinarDataService {
   /**
-   * Validate API response structure
+   * Analyze API response for detailed diagnostics
    */
-  private static validateApiResponse(response: any, endpoint: string): { isValid: boolean; error?: string } {
+  private static analyzeApiResponse(response: any, endpoint: string): ApiResponseAnalysis {
+    const analysis: ApiResponseAnalysis = {
+      hasData: false,
+      dataType: typeof response,
+      isAuthenticated: true,
+      hasPermissions: true,
+      errorCategory: 'NONE',
+      userMessage: '',
+      technicalDetails: {}
+    };
+
+    // Check if response exists
     if (!response) {
-      return { isValid: false, error: `Null response from ${endpoint}` };
+      analysis.errorCategory = 'API_ERROR';
+      analysis.userMessage = 'No response received from Zoom API';
+      analysis.technicalDetails = { endpoint, response: null };
+      return analysis;
     }
 
-    if (typeof response !== 'object') {
-      return { isValid: false, error: `Invalid response type from ${endpoint}: ${typeof response}` };
+    // Authentication check
+    if (response.error && (response.error.includes('401') || response.error.includes('unauthorized'))) {
+      analysis.isAuthenticated = false;
+      analysis.errorCategory = 'AUTH';
+      analysis.userMessage = 'Zoom authentication has expired. Please reconnect your account.';
+      analysis.technicalDetails = { endpoint, error: response.error };
+      return analysis;
     }
 
-    return { isValid: true };
-  }
+    // Permissions check
+    if (response.error && (response.error.includes('403') || response.error.includes('forbidden'))) {
+      analysis.hasPermissions = false;
+      analysis.errorCategory = 'PERMISSIONS';
+      analysis.userMessage = 'Your Zoom account does not have permission to access webinar data. Please check your Zoom app scopes.';
+      analysis.technicalDetails = { endpoint, error: response.error };
+      return analysis;
+    }
 
-  /**
-   * Enhanced logging for API responses
-   */
-  private static logApiResponse(endpoint: string, response: any, context?: string) {
-    const logPrefix = context ? `[${context}]` : '';
-    console.log(`${logPrefix} API Response for ${endpoint}:`, {
-      responseType: typeof response,
-      hasData: !!response,
-      dataType: response ? typeof response : 'null',
-      keys: response && typeof response === 'object' ? Object.keys(response) : [],
-      webinarsField: response?.webinars ? {
-        type: typeof response.webinars,
-        isArray: Array.isArray(response.webinars),
-        length: Array.isArray(response.webinars) ? response.webinars.length : 'N/A'
-      } : 'undefined'
-    });
-  }
+    // Rate limit check
+    if (response.error && (response.error.includes('429') || response.error.includes('rate limit'))) {
+      analysis.errorCategory = 'RATE_LIMIT';
+      analysis.userMessage = 'Zoom API rate limit exceeded. Please try again in a few minutes.';
+      analysis.technicalDetails = { endpoint, error: response.error };
+      return analysis;
+    }
 
-  /**
-   * Handle API errors with detailed logging
-   */
-  private static handleApiError(error: any, endpoint: string, context?: string): string {
-    const logPrefix = context ? `[${context}]` : '';
-    console.error(`${logPrefix} API Error for ${endpoint}:`, {
-      error: error,
-      message: error?.message,
-      status: error?.status || error?.statusCode,
-      isRetryable: this.isRetryableError(error)
-    });
+    // Success response analysis
+    if (response.success && response.data) {
+      const data = response.data;
+      
+      // Check if webinars field exists and is an array
+      if (data.webinars !== undefined) {
+        if (Array.isArray(data.webinars)) {
+          analysis.hasData = data.webinars.length > 0;
+          analysis.dataType = 'array';
+          
+          if (data.webinars.length === 0) {
+            analysis.errorCategory = 'NO_DATA';
+            analysis.userMessage = `No webinars found for the specified date range. Check if you have webinars in your Zoom account.`;
+          } else {
+            analysis.userMessage = `Found ${data.webinars.length} webinars to sync.`;
+          }
+        } else {
+          analysis.errorCategory = 'API_ERROR';
+          analysis.userMessage = 'Unexpected response format from Zoom API (webinars is not an array).';
+          analysis.dataType = typeof data.webinars;
+        }
+      } else {
+        analysis.errorCategory = 'API_ERROR';
+        analysis.userMessage = 'Zoom API response is missing webinars data. This might be a permissions issue.';
+        analysis.dataType = 'undefined';
+      }
 
-    if (error?.status === 401 || error?.status === 403) {
-      return 'Authentication or permission error. Please check your Zoom connection.';
-    } else if (error?.status === 429) {
-      return 'Rate limit exceeded. Please try again later.';
-    } else if (error?.status >= 500) {
-      return 'Zoom API server error. Please try again later.';
+      analysis.technicalDetails = {
+        endpoint,
+        totalRecords: data.total_records,
+        pageCount: data.page_count,
+        pageNumber: data.page_number,
+        webinarsFieldType: typeof data.webinars,
+        webinarsLength: Array.isArray(data.webinars) ? data.webinars.length : 'N/A',
+        responseKeys: Object.keys(data),
+        hasWebinarsField: 'webinars' in data
+      };
     } else {
-      return error?.message || 'Unknown API error occurred';
+      analysis.errorCategory = 'API_ERROR';
+      analysis.userMessage = 'Invalid response from Zoom API.';
+      analysis.technicalDetails = { 
+        endpoint, 
+        hasSuccess: 'success' in response,
+        hasData: 'data' in response,
+        responseKeys: Object.keys(response)
+      };
+    }
+
+    return analysis;
+  }
+
+  /**
+   * Enhanced logging for API responses with user-friendly messages
+   */
+  private static logApiResponseAnalysis(analysis: ApiResponseAnalysis, context?: string) {
+    const logPrefix = context ? `[${context}]` : '';
+    
+    console.log(`${logPrefix} 🔍 API RESPONSE ANALYSIS:`);
+    console.log(`  📊 Category: ${analysis.errorCategory}`);
+    console.log(`  👤 User Message: ${analysis.userMessage}`);
+    console.log(`  🔧 Technical Details:`, analysis.technicalDetails);
+    
+    // Color-coded logging based on category
+    switch (analysis.errorCategory) {
+      case 'NONE':
+        console.log(`  ✅ Status: Success`);
+        break;
+      case 'NO_DATA':
+        console.log(`  ℹ️ Status: No data found (not an error)`);
+        break;
+      case 'AUTH':
+        console.error(`  🔒 Status: Authentication failed`);
+        break;
+      case 'PERMISSIONS':
+        console.error(`  🚫 Status: Permission denied`);
+        break;
+      case 'RATE_LIMIT':
+        console.warn(`  ⏳ Status: Rate limited`);
+        break;
+      case 'API_ERROR':
+        console.error(`  ❌ Status: API error`);
+        break;
     }
   }
 
   /**
-   * Check if error is retryable
+   * Test API connection and permissions
    */
-  private static isRetryableError(error: any): boolean {
-    const status = error?.status || error?.statusCode;
-    return status >= 500 || status === 429 || status === 408;
+  static async testApiConnection(): Promise<ApiResponseAnalysis> {
+    try {
+      console.log('🔍 TESTING API CONNECTION...');
+      
+      // Test basic user info endpoint first
+      const userResponse = await zoomApiClient.get('/users/me');
+      const userAnalysis = this.analyzeApiResponse(userResponse, '/users/me');
+      
+      if (userAnalysis.errorCategory !== 'NONE') {
+        console.error('❌ USER API TEST FAILED:', userAnalysis.userMessage);
+        return userAnalysis;
+      }
+      
+      console.log('✅ USER API TEST PASSED');
+      
+      // Test webinar list endpoint
+      const webinarResponse = await zoomApiClient.get('/users/me/webinars?page_size=1&type=past');
+      const webinarAnalysis = this.analyzeApiResponse(webinarResponse, '/users/me/webinars');
+      
+      console.log('📊 WEBINAR API TEST RESULT:', webinarAnalysis.userMessage);
+      return webinarAnalysis;
+      
+    } catch (error) {
+      console.error('❌ API CONNECTION TEST FAILED:', error);
+      return {
+        hasData: false,
+        dataType: 'error',
+        isAuthenticated: false,
+        hasPermissions: false,
+        errorCategory: 'API_ERROR',
+        userMessage: `Connection test failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        technicalDetails: { error: error instanceof Error ? error.message : error }
+      };
+    }
   }
 
   /**
@@ -154,6 +275,12 @@ export class ZoomWebinarDataService {
     });
 
     try {
+      // Test API connection first
+      const connectionTest = await this.testApiConnection();
+      if (connectionTest.errorCategory === 'AUTH' || connectionTest.errorCategory === 'PERMISSIONS') {
+        throw new Error(connectionTest.userMessage);
+      }
+
       // Fetch past webinars
       if (onProgress) {
         onProgress({
@@ -194,7 +321,7 @@ export class ZoomWebinarDataService {
 
       console.log(`✅ UPCOMING WEBINARS RESULT: ${upcomingWebinars.length} webinars found`);
 
-      // Safely merge and deduplicate webinars - ensure both are arrays
+      // Safely merge and deduplicate webinars
       const allWebinars = [
         ...(Array.isArray(pastWebinars) ? pastWebinars : []),
         ...(Array.isArray(upcomingWebinars) ? upcomingWebinars : [])
@@ -213,25 +340,26 @@ export class ZoomWebinarDataService {
           total: 2,
           processed: 2,
           failed: 0,
-          current: `Found ${uniqueWebinars.length} total webinars`
+          current: uniqueWebinars.length > 0 
+            ? `Found ${uniqueWebinars.length} total webinars`
+            : 'No webinars found in the specified date range'
         });
       }
 
       return uniqueWebinars;
     } catch (error) {
       console.error('❌ EXTENDED RANGE SYNC ERROR:', error);
-      const errorMessage = this.handleApiError(error, 'extended-range-sync', 'EXTENDED_RANGE');
       
       if (onProgress) {
         onProgress({
           total: 2,
           processed: 1,
           failed: 1,
-          current: `Error: ${errorMessage}`
+          current: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
         });
       }
       
-      throw new Error(errorMessage);
+      throw error;
     }
   }
 
@@ -250,7 +378,7 @@ export class ZoomWebinarDataService {
   }
 
   /**
-   * List webinars with automatic pagination and date filtering
+   * List webinars with automatic pagination and enhanced error handling
    */
   static async listWebinars(
     userId: string, 
@@ -299,85 +427,65 @@ export class ZoomWebinarDataService {
         try {
           const response = await zoomApiClient.get<ZoomWebinarListResponse>(endpoint);
           
-          // Enhanced response logging
-          this.logApiResponse(endpoint, response, context);
+          // Enhanced response analysis
+          const analysis = this.analyzeApiResponse(response, endpoint);
+          this.logApiResponseAnalysis(analysis, context);
 
-          if (!response.success) {
-            console.error(`❌ ${context}: API request failed:`, response.error);
+          // Handle different error categories
+          if (analysis.errorCategory === 'AUTH') {
+            throw new Error('Authentication failed: ' + analysis.userMessage);
+          } else if (analysis.errorCategory === 'PERMISSIONS') {
+            throw new Error('Permission denied: ' + analysis.userMessage);
+          } else if (analysis.errorCategory === 'RATE_LIMIT') {
+            console.warn(`⏳ ${context}: Rate limited, waiting before retry...`);
+            await new Promise(resolve => setTimeout(resolve, 60000)); // Wait 1 minute
+            continue;
+          } else if (analysis.errorCategory === 'API_ERROR') {
             consecutiveErrors++;
+            console.error(`❌ ${context}: API Error (${consecutiveErrors}/${maxConsecutiveErrors}):`, analysis.userMessage);
             
             if (consecutiveErrors >= maxConsecutiveErrors) {
-              throw new Error(`API failed after ${maxConsecutiveErrors} attempts: ${response.error}`);
+              throw new Error(`API failed after ${maxConsecutiveErrors} attempts: ${analysis.userMessage}`);
             }
             
             // Wait before retry
             await new Promise(resolve => setTimeout(resolve, 1000 * consecutiveErrors));
             continue;
+          } else if (analysis.errorCategory === 'NO_DATA') {
+            console.log(`ℹ️ ${context}: No webinars found for page ${pageNumber}`);
+            break; // No more data to fetch
           }
 
-          if (!response.data) {
-            console.warn(`⚠️ ${context}: No data in successful response for page ${pageNumber}`);
-            break;
-          }
-
-          // Validate response structure
-          const validation = this.validateApiResponse(response.data, endpoint);
-          if (!validation.isValid) {
-            console.error(`❌ ${context}: Invalid response structure:`, validation.error);
-            break;
-          }
-
-          const { webinars, page_count, page_number: currentPage, total_records } = response.data;
-          
-          // Enhanced webinars array validation
-          if (webinars === undefined) {
-            console.warn(`⚠️ ${context}: Webinars field is undefined in response`, {
-              pageNumber: currentPage,
+          // Process successful response
+          if (response.success && response.data && Array.isArray(response.data.webinars)) {
+            const { webinars, page_count, page_number: currentPage, total_records } = response.data;
+            
+            console.log(`✅ ${context}: Page ${currentPage} processed successfully`, {
+              webinarsFound: webinars.length,
               totalRecords: total_records,
-              pageCount: page_count,
-              responseKeys: Object.keys(response.data)
+              pageCount: page_count
             });
             
-            // Check if this might be a permissions issue
-            if (total_records === 0) {
-              console.log(`ℹ️ ${context}: No webinars found (total_records = 0). This might be normal.`);
-            } else {
-              console.warn(`⚠️ ${context}: Expected webinars but got undefined. Possible permissions issue.`);
+            allWebinars.push(...webinars);
+            consecutiveErrors = 0; // Reset on successful page
+
+            // Update progress
+            if (onProgress) {
+              onProgress({
+                total: total_records || allWebinars.length,
+                processed: allWebinars.length,
+                failed: 0,
+                current: `Page ${currentPage} of ${page_count} (${type})`
+              });
             }
-            
+
+            hasMore = currentPage < page_count;
+            pageNumber++;
+          } else {
+            // This should be caught by the analysis above, but just in case
+            console.warn(`⚠️ ${context}: Unexpected response structure for page ${pageNumber}`);
             break;
           }
-
-          if (!Array.isArray(webinars)) {
-            console.error(`❌ ${context}: Webinars is not an array:`, {
-              webinarsType: typeof webinars,
-              webinarsValue: webinars,
-              pageNumber: currentPage
-            });
-            break;
-          }
-
-          console.log(`✅ ${context}: Page ${currentPage} processed successfully`, {
-            webinarsFound: webinars.length,
-            totalRecords: total_records,
-            pageCount: page_count
-          });
-          
-          allWebinars.push(...webinars);
-          consecutiveErrors = 0; // Reset on successful page
-
-          // Update progress
-          if (onProgress) {
-            onProgress({
-              total: total_records || allWebinars.length,
-              processed: allWebinars.length,
-              failed: 0,
-              current: `Page ${currentPage} of ${page_count} (${type})`
-            });
-          }
-
-          hasMore = currentPage < page_count;
-          pageNumber++;
 
         } catch (pageError) {
           console.error(`❌ ${context}: Error processing page ${pageNumber}:`, pageError);
@@ -404,7 +512,6 @@ export class ZoomWebinarDataService {
       return allWebinars;
     } catch (error) {
       console.error(`❌ ${context}: Critical error in listWebinars:`, error);
-      const errorMessage = this.handleApiError(error, 'listWebinars', context);
       
       // Return what we have so far instead of throwing
       if (allWebinars.length > 0) {
@@ -412,7 +519,7 @@ export class ZoomWebinarDataService {
         return allWebinars;
       }
       
-      throw new Error(errorMessage);
+      throw error;
     }
   }
 
@@ -465,7 +572,6 @@ export class ZoomWebinarDataService {
 
         const { registrants, page_count, page_number: currentPage } = response.data;
         
-        // Ensure registrants is an array before spreading
         if (Array.isArray(registrants)) {
           allRegistrants.push(...registrants);
         }
@@ -511,9 +617,7 @@ export class ZoomWebinarDataService {
 
         const { participants, next_page_token } = response.data;
         
-        // Ensure participants is an array before processing
         if (Array.isArray(participants)) {
-          // Calculate engagement metrics for each participant
           const enhancedParticipants = participants.map((participant: any) => ({
             ...participant,
             engagement_score: this.calculateEngagementScore(participant),
@@ -589,4 +693,4 @@ export class ZoomWebinarDataService {
 }
 
 // Export types for use in other services
-export type { ZoomWebinarApiResponse, ListWebinarsOptions, SyncProgress };
+export type { ZoomWebinarApiResponse, ListWebinarsOptions, SyncProgress, ApiResponseAnalysis };

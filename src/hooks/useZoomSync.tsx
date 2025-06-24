@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ZoomConnection } from '@/types/zoom';
 import { TokenUtils, TokenStatus } from '@/services/zoom/utils/tokenUtils';
 import { zoomSyncOrchestrator } from '@/services/zoom/sync/ZoomSyncOrchestrator';
+import { ZoomWebinarDataService } from '@/services/zoom/api/ZoomWebinarDataService';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,6 +19,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
   const [syncProgress, setSyncProgress] = useState(0);
   const [currentOperation, setCurrentOperation] = useState<string>('');
   const [activeSyncId, setActiveSyncId] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'completed' | 'failed' | 'no_data'>('idle');
 
   /**
    * Validate UUID format
@@ -26,6 +28,69 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     return uuidRegex.test(uuid);
   };
+
+  /**
+   * Test API connection before sync
+   */
+  const testApiConnection = useCallback(async (): Promise<boolean> => {
+    if (!connection) return false;
+
+    try {
+      console.log('🔍 Testing API connection before sync...');
+      const testResult = await ZoomWebinarDataService.testApiConnection();
+      
+      if (testResult.errorCategory === 'AUTH') {
+        toast({
+          title: "Authentication Error",
+          description: testResult.userMessage,
+          variant: "destructive",
+          action: (
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/settings">Reconnect Zoom</Link>
+            </Button>
+          ),
+        });
+        return false;
+      } else if (testResult.errorCategory === 'PERMISSIONS') {
+        toast({
+          title: "Permission Error",
+          description: testResult.userMessage,
+          variant: "destructive",
+          action: (
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/settings">Check Settings</Link>
+            </Button>
+          ),
+        });
+        return false;
+      } else if (testResult.errorCategory === 'RATE_LIMIT') {
+        toast({
+          title: "Rate Limited",
+          description: testResult.userMessage,
+          variant: "destructive",
+        });
+        return false;
+      } else if (testResult.errorCategory === 'API_ERROR') {
+        toast({
+          title: "API Connection Error",
+          description: testResult.userMessage,
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      console.log('✅ API connection test passed');
+      return true;
+    } catch (error) {
+      console.error('❌ API connection test failed:', error);
+      toast({
+        title: "Connection Test Failed",
+        description: "Unable to connect to Zoom API. Please check your connection.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  }, [connection, toast]);
 
   /**
    * Validate sync ID exists in database before polling
@@ -112,8 +177,15 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       return;
     }
 
+    // Test API connection before proceeding
+    const canConnect = await testApiConnection();
+    if (!canConnect) {
+      return;
+    }
+
     setIsSyncing(true);
     setSyncProgress(0);
+    setSyncStatus('syncing');
     setCurrentOperation('Starting sync...');
 
     try {
@@ -148,34 +220,65 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           pollSyncStatus(syncId);
         } else {
           console.error('Sync log not found after creation delay:', syncId);
-          setIsSyncing(false);
-          setSyncProgress(0);
-          setCurrentOperation('');
-          setActiveSyncId(null);
-          
-          toast({
-            title: "Sync Setup Failed",
-            description: "Could not initialize sync tracking. Please try again.",
-            variant: "destructive",
-          });
+          handleSyncError('Sync setup failed - could not initialize sync tracking');
         }
       }, 2000);
 
     } catch (error) {
       console.error('Sync start error:', error);
-      setIsSyncing(false);
-      setSyncProgress(0);
-      setCurrentOperation('');
-      setActiveSyncId(null);
-      
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      handleSyncError(errorMessage);
+    }
+  }, [user, connection, toast, queryClient, testApiConnection]);
+
+  const handleSyncError = (errorMessage: string) => {
+    setIsSyncing(false);
+    setSyncProgress(0);
+    setSyncStatus('failed');
+    setCurrentOperation('');
+    setActiveSyncId(null);
+    
+    toast({
+      title: "Sync Failed",
+      description: errorMessage,
+      variant: "destructive",
+    });
+  };
+
+  const handleSyncComplete = (webinarCount: number = 0) => {
+    setIsSyncing(false);
+    setSyncProgress(100);
+    setActiveSyncId(null);
+    
+    if (webinarCount === 0) {
+      setSyncStatus('no_data');
+      setCurrentOperation('No webinars found');
+      
       toast({
-        title: "Sync Failed to Start",
-        description: errorMessage,
-        variant: "destructive",
+        title: "Sync Completed",
+        description: "No webinars found in your Zoom account for the specified date range.",
+      });
+    } else {
+      setSyncStatus('completed');
+      setCurrentOperation('Sync completed');
+      
+      toast({
+        title: "Sync Completed",
+        description: `Successfully synced ${webinarCount} webinars.`,
       });
     }
-  }, [user, connection, toast, queryClient]);
+
+    // Invalidate queries to refresh data
+    queryClient.invalidateQueries({ queryKey: ['webinars'] });
+    queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
+
+    // Clear status after delay
+    setTimeout(() => {
+      setSyncProgress(0);
+      setCurrentOperation('');
+      setSyncStatus('idle');
+    }, 5000);
+  };
 
   const pollSyncStatus = useCallback(async (syncId: string) => {
     if (!isValidUUID(syncId)) {
@@ -197,147 +300,53 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       if (pollAttempts > maxPollAttempts) {
         console.log('Polling timeout reached for sync:', syncId);
         clearInterval(pollInterval);
-        setIsSyncing(false);
-        setSyncProgress(0);
-        setCurrentOperation('');
-        setActiveSyncId(null);
-        
-        toast({
-          title: "Sync Timeout",
-          description: "Sync operation timed out. It may still be running in the background.",
-          variant: "destructive",
-        });
+        handleSyncError('Sync operation timed out. It may still be running in the background.');
         return;
       }
 
       try {
-        // Get sync status from orchestrator first
-        const syncStatus = await zoomSyncOrchestrator.getSyncStatus();
-        
-        // Find our specific sync operation
-        const currentSync = syncStatus.operations.find(op => op.id === syncId);
-        
-        if (currentSync) {
-          console.log('Sync operation found:', currentSync);
+        // Get sync status from database
+        const { data: syncLog, error } = await supabase
+          .from('zoom_sync_logs')
+          .select('*')
+          .eq('id', syncId)
+          .maybeSingle();
+
+        if (error) {
+          consecutiveErrors++;
+          console.error(`Database error during polling (${consecutiveErrors}/${maxConsecutiveErrors}):`, error);
+          
+          if (consecutiveErrors >= maxConsecutiveErrors) {
+            console.error('Too many consecutive database errors, stopping poll');
+            clearInterval(pollInterval);
+            handleSyncError('Lost connection to sync database. Please try refreshing the page.');
+            return;
+          }
+          return;
+        }
+
+        if (syncLog) {
+          console.log('Sync log found:', syncLog);
           consecutiveErrors = 0; // Reset error counter
           
-          // Update progress based on operation status
-          if (currentSync.type === 'initial' || currentSync.type === 'incremental') {
-            // For now, simulate progress - this will be enhanced with real progress tracking
-            const currentProgress = Math.min(syncProgress + 5, 90);
-            setSyncProgress(currentProgress);
-            setCurrentOperation(`Processing ${currentSync.type} sync...`);
+          if (syncLog.status === 'completed' || syncLog.sync_status === 'completed') {
+            console.log('Sync completed successfully');
+            clearInterval(pollInterval);
+            handleSyncComplete(syncLog.processed_items || 0);
+            
+          } else if (syncLog.status === 'failed' || syncLog.sync_status === 'failed') {
+            console.error('Sync failed:', syncLog.error_message);
+            clearInterval(pollInterval);
+            handleSyncError(syncLog.error_message || "Unknown error occurred during sync");
+          } else {
+            // Sync still in progress
+            const progress = syncLog.stage_progress_percentage || 0;
+            setSyncProgress(Math.max(progress, 10)); // Minimum 10% to show activity
+            setCurrentOperation(syncLog.sync_stage || 'Processing...');
           }
         } else {
-          // Operation not found in orchestrator, check database
-          try {
-            const { data: syncLog, error } = await supabase
-              .from('zoom_sync_logs')
-              .select('*')
-              .eq('id', syncId)
-              .maybeSingle();
-
-            if (error) {
-              consecutiveErrors++;
-              
-              // Handle 406 specifically - likely means record doesn't exist
-              if (error.code === 'PGRST116' || error.message.includes('406')) {
-                console.log(`Sync log query failed (attempt ${consecutiveErrors}/${maxConsecutiveErrors}):`, error.message);
-                
-                // After several consecutive errors, assume sync failed
-                if (consecutiveErrors >= maxConsecutiveErrors) {
-                  console.error('Too many consecutive database errors, stopping poll');
-                  clearInterval(pollInterval);
-                  setIsSyncing(false);
-                  setSyncProgress(0);
-                  setCurrentOperation('');
-                  setActiveSyncId(null);
-                  
-                  toast({
-                    title: "Sync Tracking Lost",
-                    description: "Lost connection to sync progress. Please check sync status manually.",
-                    variant: "destructive",
-                  });
-                  return;
-                }
-                
-                // Continue polling for a few more attempts
-                return;
-              }
-              
-              console.error('Database error during polling:', error);
-              return;
-            }
-
-            if (syncLog) {
-              console.log('Sync log found:', syncLog);
-              consecutiveErrors = 0; // Reset error counter
-              
-              if (syncLog.status === 'completed' || syncLog.sync_status === 'completed') {
-                console.log('Sync completed successfully');
-                clearInterval(pollInterval);
-                setIsSyncing(false);
-                setSyncProgress(100);
-                setCurrentOperation('Sync completed');
-                setActiveSyncId(null);
-                
-                // Invalidate queries to refresh data
-                queryClient.invalidateQueries({ queryKey: ['webinars'] });
-                queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
-                
-                toast({
-                  title: "Sync Completed",
-                  description: `Successfully synced ${syncLog.processed_items || 0} webinars.`,
-                });
-
-                // Clear status after delay
-                setTimeout(() => {
-                  setSyncProgress(0);
-                  setCurrentOperation('');
-                }, 3000);
-                
-              } else if (syncLog.status === 'failed' || syncLog.sync_status === 'failed') {
-                console.error('Sync failed:', syncLog.error_message);
-                clearInterval(pollInterval);
-                setIsSyncing(false);
-                setSyncProgress(0);
-                setCurrentOperation('');
-                setActiveSyncId(null);
-                
-                toast({
-                  title: "Sync Failed",
-                  description: syncLog.error_message || "Unknown error occurred during sync",
-                  variant: "destructive",
-                });
-              } else {
-                // Sync still in progress
-                const progress = syncLog.stage_progress_percentage || 0;
-                setSyncProgress(Math.max(progress, 10)); // Minimum 10% to show activity
-                setCurrentOperation(syncLog.sync_stage || 'Processing...');
-              }
-            } else {
-              // Record not found, but don't error immediately
-              console.log('Sync log not found yet, continuing to poll...');
-            }
-          } catch (dbError) {
-            consecutiveErrors++;
-            console.error('Database exception during polling:', dbError);
-            
-            if (consecutiveErrors >= maxConsecutiveErrors) {
-              console.error('Too many consecutive database exceptions, stopping poll');
-              clearInterval(pollInterval);
-              setIsSyncing(false);
-              setSyncProgress(0);
-              setCurrentOperation('');
-              setActiveSyncId(null);
-              
-              toast({
-                title: "Database Connection Error",
-                description: "Lost connection to sync database. Please try refreshing the page.",
-                variant: "destructive",
-              });
-            }
-          }
+          // Record not found, but don't error immediately
+          console.log('Sync log not found yet, continuing to poll...');
         }
       } catch (error) {
         consecutiveErrors++;
@@ -346,21 +355,12 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         if (consecutiveErrors >= maxConsecutiveErrors) {
           console.error('Too many consecutive polling errors, stopping poll');
           clearInterval(pollInterval);
-          setIsSyncing(false);
-          setSyncProgress(0);
-          setCurrentOperation('');
-          setActiveSyncId(null);
-          
-          toast({
-            title: "Polling Error",
-            description: "Failed to track sync progress. Please check sync status manually.",
-            variant: "destructive",
-          });
+          handleSyncError('Failed to track sync progress. Please check sync status manually.');
         }
       }
     }, 2000);
 
-  }, [queryClient, toast, syncProgress]);
+  }, [queryClient, toast]);
 
   const cancelSync = useCallback(async () => {
     if (activeSyncId && isValidUUID(activeSyncId)) {
@@ -368,6 +368,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         await zoomSyncOrchestrator.cancelSync(activeSyncId);
         setIsSyncing(false);
         setSyncProgress(0);
+        setSyncStatus('idle');
         setCurrentOperation('');
         setActiveSyncId(null);
         
@@ -389,8 +390,10 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
   return {
     startSync,
     cancelSync,
+    testApiConnection,
     isSyncing,
     syncProgress,
+    syncStatus,
     currentOperation,
     activeSyncId,
   };
