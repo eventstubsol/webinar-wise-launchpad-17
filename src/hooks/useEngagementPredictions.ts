@@ -6,7 +6,6 @@ import { useToast } from '@/hooks/use-toast';
 
 interface UseEngagementPredictionsOptions {
   webinarId?: string;
-  participantId?: string;
   predictionType?: string;
   realtimeMode?: boolean;
   realtimeMinutes?: number;
@@ -34,7 +33,6 @@ export const useEngagementPredictions = (options: UseEngagementPredictionsOption
       } else {
         predictionsData = await EngagementPredictionsService.getUserPredictions({
           webinarId: options.webinarId,
-          participantId: options.participantId,
           predictionType: options.predictionType,
           limit: 100
         });
@@ -101,7 +99,7 @@ export const useEngagementPredictions = (options: UseEngagementPredictionsOption
 
   useEffect(() => {
     fetchPredictions();
-  }, [options.webinarId, options.participantId, options.predictionType]);
+  }, [options.webinarId, options.predictionType]);
 
   // Real-time mode auto-refresh
   useEffect(() => {
