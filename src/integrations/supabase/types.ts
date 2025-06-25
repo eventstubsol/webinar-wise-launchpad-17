@@ -128,6 +128,39 @@ export type Database = {
         }
         Relationships: []
       }
+      connection_health_log: {
+        Row: {
+          connection_type: string
+          created_at: string
+          error_message: string | null
+          id: string
+          ping_time_ms: number | null
+          recorded_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          connection_type: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          ping_time_ms?: number | null
+          recorded_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          connection_type?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          ping_time_ms?: number | null
+          recorded_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       csv_imports: {
         Row: {
           completed_at: string | null
@@ -533,12 +566,14 @@ export type Database = {
           connection_id: string
           created_at: string
           duration_seconds: number | null
+          error_details: Json | null
           error_message: string | null
           id: string
           metadata: Json | null
           processed_items: number | null
           stage_progress_percentage: number | null
           started_at: string
+          status: string | null
           sync_stage: string | null
           sync_status: string
           sync_type: string
@@ -551,12 +586,14 @@ export type Database = {
           connection_id: string
           created_at?: string
           duration_seconds?: number | null
+          error_details?: Json | null
           error_message?: string | null
           id?: string
           metadata?: Json | null
           processed_items?: number | null
           stage_progress_percentage?: number | null
           started_at?: string
+          status?: string | null
           sync_stage?: string | null
           sync_status?: string
           sync_type: string
@@ -569,12 +606,14 @@ export type Database = {
           connection_id?: string
           created_at?: string
           duration_seconds?: number | null
+          error_details?: Json | null
           error_message?: string | null
           id?: string
           metadata?: Json | null
           processed_items?: number | null
           stage_progress_percentage?: number | null
           started_at?: string
+          status?: string | null
           sync_stage?: string | null
           sync_status?: string
           sync_type?: string
@@ -602,6 +641,10 @@ export type Database = {
           host_id: string
           id: string
           join_url: string
+          participant_sync_attempted_at: string | null
+          participant_sync_completed_at: string | null
+          participant_sync_error: string | null
+          participant_sync_status: string | null
           registration_url: string | null
           start_time: string
           status: string
@@ -609,6 +652,7 @@ export type Database = {
           timezone: string
           topic: string
           updated_at: string
+          webinar_id: string | null
           webinar_type: number
           zoom_uuid: string | null
           zoom_webinar_id: string
@@ -622,6 +666,10 @@ export type Database = {
           host_id: string
           id?: string
           join_url: string
+          participant_sync_attempted_at?: string | null
+          participant_sync_completed_at?: string | null
+          participant_sync_error?: string | null
+          participant_sync_status?: string | null
           registration_url?: string | null
           start_time: string
           status: string
@@ -629,6 +677,7 @@ export type Database = {
           timezone: string
           topic: string
           updated_at?: string
+          webinar_id?: string | null
           webinar_type: number
           zoom_uuid?: string | null
           zoom_webinar_id: string
@@ -642,6 +691,10 @@ export type Database = {
           host_id?: string
           id?: string
           join_url?: string
+          participant_sync_attempted_at?: string | null
+          participant_sync_completed_at?: string | null
+          participant_sync_error?: string | null
+          participant_sync_status?: string | null
           registration_url?: string | null
           start_time?: string
           status?: string
@@ -649,6 +702,7 @@ export type Database = {
           timezone?: string
           topic?: string
           updated_at?: string
+          webinar_id?: string | null
           webinar_type?: number
           zoom_uuid?: string | null
           zoom_webinar_id?: string
