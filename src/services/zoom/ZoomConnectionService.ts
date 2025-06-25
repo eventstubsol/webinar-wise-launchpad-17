@@ -1,6 +1,6 @@
 
 import { ConnectionCrud } from './operations/connectionCrud';
-import { ConnectionStatusOperations } from './operations/connectionStatus';
+import { ZoomConnectionStatusService } from './operations/connectionStatus';
 import { TokenUtils } from './utils/tokenUtils';
 import { zoomSyncOrchestrator } from './sync/ZoomSyncOrchestrator';
 import { ZoomConnection, ZoomConnectionInsert, ZoomConnectionUpdate, ConnectionStatus } from '@/types/zoom';
@@ -17,12 +17,12 @@ export class ZoomConnectionService {
   static updateConnection = ConnectionCrud.updateConnection;
   static deleteConnection = ConnectionCrud.deleteConnection;
 
-  // Connection Status Operations
-  static setPrimaryConnection = ConnectionStatusOperations.setPrimaryConnection;
-  static updateConnectionStatus = ConnectionStatusOperations.updateConnectionStatus;
-  static checkConnectionStatus = ConnectionStatusOperations.checkConnectionStatus;
-  static refreshToken = ConnectionStatusOperations.refreshToken;
-  static getPrimaryConnection = ConnectionStatusOperations.getPrimaryConnection;
+  // Connection Status Operations - Fixed to use correct method names
+  static setPrimaryConnection = ZoomConnectionStatusService.setPrimaryConnection;
+  static updateConnectionStatus = ZoomConnectionStatusService.updateConnectionStatus;
+  static checkConnectionStatus = ZoomConnectionStatusService.checkConnectionStatus;
+  static refreshToken = ZoomConnectionStatusService.refreshToken;
+  static getPrimaryConnection = ZoomConnectionStatusService.getPrimaryConnection;
 
   // Token Utilities (simplified)
   static isTokenExpired = TokenUtils.isTokenExpired;

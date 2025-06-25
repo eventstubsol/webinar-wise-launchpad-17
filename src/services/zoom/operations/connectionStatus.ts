@@ -113,6 +113,97 @@ export class ZoomConnectionStatusService {
       return [];
     }
   }
+
+  // Missing methods that ZoomConnectionService expects
+  static async setPrimaryConnection(connectionId: string): Promise<boolean> {
+    try {
+      // First, get the connection to get the user_id
+      const { data: connection, error: getError } = await supabase
+        .from('zoom_connections')
+        .select('user_id')
+        .eq('id', connectionId)
+        .single();
+
+      if (getError || !connection) {
+        console.error('Error getting connection:', getError);
+        return false;
+      }
+
+      // Set all other connections for this user to non-primary
+      await supabase
+        .from('zoom_connections')
+        .update({ is_primary: false })
+        .eq('user_id', connection.user_id);
+
+      // Set this connection as primary
+      const { error } = await supabase
+        .from('zoom_connections')
+        .update({ is_primary: true })
+        .eq('id', connectionId);
+
+      return !error;
+    } catch (error) {
+      console.error('Error setting primary connection:', error);
+      return false;
+    }
+  }
+
+  static async checkConnectionStatus(connectionId: string): Promise<ConnectionStatus> {
+    const health = await this.checkConnectionHealth(connectionId);
+    return health.status;
+  }
+
+  static async refreshToken(connectionId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Call the refresh token edge function
+      const { data, error } = await supabase.functions.invoke('zoom-token-refresh', {
+        body: { connectionId }
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
+  }
+
+  static async getPrimaryConnection(userId: string): Promise<any | null> {
+    try {
+      const { data: connection, error } = await supabase
+        .from('zoom_connections')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_primary', true)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No primary connection found, try to get any connection
+          const { data: anyConnection, error: anyError } = await supabase
+            .from('zoom_connections')
+            .select('*')
+            .eq('user_id', userId)
+            .limit(1)
+            .single();
+
+          return anyError ? null : anyConnection;
+        }
+        return null;
+      }
+
+      return connection;
+    } catch (error) {
+      console.error('Error getting primary connection:', error);
+      return null;
+    }
+  }
 }
 
 // Export for backward compatibility

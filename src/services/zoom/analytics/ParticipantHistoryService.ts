@@ -1,212 +1,200 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
-export interface ParticipantHistory {
-  participant_id: string;
-  participant_name: string;
-  participant_email: string;
-  webinar_history: WebinarParticipation[];
-  total_webinars_attended: number;
-  avg_engagement_score: number;
-  avg_duration_minutes: number;
-  last_attended: string;
-  engagement_trend: 'improving' | 'declining' | 'stable';
+export interface ParticipantEngagementHistory {
+  participantEmail: string;
+  participantName: string;
+  webinarHistory: WebinarParticipation[];
+  engagementTrend: EngagementTrendData;
+  totalWebinarsAttended: number;
+  averageEngagementScore: number;
+  totalHoursAttended: number;
 }
 
 export interface WebinarParticipation {
-  webinar_id: string;
-  webinar_title: string;
-  webinar_date: string;
-  duration_minutes: number;
-  engagement_score: number;
-  asked_questions: boolean;
-  answered_polls: boolean;
-  join_time: string;
-  leave_time: string;
+  webinarId: string;
+  webinarTopic: string;
+  webinarDate: string;
+  duration: number;
+  engagementScore: number;
+  joinTime: string;
+  leaveTime: string;
+  interactionMetrics: {
+    askedQuestions: boolean;
+    answeredPolls: boolean;
+    sentChatMessages: boolean;
+    raisedHand: boolean;
+  };
+}
+
+export interface EngagementTrendData {
+  trend: 'improving' | 'stable' | 'declining';
+  changePercentage: number;
+  dataPoints: Array<{
+    date: string;
+    score: number;
+  }>;
 }
 
 export class ParticipantHistoryService {
-  static async getParticipantHistory(
-    userId: string,
-    participantEmail?: string,
-    limit: number = 100
-  ): Promise<ParticipantHistory[]> {
-    let query = supabase
-      .from('zoom_participants')
-      .select(`
-        *,
-        zoom_webinars!inner(
-          id,
-          topic,
-          start_time,
-          duration,
-          zoom_connections!inner(user_id)
-        )
-      `)
-      .eq('zoom_webinars.zoom_connections.user_id', userId)
-      .not('email', 'is', null)
-      .order('join_time', { ascending: false })
-      .limit(limit);
+  static async getParticipantEngagementHistory(
+    participantEmail: string,
+    connectionId: string,
+    dateRange?: { startDate: string; endDate: string }
+  ): Promise<ParticipantEngagementHistory | null> {
+    try {
+      let query = supabase
+        .from('zoom_participants')
+        .select(`
+          *,
+          zoom_webinars!inner(
+            id,
+            topic,
+            start_time,
+            connection_id
+          )
+        `)
+        .eq('email', participantEmail)
+        .eq('zoom_webinars.connection_id', connectionId);
 
-    if (participantEmail) {
-      query = query.eq('email', participantEmail);
-    }
+      if (dateRange) {
+        query = query
+          .gte('zoom_webinars.start_time', dateRange.startDate)
+          .lte('zoom_webinars.start_time', dateRange.endDate);
+      }
 
-    const { data: participants, error } = await query;
+      const { data: participantData, error } = await query.order('zoom_webinars.start_time', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching participant history:', error);
-      throw error;
-    }
+      if (error || !participantData || participantData.length === 0) {
+        return null;
+      }
 
-    if (!participants || participants.length === 0) {
-      return [];
-    }
-
-    // Group participants by email
-    const participantGroups = this.groupParticipantsByEmail(participants);
-
-    return Object.entries(participantGroups).map(([email, participantData]) => {
-      const webinarHistory: WebinarParticipation[] = participantData.map(p => ({
-        webinar_id: p.zoom_webinars.id,
-        webinar_title: p.zoom_webinars.topic,
-        webinar_date: p.zoom_webinars.start_time,
-        duration_minutes: Math.round((p.duration || 0) / 60),
-        engagement_score: p.attentiveness_score || 0,
-        asked_questions: p.asked_question || false,
-        answered_polls: p.answered_polling || false,
-        join_time: p.join_time || '',
-        leave_time: p.leave_time || ''
+      // Build webinar history with safe property access
+      const webinarHistory: WebinarParticipation[] = participantData.map(participation => ({
+        webinarId: participation.webinar_id || '',
+        webinarTopic: participation.zoom_webinars?.topic || 'Unknown Topic',
+        webinarDate: participation.zoom_webinars?.start_time || '',
+        duration: participation.duration || 0,
+        engagementScore: (participation as any).attentiveness_score || 0,
+        joinTime: participation.join_time || '',
+        leaveTime: participation.leave_time || '',
+        interactionMetrics: {
+          askedQuestions: (participation as any).asked_questions || false,
+          answeredPolls: (participation as any).answered_polls || false,
+          sentChatMessages: (participation as any).sent_chat_messages || false,
+          raisedHand: (participation as any).raised_hand || false,
+        }
       }));
 
-      const totalWebinars = webinarHistory.length;
-      const avgEngagementScore = totalWebinars > 0 
-        ? webinarHistory.reduce((sum, w) => sum + w.engagement_score, 0) / totalWebinars
-        : 0;
-      
-      const avgDurationMinutes = totalWebinars > 0
-        ? webinarHistory.reduce((sum, w) => sum + w.duration_minutes, 0) / totalWebinars
-        : 0;
+      // Calculate aggregate metrics
+      const totalWebinarsAttended = webinarHistory.length;
+      const averageEngagementScore = webinarHistory.reduce((sum, w) => sum + w.engagementScore, 0) / totalWebinarsAttended;
+      const totalHoursAttended = webinarHistory.reduce((sum, w) => sum + w.duration, 0) / 60; // Convert to hours
 
-      const sortedHistory = webinarHistory.sort((a, b) => 
-        new Date(b.webinar_date).getTime() - new Date(a.webinar_date).getTime()
-      );
-
-      const engagementTrend = this.calculateEngagementTrend(sortedHistory);
+      // Calculate engagement trend
+      const engagementTrend = this.calculateEngagementTrend(webinarHistory);
 
       return {
-        participant_id: participantData[0].participant_uuid || participantData[0].id,
-        participant_name: participantData[0].name,
-        participant_email: email,
-        webinar_history: sortedHistory,
-        total_webinars_attended: totalWebinars,
-        avg_engagement_score: Math.round(avgEngagementScore * 100) / 100,
-        avg_duration_minutes: Math.round(avgDurationMinutes * 100) / 100,
-        last_attended: sortedHistory[0]?.webinar_date || '',
-        engagement_trend
+        participantEmail,
+        participantName: participantData[0].name || 'Unknown',
+        webinarHistory,
+        engagementTrend,
+        totalWebinarsAttended,
+        averageEngagementScore,
+        totalHoursAttended
       };
-    });
+    } catch (error) {
+      console.error('Error getting participant engagement history:', error);
+      return null;
+    }
   }
 
-  private static groupParticipantsByEmail(participants: any[]): Record<string, any[]> {
-    const groups: Record<string, any[]> = {};
-    
-    participants.forEach(participant => {
-      const email = participant.email;
-      if (!groups[email]) {
-        groups[email] = [];
-      }
-      groups[email].push(participant);
-    });
-
-    return groups;
-  }
-
-  private static calculateEngagementTrend(
-    history: WebinarParticipation[]
-  ): 'improving' | 'declining' | 'stable' {
-    if (history.length < 3) return 'stable';
-
-    const recent = history.slice(0, Math.ceil(history.length / 2));
-    const older = history.slice(Math.ceil(history.length / 2));
-
-    const recentAvg = recent.reduce((sum, w) => sum + w.engagement_score, 0) / recent.length;
-    const olderAvg = older.reduce((sum, w) => sum + w.engagement_score, 0) / older.length;
-
-    const difference = recentAvg - olderAvg;
-
-    if (difference > 10) return 'improving';
-    if (difference < -10) return 'declining';
-    return 'stable';
-  }
-
-  static async getTopParticipants(
-    userId: string,
-    metric: 'engagement' | 'participation' | 'duration' = 'engagement',
-    limit: number = 10
-  ): Promise<ParticipantHistory[]> {
-    const allHistory = await this.getParticipantHistory(userId, undefined, 1000);
-
-    let sorted: ParticipantHistory[];
-    
-    switch (metric) {
-      case 'engagement':
-        sorted = allHistory.sort((a, b) => b.avg_engagement_score - a.avg_engagement_score);
-        break;
-      case 'participation':
-        sorted = allHistory.sort((a, b) => b.total_webinars_attended - a.total_webinars_attended);
-        break;
-      case 'duration':
-        sorted = allHistory.sort((a, b) => b.avg_duration_minutes - a.avg_duration_minutes);
-        break;
-      default:
-        sorted = allHistory.sort((a, b) => b.avg_engagement_score - a.avg_engagement_score);
+  private static calculateEngagementTrend(webinarHistory: WebinarParticipation[]): EngagementTrendData {
+    if (webinarHistory.length < 2) {
+      return {
+        trend: 'stable',
+        changePercentage: 0,
+        dataPoints: webinarHistory.map(w => ({
+          date: w.webinarDate,
+          score: w.engagementScore
+        }))
+      };
     }
 
-    return sorted.slice(0, limit);
-  }
+    // Sort by date (oldest first)
+    const sortedHistory = [...webinarHistory].sort((a, b) => 
+      new Date(a.webinarDate).getTime() - new Date(b.webinarDate).getTime()
+    );
 
-  static async getParticipantInsights(userId: string, participantEmail: string): Promise<{
-    participant: ParticipantHistory;
-    insights: string[];
-    recommendations: string[];
-  }> {
-    const [participant] = await this.getParticipantHistory(userId, participantEmail, 50);
-    
-    if (!participant) {
-      throw new Error('Participant not found');
-    }
+    // Calculate trend using first and last quarters of data
+    const quarterSize = Math.max(1, Math.floor(sortedHistory.length / 4));
+    const firstQuarter = sortedHistory.slice(0, quarterSize);
+    const lastQuarter = sortedHistory.slice(-quarterSize);
 
-    const insights: string[] = [];
-    const recommendations: string[] = [];
+    const firstQuarterAvg = firstQuarter.reduce((sum, w) => sum + w.engagementScore, 0) / firstQuarter.length;
+    const lastQuarterAvg = lastQuarter.reduce((sum, w) => sum + w.engagementScore, 0) / lastQuarter.length;
 
-    // Generate insights
-    if (participant.avg_engagement_score > 80) {
-      insights.push('Highly engaged participant with consistently high attention scores');
-    } else if (participant.avg_engagement_score < 40) {
-      insights.push('Low engagement participant - may need different content approach');
-    }
+    const changePercentage = ((lastQuarterAvg - firstQuarterAvg) / firstQuarterAvg) * 100;
 
-    if (participant.engagement_trend === 'improving') {
-      insights.push('Engagement is improving over time - positive trend');
-    } else if (participant.engagement_trend === 'declining') {
-      insights.push('Engagement has been declining - may need intervention');
-    }
-
-    // Generate recommendations
-    if (participant.avg_engagement_score < 50) {
-      recommendations.push('Consider personalized follow-up content');
-      recommendations.push('Segment into re-engagement campaign');
-    }
-
-    if (participant.total_webinars_attended > 5) {
-      recommendations.push('Potential candidate for advanced content or VIP treatment');
-    }
+    let trend: 'improving' | 'stable' | 'declining' = 'stable';
+    if (changePercentage > 10) trend = 'improving';
+    else if (changePercentage < -10) trend = 'declining';
 
     return {
-      participant,
-      insights,
-      recommendations
+      trend,
+      changePercentage,
+      dataPoints: sortedHistory.map(w => ({
+        date: w.webinarDate,
+        score: w.engagementScore
+      }))
     };
+  }
+
+  static async getTopEngagedParticipants(
+    connectionId: string,
+    limit: number = 10,
+    dateRange?: { startDate: string; endDate: string }
+  ): Promise<ParticipantEngagementHistory[]> {
+    try {
+      let query = supabase
+        .from('zoom_participants')
+        .select(`
+          email,
+          name,
+          zoom_webinars!inner(connection_id, start_time)
+        `)
+        .eq('zoom_webinars.connection_id', connectionId);
+
+      if (dateRange) {
+        query = query
+          .gte('zoom_webinars.start_time', dateRange.startDate)
+          .lte('zoom_webinars.start_time', dateRange.endDate);
+      }
+
+      const { data: participants, error } = await query;
+
+      if (error || !participants) {
+        return [];
+      }
+
+      // Get unique participant emails
+      const uniqueEmails = [...new Set(participants.map(p => p.email).filter(Boolean))];
+
+      // Get engagement history for each participant
+      const participantHistories = await Promise.all(
+        uniqueEmails.slice(0, limit * 2).map(email => // Get more than needed to filter later
+          email ? this.getParticipantEngagementHistory(email, connectionId, dateRange) : null
+        )
+      );
+
+      // Filter out nulls and sort by average engagement score
+      return participantHistories
+        .filter(Boolean)
+        .sort((a, b) => (b?.averageEngagementScore || 0) - (a?.averageEngagementScore || 0))
+        .slice(0, limit) as ParticipantEngagementHistory[];
+    } catch (error) {
+      console.error('Error getting top engaged participants:', error);
+      return [];
+    }
   }
 }

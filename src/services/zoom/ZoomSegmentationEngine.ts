@@ -122,20 +122,26 @@ export class ZoomSegmentationEngine {
         return null;
       }
 
-      // Apply segmentation criteria
+      // Apply segmentation criteria with safe property access
       const matchingParticipants = participants.filter(participant => 
         this.meetsCriteria(participant, rule.segment_criteria)
       );
+
+      // Safe access to engagement score with fallback
+      const avgEngagementScore = matchingParticipants.reduce((sum, p) => {
+        const score = (p as any).attentiveness_score || 0;
+        return sum + score;
+      }, 0) / (matchingParticipants.length || 1);
 
       return {
         segment_name: rule.rule_name,
         participants: matchingParticipants.map(p => p.email || p.name).filter(Boolean),
         criteria_met: {
           total_participants: matchingParticipants.length,
-          avg_duration: matchingParticipants.reduce((sum, p) => sum + (p.duration || 0), 0) / matchingParticipants.length,
-          engagement_score: matchingParticipants.reduce((sum, p) => sum + (p.attentiveness_score || 0), 0) / matchingParticipants.length
+          avg_duration: matchingParticipants.reduce((sum, p) => sum + (p.duration || 0), 0) / (matchingParticipants.length || 1),
+          engagement_score: avgEngagementScore
         },
-        engagement_score: matchingParticipants.reduce((sum, p) => sum + (p.attentiveness_score || 0), 0) / matchingParticipants.length
+        engagement_score: avgEngagementScore
       };
     } catch (error) {
       console.error('Error applying segmentation rule:', error);
@@ -144,13 +150,14 @@ export class ZoomSegmentationEngine {
   }
 
   private static meetsCriteria(participant: any, criteria: Record<string, any>): boolean {
-    // Check minimum engagement score
-    if (criteria.min_engagement_score && (participant.attentiveness_score || 0) < criteria.min_engagement_score) {
+    // Check minimum engagement score with safe access
+    const engagementScore = participant.attentiveness_score || 0;
+    if (criteria.min_engagement_score && engagementScore < criteria.min_engagement_score) {
       return false;
     }
 
     // Check maximum engagement score
-    if (criteria.max_engagement_score && (participant.attentiveness_score || 0) > criteria.max_engagement_score) {
+    if (criteria.max_engagement_score && engagementScore > criteria.max_engagement_score) {
       return false;
     }
 
