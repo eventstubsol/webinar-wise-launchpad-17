@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface ExportQueueItem {
   id: string;
-  export_type: string;
+  export_type: 'pdf' | 'excel' | 'powerpoint' | 'csv';
   status: string;
   file_url?: string;
   file_size?: number;
@@ -14,7 +14,7 @@ export interface ExportQueueItem {
   progress_percentage: number;
   export_config: any;
   updated_at: string;
-  expires_at: string; // Added missing property
+  expires_at: string;
 }
 
 export class ExportHistoryProvider {
@@ -45,10 +45,10 @@ export class ExportHistoryProvider {
       return [];
     }
 
-    // Map export_queue data to ExportQueueItem format
+    // Map export_queue data to ExportQueueItem format with proper type casting
     return data.map(item => ({
       id: item.id,
-      export_type: item.export_type,
+      export_type: item.export_type as 'pdf' | 'excel' | 'powerpoint' | 'csv',
       status: item.status,
       file_url: item.file_url,
       file_size: item.file_size,
@@ -61,7 +61,7 @@ export class ExportHistoryProvider {
       updated_at: item.updated_at,
       expires_at: item.completed_at ? 
         new Date(new Date(item.completed_at).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString() : 
-        new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Default 24h expiry for active jobs
+        new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
     }));
   }
 
