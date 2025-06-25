@@ -1,3 +1,4 @@
+
 const axios = require('axios');
 
 class ZoomService {
@@ -153,6 +154,19 @@ class ZoomService {
     }
 
     return this.makeAuthenticatedRequest('/users/me/webinars', accessToken, { params });
+  }
+
+  // Get detailed webinar information
+  async getWebinarDetails(accessToken, webinarId) {
+    try {
+      console.log(`🔍 Fetching detailed info for webinar: ${webinarId}`);
+      const webinarDetails = await this.makeAuthenticatedRequest(`/webinars/${webinarId}`, accessToken);
+      console.log(`✅ Successfully fetched details for webinar: ${webinarId}`);
+      return webinarDetails;
+    } catch (error) {
+      console.warn(`⚠️ Failed to fetch details for webinar ${webinarId}:`, error.message);
+      return null;
+    }
   }
 
   // Get all webinars with enhanced date range support (handles pagination)

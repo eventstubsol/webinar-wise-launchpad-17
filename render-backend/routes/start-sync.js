@@ -1,4 +1,3 @@
-
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
@@ -164,8 +163,8 @@ async function performWebinarSync(syncId, connection, credentials, syncType) {
       // Process batch
       for (const webinar of batch) {
         try {
-          // Store webinar in database
-          await storeWebinar(webinar, connection.id);
+          // Store webinar in database with enhanced detail fetching
+          await storeWebinar(webinar, connection.id, accessToken);
           
           // Optionally fetch participants and registrants for completed webinars
           if (webinar.status === 'ended') {
@@ -243,34 +242,75 @@ async function performWebinarSync(syncId, connection, credentials, syncType) {
   }
 }
 
-// Helper function to store webinar data
-async function storeWebinar(webinar, connectionId) {
+// Helper function to store webinar data with enhanced detail fetching
+async function storeWebinar(webinar, connectionId, accessToken) {
   console.log(`📝 Storing webinar: ${webinar.id} - ${webinar.topic}`);
   
   try {
-    // Transform Zoom API webinar data to database format
+    // Fetch detailed webinar information to get complete data
+    const webinarDetails = await zoomService.getWebinarDetails(accessToken, webinar.id);
+    
+    // Merge data from list response and detailed response
+    const mergedWebinar = { ...webinar };
+    
+    if (webinarDetails) {
+      console.log(`🔗 Merging detailed info for webinar: ${webinar.id}`);
+      
+      // Extract host email from detailed response
+      if (webinarDetails.host_email) {
+        mergedWebinar.host_email = webinarDetails.host_email;
+        console.log(`✅ Found host_email: ${webinarDetails.host_email}`);
+      }
+      
+      // Extract registration URL if registration is enabled
+      if (webinarDetails.settings?.registration_type && webinarDetails.settings.registration_type > 0) {
+        if (webinarDetails.registration_url) {
+          mergedWebinar.registration_url = webinarDetails.registration_url;
+          console.log(`✅ Found registration_url: ${webinarDetails.registration_url}`);
+        }
+      }
+      
+      // Log the structure for debugging if fields are still missing
+      if (!webinarDetails.host_email) {
+        console.warn(`⚠️ host_email not found in detailed response for webinar ${webinar.id}`);
+        console.log('Available fields in webinar details:', Object.keys(webinarDetails));
+      }
+      
+      // Merge other potentially useful fields from detailed response
+      if (webinarDetails.agenda && !mergedWebinar.agenda) {
+        mergedWebinar.agenda = webinarDetails.agenda;
+      }
+      
+      if (webinarDetails.timezone && !mergedWebinar.timezone) {
+        mergedWebinar.timezone = webinarDetails.timezone;
+      }
+    } else {
+      console.warn(`⚠️ Could not fetch detailed info for webinar ${webinar.id}, using basic data only`);
+    }
+    
+    // Transform merged webinar data to database format
     const webinarData = {
       connection_id: connectionId,
-      zoom_webinar_id: webinar.id?.toString() || webinar.webinar_id?.toString(),
-      webinar_id: webinar.id?.toString() || webinar.webinar_id?.toString(),
-      zoom_uuid: webinar.uuid || null,
-      host_id: webinar.host_id || '',
-      host_email: webinar.host_email || '',
-      topic: webinar.topic || 'Untitled Webinar',
-      agenda: webinar.agenda || null,
-      webinar_type: webinar.type || 5,
-      status: webinar.status || 'available',
-      start_time: webinar.start_time || new Date().toISOString(),
-      duration: webinar.duration || 60,
-      timezone: webinar.timezone || 'UTC',
-      registration_url: webinar.registration_url || null,
-      join_url: webinar.join_url || '',
+      zoom_webinar_id: mergedWebinar.id?.toString() || mergedWebinar.webinar_id?.toString(),
+      webinar_id: mergedWebinar.id?.toString() || mergedWebinar.webinar_id?.toString(),
+      zoom_uuid: mergedWebinar.uuid || null,
+      host_id: mergedWebinar.host_id || '',
+      host_email: mergedWebinar.host_email || '', // Now should be populated from detailed response
+      topic: mergedWebinar.topic || 'Untitled Webinar',
+      agenda: mergedWebinar.agenda || null,
+      webinar_type: mergedWebinar.type || 5,
+      status: mergedWebinar.status || 'available',
+      start_time: mergedWebinar.start_time || new Date().toISOString(),
+      duration: mergedWebinar.duration || 60,
+      timezone: mergedWebinar.timezone || 'UTC',
+      registration_url: mergedWebinar.registration_url || null, // Now should be populated from detailed response
+      join_url: mergedWebinar.join_url || '',
       synced_at: new Date().toISOString(),
       participant_sync_status: 'not_applicable'
     };
 
     await supabaseService.storeWebinar(webinarData);
-    console.log(`✅ Successfully stored webinar: ${webinar.id}`);
+    console.log(`✅ Successfully stored webinar: ${mergedWebinar.id} with enhanced details`);
   } catch (error) {
     console.error(`❌ Failed to store webinar ${webinar.id}:`, error);
     throw error;
