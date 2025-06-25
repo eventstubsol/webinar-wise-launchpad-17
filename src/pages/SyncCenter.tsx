@@ -1,491 +1,458 @@
+
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   RefreshCw, 
-  Download, 
-  ServerCrash, 
   Clock, 
   CheckCircle, 
   XCircle, 
-  Loader2, 
-  List, 
-  AlertTriangle, 
-  Zap,
   Activity,
+  TrendingUp,
+  Database,
+  Users,
+  Calendar,
+  AlertTriangle,
+  Play,
+  Pause,
   Settings
 } from 'lucide-react';
-import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
-import { AppSidebar } from '@/components/dashboard/AppSidebar';
-import { SidebarTrigger } from '@/components/ui/sidebar';
-import { useZoomConnection } from '@/hooks/useZoomConnection';
-import { useNotificationSystem } from '@/hooks/useNotificationSystem';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { format, formatDistanceToNow, formatDuration, intervalToDuration } from 'date-fns';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { RealTimeSyncProgress } from '@/components/sync/RealTimeSyncProgress';
-import { SyncHistoryDetailView } from '@/components/sync/SyncHistoryDetailView';
-import { SyncQueueVisualization } from '@/components/sync/SyncQueueVisualization';
-import { PerformanceMetricsDashboard } from '@/components/sync/PerformanceMetricsDashboard';
-import { NotificationService } from '@/services/notifications/NotificationService';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
+import { useZoomConnection } from '@/hooks/useZoomConnection';
+import { SyncType, SyncStatus } from '@/types/zoom';
+import { RealTimeSyncProgress } from '@/components/sync/RealTimeSyncProgress';
+import { PerformanceMetricsDashboard } from '@/components/sync/PerformanceMetricsDashboard';
+import { EnhancedSyncDashboard } from '@/components/zoom/EnhancedSyncDashboard';
 
-// Header component for consistent styling
-const SyncCenterHeader = () => {
-  return (
-    <header className="border-b border-border bg-background sticky top-0 z-10">
-      <div className="flex items-center justify-between px-6 py-4">
-        <div className="flex items-center space-x-4">
-          <SidebarTrigger />
-          <div className="flex items-center space-x-2">
-            <RefreshCw className="h-5 w-5 text-muted-foreground" />
-            <h1 className="text-xl font-semibold text-foreground">Sync Center</h1>
-          </div>
-        </div>
+interface SyncLogWithDetails {
+  id: string;
+  connection_id: string;
+  sync_type: string;
+  sync_status: string;
+  started_at: string;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  total_items: number | null;
+  processed_items: number | null;
+  error_message: string | null;
+  metadata: any;
+  webinars_synced: number | null;
+  // Note: current_webinar_id is not available in the database schema
+  sync_stage: string | null;
+  stage_progress_percentage: number | null;
+}
 
-        <div className="text-right">
-          <Button>
-            <Settings className="mr-2 h-4 w-4" />
-            Configure Sync
-          </Button>
-        </div>
-      </div>
-    </header>
-  );
-};
+interface SyncQueue {
+  id: string;
+  sync_id: string;
+  webinar_id: string | null;
+  webinar_title: string | null;
+  status: string;
+  queue_position: number;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  estimated_duration_seconds: number | null;
+}
 
-const SyncAnalytics = () => {
-    const { connection } = useZoomConnection();
-    const { data: stats, isLoading, error } = useQuery({
-      queryKey: ['zoom-sync-analytics', connection?.id],
-      queryFn: async () => {
-        if (!connection?.id) return null;
-        
-        try {
-          // First, check if the connection has any webinars at all
-          const { count: totalWebinars, error: webinarError } = await supabase
-            .from('zoom_webinars')
-            .select('id', { count: 'exact' })
-            .eq('connection_id', connection.id);
+interface SyncMetrics {
+  totalSyncs: number;
+  successfulSyncs: number;
+  failedSyncs: number;
+  averageDuration: number;
+  totalWebinarsSynced: number;
+  lastSyncAt: string | null;
+}
 
-          if (webinarError) {
-            console.error("Error fetching webinars:", webinarError);
-            return {
-              totalWebinars: 0,
-              lastSyncDate: null,
-              webinarsSyncedLast: 0,
-            };
-          }
+export default function SyncCenter() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { connection, isConnected } = useZoomConnection();
+  const [activeTab, setActiveTab] = useState('overview');
 
-          // Only query sync logs if there might be data
-          let lastSuccessfulSync = null;
-          if (totalWebinars && totalWebinars > 0) {
-            const { data: syncData, error: syncError } = await supabase
-              .from('zoom_sync_logs')
-              .select('completed_at,processed_items')
-              .eq('connection_id', connection.id)
-              .eq('sync_status', 'completed')
-              .order('completed_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-
-            if (syncError) {
-              console.error("Error fetching sync logs:", syncError);
-            } else {
-              lastSuccessfulSync = syncData;
-            }
-          }
-
-          return {
-            totalWebinars: totalWebinars || 0,
-            lastSyncDate: lastSuccessfulSync?.completed_at || null,
-            webinarsSyncedLast: lastSuccessfulSync?.processed_items || 0,
-          };
-        } catch (error) {
-          console.error("Sync Analytics Error:", error);
-          return {
-            totalWebinars: 0,
-            lastSyncDate: null,
-            webinarsSyncedLast: 0,
-          };
-        }
-      },
-      enabled: !!connection?.id,
-      refetchInterval: 30000,
-      retry: (failureCount, error) => {
-        // Type guard for error with status property
-        const hasStatus = error && typeof error === 'object' && 'status' in error;
-        const status = hasStatus ? (error as any).status : null;
-        
-        // Don't retry on 4xx errors
-        if (typeof status === 'number' && status >= 400 && status < 500) {
-          return false;
-        }
-        return failureCount < 2;
-      },
-    });
-
-    if (isLoading) {
-      return (
-        <Card>
-          <CardHeader>
-            <CardTitle>Sync Overview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              <p>Loading analytics...</p>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    if (error) {
-      return (
-        <Card>
-          <CardHeader>
-            <CardTitle>Sync Overview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Error Loading Analytics</AlertTitle>
-              <AlertDescription>
-                Unable to load sync analytics. Please try refreshing the page.
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Sync Overview</CardTitle>
-                <CardDescription>High-level statistics about your data synchronization.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-3">
-                <div className="flex flex-col items-center justify-center p-4 border rounded-lg">
-                    <p className="text-3xl font-bold">{stats?.totalWebinars ?? 0}</p>
-                    <p className="text-sm text-muted-foreground">Total Webinars Synced</p>
-                </div>
-                <div className="flex flex-col items-center justify-center p-4 border rounded-lg">
-                    <p className="text-3xl font-bold">{stats?.webinarsSyncedLast ?? 0}</p>
-                    <p className="text-sm text-muted-foreground">Synced in Last Run</p>
-                </div>
-                <div className="flex flex-col items-center justify-center p-4 border rounded-lg">
-                    <p className="text-lg font-semibold">
-                      {stats?.lastSyncDate ? formatDistanceToNow(new Date(stats.lastSyncDate), { addSuffix: true }) : 'Never'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Last Successful Sync</p>
-                </div>
-            </CardContent>
-        </Card>
-    );
-};
-
-const SyncHistory = () => {
-  const { connection } = useZoomConnection();
-  const [selectedSyncId, setSelectedSyncId] = useState<string | null>(null);
-  
-  const { data: history, isLoading, error } = useQuery({
-    queryKey: ['zoom-sync-history', connection?.id],
+  // Fetch sync logs with enhanced details
+  const { data: syncLogs = [], isLoading: logsLoading } = useQuery({
+    queryKey: ['sync-logs', connection?.id],
     queryFn: async () => {
       if (!connection?.id) return [];
       
-      try {
-        const { data, error } = await supabase
-          .from('zoom_sync_logs')
-          .select('*')
-          .eq('connection_id', connection.id)
-          .order('created_at', { ascending: false })
-          .limit(20);
-        
-        if (error) {
-          console.error("Error fetching sync history:", error);
-          return [];
-        }
-        
-        return data || [];
-      } catch (error) {
-        console.error("Sync history query failed:", error);
-        return [];
+      const { data, error } = await supabase
+        .from('zoom_sync_logs')
+        .select('*')
+        .eq('connection_id', connection.id)
+        .order('started_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Error fetching sync logs:', error);
+        throw error;
       }
+
+      return data as SyncLogWithDetails[];
     },
     enabled: !!connection?.id,
     refetchInterval: 5000,
-    retry: (failureCount, error) => {
-      // Type guard for error with status property
-      const hasStatus = error && typeof error === 'object' && 'status' in error;
-      const status = hasStatus ? (error as any).status : null;
+  });
+
+  // Fetch sync queue
+  const { data: syncQueue = [], isLoading: queueLoading } = useQuery({
+    queryKey: ['sync-queue', connection?.id],
+    queryFn: async () => {
+      if (!connection?.id) return [];
       
-      // Don't retry on 4xx errors
-      if (typeof status === 'number' && status >= 400 && status < 500) {
-        return false;
+      // Get recent sync logs to find associated queue items
+      const { data, error } = await supabase
+        .from('sync_queue')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('Error fetching sync queue:', error);
+        throw error;
       }
-      return failureCount < 2;
+
+      return data as SyncQueue[];
+    },
+    enabled: !!connection?.id,
+    refetchInterval: 3000,
+  });
+
+  // Calculate sync metrics
+  const syncMetrics: SyncMetrics = React.useMemo(() => {
+    const totalSyncs = syncLogs.length;
+    const successfulSyncs = syncLogs.filter(log => log.sync_status === 'completed').length;
+    const failedSyncs = syncLogs.filter(log => log.sync_status === 'failed').length;
+    
+    const completedSyncs = syncLogs.filter(log => log.duration_seconds !== null);
+    const averageDuration = completedSyncs.length > 0 
+      ? completedSyncs.reduce((sum, log) => sum + (log.duration_seconds || 0), 0) / completedSyncs.length
+      : 0;
+    
+    const totalWebinarsSynced = syncLogs.reduce((sum, log) => sum + (log.webinars_synced || 0), 0);
+    const lastSyncAt = syncLogs.length > 0 ? syncLogs[0].started_at : null;
+
+    return {
+      totalSyncs,
+      successfulSyncs,
+      failedSyncs,
+      averageDuration,
+      totalWebinarsSynced,
+      lastSyncAt,
+    };
+  }, [syncLogs]);
+
+  // Start manual sync mutation
+  const startSyncMutation = useMutation({
+    mutationFn: async (syncType: SyncType) => {
+      if (!connection?.id) throw new Error('No connection available');
+      
+      // This would typically call a sync service
+      // For now, we'll just create a log entry to simulate starting a sync
+      const { data, error } = await supabase
+        .from('zoom_sync_logs')
+        .insert({
+          connection_id: connection.id,
+          sync_type: syncType,
+          sync_status: 'pending',
+          started_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sync-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['sync-queue'] });
+      toast({
+        title: "Sync Started",
+        description: "Your sync has been queued and will begin shortly.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Sync Failed to Start",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
-  // Set up sync completion notifications
-  useEffect(() => {
-    if (!connection?.id) return;
-
-    const channel = supabase
-      .channel(`sync-notifications-${connection.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'zoom_sync_logs',
-          filter: `connection_id=eq.${connection.id}`,
-        },
-        (payload) => {
-          const syncLog = payload.new;
-          if (syncLog.sync_status === 'completed') {
-            const duration = syncLog.duration_seconds 
-              ? formatDuration(intervalToDuration({ start: 0, end: syncLog.duration_seconds * 1000 }))
-              : 'unknown time';
-            
-            NotificationService.showSyncComplete(
-              syncLog.processed_items || 0,
-              duration
-            );
-          } else if (syncLog.sync_status === 'failed') {
-            NotificationService.showSyncError(
-              syncLog.error_message || 'Sync failed with unknown error'
-            );
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [connection?.id]);
-
-  const getStatusIcon = (status: string) => {
+  const getSyncStatusBadge = (status: string) => {
     switch (status) {
-      case 'completed': return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'failed': return <XCircle className="h-4 w-4 text-red-500" />;
-      case 'in_progress':
-      case 'started': return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
-      default: return <Clock className="h-4 w-4 text-gray-400" />;
+      case 'completed':
+        return <Badge className="bg-green-100 text-green-800">Completed</Badge>;
+      case 'failed':
+        return <Badge variant="destructive">Failed</Badge>;
+      case 'running':
+      case 'syncing':
+        return <Badge className="bg-blue-100 text-blue-800">Running</Badge>;
+      case 'pending':
+        return <Badge variant="outline">Pending</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  const getSyncDuration = (start: string, end: string | null): string => {
-    if (!start || !end) return '-';
-    try {
-        const duration = intervalToDuration({ start: new Date(start), end: new Date(end) });
-        return formatDuration(duration, { format: ['minutes', 'seconds'], zero: false }) || '< 1 second';
-    } catch(e) {
-        return '-';
-    }
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return 'N/A';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
   };
 
-  const formatSyncStage = (stage: string | null, webinarId: string | null): string => {
-    if (!stage) return 'Not started';
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  const getCurrentSyncInfo = (log: SyncLogWithDetails) => {
+    // Use metadata or sync_stage instead of current_webinar_id
+    const currentStage = log.sync_stage || 'Unknown stage';
+    const progress = log.stage_progress_percentage || 0;
+    const processedItems = log.processed_items || 0;
+    const totalItems = log.total_items || 0;
     
-    const stageLabels: { [key: string]: string } = {
-      'initializing': 'Initializing sync',
-      'fetching_webinar_list': 'Fetching webinar list',
-      'fetching_recent_webinars': 'Fetching recent webinars',
-      'starting_webinar': 'Starting webinar sync',
-      'webinar_details': 'Fetching webinar details',
-      'registrants': 'Fetching registrants',
-      'participants': 'Fetching participants',
-      'polls': 'Fetching polls and responses',
-      'qa': 'Fetching Q&A data',
-      'recordings': 'Fetching recordings',
-      'webinar_completed': 'Webinar completed',
-      'webinar_failed': 'Webinar failed',
-      'completed': 'Sync completed',
-      'failed': 'Sync failed'
+    return {
+      stage: currentStage,
+      progress,
+      processedItems,
+      totalItems,
+      currentItem: `${processedItems}/${totalItems} items processed`
     };
-
-    const label = stageLabels[stage] || stage;
-    return webinarId ? `${label} (${webinarId})` : label;
   };
 
-  const selectedSync = selectedSyncId ? history?.find(h => h.id === selectedSyncId) : null;
+  if (!isConnected) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold">Sync Center</h1>
+          <p className="text-muted-foreground mt-2">
+            Monitor and manage your Zoom data synchronization
+          </p>
+        </div>
+
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Please connect your Zoom account first to access the Sync Center.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-              <CardTitle className="flex items-center gap-2">
-                <Zap className="h-5 w-5" />
-                Sequential Sync History & Logs
-              </CardTitle>
-              <CardDescription>
-                Detailed logs and history of your synchronization jobs.
-              </CardDescription>
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">Sync Center</h1>
+        <p className="text-muted-foreground mt-2">
+          Monitor and manage your Zoom data synchronization
+        </p>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="realtime">Real-time Sync</TabsTrigger>
+          <TabsTrigger value="history">Sync History</TabsTrigger>
+          <TabsTrigger value="performance">Performance</TabsTrigger>
+          <TabsTrigger value="advanced">Advanced</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          {/* Metrics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-8 w-8 text-blue-600" />
+                  <div>
+                    <p className="text-2xl font-bold">{syncMetrics.totalSyncs}</p>
+                    <p className="text-sm text-muted-foreground">Total Syncs</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-8 w-8 text-green-600" />
+                  <div>
+                    <p className="text-2xl font-bold">{syncMetrics.successfulSyncs}</p>
+                    <p className="text-sm text-muted-foreground">Successful</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-8 w-8 text-orange-600" />
+                  <div>
+                    <p className="text-2xl font-bold">{formatDuration(syncMetrics.averageDuration)}</p>
+                    <p className="text-sm text-muted-foreground">Avg Duration</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2">
+                  <Database className="h-8 w-8 text-purple-600" />
+                  <div>
+                    <p className="text-2xl font-bold">{syncMetrics.totalWebinarsSynced}</p>
+                    <p className="text-sm text-muted-foreground">Webinars Synced</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading && (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              <p>Loading history...</p>
-            </div>
-          )}
-          
-          {error && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>
-                Unable to load sync history. Please try refreshing the page.
-              </AlertDescription>
-            </Alert>
-          )}
-          
-          {!isLoading && !error && history && history.length === 0 && (
-            <div className="text-center py-8">
-              <List className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No Sync History</h3>
-              <p className="mt-1 text-sm text-gray-500">Run a sync to see its history here.</p>
-            </div>
-          )}
-          
-          {!isLoading && !error && history && history.length > 0 && (
-            <Accordion type="single" collapsible onValueChange={setSelectedSyncId}>
-              {history.map((log) => (
-                <AccordionItem value={log.id} key={log.id}>
-                  <AccordionTrigger>
-                    <div className="flex items-center justify-between w-full pr-4">
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(log.sync_status)}
-                        <span className="font-medium capitalize">{log.sync_type} Sync</span>
-                        <Badge variant="outline">{log.sync_status}</Badge>
+
+          {/* Recent Sync Activity */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                Recent Sync Activity
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {logsLoading ? (
+                <div className="flex items-center justify-center p-8">
+                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : syncLogs.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">No sync history available</p>
+              ) : (
+                <div className="space-y-4">
+                  {syncLogs.slice(0, 5).map((log) => {
+                    const syncInfo = getCurrentSyncInfo(log);
+                    return (
+                      <div key={log.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex items-center gap-4">
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                              {getSyncStatusBadge(log.sync_status)}
+                              <span className="font-medium capitalize">{log.sync_type} Sync</span>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              Started: {formatDateTime(log.started_at)}
+                            </div>
+                            {log.sync_status === 'running' && (
+                              <div className="text-sm text-blue-600">
+                                {syncInfo.stage} - {syncInfo.currentItem}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-muted-foreground">
+                            Duration: {formatDuration(log.duration_seconds)}
+                          </div>
+                          {log.webinars_synced && (
+                            <div className="text-sm text-muted-foreground">
+                              {log.webinars_synced} webinars
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="realtime" className="space-y-6">
+          {/* Fixed: Remove connectionId prop and use correct interface */}
+          <RealTimeSyncProgress onSyncComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['sync-logs'] });
+            queryClient.invalidateQueries({ queryKey: ['sync-queue'] });
+          }} />
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Complete Sync History</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {logsLoading ? (
+                <div className="flex items-center justify-center p-8">
+                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {syncLogs.map((log) => {
+                    const syncInfo = getCurrentSyncInfo(log);
+                    return (
+                      <div key={log.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                        <div className="flex items-center gap-4">
+                          <div>
+                            {getSyncStatusBadge(log.sync_status)}
+                          </div>
+                          <div>
+                            <div className="font-medium capitalize">{log.sync_type} Sync</div>
+                            <div className="text-sm text-muted-foreground">
+                              {formatDateTime(log.started_at)}
+                              {log.completed_at && ` - ${formatDateTime(log.completed_at)}`}
+                            </div>
+                            {log.error_message && (
+                              <div className="text-sm text-red-600 mt-1">
+                                Error: {log.error_message}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm">
+                            Duration: {formatDuration(log.duration_seconds)}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {log.processed_items || 0}/{log.total_items || 0} items
+                          </div>
+                          {log.webinars_synced && (
+                            <div className="text-sm text-muted-foreground">
+                              {log.webinars_synced} webinars
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="p-4 bg-gray-50 rounded-b-md">
-                      <p><strong>Status:</strong> {log.sync_status}</p>
-                      <p><strong>Started:</strong> {format(new Date(log.created_at), "PPP p")}</p>
-                      {log.completed_at && <p><strong>Duration:</strong> {getSyncDuration(log.created_at, log.completed_at)}</p>}
-                      <p><strong>Current Stage:</strong> {formatSyncStage(log.sync_stage, log.current_webinar_id)}</p>
-                      {log.processed_items !== null && <p><strong>Items Processed:</strong> {log.processed_items}</p>}
-                      {log.error_message && <p className="text-red-500"><strong>Error:</strong> {log.error_message}</p>}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="performance" className="space-y-6">
+          {isConnected && connection && (
+            <PerformanceMetricsDashboard 
+              connectionId={connection.id}
+              userId={connection.user_id}
+            />
           )}
-        </CardContent>
-      </Card>
-      
-      {selectedSync && (
-        <SyncHistoryDetailView syncEntry={selectedSync} />
-      )}
+        </TabsContent>
+
+        <TabsContent value="advanced" className="space-y-6">
+          <EnhancedSyncDashboard />
+        </TabsContent>
+      </Tabs>
     </div>
   );
-};
-
-const SyncCenterPage = () => {
-    const { connection, isLoading, isConnected } = useZoomConnection();
-    const { user } = useAuth();
-
-    if (isLoading) {
-        return (
-          <SidebarProvider>
-            <AppSidebar />
-            <SidebarInset>
-              <SyncCenterHeader />
-              <div className="p-6 text-center">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                <p className="mt-2 text-muted-foreground">Loading sync center...</p>
-              </div>
-            </SidebarInset>
-          </SidebarProvider>
-        );
-    }
-    
-    if (!isConnected) {
-        return (
-            <SidebarProvider>
-              <AppSidebar />
-              <SidebarInset>
-                <SyncCenterHeader />
-                <div className="p-6">
-                    <Alert variant="destructive">
-                        <ServerCrash className="h-4 w-4" />
-                        <AlertTitle>Not Connected to Zoom</AlertTitle>
-                        <AlertDescription>
-                            Please connect your Zoom account in the settings to use the Sync Center.
-                        </AlertDescription>
-                    </Alert>
-                </div>
-              </SidebarInset>
-            </SidebarProvider>
-        );
-    }
-    
-    return (
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset>
-            <SyncCenterHeader />
-            <div className="p-6 space-y-6">
-              <div>
-                <p className="text-muted-foreground">Monitor and manage your Zoom data synchronization.</p>
-              </div>
-
-              <RealTimeSyncProgress connectionId={connection?.id} />
-
-              <Tabs defaultValue="overview">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="overview">
-                    <Activity className="mr-2 h-4 w-4" />
-                    Overview
-                  </TabsTrigger>
-                  <TabsTrigger value="history">
-                    <Clock className="mr-2 h-4 w-4" />
-                    History
-                  </TabsTrigger>
-                  <TabsTrigger value="performance">
-                    <Zap className="mr-2 h-4 w-4" />
-                    Performance
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="overview" className="mt-6">
-                  <SyncAnalytics />
-                  <div className="mt-8">
-                      <SyncQueueVisualization connectionId={connection?.id} />
-                  </div>
-                </TabsContent>
-                <TabsContent value="history" className="mt-6">
-                  <SyncHistory />
-                </TabsContent>
-                <TabsContent value="performance" className="mt-6">
-                  <PerformanceMetricsDashboard connectionId={connection?.id} userId={user?.id} />
-                </TabsContent>
-              </Tabs>
-            </div>
-          </SidebarInset>
-        </SidebarProvider>
-    );
-};
-
-export default SyncCenterPage;
+}
