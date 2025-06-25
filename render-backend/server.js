@@ -36,6 +36,7 @@ app.use('/', require('./routes/sync-progress'));
 app.use('/', require('./routes/cancel-sync'));
 app.use('/', require('./routes/disconnect'));
 app.use('/', require('./routes/sync-webinars'));
+app.use('/', require('./routes/reset-participant-sync'));
 app.use('/', require('./routes/performance-test'));
 
 // 404 handler
