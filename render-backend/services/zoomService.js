@@ -351,7 +351,7 @@ class ZoomService {
     });
   }
 
-  // Enhanced webinar participants with proper field mapping
+  // ENHANCED: Fixed webinar participants with comprehensive field mapping and validation
   async getWebinarParticipants(accessToken, webinarId) {
     try {
       console.log(`👥 Fetching comprehensive participant data for webinar ${webinarId}`);
@@ -370,59 +370,91 @@ class ZoomService {
       const participants = response.participants || [];
       console.log(`📊 Found ${participants.length} participants for webinar ${webinarId}`);
       
-      // Enhanced participant data with proper field mapping to match database schema
-      const enhancedParticipants = participants.map(participant => {
-        console.log(`🔍 Processing participant: ${participant.name || participant.user_name || 'Unknown'}`);
-        console.log(`📋 Available participant fields:`, Object.keys(participant));
+      // CRITICAL FIX: Enhanced participant data with comprehensive validation and proper field mapping
+      const enhancedParticipants = participants.map((participant, index) => {
+        console.log(`🔍 Processing participant ${index + 1}/${participants.length}`);
+        console.log(`📋 Raw participant data:`, JSON.stringify(participant, null, 2));
         
-        return {
-          // Map to database 'name' field (NOT NULL constraint)
-          name: participant.name || participant.user_name || participant.participant_name || 'Unknown Participant',
+        // CRITICAL: Ensure 'name' field is NEVER null (database constraint)
+        let participantName = participant.name || 
+                             participant.user_name || 
+                             participant.participant_name || 
+                             participant.email || 
+                             participant.user_email || 
+                             participant.participant_email ||
+                             `Participant ${index + 1}`;
+        
+        // Additional validation - ensure name is a string and not empty
+        if (!participantName || typeof participantName !== 'string' || participantName.trim() === '') {
+          participantName = `Unknown Participant ${index + 1}`;
+          console.warn(`⚠️ Participant ${index + 1} had no valid name, using fallback: "${participantName}"`);
+        }
+        
+        const mappedParticipant = {
+          // CRITICAL: Database 'name' field (NOT NULL constraint) - ALWAYS guaranteed to be set
+          name: participantName.trim(),
           
-          // Core identification
-          participant_id: participant.id || participant.participant_uuid,
-          participant_uuid: participant.participant_uuid || participant.id,
-          participant_name: participant.name || participant.user_name || 'Unknown Participant', // Keep for compatibility
+          // Core identification with validation
+          participant_id: participant.id || participant.participant_uuid || `temp_${Date.now()}_${index}`,
+          participant_uuid: participant.participant_uuid || participant.id || null,
+          participant_name: participantName.trim(), // Keep for compatibility
           participant_email: participant.email || participant.user_email || null,
           participant_user_id: participant.user_id || null,
           email: participant.email || participant.user_email || null, // Map to database email field
           user_id: participant.user_id || null, // Map to database user_id field
           registrant_id: participant.registrant_id || null,
           
-          // Timing information
-          join_time: participant.join_time || null,
-          leave_time: participant.leave_time || null,
-          duration: participant.duration || 0,
+          // Timing information with validation
+          join_time: participant.join_time ? new Date(participant.join_time).toISOString() : null,
+          leave_time: participant.leave_time ? new Date(participant.leave_time).toISOString() : null,
+          duration: parseInt(participant.duration) || 0,
           
-          // Engagement metrics (from Zoom Dashboard API)
-          attentiveness_score: participant.attentiveness_score || null,
-          camera_on_duration: participant.camera_on_duration || 0,
-          share_application_duration: participant.share_application_duration || 0,
-          share_desktop_duration: participant.share_desktop_duration || 0,
-          share_whiteboard_duration: participant.share_whiteboard_duration || 0,
+          // Engagement metrics (from Zoom Dashboard API) with validation
+          attentiveness_score: participant.attentiveness_score ? parseInt(participant.attentiveness_score) : null,
+          camera_on_duration: parseInt(participant.camera_on_duration) || 0,
+          share_application_duration: parseInt(participant.share_application_duration) || 0,
+          share_desktop_duration: parseInt(participant.share_desktop_duration) || 0,
+          share_whiteboard_duration: parseInt(participant.share_whiteboard_duration) || 0,
           
-          // Interaction flags
-          posted_chat: participant.posted_chat || false,
-          raised_hand: participant.raised_hand || false,
-          answered_polling: participant.answered_polling || false,
-          asked_question: participant.asked_question || false,
+          // Interaction flags with boolean validation
+          posted_chat: Boolean(participant.posted_chat),
+          raised_hand: Boolean(participant.raised_hand),
+          answered_polling: Boolean(participant.answered_polling),
+          asked_question: Boolean(participant.asked_question),
           
-          // Technical information
-          device: participant.device || null,
+          // Technical information with string validation
+          device: participant.device ? String(participant.device) : null,
           ip_address: participant.ip_address ? String(participant.ip_address) : null,
-          location: participant.location || null,
-          network_type: participant.network_type || null,
-          version: participant.version || null,
-          customer_key: participant.customer_key || null,
+          location: participant.location ? String(participant.location) : null,
+          network_type: participant.network_type ? String(participant.network_type) : null,
+          version: participant.version ? String(participant.version) : null,
+          customer_key: participant.customer_key ? String(participant.customer_key) : null,
           
-          // Status and other - map to database fields
-          status: participant.status || 'joined', // Map to database status field
-          participant_status: participant.status || 'in_meeting',
-          failover: participant.failover || false
+          // Status and other - map to database fields with validation
+          status: participant.status ? String(participant.status) : 'joined', // Map to database status field
+          participant_status: participant.status ? String(participant.status) : 'in_meeting',
+          failover: Boolean(participant.failover)
         };
+        
+        // Final validation - ensure name is still valid
+        if (!mappedParticipant.name || mappedParticipant.name.trim() === '') {
+          mappedParticipant.name = `Validated Participant ${index + 1}`;
+          console.error(`❌ CRITICAL: Participant ${index + 1} name validation failed, using emergency fallback`);
+        }
+        
+        console.log(`✅ Mapped participant ${index + 1}: name="${mappedParticipant.name}", id="${mappedParticipant.participant_id}"`);
+        return mappedParticipant;
       });
 
-      console.log(`✅ Enhanced ${enhancedParticipants.length} participants with comprehensive data and proper field mapping`);
+      console.log(`✅ Enhanced ${enhancedParticipants.length} participants with comprehensive data and validation`);
+      
+      // Final safety check - ensure no participant has null name
+      const invalidParticipants = enhancedParticipants.filter(p => !p.name || p.name.trim() === '');
+      if (invalidParticipants.length > 0) {
+        console.error(`❌ CRITICAL ERROR: ${invalidParticipants.length} participants still have invalid names after validation!`);
+        throw new Error(`Data validation failed: ${invalidParticipants.length} participants have invalid names`);
+      }
+      
       return enhancedParticipants;
       
     } catch (error) {

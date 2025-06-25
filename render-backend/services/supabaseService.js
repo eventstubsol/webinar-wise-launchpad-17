@@ -130,22 +130,28 @@ class SupabaseService {
 
   async storeParticipants(participantData) {
     try {
-      console.log(`📥 Storing ${participantData.length} participants in database`);
+      console.log(`📥 Starting to store ${participantData.length} participants in database`);
       
-      // Validate required fields before insertion
+      // CRITICAL: Pre-validation before database insertion
       const validatedParticipants = participantData.map((participant, index) => {
-        // Ensure required 'name' field is present (NOT NULL constraint)
-        if (!participant.name) {
-          console.warn(`⚠️ Participant ${index} missing required 'name' field, using fallback`);
-          participant.name = participant.participant_name || 
-                           participant.participant_email || 
-                           participant.email || 
-                           'Unknown Participant';
+        // CRITICAL: Ensure required 'name' field is present and valid (NOT NULL constraint)
+        if (!participant.name || typeof participant.name !== 'string' || participant.name.trim() === '') {
+          const fallbackName = participant.participant_name || 
+                              participant.participant_email || 
+                              participant.email || 
+                              `Emergency Fallback ${index + 1}`;
+          
+          console.error(`❌ CRITICAL: Participant ${index} missing/invalid 'name' field. Original: "${participant.name}", using fallback: "${fallbackName}"`);
+          participant.name = fallbackName;
         }
         
-        // Log participant data for debugging
-        console.log(`🔍 Participant ${index}: name="${participant.name}", id="${participant.participant_id}"`);
+        // Ensure name is trimmed and valid
+        participant.name = participant.name.trim();
         
+        // Log participant data for debugging
+        console.log(`🔍 Validating participant ${index + 1}: name="${participant.name}", id="${participant.participant_id}"`);
+        
+        // Return validated participant with timestamps
         return {
           ...participant,
           created_at: new Date().toISOString(),
@@ -153,6 +159,16 @@ class SupabaseService {
         };
       });
 
+      // Final safety check - ensure NO participants have null/empty names
+      const invalidParticipants = validatedParticipants.filter(p => !p.name || p.name.trim() === '');
+      if (invalidParticipants.length > 0) {
+        console.error('❌ CRITICAL: Found participants with invalid names after validation:', invalidParticipants);
+        throw new Error(`Data validation failed: ${invalidParticipants.length} participants have invalid names after validation`);
+      }
+
+      console.log(`✅ All ${validatedParticipants.length} participants passed validation`);
+
+      // Attempt database insertion with enhanced error handling
       const { data, error } = await this.supabase
         .from('zoom_participants')
         .upsert(validatedParticipants, { 
@@ -161,15 +177,31 @@ class SupabaseService {
         });
 
       if (error) {
-        console.error('❌ Error storing participants:', error);
-        console.error('❌ Sample participant data:', JSON.stringify(validatedParticipants[0], null, 2));
+        console.error('❌ Database insertion error:', error);
+        console.error('❌ Error details:', JSON.stringify(error, null, 2));
+        console.error('❌ Sample participant data causing error:');
+        console.error(JSON.stringify(validatedParticipants.slice(0, 2), null, 2));
+        
+        // Enhanced error message for debugging
+        if (error.message.includes('not-null constraint')) {
+          const problematicFields = validatedParticipants.map((p, i) => ({
+            index: i,
+            name: p.name,
+            hasName: !!p.name,
+            nameType: typeof p.name,
+            nameLength: p.name ? p.name.length : 0
+          }));
+          console.error('❌ Participant name analysis:', problematicFields);
+        }
+        
         throw new Error(`Failed to store participants: ${error.message}`);
       }
 
-      console.log(`✅ Successfully stored ${participantData.length} participants`);
+      console.log(`✅ Successfully stored ${participantData.length} participants in database`);
       return data;
     } catch (error) {
-      console.error('❌ Failed to store participants:', error);
+      console.error('❌ Failed to store participants - Full error details:', error);
+      console.error('❌ Stack trace:', error.stack);
       throw error;
     }
   }
@@ -389,7 +421,7 @@ class SupabaseService {
     }
   }
 
-  // New method: Get webinars that need participant data sync
+  // Enhanced method: Get webinars that need participant data sync with better status calculation
   async getWebinarsNeedingParticipantSync(connectionId, limit = 10) {
     try {
       console.log(`🔍 Finding webinars needing participant sync for connection: ${connectionId}`);
@@ -399,7 +431,7 @@ class SupabaseService {
         .select('*')
         .eq('connection_id', connectionId)
         .eq('calculated_status', 'ended')
-        .in('participant_sync_status', ['pending', 'not_applicable'])
+        .in('participant_sync_status', ['pending', 'not_applicable', 'failed'])
         .order('start_time', { ascending: false })
         .limit(limit);
 

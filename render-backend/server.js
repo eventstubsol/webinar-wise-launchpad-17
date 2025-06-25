@@ -1,124 +1,76 @@
 
 const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const compression = require('compression');
-const rateLimit = require('express-rate-limit');
-const dotenv = require('dotenv');
-
-// Load environment variables
-dotenv.config();
+const corsMiddleware = require('./middleware/corsMiddleware');
+const authMiddleware = require('./middleware/auth');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
-// Environment validation
-const requiredEnvVars = [
-  'DATABASE_URL',
-  'SUPABASE_SERVICE_ROLE_KEY',
-  'JWT_SECRET'
-];
+// Trust proxy for accurate IP addresses
+app.set('trust proxy', 1);
 
-const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
-if (missingEnvVars.length > 0) {
-  console.error('❌ Missing required environment variables:', missingEnvVars);
-  process.exit(1);
-}
+// Apply CORS middleware FIRST
+app.use(corsMiddleware);
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Limit each IP to 1000 requests per windowMs
-  message: {
-    success: false,
-    error: 'Too many requests from this IP, please try again later.'
-  }
-});
-
-// Middleware
-app.use(helmet());
-app.use(compression());
-app.use(limiter);
-app.use(cors({
-  origin: true, // Allow all origins for now
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
-}));
+// Parse JSON bodies
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Request logging
+// Add request logging
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Origin: ${req.get('Origin')}`);
   next();
 });
 
-// Helper function to safely require routes
-function safeRequire(path, routeName) {
-  try {
-    return require(path);
-  } catch (error) {
-    console.warn(`⚠️ Warning: Could not load route ${routeName}:`, error.message);
-    // Return a dummy router that responds with 501 Not Implemented
-    const dummyRouter = express.Router();
-    dummyRouter.all('*', (req, res) => {
-      res.status(501).json({
-        success: false,
-        error: `${routeName} endpoint is not implemented yet`
-      });
-    });
-    return dummyRouter;
-  }
-}
+// Health check endpoint (no auth required)
+app.use('/health', require('./routes/health'));
 
-// Routes with error handling
-app.use('/health', safeRequire('./routes/health', 'health'));
-app.use('/validate-credentials', safeRequire('./routes/validate-credentials', 'validate-credentials'));
-app.use('/refresh-token', safeRequire('./routes/refresh-token', 'refresh-token'));
-app.use('/test-connection', safeRequire('./routes/test-connection', 'test-connection'));
-app.use('/start-sync', safeRequire('./routes/start-sync', 'start-sync'));
-app.use('/sync-progress', safeRequire('./routes/sync-progress', 'sync-progress'));
-app.use('/cancel-sync', safeRequire('./routes/cancel-sync', 'cancel-sync'));
-app.use('/sync-webinars', safeRequire('./routes/sync-webinars', 'sync-webinars'));
-app.use('/performance-test', safeRequire('./routes/performance-test', 'performance-test'));
-app.use('/disconnect', safeRequire('./routes/disconnect', 'disconnect'));
+// Apply authentication middleware to all other routes
+app.use(authMiddleware);
+
+// API Routes
+app.use('/', require('./routes/validate-credentials'));
+app.use('/', require('./routes/refresh-token'));
+app.use('/', require('./routes/test-connection'));
+app.use('/', require('./routes/start-sync'));
+app.use('/', require('./routes/sync-progress'));
+app.use('/', require('./routes/cancel-sync'));
+app.use('/', require('./routes/disconnect'));
+app.use('/', require('./routes/sync-webinars'));
+app.use('/', require('./routes/performance-test'));
 
 // 404 handler
 app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Endpoint not found',
+  console.log(`404 - Route not found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ 
+    error: 'Route not found',
+    method: req.method,
     path: req.originalUrl
   });
 });
 
 // Global error handler
-app.use((error, req, res, next) => {
-  console.error('Global error handler:', error);
+app.use((err, req, res, next) => {
+  console.error('Global error handler:', err);
   
-  res.status(error.status || 500).json({
-    success: false,
-    error: error.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({
+      error: 'CORS policy violation',
+      origin: req.get('Origin'),
+      allowedOrigins: [
+        'https://preview--webinar-wise-launchpad-17.lovable.app',
+        'https://webinar-wise-launchpad-17.lovable.app'
+      ]
+    });
+  }
+  
+  res.status(500).json({
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
   });
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  process.exit(0);
+app.listen(PORT, () => {
+  console.log(`🚀 Render backend server running on port ${PORT}`);
+  console.log(`🌐 CORS enabled for Lovable preview domain`);
+  console.log(`📡 Health check available at /health`);
 });
-
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
-  process.exit(0);
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Webinar Wise Render Backend running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-});
-
-module.exports = app;

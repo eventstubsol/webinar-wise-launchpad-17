@@ -8,7 +8,7 @@ export async function webinarSync(supabase: SupabaseClient, connection: any, syn
   let participantSyncCount = 0;
   
   try {
-    console.log(`🚀 Starting comprehensive webinar sync with participant data recovery for connection: ${connection.id}`);
+    console.log(`🚀 Starting ENHANCED comprehensive webinar sync with participant data recovery for connection: ${connection.id}`);
     
     // Update sync log to in_progress
     await updateSyncLog(supabase, syncLogId, {
@@ -17,7 +17,7 @@ export async function webinarSync(supabase: SupabaseClient, connection: any, syn
     });
 
     // Step 1: Call Render backend to reset participant sync status for recovery
-    console.log('🔄 Resetting participant sync status for data recovery...');
+    console.log('🔄 Resetting participant sync status for enhanced data recovery...');
     
     const renderUrl = Deno.env.get('RENDER_BACKEND_URL') || 'https://webinar-wise-launchpad-17.onrender.com';
     
@@ -34,19 +34,22 @@ export async function webinarSync(supabase: SupabaseClient, connection: any, syn
 
     if (resetResponse.ok) {
       const resetResult = await resetResponse.json();
-      console.log(`✅ Participant sync reset completed:`, resetResult);
+      console.log(`✅ Enhanced participant sync reset completed:`, resetResult);
       
       await updateSyncLog(supabase, syncLogId, {
-        sync_stage: 'participant_sync_reset',
+        sync_stage: 'enhanced_participant_sync_reset',
         stage_progress_percentage: 10,
-        metadata: { reset_result: resetResult }
+        metadata: { 
+          reset_result: resetResult,
+          enhanced_recovery: true
+        }
       });
     } else {
-      console.warn(`⚠️ Participant sync reset failed, continuing with regular sync...`);
+      console.warn(`⚠️ Participant sync reset failed, continuing with enhanced sync...`);
     }
 
-    // Step 2: Call Render backend to sync webinars
-    console.log('📡 Calling Render backend for webinar sync...');
+    // Step 2: Call Render backend to sync webinars with enhanced processing
+    console.log('📡 Calling Render backend for enhanced webinar sync...');
     
     const response = await fetch(`${renderUrl}/sync-webinars`, {
       method: 'POST',
@@ -56,59 +59,63 @@ export async function webinarSync(supabase: SupabaseClient, connection: any, syn
       },
       body: JSON.stringify({
         connectionId: connection.id,
-        syncType: 'full'
+        syncType: 'full',
+        enhancedRecovery: true
       })
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Render backend sync failed: ${response.status} - ${errorText}`);
+      throw new Error(`Enhanced Render backend sync failed: ${response.status} - ${errorText}`);
     }
 
     const syncResult = await response.json();
-    console.log('✅ Render backend sync completed:', syncResult);
+    console.log('✅ Enhanced Render backend sync completed:', syncResult);
 
     // Update sync progress
     await updateSyncLog(supabase, syncLogId, {
-      sync_stage: 'webinars_synced',
+      sync_stage: 'enhanced_webinars_synced',
       stage_progress_percentage: 50,
-      metadata: { render_sync_result: syncResult }
+      metadata: { 
+        render_sync_result: syncResult,
+        enhanced_processing: true
+      }
     });
 
-    // Step 3: Get webinars that need participant sync (including those reset for recovery)
-    console.log('🔍 Finding webinars needing participant data sync (including recovery)...');
+    // Step 3: Get webinars that need participant sync with enhanced filtering
+    console.log('🔍 Finding webinars needing ENHANCED participant data sync...');
     
     const { data: webinarsNeedingSync, error: webinarError } = await supabase
       .from('zoom_webinars_with_calculated_status')
       .select('*')
       .eq('connection_id', connection.id)
       .eq('calculated_status', 'ended')
-      .eq('participant_sync_status', 'pending') // Focus on pending status after reset
+      .in('participant_sync_status', ['pending', 'not_applicable', 'failed']) // Enhanced to include failed syncs
       .order('start_time', { ascending: false })
-      .limit(25); // Process up to 25 webinars in one sync (increased for recovery)
+      .limit(30); // Increased limit for comprehensive recovery
 
     if (webinarError) {
-      console.error('Error fetching webinars for participant sync:', webinarError);
+      console.error('Error fetching webinars for enhanced participant sync:', webinarError);
       throw webinarError;
     }
 
-    console.log(`🎯 Found ${webinarsNeedingSync?.length || 0} webinars needing participant sync (including recovery)`);
+    console.log(`🎯 Found ${webinarsNeedingSync?.length || 0} webinars needing ENHANCED participant sync`);
     
     totalCount = webinarsNeedingSync?.length || 0;
 
-    // Step 4: Sync participant data for ended webinars (recovery process)
+    // Step 4: Enhanced participant data sync with comprehensive recovery
     if (webinarsNeedingSync && webinarsNeedingSync.length > 0) {
       await updateSyncLog(supabase, syncLogId, {
-        sync_stage: 'syncing_participants_recovery',
+        sync_stage: 'enhanced_syncing_participants_recovery',
         stage_progress_percentage: 60,
         total_items: totalCount
       });
 
       for (const webinar of webinarsNeedingSync) {
         try {
-          console.log(`👥 [RECOVERY] Syncing participants for webinar: ${webinar.topic} (${webinar.webinar_id})`);
+          console.log(`👥 [ENHANCED RECOVERY] Syncing participants for webinar: ${webinar.topic} (${webinar.webinar_id})`);
           
-          // Call Render backend to sync participants for this specific webinar
+          // Call Render backend to sync participants with enhanced processing
           const participantResponse = await fetch(`${renderUrl}/sync-webinars`, {
             method: 'POST',
             headers: {
@@ -120,64 +127,75 @@ export async function webinarSync(supabase: SupabaseClient, connection: any, syn
               syncType: 'participants',
               webinarId: webinar.webinar_id,
               webinarDbId: webinar.id,
-              recoveryMode: true // Flag for recovery operation
+              enhancedRecovery: true,
+              comprehensiveValidation: true
             })
           });
 
           if (participantResponse.ok) {
             const participantResult = await participantResponse.json();
-            console.log(`✅ [RECOVERY] Participant sync completed for webinar ${webinar.webinar_id}:`, participantResult);
+            console.log(`✅ [ENHANCED RECOVERY] Participant sync completed for webinar ${webinar.webinar_id}:`, participantResult);
             participantSyncCount++;
           } else {
             const errorText = await participantResponse.text();
-            console.error(`❌ [RECOVERY] Participant sync failed for webinar ${webinar.webinar_id}: ${errorText}`);
+            console.error(`❌ [ENHANCED RECOVERY] Participant sync failed for webinar ${webinar.webinar_id}: ${errorText}`);
           }
 
           processedCount++;
 
-          // Update progress
+          // Update progress with enhanced tracking
           const progressPercentage = 60 + Math.round((processedCount / totalCount) * 35);
           await updateSyncLog(supabase, syncLogId, {
             processed_items: processedCount,
-            stage_progress_percentage: progressPercentage
+            stage_progress_percentage: progressPercentage,
+            metadata: {
+              current_webinar: webinar.topic,
+              enhanced_processing: true
+            }
           });
 
         } catch (webinarError) {
-          console.error(`❌ [RECOVERY] Error syncing webinar ${webinar.webinar_id}:`, webinarError);
+          console.error(`❌ [ENHANCED RECOVERY] Error syncing webinar ${webinar.webinar_id}:`, webinarError);
           processedCount++;
         }
       }
     }
 
-    // Step 5: Final status update
+    // Step 5: Final status update with enhanced results
     await updateSyncLog(supabase, syncLogId, {
-      sync_stage: 'completed_with_recovery',
+      sync_stage: 'completed_with_enhanced_recovery',
       stage_progress_percentage: 100,
       metadata: {
         render_sync_result: syncResult,
         participant_syncs_attempted: totalCount,
         participant_syncs_successful: participantSyncCount,
-        recovery_mode: true
+        enhanced_recovery_mode: true,
+        comprehensive_validation: true
       }
     });
 
-    console.log(`🎉 Comprehensive sync with participant data recovery completed!`);
-    console.log(`📊 Recovery Stats: ${processedCount}/${totalCount} webinars processed, ${participantSyncCount} participant syncs successful`);
+    console.log(`🎉 ENHANCED comprehensive sync with participant data recovery completed!`);
+    console.log(`📊 Enhanced Recovery Stats: ${processedCount}/${totalCount} webinars processed, ${participantSyncCount} participant syncs successful`);
 
     return {
       processedCount: processedCount + (syncResult.processedCount || 0),
       totalCount: totalCount + (syncResult.totalCount || 0),
       participantSyncs: participantSyncCount,
-      recoveryMode: true
+      enhancedRecoveryMode: true,
+      comprehensiveValidation: true
     };
 
   } catch (error) {
-    console.error('❌ Webinar sync with participant recovery failed:', error);
+    console.error('❌ Enhanced webinar sync with participant recovery failed:', error);
     
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'failed',
       error_message: error.message,
-      stage_progress_percentage: 0
+      stage_progress_percentage: 0,
+      metadata: {
+        enhanced_recovery_attempted: true,
+        error_details: error.stack
+      }
     });
     
     throw error;
