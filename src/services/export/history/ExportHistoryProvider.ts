@@ -1,22 +1,33 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
-export interface ExportHistoryItem {
+export interface ExportQueueItem {
   id: string;
   export_type: string;
-  export_format: string;
   status: string;
   file_url?: string;
   file_size?: number;
   created_at: string;
   completed_at?: string;
-  expires_at?: string;
   error_message?: string;
   user_id: string;
+  progress_percentage: number;
+  export_config: any;
+  updated_at: string;
 }
 
 export class ExportHistoryProvider {
-  static async getExportHistory(userId: string, limit = 50): Promise<ExportHistoryItem[]> {
+  static async getExportHistory(userId?: string, limit = 50): Promise<ExportQueueItem[]> {
+    // Get current user if userId not provided
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.warn('User not authenticated, returning empty history');
+        return [];
+      }
+      userId = user.id;
+    }
+
     const { data, error } = await supabase
       .from('export_queue')
       .select('*')
@@ -33,19 +44,20 @@ export class ExportHistoryProvider {
       return [];
     }
 
-    // Map export_queue data to ExportHistoryItem format
+    // Map export_queue data to ExportQueueItem format
     return data.map(item => ({
       id: item.id,
       export_type: item.export_type,
-      export_format: this.getExportFormat(item.export_config), // Extract format from config
       status: item.status,
       file_url: item.file_url,
       file_size: item.file_size,
       created_at: item.created_at,
       completed_at: item.completed_at,
-      expires_at: this.calculateExpiresAt(item.completed_at), // Calculate expiry
       error_message: item.error_message,
       user_id: item.user_id,
+      progress_percentage: item.progress_percentage,
+      export_config: item.export_config,
+      updated_at: item.updated_at,
     }));
   }
 
@@ -61,7 +73,23 @@ export class ExportHistoryProvider {
     }
   }
 
-  static async getExportStats(userId: string) {
+  static async getExportStats(userId?: string) {
+    // Get current user if userId not provided
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.warn('User not authenticated, returning empty stats');
+        return {
+          totalExports: 0,
+          successfulExports: 0,
+          failedExports: 0,
+          pendingExports: 0,
+          exportsByType: {},
+        };
+      }
+      userId = user.id;
+    }
+
     const { data, error } = await supabase
       .from('export_queue')
       .select('status, export_type, created_at')
@@ -91,22 +119,6 @@ export class ExportHistoryProvider {
     };
 
     return stats;
-  }
-
-  private static getExportFormat(exportConfig: any): string {
-    if (typeof exportConfig === 'object' && exportConfig?.format) {
-      return exportConfig.format;
-    }
-    return 'unknown';
-  }
-
-  private static calculateExpiresAt(completedAt?: string): string | undefined {
-    if (!completedAt) return undefined;
-    
-    // Set expiry to 30 days after completion
-    const expiryDate = new Date(completedAt);
-    expiryDate.setDate(expiryDate.getDate() + 30);
-    return expiryDate.toISOString();
   }
 
   private static groupByType(data: any[]) {

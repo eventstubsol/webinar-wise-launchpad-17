@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { ExportQueueItem } from '@/services/export/types';
-import { ExportHistoryProvider } from '@/services/export/history/ExportHistoryProvider';
+import { ExportQueueItem, ExportHistoryProvider } from '@/services/export/history/ExportHistoryProvider';
 import { useToast } from '@/components/ui/use-toast';
 import { ExportQueueHeader } from './queue-monitor/ExportQueueHeader';
 import { ExportQueueList } from './queue-monitor/ExportQueueList';

@@ -54,7 +54,10 @@ export function ExportDashboard() {
     try {
       // Create individual export jobs for each selected webinar
       const exportPromises = selectedIds.map(webinarId => 
-        ExportJobManager.createExportJob(format as 'pdf' | 'excel' | 'powerpoint' | 'csv', {
+        ExportJobManager.createExportJob({
+          userId: '', // Will be filled automatically by the method
+          exportType: 'webinar_report',
+          format: format as 'pdf' | 'excel' | 'powerpoint' | 'csv',
           title: `Bulk Export - Webinar ${webinarId}`,
           description: `Automated bulk export using ${template || 'default'} template`,
           webinarIds: [webinarId],

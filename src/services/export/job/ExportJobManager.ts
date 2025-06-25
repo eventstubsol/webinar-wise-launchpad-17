@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ExportJobConfig {
@@ -7,6 +6,14 @@ export interface ExportJobConfig {
   format: string;
   filters?: any;
   reportConfig?: any;
+  title?: string;
+  description?: string;
+  includeCharts?: boolean;
+  includeRawData?: boolean;
+  brandingConfig?: any;
+  dateRange?: any;
+  webinarIds?: string[];
+  templateId?: string;
 }
 
 export interface ExportJob {
@@ -28,14 +35,52 @@ export interface ExportJob {
 }
 
 export class ExportJobManager {
-  static async createExportJob(config: ExportJobConfig): Promise<string> {
+  static async createExportJob(format: 'pdf' | 'excel' | 'powerpoint' | 'csv', config: ExportJobConfig): Promise<string>;
+  static async createExportJob(config: ExportJobConfig): Promise<string>;
+  static async createExportJob(
+    formatOrConfig: 'pdf' | 'excel' | 'powerpoint' | 'csv' | ExportJobConfig, 
+    config?: ExportJobConfig
+  ): Promise<string> {
+    // Handle both function signatures for backwards compatibility
+    let actualConfig: ExportJobConfig;
+    
+    if (typeof formatOrConfig === 'string') {
+      // Legacy signature: createExportJob(format, config)
+      if (!config) {
+        throw new Error('Config is required when format is provided as first argument');
+      }
+      actualConfig = {
+        ...config,
+        format: formatOrConfig,
+        exportType: config.exportType || 'webinar_report'
+      };
+    } else {
+      // New signature: createExportJob(config)
+      actualConfig = formatOrConfig;
+    }
+
+    // Get current user for userId if not provided
+    if (!actualConfig.userId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+      actualConfig.userId = user.id;
+    }
+
     const jobData = {
-      user_id: config.userId,
-      export_type: config.exportType,
+      user_id: actualConfig.userId,
+      export_type: actualConfig.exportType || 'webinar_report',
       export_config: {
-        format: config.format,
-        filters: config.filters || {},
-        reportConfig: config.reportConfig || {},
+        format: actualConfig.format,
+        filters: actualConfig.filters || {},
+        reportConfig: actualConfig.reportConfig || {},
+        title: actualConfig.title,
+        description: actualConfig.description,
+        includeCharts: actualConfig.includeCharts,
+        includeRawData: actualConfig.includeRawData,
+        brandingConfig: actualConfig.brandingConfig,
+        dateRange: actualConfig.dateRange,
+        webinarIds: actualConfig.webinarIds,
+        templateId: actualConfig.templateId,
       },
       status: 'pending',
       progress_percentage: 0,

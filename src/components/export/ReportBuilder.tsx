@@ -90,7 +90,17 @@ export function ReportBuilder() {
     try {
       const jobs = await Promise.all(
         selectedFormats.map(format => 
-          ExportJobManager.createExportJob(format as 'pdf' | 'excel' | 'powerpoint' | 'csv', config)
+          ExportJobManager.createExportJob({
+            userId: '', // Will be filled automatically by the method
+            exportType: 'webinar_report',
+            format: format as 'pdf' | 'excel' | 'powerpoint' | 'csv',
+            title: config.title,
+            description: config.description,
+            includeCharts: config.includeCharts,
+            includeRawData: config.includeRawData,
+            brandingConfig: config.brandingConfig,
+            dateRange: config.dateRange
+          })
         )
       );
 
