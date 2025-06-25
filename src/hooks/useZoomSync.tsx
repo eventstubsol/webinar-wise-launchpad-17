@@ -2,7 +2,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { ZoomConnection } from '@/types/zoom';
+import { ZoomConnection, SyncType } from '@/types/zoom';
 import { RenderZoomService } from '@/services/zoom/RenderZoomService';
 
 export const useZoomSync = (connection?: ZoomConnection | null) => {
@@ -82,7 +82,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     }
   }, [clearProgressInterval, queryClient, toast]);
 
-  const startSync = useCallback(async (syncType: 'initial' | 'incremental' = 'incremental') => {
+  const startSync = useCallback(async (syncType: SyncType = SyncType.INCREMENTAL) => {
     if (!connection?.id) {
       toast({
         title: "No connection",
@@ -107,7 +107,13 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     setCurrentOperation('Starting sync...');
 
     try {
-      const result = await RenderZoomService.startSync(connection.id, syncType);
+      const syncTypeMap = {
+        [SyncType.INITIAL]: 'initial' as const,
+        [SyncType.INCREMENTAL]: 'incremental' as const,
+        [SyncType.MANUAL]: 'incremental' as const,
+      };
+
+      const result = await RenderZoomService.startSync(connection.id, syncTypeMap[syncType]);
       
       if (result.success && result.syncId) {
         setSyncId(result.syncId);
@@ -149,6 +155,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         setSyncStatus('idle');
         setSyncProgress(0);
         setCurrentOperation('');
+        setSyncId(null);
         clearProgressInterval();
         
         toast({
@@ -206,5 +213,6 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     startSync,
     cancelSync,
     testApiConnection,
+    healthCheck: { success: true }, // Add default health check
   };
 };

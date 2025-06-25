@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,14 +23,17 @@ export const SyncQueueVisualization: React.FC<SyncQueueVisualizationProps> = ({
 }) => {
   const { 
     queueItems, 
+    queueStats,
     isLoading, 
     error, 
-    getQueueSummary, 
-    getCurrentItem, 
-    getEstimatedTimeRemaining 
+    refetch, 
   } = useSyncQueue(connectionId);
 
-  const queueSummary = getQueueSummary();
+  // Helper functions
+  const getQueueSummary = () => queueStats;
+  const getCurrentItem = () => queueItems.find(item => item.status === 'processing');
+  const getEstimatedTimeRemaining = () => queueStats.estimatedTotalTime;
+
   const currentItem = getCurrentItem();
   const estimatedTimeRemaining = getEstimatedTimeRemaining();
 
@@ -95,7 +97,7 @@ export const SyncQueueVisualization: React.FC<SyncQueueVisualizationProps> = ({
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-red-600">
-            Failed to load sync queue: {error}
+            Failed to load sync queue: {error.message || 'Unknown error'}
           </div>
         </CardContent>
       </Card>
@@ -115,23 +117,23 @@ export const SyncQueueVisualization: React.FC<SyncQueueVisualizationProps> = ({
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-orange-500">{queueSummary.pending}</div>
+              <div className="text-2xl font-bold text-orange-500">{queueStats.pending}</div>
               <div className="text-sm text-muted-foreground">Pending</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-500">{queueSummary.processing}</div>
+              <div className="text-2xl font-bold text-blue-500">{queueStats.processing}</div>
               <div className="text-sm text-muted-foreground">Processing</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-500">{queueSummary.completed}</div>
+              <div className="text-2xl font-bold text-green-500">{queueStats.completed}</div>
               <div className="text-sm text-muted-foreground">Completed</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-red-500">{queueSummary.failed}</div>
+              <div className="text-2xl font-bold text-red-500">{queueStats.failed}</div>
               <div className="text-sm text-muted-foreground">Failed</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold">{queueSummary.total}</div>
+              <div className="text-2xl font-bold">{queueStats.total}</div>
               <div className="text-sm text-muted-foreground">Total</div>
             </div>
           </div>
@@ -166,7 +168,7 @@ export const SyncQueueVisualization: React.FC<SyncQueueVisualizationProps> = ({
                     {currentItem.webinar_title || `Webinar ${currentItem.webinar_id}`}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    Position {currentItem.queue_position} of {queueSummary.total}
+                    Position {currentItem.queue_position} of {queueStats.total}
                   </div>
                 </div>
                 <Badge variant="default">Processing</Badge>

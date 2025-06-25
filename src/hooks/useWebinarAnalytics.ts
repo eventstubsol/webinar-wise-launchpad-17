@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,7 +32,7 @@ export const useWebinarAnalytics = (connectionId?: string) => {
   const [mostRecentWebinar, setMostRecentWebinar] = useState<Webinar | null>(null);
 
   // Query for webinar metrics
-  const { data: metrics = [], isLoading: metricsLoading } = useQuery({
+  const { data: metrics = [], isLoading: metricsLoading, error, refetch } = useQuery({
     queryKey: ['webinar-analytics-metrics', connectionId],
     queryFn: async () => {
       if (!connectionId) return [];
@@ -93,5 +94,8 @@ export const useWebinarAnalytics = (connectionId?: string) => {
     mostRecentWebinar,
     metrics: metrics as any[], // Type assertion to avoid conversion errors
     isLoading: metricsLoading,
+    data: metrics,
+    error,
+    refetch,
   };
 };
