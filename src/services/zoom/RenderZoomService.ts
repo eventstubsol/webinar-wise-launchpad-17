@@ -1,4 +1,3 @@
-
 import axios, { AxiosError } from 'axios';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -21,9 +20,12 @@ interface ApiResponse<T = any> {
   message?: string;
   // Sync-specific properties
   syncId?: string;
-  status?: 'pending' | 'running' | 'completed' | 'failed' | 'no_data';
+  status?: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   progress?: number;
   currentOperation?: string;
+  total_items?: number;
+  processed_items?: number;
+  error_message?: string;
   // Connection-specific properties
   connection?: any;
 }

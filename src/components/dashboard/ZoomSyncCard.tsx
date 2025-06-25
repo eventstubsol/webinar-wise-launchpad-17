@@ -110,16 +110,19 @@ export function ZoomSyncCard() {
   }
 
   // Determine current sync status
-  let currentSyncStatus: 'idle' | 'syncing' | 'completed' | 'failed' | 'no_data' = 'idle';
+  let currentSyncStatus: 'idle' | 'running' | 'completed' | 'failed' | 'pending' = 'idle';
   let statusMessage = '';
   
   if (isSyncing) {
-    currentSyncStatus = 'syncing';
+    currentSyncStatus = syncStatus === 'pending' ? 'pending' : 'running';
     statusMessage = currentOperation;
-  } else if (syncStatus !== 'idle') {
-    currentSyncStatus = syncStatus;
+  } else if (syncStatus === 'completed') {
+    currentSyncStatus = 'completed';
+  } else if (syncStatus === 'failed') {
+    currentSyncStatus = 'failed';
+    statusMessage = 'Sync failed';
   } else if (syncStats?.lastSyncStatus === 'completed') {
-    currentSyncStatus = syncStats.processedItems === 0 ? 'no_data' : 'completed';
+    currentSyncStatus = syncStats.processedItems === 0 ? 'idle' : 'completed';
   } else if (syncStats?.lastSyncStatus === 'failed') {
     currentSyncStatus = 'failed';
     statusMessage = syncStats.lastSyncError || 'Unknown error';
