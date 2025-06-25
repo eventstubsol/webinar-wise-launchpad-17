@@ -2,10 +2,10 @@
 import axios, { AxiosError } from 'axios';
 import { supabase } from '@/integrations/supabase/client';
 
-// Update this URL after deploying to Render.com
+// Updated with your actual Render deployment URL
 const RENDER_API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-service-name.onrender.com'
-  : 'https://zoom-auth-api-latest.onrender.com';
+  ? 'https://webinar-wise-launchpad-17.onrender.com'
+  : 'https://webinar-wise-launchpad-17.onrender.com';
 
 interface ValidationCredentialsPayload {
   account_id: string;
