@@ -47,117 +47,24 @@ export interface EngagementForecast {
 
 export class PredictiveAnalyticsService {
   static async getPredictiveModels(userId: string): Promise<PredictiveModel[]> {
-    const { data, error } = await supabase
-      .from('predictive_models')
-      .select('*')
-      .eq('user_id', userId)
-      .order('last_trained_at', { ascending: false });
-
-    if (error) throw error;
-    
-    return (data || []).map(model => ({
-      id: model.id,
-      model_name: model.model_name,
-      model_type: castModelType(model.model_type),
-      algorithm: model.algorithm,
-      model_parameters: castToRecord(model.model_parameters),
-      feature_columns: castToArray(model.feature_columns),
-      target_column: model.target_column,
-      accuracy_score: model.accuracy_score,
-      precision_score: model.precision_score,
-      recall_score: model.recall_score,
-      f1_score: model.f1_score,
-      training_data_size: model.training_data_size,
-      last_trained_at: model.last_trained_at,
-      is_active: model.is_active,
-    }));
+    console.warn('PredictiveAnalyticsService: predictive_models table not implemented yet');
+    return [];
   }
 
   static async createPredictiveModel(
     userId: string,
     model: Omit<PredictiveModel, 'id'>
   ): Promise<PredictiveModel> {
-    const { data, error } = await supabase
-      .from('predictive_models')
-      .insert({
-        user_id: userId,
-        model_name: model.model_name,
-        model_type: model.model_type,
-        algorithm: model.algorithm,
-        model_parameters: model.model_parameters,
-        feature_columns: model.feature_columns,
-        target_column: model.target_column,
-        accuracy_score: model.accuracy_score,
-        precision_score: model.precision_score,
-        recall_score: model.recall_score,
-        f1_score: model.f1_score,
-        training_data_size: model.training_data_size,
-        last_trained_at: model.last_trained_at,
-        is_active: model.is_active,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    
-    return {
-      id: data.id,
-      model_name: data.model_name,
-      model_type: castModelType(data.model_type),
-      algorithm: data.algorithm,
-      model_parameters: castToRecord(data.model_parameters),
-      feature_columns: castToArray(data.feature_columns),
-      target_column: data.target_column,
-      accuracy_score: data.accuracy_score,
-      precision_score: data.precision_score,
-      recall_score: data.recall_score,
-      f1_score: data.f1_score,
-      training_data_size: data.training_data_size,
-      last_trained_at: data.last_trained_at,
-      is_active: data.is_active,
-    };
+    console.warn('PredictiveAnalyticsService: predictive_models table not implemented yet');
+    throw new Error('Predictive models feature not yet implemented');
   }
 
   static async predictChurn(
     userId: string,
     emailAddresses?: string[]
   ): Promise<ChurnPrediction[]> {
-    // Get behavior profiles for prediction
-    let query = supabase
-      .from('user_behavior_profiles')
-      .select('*')
-      .eq('user_id', userId);
-
-    if (emailAddresses) {
-      query = query.in('email_address', emailAddresses);
-    }
-
-    const { data: profiles, error } = await query;
-    if (error) throw error;
-
-    if (!profiles || profiles.length === 0) {
-      return [];
-    }
-
-    const predictions: ChurnPrediction[] = [];
-
-    for (const profile of profiles) {
-      const churnProbability = this.calculateChurnProbability(profile);
-      const riskLevel = this.getChurnRiskLevel(churnProbability);
-      const contributingFactors = this.getChurnFactors(profile);
-      const recommendedActions = this.getChurnRecommendations(profile, churnProbability);
-
-      predictions.push({
-        email_address: profile.email_address,
-        churn_probability: churnProbability,
-        risk_level: riskLevel,
-        contributing_factors: contributingFactors,
-        recommended_actions: recommendedActions,
-        confidence: this.calculateConfidence(profile),
-      });
-    }
-
-    return predictions;
+    console.warn('PredictiveAnalyticsService: user_behavior_profiles table not implemented yet');
+    return [];
   }
 
   static async predictLTV(
@@ -165,40 +72,8 @@ export class PredictiveAnalyticsService {
     emailAddresses?: string[],
     timeHorizonDays: number = 365
   ): Promise<LTVPrediction[]> {
-    let query = supabase
-      .from('user_behavior_profiles')
-      .select('*')
-      .eq('user_id', userId);
-
-    if (emailAddresses) {
-      query = query.in('email_address', emailAddresses);
-    }
-
-    const { data: profiles, error } = await query;
-    if (error) throw error;
-
-    if (!profiles || profiles.length === 0) {
-      return [];
-    }
-
-    const predictions: LTVPrediction[] = [];
-
-    for (const profile of profiles) {
-      const predictedLTV = this.calculateLTV(profile, timeHorizonDays);
-      const ltvCategory = this.getLTVCategory(predictedLTV);
-      const contributingFactors = this.getLTVFactors(profile);
-
-      predictions.push({
-        email_address: profile.email_address,
-        predicted_ltv: predictedLTV,
-        ltv_category: ltvCategory,
-        time_horizon_days: timeHorizonDays,
-        confidence: this.calculateConfidence(profile),
-        contributing_factors: contributingFactors,
-      });
-    }
-
-    return predictions;
+    console.warn('PredictiveAnalyticsService: user_behavior_profiles table not implemented yet');
+    return [];
   }
 
   static async forecastEngagement(
@@ -206,72 +81,16 @@ export class PredictiveAnalyticsService {
     emailAddresses?: string[],
     forecastDays: number = 30
   ): Promise<EngagementForecast[]> {
-    let query = supabase
-      .from('user_behavior_profiles')
-      .select('*')
-      .eq('user_id', userId);
-
-    if (emailAddresses) {
-      query = query.in('email_address', emailAddresses);
-    }
-
-    const { data: profiles, error } = await query;
-    if (error) throw error;
-
-    if (!profiles || profiles.length === 0) {
-      return [];
-    }
-
-    const forecasts: EngagementForecast[] = [];
-
-    for (const profile of profiles) {
-      const predictedScore = this.forecastEngagementScore(profile, forecastDays);
-      const trend = this.getEngagementTrend(profile);
-      const keyDrivers = this.getEngagementDrivers(profile);
-
-      forecasts.push({
-        email_address: profile.email_address,
-        predicted_engagement_score: predictedScore,
-        forecast_period_days: forecastDays,
-        trend,
-        confidence: this.calculateConfidence(profile),
-        key_drivers: keyDrivers,
-      });
-    }
-
-    return forecasts;
+    console.warn('PredictiveAnalyticsService: user_behavior_profiles table not implemented yet');
+    return [];
   }
 
   static async trainModel(
     modelId: string,
     trainingData: any[]
   ): Promise<{ success: boolean; metrics: Record<string, number> }> {
-    // This would typically interface with a ML service
-    // For now, we'll simulate training and return mock metrics
-    
-    const { error } = await supabase
-      .from('predictive_models')
-      .update({
-        last_trained_at: new Date().toISOString(),
-        training_data_size: trainingData.length,
-        accuracy_score: 0.85,
-        precision_score: 0.83,
-        recall_score: 0.87,
-        f1_score: 0.85,
-      })
-      .eq('id', modelId);
-
-    if (error) throw error;
-
-    return {
-      success: true,
-      metrics: {
-        accuracy: 0.85,
-        precision: 0.83,
-        recall: 0.87,
-        f1_score: 0.85,
-      },
-    };
+    console.warn('PredictiveAnalyticsService: predictive_models table not implemented yet');
+    throw new Error('Model training feature not yet implemented');
   }
 
   private static calculateChurnProbability(profile: any): number {
