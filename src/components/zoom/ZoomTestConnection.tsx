@@ -4,11 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, CheckCircle, XCircle, Info, RefreshCw } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Info, RefreshCw, Wrench } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useZoomCredentials } from '@/hooks/useZoomCredentials';
-import { supabase } from '@/integrations/supabase/client';
+import { RenderConnectionService } from '@/services/zoom/RenderConnectionService';
 
 interface TestResult {
   step: string;
@@ -22,6 +22,7 @@ export const ZoomTestConnection: React.FC = () => {
   const { connection, refetch: refetchConnection } = useZoomConnection();
   const { credentials } = useZoomCredentials();
   const [isLoading, setIsLoading] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
   const [results, setResults] = useState<TestResult[]>([]);
 
   const addResult = (result: TestResult) => {
@@ -29,11 +30,11 @@ export const ZoomTestConnection: React.FC = () => {
   };
 
   const runConnectionTest = async () => {
-    if (!user) {
+    if (!connection?.id) {
       addResult({
-        step: 'Authentication',
+        step: 'Connection Check',
         status: 'error',
-        message: 'User not authenticated'
+        message: 'No Zoom connection found'
       });
       return;
     }
@@ -45,38 +46,44 @@ export const ZoomTestConnection: React.FC = () => {
       addResult({
         step: 'Starting Test',
         status: 'info',
-        message: 'Testing Zoom API connection...'
+        message: 'Testing Zoom connection via Render API...'
       });
 
-      // Test the connection
-      const { data, error } = await supabase.functions.invoke('zoom-test-fetch', {
-        body: { userId: user.id }
-      });
-
-      if (error) {
+      // Test connection health
+      const healthCheck = await RenderConnectionService.checkConnectionHealth(connection.id);
+      
+      if (healthCheck.isHealthy) {
         addResult({
-          step: 'Connection Test',
-          status: 'error',
-          message: `Test failed: ${error.message}`,
-          data: error
-        });
-        return;
-      }
-
-      // Process the response
-      if (data?.success) {
-        addResult({
-          step: 'Connection Test',
+          step: 'Health Check',
           status: 'success',
-          message: data.message,
-          data: data.data
+          message: 'Connection is healthy',
+          data: healthCheck.details
         });
       } else {
         addResult({
-          step: 'Connection Test',
+          step: 'Health Check',
           status: 'error',
-          message: data?.message || 'Unknown error occurred',
-          data: data
+          message: 'Connection health issues detected',
+          data: healthCheck.details
+        });
+      }
+
+      // Test actual API connection
+      const connectionTest = await RenderConnectionService.testConnection(connection.id);
+      
+      if (connectionTest.success) {
+        addResult({
+          step: 'API Test',
+          status: 'success',
+          message: connectionTest.message,
+          data: connectionTest.details
+        });
+      } else {
+        addResult({
+          step: 'API Test',
+          status: 'error',
+          message: connectionTest.message,
+          data: connectionTest.details
         });
       }
 
@@ -88,6 +95,56 @@ export const ZoomTestConnection: React.FC = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const attemptRecovery = async () => {
+    if (!connection?.id) return;
+
+    setIsRecovering(true);
+    setResults([]);
+
+    try {
+      addResult({
+        step: 'Recovery Started',
+        status: 'info',
+        message: 'Attempting automatic connection recovery...'
+      });
+
+      const recoveryResult = await RenderConnectionService.attemptConnectionRecovery(connection.id);
+      
+      // Add each recovery step as a result
+      recoveryResult.recoverySteps.forEach((step, index) => {
+        addResult({
+          step: `Recovery Step ${index + 1}`,
+          status: 'info',
+          message: step
+        });
+      });
+
+      // Final result
+      addResult({
+        step: 'Recovery Complete',
+        status: recoveryResult.success ? 'success' : 'error',
+        message: recoveryResult.success 
+          ? 'Connection recovery successful!' 
+          : 'Recovery failed - manual intervention required',
+        data: { finalStatus: recoveryResult.finalStatus }
+      });
+
+      // Refresh connection data if recovery was successful
+      if (recoveryResult.success) {
+        await refetchConnection();
+      }
+
+    } catch (error) {
+      addResult({
+        step: 'Recovery Error',
+        status: 'error',
+        message: `Recovery failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+    } finally {
+      setIsRecovering(false);
     }
   };
 
@@ -127,9 +184,29 @@ export const ZoomTestConnection: React.FC = () => {
               <RefreshCw className="w-4 h-4 mr-2" />
               Refresh
             </Button>
+            {connection && (
+              <Button 
+                onClick={attemptRecovery}
+                disabled={isRecovering}
+                variant="secondary"
+                size="sm"
+              >
+                {isRecovering ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Recovering...
+                  </>
+                ) : (
+                  <>
+                    <Wrench className="w-4 h-4 mr-2" />
+                    Auto-Recover
+                  </>
+                )}
+              </Button>
+            )}
             <Button 
               onClick={runConnectionTest} 
-              disabled={isLoading}
+              disabled={isLoading || !connection}
               size="sm"
             >
               {isLoading ? (
@@ -160,8 +237,8 @@ export const ZoomTestConnection: React.FC = () => {
             <p className="font-medium">{connection?.zoom_email || 'None'}</p>
           </div>
           <div>
-            <p className="text-gray-600">Token Length</p>
-            <p className="font-medium">{connection?.access_token?.length || 0} chars</p>
+            <p className="text-gray-600">API Backend</p>
+            <p className="font-medium">Render API</p>
           </div>
         </div>
 
@@ -204,8 +281,8 @@ export const ZoomTestConnection: React.FC = () => {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            This test verifies your Zoom API connection by attempting to authenticate and make a simple API call.
-            If the test fails, check your credentials and connection configuration.
+            This test uses the new Render API backend to verify your Zoom connection. 
+            The auto-recovery feature can attempt to fix common connection issues automatically.
           </AlertDescription>
         </Alert>
       </CardContent>

@@ -1,265 +1,158 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection, ConnectionStatus } from '@/types/zoom';
-import { toast } from '@/hooks/use-toast';
-import { TokenUtils } from '../utils/tokenUtils';
-import { ConnectionCleanup } from '../utils/connectionCleanup';
+import { TokenUtils, TokenStatus } from '../utils/tokenUtils';
+import { RenderConnectionService } from '../RenderConnectionService';
 
-/**
- * Connection status management operations with proper Server-to-Server support
- */
 export class ConnectionStatusOperations {
-  /**
-   * Get the primary connection for a user - simplified for plain text tokens
-   */
-  static async getPrimaryConnection(userId: string): Promise<ZoomConnection | null> {
-    try {
-      // First, auto-cleanup any corrupted connections
-      await ConnectionCleanup.autoCleanupCorruptedConnections(userId);
-
-      const { data, error } = await supabase
-        .from('zoom_connections')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('is_primary', true)
-        .eq('connection_status', 'active')
-        .maybeSingle();
-
-      if (error) {
-        console.error('Failed to get primary connection:', error);
-        return null;
-      }
-
-      if (!data) {
-        return null;
-      }
-
-      // Cast the connection_status to the proper enum type
-      const connection = {
-        ...data,
-        connection_status: data.connection_status as ConnectionStatus,
-      } as ZoomConnection;
-
-      // Validate connection based on type
-      if (TokenUtils.isServerToServerConnection(connection)) {
-        // For Server-to-Server, validate credentials
-        if (!connection.client_id || !connection.client_secret || !connection.account_id) {
-          console.warn('Invalid Server-to-Server credentials, cleaning up connection:', connection.id);
-          
-          await supabase
-            .from('zoom_connections')
-            .delete()
-            .eq('id', connection.id);
-          
-          toast({
-            title: "Connection Reset",
-            description: "Invalid Server-to-Server credentials detected. Please reconnect your Zoom account.",
-            variant: "destructive",
-          });
-          
-          return null;
-        }
-      } else {
-        // For OAuth, validate tokens
-        if (!TokenUtils.isValidToken(connection.access_token) || !TokenUtils.isValidToken(connection.refresh_token)) {
-          console.warn('Invalid OAuth tokens detected, cleaning up connection:', connection.id);
-          
-          await supabase
-            .from('zoom_connections')
-            .delete()
-            .eq('id', connection.id);
-          
-          toast({
-            title: "Connection Reset",
-            description: "Invalid connection tokens detected. Please reconnect your Zoom account.",
-            variant: "destructive",
-          });
-          
-          return null;
-        }
-      }
-
-      return connection;
-    } catch (error) {
-      console.error('Unexpected error getting primary connection:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Set a connection as primary (and unset others)
-   */
   static async setPrimaryConnection(connectionId: string, userId: string): Promise<boolean> {
     try {
       // First, unset all primary connections for the user
-      const { error: unsetError } = await supabase
+      await supabase
         .from('zoom_connections')
         .update({ is_primary: false })
         .eq('user_id', userId);
 
-      if (unsetError) {
-        console.error('Failed to unset primary connections:', unsetError);
-        return false;
-      }
-
       // Then set the specified connection as primary
-      const { error: setPrimaryError } = await supabase
+      const { error } = await supabase
         .from('zoom_connections')
-        .update({ 
-          is_primary: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', connectionId);
+        .update({ is_primary: true })
+        .eq('id', connectionId)
+        .eq('user_id', userId);
 
-      if (setPrimaryError) {
-        console.error('Failed to set primary connection:', setPrimaryError);
-        return false;
-      }
-
-      return true;
+      return !error;
     } catch (error) {
-      console.error('Unexpected error setting primary connection:', error);
+      console.error('Error setting primary connection:', error);
       return false;
     }
   }
 
-  /**
-   * Update connection status
-   */
-  static async updateConnectionStatus(id: string, status: ConnectionStatus): Promise<boolean> {
+  static async updateConnectionStatus(connectionId: string, status: ConnectionStatus): Promise<boolean> {
     try {
       const { error } = await supabase
         .from('zoom_connections')
         .update({ 
           connection_status: status,
-          updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
-        .eq('id', id);
+        .eq('id', connectionId);
 
-      if (error) {
-        console.error('Failed to update connection status:', error);
-        return false;
-      }
-
-      return true;
+      return !error;
     } catch (error) {
-      console.error('Unexpected error updating connection status:', error);
+      console.error('Error updating connection status:', error);
       return false;
     }
   }
 
-  /**
-   * Check connection health by attempting to validate token
-   */
-  static async checkConnectionStatus(connection: ZoomConnection): Promise<ConnectionStatus> {
+  static async checkConnectionStatus(connectionId: string): Promise<{
+    status: ConnectionStatus;
+    tokenStatus: TokenStatus;
+    isHealthy: boolean;
+  }> {
     try {
-      // Check if token needs refresh
-      if (TokenUtils.needsTokenRefresh(connection)) {
-        if (TokenUtils.canRefreshToken(connection)) {
-          // For Server-to-Server connections, refresh silently without UI indication
-          if (TokenUtils.isServerToServerConnection(connection)) {
-            const refreshedConnection = await this.refreshTokenSilently(connection);
-            if (refreshedConnection) return 'active' as ConnectionStatus;
-          } else {
-            // For OAuth connections, use the regular refresh with UI feedback
-            const refreshedConnection = await this.refreshToken(connection);
-            if (refreshedConnection) return 'active' as ConnectionStatus;
-          }
-        }
+      // Use Render API for comprehensive health check
+      const healthCheck = await RenderConnectionService.checkConnectionHealth(connectionId);
+      
+      // Update local database with current status
+      const dbStatus = healthCheck.isHealthy ? 'active' : 'inactive';
+      await this.updateConnectionStatus(connectionId, dbStatus as ConnectionStatus);
 
-        await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
-        return 'expired' as ConnectionStatus;
-      }
-
-      if (connection.connection_status === 'active') {
-        return 'active' as ConnectionStatus;
-      }
-
-      return connection.connection_status;
+      return {
+        status: dbStatus as ConnectionStatus,
+        tokenStatus: healthCheck.status,
+        isHealthy: healthCheck.isHealthy,
+      };
     } catch (error) {
       console.error('Error checking connection status:', error);
-      await this.updateConnectionStatus(connection.id, 'error' as ConnectionStatus);
-      return 'error' as ConnectionStatus;
+      return {
+        status: 'inactive',
+        tokenStatus: TokenStatus.INVALID,
+        isHealthy: false,
+      };
     }
   }
 
-  /**
-   * Refresh an expired access token with proper Server-to-Server support
-   */
-  static async refreshToken(connection: ZoomConnection): Promise<ZoomConnection | null> {
+  static async refreshToken(connectionId: string): Promise<{ success: boolean; connection?: ZoomConnection; error?: string }> {
     try {
-      console.log('Starting token refresh for connection:', connection.id, 'type:', connection.connection_type);
-
-      // Don't show refreshing toast for Server-to-Server as it's usually fast
-      if (!TokenUtils.isServerToServerConnection(connection)) {
-        toast({
-          title: "Refreshing Connection",
-          description: "Your Zoom connection is being refreshed...",
-        });
-      }
-
-      let functionName = 'zoom-token-refresh';
-      let body = { connectionId: connection.id };
-
-      // For Server-to-Server connections, use the validation function which handles S2S properly
-      if (TokenUtils.isServerToServerConnection(connection)) {
-        functionName = 'validate-zoom-credentials';
-        body = { connectionId: connection.id }; // Include connectionId for Server-to-Server validation
-      }
-
-      const { data, error } = await supabase.functions.invoke(functionName, { body });
-
-      if (error) {
-        throw new Error(error.message || 'Unknown error during token refresh.');
-      }
+      // Use Render API for token refresh
+      const result = await RenderConnectionService.refreshToken(connectionId);
       
-      // Only show success toast for OAuth connections
-      if (!TokenUtils.isServerToServerConnection(connection)) {
-        toast({
-          title: "Connection Refreshed",
-          description: "Your Zoom token has been successfully refreshed.",
-        });
+      if (result.success && result.connection) {
+        // Update local database with new token information
+        const { error } = await supabase
+          .from('zoom_connections')
+          .update({
+            access_token: result.connection.access_token,
+            refresh_token: result.connection.refresh_token,
+            token_expires_at: result.newTokenExpiresAt || result.connection.token_expires_at,
+            connection_status: 'active',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', connectionId);
+
+        if (error) {
+          console.error('Error updating connection with new tokens:', error);
+          return { success: false, error: 'Failed to update connection in database' };
+        }
+
+        return { success: true, connection: result.connection };
       }
 
-      return data.connection;
+      return { success: false, error: result.error || 'Token refresh failed' };
     } catch (error) {
-      console.error('Error refreshing token:', error);
-      
-      const errorMessage = TokenUtils.isServerToServerConnection(connection) 
-        ? "Could not refresh your Server-to-Server connection. Please check your credentials in settings."
-        : "Could not refresh your Zoom connection. Please re-authenticate in settings.";
-      
-      toast({
-        title: "Refresh Failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      
-      await this.updateConnectionStatus(connection.id, 'expired' as ConnectionStatus);
-      return null;
+      console.error('Token refresh error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
-  /**
-   * Silently refresh Server-to-Server tokens without UI feedback
-   */
-  static async refreshTokenSilently(connection: ZoomConnection): Promise<ZoomConnection | null> {
+  static async refreshTokenSilently(connectionId: string): Promise<boolean> {
     try {
-      console.log('Silently refreshing Server-to-Server token for connection:', connection.id);
+      const result = await RenderConnectionService.refreshTokenSilently(connectionId);
+      return result;
+    } catch (error) {
+      console.error('Silent token refresh error:', error);
+      return false;
+    }
+  }
 
-      const { data, error } = await supabase.functions.invoke('validate-zoom-credentials', { 
-        body: { connectionId: connection.id } 
-      });
+  static async getPrimaryConnection(userId: string): Promise<ZoomConnection | null> {
+    try {
+      const { data: connection, error } = await supabase
+        .from('zoom_connections')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_primary', true)
+        .maybeSingle();
 
       if (error) {
-        console.error('Silent token refresh failed:', error);
+        console.error('Error fetching primary connection:', error);
         return null;
       }
 
-      console.log('Server-to-Server token refreshed silently');
-      return data.connection;
+      if (connection) {
+        // Perform health check via Render API
+        const healthCheck = await RenderConnectionService.checkConnectionHealth(connection.id);
+        
+        // Update connection status based on health check
+        if (!healthCheck.isHealthy) {
+          await this.updateConnectionStatus(connection.id, 'inactive');
+          connection.connection_status = 'inactive';
+        }
+      }
+
+      return connection;
     } catch (error) {
-      console.error('Error during silent token refresh:', error);
+      console.error('Error getting primary connection:', error);
       return null;
     }
+  }
+
+  // Auto-recovery for connections
+  static async attemptConnectionRecovery(connectionId: string): Promise<{
+    success: boolean;
+    recoverySteps: string[];
+    finalStatus: string;
+  }> {
+    return await RenderConnectionService.attemptConnectionRecovery(connectionId);
   }
 }

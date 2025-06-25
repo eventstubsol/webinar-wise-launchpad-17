@@ -7,6 +7,7 @@ import { useZoomCredentials } from '@/hooks/useZoomCredentials';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
 import { RenderZoomService } from '@/services/zoom/RenderZoomService';
+import { RenderConnectionService } from '@/services/zoom/RenderConnectionService';
 import { ZoomConnection } from '@/types/zoom';
 
 interface UseZoomValidationProps {
@@ -33,16 +34,26 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
         throw new Error('Zoom credentials not configured');
       }
 
-      // If there's an existing invalid connection, delete it first
+      // If there's an existing invalid connection, attempt recovery first
       if (connection && connection.access_token?.length < 50) {
-        console.log('Deleting invalid connection before validation...');
-        await ZoomConnectionService.deleteConnection(connection.id);
+        console.log('Attempting connection recovery before validation...');
+        const recoveryResult = await RenderConnectionService.attemptConnectionRecovery(connection.id);
         
-        // Wait a moment for the deletion to be processed
+        if (recoveryResult.success) {
+          // Recovery successful, test the connection
+          const healthCheck = await RenderConnectionService.checkConnectionHealth(connection.id);
+          if (healthCheck.isHealthy) {
+            return { success: true, connection, message: 'Connection recovered successfully' };
+          }
+        }
+        
+        // Recovery failed, delete the connection
+        console.log('Recovery failed, deleting invalid connection...');
+        await ZoomConnectionService.deleteConnection(connection.id);
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      // Use Render service instead of Supabase Edge Function
+      // Use Render service for credential validation
       const result = await RenderZoomService.validateCredentials(credentials);
       
       if (!result.success) {
@@ -65,7 +76,7 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
       
       toast({
         title: "Success!",
-        description: "Your Zoom credentials have been validated and Server-to-Server connection established via Render.",
+        description: result.message || "Your Zoom credentials have been validated and connection established via Render API.",
       });
       
       if (result.connection) {
