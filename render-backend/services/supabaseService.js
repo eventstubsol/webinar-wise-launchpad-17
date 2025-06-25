@@ -1,282 +1,274 @@
-
 const { createClient } = require('@supabase/supabase-js');
 
-class SupabaseService {
-  constructor() {
-    if (!process.env.DATABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Missing required Supabase environment variables: DATABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
-    }
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // Extract Supabase URL from DATABASE_URL if needed
-    const supabaseUrl = process.env.SUPABASE_URL || this.extractSupabaseUrl(process.env.DATABASE_URL);
-    
-    try {
-      this.client = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      });
-      
-      console.log('✅ Supabase client initialized successfully');
-    } catch (error) {
-      console.error('❌ Failed to initialize Supabase client:', error);
-      throw error;
-    }
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Zoom Connection methods
+async function getZoomConnection(connectionId) {
+  const { data, error } = await supabase
+    .from('zoom_connections')
+    .select('*')
+    .eq('id', connectionId)
+    .single();
+
+  if (error) {
+    console.error('Failed to get Zoom connection:', error);
+    throw error;
   }
 
-  extractSupabaseUrl(databaseUrl) {
-    try {
-      // Convert postgres:// URL to https:// Supabase URL
-      const match = databaseUrl.match(/\/\/([^:]+)/);
-      if (match) {
-        return `https://${match[1]}.supabase.co`;
-      }
-      throw new Error('Could not extract Supabase URL from DATABASE_URL');
-    } catch (error) {
-      console.error('Error extracting Supabase URL:', error);
-      throw error;
-    }
+  return data;
+}
+
+async function updateZoomConnection(connectionId, updates) {
+  const { data, error } = await supabase
+    .from('zoom_connections')
+    .update(updates)
+    .eq('id', connectionId)
+    .select();
+
+  if (error) {
+    console.error('Failed to update Zoom connection:', error);
+    throw error;
   }
 
-  // User and credential management
-  async getUserCredentials(userId) {
-    try {
-      const { data, error } = await this.client
-        .from('zoom_credentials')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .single();
+  return data;
+}
 
-      if (error && error.code !== 'PGRST116') throw error;
-      return data;
-    } catch (error) {
-      console.error('Error getting user credentials:', error);
-      throw error;
-    }
+// User Credentials methods
+async function getUserCredentials(userId) {
+  const { data, error } = await supabase
+    .from('zoom_credentials')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    console.error('Failed to get user credentials:', error);
+    return null;
   }
 
-  async getConnectionWithCredentials(connectionId) {
-    try {
-      const { data: connection, error: connError } = await this.client
-        .from('zoom_connections')
-        .select('*')
-        .eq('id', connectionId)
-        .single();
+  return data;
+}
 
-      if (connError) throw connError;
+async function storeUserCredentials(userId, credentials) {
+  const { data, error } = await supabase
+    .from('zoom_credentials')
+    .upsert(
+      { user_id: userId, ...credentials },
+      { onConflict: 'user_id', ignoreDuplicates: false }
+    )
+    .select();
 
-      const { data: credentials, error: credError } = await this.client
-        .from('zoom_credentials')
-        .select('*')
-        .eq('user_id', connection.user_id)
-        .eq('is_active', true)
-        .single();
-
-      if (credError && credError.code !== 'PGRST116') throw credError;
-
-      return {
-        connection,
-        credentials
-      };
-    } catch (error) {
-      console.error('Error getting connection with credentials:', error);
-      throw error;
-    }
+  if (error) {
+    console.error('Failed to store user credentials:', error);
+    throw error;
   }
 
-  // Connection management
-  async createZoomConnection(connectionData) {
-    try {
-      const { data, error } = await this.client
-        .from('zoom_connections')
-        .insert(connectionData)
-        .select()
-        .single();
+  return data;
+}
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error creating zoom connection:', error);
-      throw error;
-    }
+// Sync Log methods
+async function createSyncLog(syncLogData) {
+  const { data, error } = await supabase
+    .from('zoom_sync_logs')
+    .insert([syncLogData])
+    .select();
+
+  if (error) {
+    console.error('Failed to create sync log:', error);
+    throw error;
   }
 
-  async updateZoomConnection(id, updates) {
-    try {
-      const { data, error } = await this.client
-        .from('zoom_connections')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id)
-        .select()
-        .single();
+  return data;
+}
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error updating zoom connection:', error);
-      throw error;
-    }
+async function updateSyncLog(syncId, updates) {
+  const { data, error } = await supabase
+    .from('zoom_sync_logs')
+    .update(updates)
+    .eq('id', syncId)
+    .select();
+
+  if (error) {
+    console.error('Failed to update sync log:', error);
+    throw error;
   }
 
-  async getZoomConnection(id) {
-    try {
-      const { data, error } = await this.client
-        .from('zoom_connections')
-        .select('*')
-        .eq('id', id)
-        .single();
+  return data;
+}
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error getting zoom connection:', error);
+// Webinar methods
+async function storeWebinar(webinarData) {
+  try {
+    const { data, error } = await supabase
+      .from('zoom_webinars')
+      .upsert([webinarData], {
+        onConflict: 'connection_id,webinar_id',
+        ignoreDuplicates: false
+      })
+      .select();
+
+    if (error) {
+      console.error('Failed to store webinar:', error);
       throw error;
     }
-  }
 
-  async deleteZoomConnection(id) {
-    try {
-      const { error } = await this.client
-        .from('zoom_connections')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error('Error deleting zoom connection:', error);
-      throw error;
-    }
-  }
-
-  // Sync logging
-  async createSyncLog(logData) {
-    try {
-      const { data, error } = await this.client
-        .from('zoom_sync_logs')
-        .insert(logData)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error creating sync log:', error);
-      throw error;
-    }
-  }
-
-  async updateSyncLog(id, updates) {
-    try {
-      const { error } = await this.client
-        .from('zoom_sync_logs')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
-
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error('Error updating sync log:', error);
-      throw error;
-    }
-  }
-
-  async getSyncLog(id) {
-    try {
-      const { data, error } = await this.client
-        .from('zoom_sync_logs')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error getting sync log:', error);
-      throw error;
-    }
-  }
-
-  // Webinar data storage
-  async storeWebinar(webinarData) {
-    try {
-      const { data, error } = await this.client
-        .from('zoom_webinars')
-        .upsert(webinarData, {
-          onConflict: 'zoom_webinar_id,connection_id'
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error storing webinar:', error);
-      throw error;
-    }
-  }
-
-  // Get webinar by Zoom ID (helper for participant/registrant storage)
-  async getWebinarByZoomId(zoomWebinarId, connectionId) {
-    try {
-      const { data, error } = await this.client
-        .from('zoom_webinars')
-        .select('id, zoom_webinar_id')
-        .eq('zoom_webinar_id', zoomWebinarId.toString())
-        .eq('connection_id', connectionId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      return data;
-    } catch (error) {
-      console.error('Error getting webinar by Zoom ID:', error);
-      throw error;
-    }
-  }
-
-  // Participant data storage
-  async storeParticipants(participantData) {
-    try {
-      const { data, error } = await this.client
-        .from('zoom_participants')
-        .upsert(participantData, {
-          onConflict: 'participant_uuid,webinar_id'
-        })
-        .select();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error storing participants:', error);
-      throw error;
-    }
-  }
-
-  // Registrant data storage
-  async storeRegistrants(registrantData) {
-    try {
-      const { data, error } = await this.client
-        .from('zoom_registrants')
-        .upsert(registrantData, {
-          onConflict: 'registrant_id,webinar_id'
-        })
-        .select();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error storing registrants:', error);
-      throw error;  
-    }
+    return data[0].id;
+  } catch (error) {
+    console.error('Error storing webinar:', error);
+    throw error;
   }
 }
 
-module.exports = new SupabaseService();
+async function getWebinarByZoomId(zoomWebinarId, connectionId) {
+  try {
+    const { data, error } = await supabase
+      .from('zoom_webinars')
+      .select('*')
+      .eq('zoom_webinar_id', zoomWebinarId)
+      .eq('connection_id', connectionId)
+      .single();
+
+    if (error) {
+      console.error('Failed to get webinar by Zoom ID:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error getting webinar by Zoom ID:', error);
+    return null;
+  }
+}
+
+async function updateWebinarMetrics(webinarDbId, metricsData) {
+  try {
+    const { data, error } = await supabase
+      .from('zoom_webinars')
+      .update(metricsData)
+      .eq('id', webinarDbId)
+      .select();
+
+    if (error) {
+      console.error('Failed to update webinar metrics:', error);
+      throw error;
+    }
+
+    return data?.[0];
+  } catch (error) {
+    console.error('Error updating webinar metrics:', error);
+    throw error;
+  }
+}
+
+// Participant methods
+async function storeParticipants(participantData) {
+  try {
+    const { data, error } = await supabase
+      .from('zoom_participants')
+      .upsert(participantData, {
+        onConflict: 'webinar_id,participant_uuid',
+        ignoreDuplicates: false
+      })
+      .select();
+
+    if (error) {
+      console.error('Failed to store participants:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error storing participants:', error);
+    throw error;
+  }
+}
+
+// Registrant methods
+async function storeRegistrants(registrantData) {
+  try {
+    const { data, error } = await supabase
+      .from('zoom_registrants')
+      .upsert(registrantData, {
+        onConflict: 'webinar_id,registrant_id',
+        ignoreDuplicates: false
+      })
+      .select();
+
+    if (error) {
+      console.error('Failed to store registrants:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error storing registrants:', error);
+    throw error;
+  }
+}
+
+// Get registrant count for a webinar
+async function getRegistrantCount(webinarDbId) {
+  try {
+    const { count, error } = await supabase
+      .from('zoom_registrants')
+      .select('*', { count: 'exact', head: true })
+      .eq('webinar_id', webinarDbId);
+
+    if (error) {
+      console.error('Failed to get registrant count:', error);
+      return 0;
+    }
+
+    return count || 0;
+  } catch (error) {
+    console.error('Error getting registrant count:', error);
+    return 0;
+  }
+}
+
+// Get participant metrics for a webinar
+async function getParticipantMetrics(webinarDbId) {
+  try {
+    const { data: participants, error } = await supabase
+      .from('zoom_participants')
+      .select('duration, join_time')
+      .eq('webinar_id', webinarDbId);
+
+    if (error) {
+      console.error('Failed to get participant metrics:', error);
+      return { totalAttendees: 0, totalMinutes: 0, avgDuration: 0 };
+    }
+
+    const totalAttendees = participants?.length || 0;
+    const totalMinutes = participants?.reduce((sum, p) => sum + (p.duration || 0), 0) || 0;
+    const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
+
+    return {
+      totalAttendees,
+      totalMinutes,
+      avgDuration
+    };
+  } catch (error) {
+    console.error('Error calculating participant metrics:', error);
+    return { totalAttendees: 0, totalMinutes: 0, avgDuration: 0 };
+  }
+}
+
+module.exports = {
+  getZoomConnection,
+  updateZoomConnection,
+  getUserCredentials,
+  storeUserCredentials,
+  createSyncLog,
+  updateSyncLog,
+  storeWebinar,
+  getWebinarByZoomId,
+  storeParticipants,
+  getRegistrantCount,
+  getParticipantMetrics,
+  updateWebinarMetrics,
+  storeRegistrants
+};

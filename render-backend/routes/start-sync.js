@@ -164,23 +164,42 @@ async function performWebinarSync(syncId, connection, credentials, syncType) {
       for (const webinar of batch) {
         try {
           // Store webinar in database with comprehensive field extraction
-          await storeWebinarWithAllFields(webinar, connection.id, accessToken);
+          const webinarDbId = await storeWebinarWithAllFields(webinar, connection.id, accessToken);
           
-          // Optionally fetch participants and registrants for completed webinars
-          if (webinar.status === 'ended') {
-            try {
-              const [participants, registrants] = await Promise.all([
-                zoomService.getWebinarParticipants(accessToken, webinar.id),
-                zoomService.getWebinarRegistrants(accessToken, webinar.id)
-              ]);
-
-              // Store participants and registrants
-              await storeParticipants(participants.participants || [], webinar.id, connection.id);
-              await storeRegistrants(registrants.registrants || [], webinar.id, connection.id);
-            } catch (detailError) {
-              console.warn(`Failed to fetch details for webinar ${webinar.id}:`, detailError.message);
+          // Enhanced: Fetch registrants for ALL webinars (not just ended ones)
+          console.log(`📋 ENHANCED: Fetching registrants for webinar ${webinar.id} (status: ${webinar.status})`);
+          try {
+            const registrants = await zoomService.getWebinarRegistrants(accessToken, webinar.id);
+            if (registrants && registrants.length > 0) {
+              await storeRegistrants(registrants, webinar.id, connection.id);
+              console.log(`✅ Stored ${registrants.length} registrants for webinar ${webinar.id}`);
+            } else {
+              console.log(`📭 No registrants found for webinar ${webinar.id}`);
             }
+          } catch (registrantError) {
+            console.warn(`⚠️ Failed to fetch registrants for webinar ${webinar.id}:`, registrantError.message);
           }
+          
+          // Fetch participants only for ended webinars
+          if (webinar.status === 'ended') {
+            console.log(`👥 Fetching participants for ended webinar ${webinar.id}`);
+            try {
+              const participants = await zoomService.getWebinarParticipants(accessToken, webinar.id);
+              if (participants && participants.length > 0) {
+                await storeParticipants(participants, webinar.id, connection.id);
+                console.log(`✅ Stored ${participants.length} participants for webinar ${webinar.id}`);
+              } else {
+                console.log(`👥 No participants found for ended webinar ${webinar.id}`);
+              }
+            } catch (participantError) {
+              console.warn(`⚠️ Failed to fetch participants for webinar ${webinar.id}:`, participantError.message);
+            }
+          } else {
+            console.log(`⏭️ Skipping participants for non-ended webinar ${webinar.id} (status: ${webinar.status})`);
+          }
+
+          // Enhanced: Calculate and update computed metrics
+          await calculateAndUpdateMetrics(webinarDbId, connection.id);
 
           processedCount++;
         } catch (webinarError) {
@@ -215,7 +234,8 @@ async function performWebinarSync(syncId, connection, credentials, syncType) {
         date_range_from: fromDate.toISOString(),
         date_range_to: toDate.toISOString(),
         completed_at: new Date().toISOString(),
-        sync_duration_days: 180 // 90 days past + 90 days future
+        sync_duration_days: 180, // 90 days past + 90 days future
+        enhanced_metrics_enabled: true
       }
     });
 
@@ -224,7 +244,7 @@ async function performWebinarSync(syncId, connection, credentials, syncType) {
       last_sync_at: new Date().toISOString()
     });
 
-    console.log(`✅ Comprehensive sync completed successfully. Processed ${processedCount}/${webinars.length} webinars from 90-day range`);
+    console.log(`✅ Enhanced sync completed successfully. Processed ${processedCount}/${webinars.length} webinars with computed metrics`);
 
   } catch (error) {
     console.error('Sync process failed:', error);
@@ -317,6 +337,15 @@ async function storeWebinarWithAllFields(webinar, connectionId, accessToken) {
       occurrences: completeWebinar.occurrences || null,
       tracking_fields: completeWebinar.tracking_fields || [],
       
+      // Initialize computed fields to 0 (will be updated by calculateAndUpdateMetrics)
+      total_registrants: 0,
+      total_attendees: 0,
+      total_absentees: 0,
+      total_minutes: 0,
+      avg_attendance_duration: 0,
+      attendees_count: 0,
+      registrants_count: 0,
+      
       // Sync tracking
       synced_at: new Date().toISOString(),
       last_synced_at: new Date().toISOString(),
@@ -336,11 +365,54 @@ async function storeWebinarWithAllFields(webinar, connectionId, accessToken) {
     console.log(`  - settings keys: ${Object.keys(webinarData.settings || {}).length} fields`);
     console.log(`  - tracking_fields: ${Array.isArray(webinarData.tracking_fields) ? webinarData.tracking_fields.length : 0} fields`);
 
-    await supabaseService.storeWebinar(webinarData);
-    console.log(`✅ Successfully stored comprehensive webinar data: ${completeWebinar.id}`);
+    const webinarDbId = await supabaseService.storeWebinar(webinarData);
+    console.log(`✅ Successfully stored comprehensive webinar data: ${completeWebinar.id} -> DB ID: ${webinarDbId}`);
+    
+    return webinarDbId;
   } catch (error) {
     console.error(`❌ Failed to store comprehensive webinar ${webinar.id}:`, error);
     throw error;
+  }
+}
+
+// Enhanced helper function to calculate and update computed metrics
+async function calculateAndUpdateMetrics(webinarDbId, connectionId) {
+  console.log(`🧮 Calculating computed metrics for webinar DB ID: ${webinarDbId}`);
+  
+  try {
+    // Get registrant count
+    const registrantCount = await supabaseService.getRegistrantCount(webinarDbId);
+    
+    // Get participant metrics
+    const participantMetrics = await supabaseService.getParticipantMetrics(webinarDbId);
+    
+    // Calculate additional metrics
+    const totalAbsentees = Math.max(0, registrantCount - participantMetrics.totalAttendees);
+    
+    // Update webinar with calculated metrics
+    const updateData = {
+      total_registrants: registrantCount,
+      registrants_count: registrantCount,
+      total_attendees: participantMetrics.totalAttendees,
+      attendees_count: participantMetrics.totalAttendees,
+      total_absentees: totalAbsentees,
+      total_minutes: participantMetrics.totalMinutes,
+      avg_attendance_duration: participantMetrics.avgDuration,
+      updated_at: new Date().toISOString()
+    };
+    
+    await supabaseService.updateWebinarMetrics(webinarDbId, updateData);
+    
+    console.log(`✅ Updated metrics for webinar ${webinarDbId}:`);
+    console.log(`  - Registrants: ${registrantCount}`);
+    console.log(`  - Attendees: ${participantMetrics.totalAttendees}`);
+    console.log(`  - Absentees: ${totalAbsentees}`);
+    console.log(`  - Total minutes: ${participantMetrics.totalMinutes}`);
+    console.log(`  - Avg duration: ${participantMetrics.avgDuration}min`);
+    
+  } catch (error) {
+    console.error(`❌ Failed to calculate metrics for webinar ${webinarDbId}:`, error);
+    // Don't throw - metrics calculation failure shouldn't stop the sync
   }
 }
 
