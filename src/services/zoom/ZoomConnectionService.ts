@@ -4,10 +4,10 @@ import { ConnectionStatusOperations } from './operations/connectionStatus';
 import { TokenUtils } from './utils/tokenUtils';
 import { zoomSyncOrchestrator } from './sync/ZoomSyncOrchestrator';
 import { ZoomConnection, ZoomConnectionInsert, ZoomConnectionUpdate, ConnectionStatus } from '@/types/zoom';
-import { supabase } from '@/integrations/supabase/client';
+import { RenderZoomService } from './RenderZoomService';
 
 /**
- * Main service for managing Zoom connections - simplified for plain text tokens
+ * Main service for managing Zoom connections - now using Render API
  */
 export class ZoomConnectionService {
   // CRUD Operations
@@ -29,39 +29,88 @@ export class ZoomConnectionService {
   static getTokenStatus = TokenUtils.getTokenStatus;
   static isValidToken = TokenUtils.isValidToken;
 
-  // Sync Operations
+  // Sync Operations - now using Render API
   static async startInitialSync(connectionId: string, options?: { batchSize?: number }) {
-    return await zoomSyncOrchestrator.startInitialSync(connectionId, options);
+    try {
+      const result = await RenderZoomService.startSync(connectionId, 'initial');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to start initial sync');
+      }
+      return { success: true, syncId: result.syncId };
+    } catch (error) {
+      console.error('Error starting initial sync:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
   }
 
   static async startIncrementalSync(connectionId: string) {
-    return await zoomSyncOrchestrator.startIncrementalSync(connectionId);
+    try {
+      const result = await RenderZoomService.startSync(connectionId, 'incremental');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to start incremental sync');
+      }
+      return { success: true, syncId: result.syncId };
+    } catch (error) {
+      console.error('Error starting incremental sync:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
   }
 
   static async syncSingleWebinar(webinarId: string, connectionId: string) {
-    return await zoomSyncOrchestrator.syncSingleWebinar(webinarId, connectionId);
+    try {
+      const result = await RenderZoomService.syncWebinars(connectionId, {
+        webinarId,
+        type: 'manual'
+      });
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to sync webinar');
+      }
+      return { success: true, syncId: result.syncId };
+    } catch (error) {
+      console.error('Error syncing single webinar:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
   }
 
   static async scheduleAutomaticSync(connectionId: string) {
     return await zoomSyncOrchestrator.scheduleAutomaticSync(connectionId);
   }
 
-  static async cancelSync(operationId: string) {
-    return await zoomSyncOrchestrator.cancelSync(operationId);
+  static async cancelSync(syncId: string) {
+    try {
+      const result = await RenderZoomService.cancelSync(syncId);
+      return result;
+    } catch (error) {
+      console.error('Error canceling sync:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
   }
 
   static async getSyncStatus() {
     return await zoomSyncOrchestrator.getSyncStatus();
   }
 
-  // Clear all connections (for migration)
+  // Clear all connections - now using Render API
   static async clearAllConnections(userId: string): Promise<boolean> {
     try {
-      const { data, error } = await supabase.functions.invoke('clear-zoom-connections');
-
-      if (error) {
-        console.error('Failed to clear connections:', error);
-        return false;
+      // Get user connections first
+      const connections = await this.getUserConnections(userId);
+      
+      // Disconnect each connection via Render API
+      for (const connection of connections) {
+        await RenderZoomService.disconnectAccount(connection.id);
       }
 
       return true;

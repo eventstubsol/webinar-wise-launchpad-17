@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { SyncStatusMessage } from '@/components/zoom/sync/SyncStatusMessage';
-import { RenderZoomService } from '@/services/zoom/RenderZoomService';
+import { SyncType } from '@/types/zoom';
 
 export function ZoomSyncCard() {
   const { connection, isConnected, isExpired } = useZoomConnection();
@@ -19,7 +19,8 @@ export function ZoomSyncCard() {
     isSyncing, 
     syncProgress, 
     syncStatus, 
-    currentOperation 
+    currentOperation,
+    healthCheck 
   } = useZoomSync(connection);
 
   // Get sync statistics
@@ -76,16 +77,8 @@ export function ZoomSyncCard() {
     },
   });
 
-  // Check Render service health
-  const { data: renderHealth } = useQuery({
-    queryKey: ['render-health'],
-    queryFn: () => RenderZoomService.healthCheck(),
-    refetchInterval: 60000, // Check every minute
-    retry: 1,
-  });
-
   const handleSyncClick = () => {
-    startSync('incremental');
+    startSync(SyncType.INCREMENTAL);
   };
 
   const handleConnectionTest = async () => {
@@ -138,13 +131,13 @@ export function ZoomSyncCard() {
         <CardTitle className="flex items-center gap-2">
           <Database className="h-5 w-5" />
           Webinar Data Sync (Render API)
-          {renderHealth && !renderHealth.success && (
+          {healthCheck && !healthCheck.success && (
             <AlertCircle className="h-4 w-4 text-red-500" />
           )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {renderHealth && !renderHealth.success && (
+        {healthCheck && !healthCheck.success && (
           <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
             <div className="flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
@@ -183,7 +176,7 @@ export function ZoomSyncCard() {
         <div className="flex gap-2">
           <Button 
             onClick={handleSyncClick}
-            disabled={isSyncing || isExpired || (renderHealth && !renderHealth.success)}
+            disabled={isSyncing || isExpired || (healthCheck && !healthCheck.success)}
             size="sm"
             className="flex-1"
           >
@@ -195,7 +188,7 @@ export function ZoomSyncCard() {
             onClick={handleConnectionTest}
             variant="outline"
             size="sm"
-            disabled={isSyncing || (renderHealth && !renderHealth.success)}
+            disabled={isSyncing || (healthCheck && !healthCheck.success)}
           >
             Test Connection
           </Button>
@@ -214,8 +207,8 @@ export function ZoomSyncCard() {
           )}
           <div className="flex items-center gap-1 mt-1">
             Render API status: 
-            <span className={renderHealth?.success ? 'text-green-600' : 'text-red-600'}>
-              {renderHealth?.success ? 'Online' : 'Offline'}
+            <span className={healthCheck?.success ? 'text-green-600' : 'text-red-600'}>
+              {healthCheck?.success ? 'Online' : 'Offline'}
             </span>
           </div>
         </div>
