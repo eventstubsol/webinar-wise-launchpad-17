@@ -9,6 +9,39 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      analytics_cache: {
+        Row: {
+          cache_data: Json
+          cache_key: string
+          cache_version: number | null
+          created_at: string | null
+          dependencies: string[] | null
+          expires_at: string
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          cache_data: Json
+          cache_key: string
+          cache_version?: number | null
+          created_at?: string | null
+          dependencies?: string[] | null
+          expires_at: string
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          cache_data?: Json
+          cache_key?: string
+          cache_version?: number | null
+          created_at?: string | null
+          dependencies?: string[] | null
+          expires_at?: string
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       campaign_performance_summaries: {
         Row: {
           bounce_rate: number | null
@@ -364,6 +397,68 @@ export type Database = {
         }
         Relationships: []
       }
+      processing_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          max_retries: number | null
+          priority: number | null
+          retry_count: number | null
+          scheduled_at: string | null
+          started_at: string | null
+          status: string | null
+          task_data: Json
+          task_type: string
+          updated_at: string | null
+          user_id: string | null
+          webinar_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          max_retries?: number | null
+          priority?: number | null
+          retry_count?: number | null
+          scheduled_at?: string | null
+          started_at?: string | null
+          status?: string | null
+          task_data: Json
+          task_type: string
+          updated_at?: string | null
+          user_id?: string | null
+          webinar_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          max_retries?: number | null
+          priority?: number | null
+          retry_count?: number | null
+          scheduled_at?: string | null
+          started_at?: string | null
+          status?: string | null
+          task_data?: Json
+          task_type?: string
+          updated_at?: string | null
+          user_id?: string | null
+          webinar_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processing_queue_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -482,6 +577,47 @@ export type Database = {
           },
         ]
       }
+      sync_performance_metrics: {
+        Row: {
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          metric_name: string
+          metric_unit: string | null
+          metric_value: number
+          recorded_at: string | null
+          sync_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          metric_name: string
+          metric_unit?: string | null
+          metric_value: number
+          recorded_at?: string | null
+          sync_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          metric_name?: string
+          metric_unit?: string | null
+          metric_value?: number
+          recorded_at?: string | null
+          sync_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_performance_metrics_sync_id_fkey"
+            columns: ["sync_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_sync_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_progress: {
         Row: {
           completed_webinars: number
@@ -525,6 +661,66 @@ export type Database = {
             columns: ["sync_id"]
             isOneToOne: false
             referencedRelation: "zoom_sync_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          estimated_duration_seconds: number | null
+          id: string
+          queue_position: number
+          started_at: string | null
+          status: string | null
+          sync_id: string
+          updated_at: string | null
+          webinar_id: string | null
+          webinar_title: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          estimated_duration_seconds?: number | null
+          id?: string
+          queue_position: number
+          started_at?: string | null
+          status?: string | null
+          sync_id: string
+          updated_at?: string | null
+          webinar_id?: string | null
+          webinar_title?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          estimated_duration_seconds?: number | null
+          id?: string
+          queue_position?: number
+          started_at?: string | null
+          status?: string | null
+          sync_id?: string
+          updated_at?: string | null
+          webinar_id?: string | null
+          webinar_title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_queue_sync_id_fkey"
+            columns: ["sync_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_sync_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_queue_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
             referencedColumns: ["id"]
           },
         ]
@@ -852,7 +1048,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      enqueue_task: {
+        Args: {
+          p_task_type: string
+          p_task_data: Json
+          p_priority?: number
+          p_webinar_id?: string
+          p_user_id?: string
+        }
+        Returns: string
+      }
+      invalidate_cache_dependencies: {
+        Args: { dep_pattern: string }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never

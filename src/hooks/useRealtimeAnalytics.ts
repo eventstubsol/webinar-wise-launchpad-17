@@ -1,101 +1,213 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { AnalyticsEvent, ProcessingTask, CacheEntry } from '@/services/realtime/types';
+
+interface AnalyticsCache {
+  id: string;
+  cache_key: string;
+  cache_data: any;
+  cache_version: number;
+  dependencies: string[];
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ProcessingTask {
+  id: string;
+  task_type: string;
+  task_data: any;
+  priority: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  webinar_id?: string;
+  user_id?: string;
+  retry_count: number;
+  max_retries: number;
+  scheduled_at: string;
+  started_at?: string;
+  completed_at?: string;
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface AnalyticsEvent {
+  id: string;
+  type: string;
+  data: any;
+  timestamp: string;
+}
 
 interface UseRealtimeAnalyticsOptions {
   webinarId?: string;
   enableProcessingUpdates?: boolean;
   enableCacheUpdates?: boolean;
-  reconnectInterval?: number;
-  disabled?: boolean; // Add option to disable real-time features
 }
 
 export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) => {
-  const { user } = useAuth();
-  const { toast } = useToast();
+  const {
+    webinarId,
+    enableProcessingUpdates = false,
+    enableCacheUpdates = false,
+  } = options;
+
   const [isConnected, setIsConnected] = useState(false);
   const [processingTasks, setProcessingTasks] = useState<ProcessingTask[]>([]);
-  const [cacheEntries, setCacheEntries] = useState<Map<string, CacheEntry>>(new Map());
   const [analyticsEvents, setAnalyticsEvents] = useState<AnalyticsEvent[]>([]);
-  const [connectionAttempts, setConnectionAttempts] = useState(0);
-  const subscriptionsRef = useRef<any[]>([]);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const [cacheData, setCacheData] = useState<Map<string, any>>(new Map());
+  
+  const channelRef = useRef<any>(null);
+  const taskQueueRef = useRef<Map<string, any>>(new Map());
 
-  // Connection management with exponential backoff
-  const connect = useCallback(() => {
-    // Skip if disabled or no user
-    if (options.disabled || !user?.id) return;
+  // Load initial processing tasks
+  const loadProcessingTasks = useCallback(async () => {
+    if (!enableProcessingUpdates) return;
 
     try {
-      // Subscribe to processing queue updates
-      if (options.enableProcessingUpdates !== false) {
+      const { data, error } = await supabase
+        .from('processing_queue')
+        .select('*')
+        .in('status', ['pending', 'processing'])
+        .order('priority', { ascending: true })
+        .order('scheduled_at', { ascending: true });
+
+      if (error) throw error;
+      setProcessingTasks(data || []);
+    } catch (error) {
+      console.error('Error loading processing tasks:', error);
+    }
+  }, [enableProcessingUpdates]);
+
+  // Cache management functions
+  const getCachedData = useCallback((key: string) => {
+    return cacheData.get(key);
+  }, [cacheData]);
+
+  const setCachedData = useCallback(async (key: string, data: any, dependencies: string[] = [], ttlHours: number = 1) => {
+    try {
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + ttlHours);
+
+      const { error } = await supabase
+        .from('analytics_cache')
+        .upsert({
+          cache_key: key,
+          cache_data: data,
+          dependencies,
+          expires_at: expiresAt.toISOString(),
+        });
+
+      if (error) throw error;
+      
+      setCacheData(prev => new Map(prev.set(key, data)));
+    } catch (error) {
+      console.error('Error setting cache data:', error);
+    }
+  }, []);
+
+  const invalidateCache = useCallback(async (pattern: string) => {
+    try {
+      const { error } = await supabase.rpc('invalidate_cache_dependencies', {
+        dep_pattern: pattern
+      });
+
+      if (error) throw error;
+
+      // Update local cache
+      setCacheData(prev => {
+        const newCache = new Map(prev);
+        for (const [key] of newCache) {
+          if (key.includes(pattern)) {
+            newCache.delete(key);
+          }
+        }
+        return newCache;
+      });
+    } catch (error) {
+      console.error('Error invalidating cache:', error);
+    }
+  }, []);
+
+  // Task queue management
+  const enqueueAnalysisTask = useCallback(async (
+    taskType: string,
+    taskData: any,
+    priority: number = 5
+  ) => {
+    try {
+      const { data, error } = await supabase.rpc('enqueue_task', {
+        p_task_type: taskType,
+        p_task_data: taskData,
+        p_priority: priority,
+        p_webinar_id: webinarId || null,
+        p_user_id: null, // Will be set by RLS
+      });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error enqueuing task:', error);
+      return null;
+    }
+  }, [webinarId]);
+
+  // Set up real-time subscriptions
+  useEffect(() => {
+    if (!isConnected) {
+      setIsConnected(true);
+    }
+
+    const setupSubscriptions = async () => {
+      // Load initial data
+      await loadProcessingTasks();
+
+      // Set up processing queue subscription
+      if (enableProcessingUpdates) {
         const processingChannel = supabase
-          .channel(`processing-queue-${user.id}`)
+          .channel('processing-updates')
           .on(
             'postgres_changes',
             {
               event: '*',
               schema: 'public',
               table: 'processing_queue',
-              filter: `user_id=eq.${user.id}`,
             },
             (payload) => {
-              // Handle DELETE events safely
-              if (payload.eventType === 'DELETE') {
-                if (payload.old && typeof payload.old === 'object' && 'id' in payload.old) {
-                  setProcessingTasks(prev => prev.filter(t => t.id !== payload.old.id));
-                }
-                return;
-              }
-
-              // Handle INSERT and UPDATE events
-              if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
-                const task = payload.new as ProcessingTask;
-                
+              const task = payload.new as ProcessingTask;
+              
+              if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
                 setProcessingTasks(prev => {
-                  const existing = prev.findIndex(t => t.id === task.id);
-                  if (existing >= 0) {
-                    const updated = [...prev];
-                    updated[existing] = task;
-                    return updated;
-                  } else {
-                    return [...prev, task];
+                  const filtered = prev.filter(t => t.id !== task.id);
+                  if (task.status === 'pending' || task.status === 'processing') {
+                    return [...filtered, task].sort((a, b) => a.priority - b.priority);
                   }
+                  return filtered;
                 });
 
-                // Show toast for important status changes
-                if (task.status === 'completed') {
-                  toast({
-                    title: "Analysis Complete",
-                    description: `${task.task_type} finished successfully`,
-                  });
-                } else if (task.status === 'failed') {
-                  toast({
-                    title: "Analysis Failed",
-                    description: task.error_message || `${task.task_type} failed`,
-                    variant: "destructive",
-                  });
-                }
+                // Emit analytics event
+                setAnalyticsEvents(prev => [
+                  ...prev.slice(-99), // Keep last 100 events
+                  {
+                    id: `${Date.now()}-${Math.random()}`,
+                    type: `task_${payload.eventType.toLowerCase()}`,
+                    data: task,
+                    timestamp: new Date().toISOString(),
+                  }
+                ]);
+              } else if (payload.eventType === 'DELETE') {
+                setProcessingTasks(prev => prev.filter(t => t.id !== payload.old.id));
               }
             }
           )
-          .subscribe((status) => {
-            setIsConnected(status === 'SUBSCRIBED');
-            if (status === 'SUBSCRIBED') {
-              setConnectionAttempts(0);
-            }
-          });
+          .subscribe();
 
-        subscriptionsRef.current.push(processingChannel);
+        channelRef.current = processingChannel;
       }
 
-      // Subscribe to cache updates (simplified - only if explicitly enabled)
-      if (options.enableCacheUpdates === true) {
+      // Set up cache subscription
+      if (enableCacheUpdates) {
         const cacheChannel = supabase
-          .channel('analytics-cache-global')
+          .channel('cache-updates')
           .on(
             'postgres_changes',
             {
@@ -104,151 +216,36 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
               table: 'analytics_cache',
             },
             (payload) => {
-              if (payload.eventType === 'DELETE') {
-                if (payload.old && typeof payload.old === 'object' && 'cache_key' in payload.old) {
-                  setCacheEntries(prev => {
-                    const updated = new Map(prev);
-                    updated.delete(payload.old.cache_key);
-                    return updated;
-                  });
-                }
-              } else {
-                if (payload.new && typeof payload.new === 'object' && 'cache_key' in payload.new) {
-                  const cacheEntry = payload.new as CacheEntry;
-                  setCacheEntries(prev => {
-                    const updated = new Map(prev);
-                    updated.set(cacheEntry.cache_key, cacheEntry);
-                    return updated;
-                  });
-                }
+              if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                const cacheItem = payload.new as AnalyticsCache;
+                setCacheData(prev => new Map(prev.set(cacheItem.cache_key, cacheItem.cache_data)));
+              } else if (payload.eventType === 'DELETE') {
+                const oldItem = payload.old as AnalyticsCache;
+                setCacheData(prev => {
+                  const newCache = new Map(prev);
+                  newCache.delete(oldItem.cache_key);
+                  return newCache;
+                });
               }
             }
           )
           .subscribe();
 
-        subscriptionsRef.current.push(cacheChannel);
+        if (!channelRef.current) {
+          channelRef.current = cacheChannel;
+        }
       }
+    };
 
-    } catch (error) {
-      console.error('Failed to establish realtime connections:', error);
-      scheduleReconnect();
-    }
-  }, [user?.id, options, toast]);
+    setupSubscriptions();
 
-  // Reconnection logic with exponential backoff
-  const scheduleReconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
-
-    const delay = Math.min(1000 * Math.pow(2, connectionAttempts), 30000); // Max 30 seconds
-    
-    reconnectTimeoutRef.current = setTimeout(() => {
-      setConnectionAttempts(prev => prev + 1);
-      connect();
-    }, delay);
-  }, [connectionAttempts, connect]);
-
-  // Disconnect all subscriptions
-  const disconnect = useCallback(() => {
-    subscriptionsRef.current.forEach(channel => {
-      try {
-        supabase.removeChannel(channel);
-      } catch (error) {
-        console.warn('Error removing channel:', error);
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
-    });
-    subscriptionsRef.current = [];
-    setIsConnected(false);
-    
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
-  }, []);
-
-  // Enqueue analysis task
-  const enqueueAnalysisTask = useCallback(async (
-    taskType: string,
-    taskData: any,
-    priority: number = 5
-  ) => {
-    try {
-      const { error } = await supabase.rpc('enqueue_task', {
-        p_task_type: taskType,
-        p_task_data: taskData,
-        p_priority: priority,
-        p_webinar_id: taskData.webinar_id || null,
-        p_user_id: user?.id || null,
-      });
-
-      if (error) {
-        console.error('Failed to enqueue task:', error);
-        throw error;
-      }
-    } catch (error) {
-      console.error('Error enqueuing analysis task:', error);
-    }
-  }, [user?.id]);
-
-  // Get cached data
-  const getCachedData = useCallback((cacheKey: string) => {
-    const entry = cacheEntries.get(cacheKey);
-    if (!entry) return null;
-    
-    // Check if expired
-    if (new Date(entry.expires_at) < new Date()) {
-      return null;
-    }
-    
-    return entry.cache_data;
-  }, [cacheEntries]);
-
-  // Set cached data
-  const setCachedData = useCallback(async (
-    cacheKey: string,
-    data: any,
-    expiresInMinutes: number = 30,
-    dependencies: string[] = []
-  ) => {
-    try {
-      const expiresAt = new Date();
-      expiresAt.setMinutes(expiresAt.getMinutes() + expiresInMinutes);
-
-      const { error } = await supabase
-        .from('analytics_cache')
-        .upsert({
-          cache_key: cacheKey,
-          cache_data: data,
-          dependencies,
-          expires_at: expiresAt.toISOString(),
-        });
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Failed to set cache data:', error);
-    }
-  }, []);
-
-  // Invalidate cache
-  const invalidateCache = useCallback(async (pattern: string) => {
-    try {
-      const { error } = await supabase.rpc('invalidate_cache_dependencies', {
-        dep_pattern: pattern,
-      });
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Failed to invalidate cache:', error);
-    }
-  }, []);
-
-  // Initialize connections only if not disabled
-  useEffect(() => {
-    if (!options.disabled) {
-      connect();
-    }
-    return disconnect;
-  }, [connect, disconnect, options.disabled]);
+    };
+  }, [enableProcessingUpdates, enableCacheUpdates, loadProcessingTasks]);
 
   return {
     isConnected,
@@ -258,7 +255,5 @@ export const useRealtimeAnalytics = (options: UseRealtimeAnalyticsOptions = {}) 
     getCachedData,
     setCachedData,
     invalidateCache,
-    reconnect: connect,
-    disconnect,
   };
 };
