@@ -9,6 +9,125 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      campaign_performance_summaries: {
+        Row: {
+          bounce_rate: number | null
+          campaign_id: string
+          click_rate: number | null
+          conversion_rate: number | null
+          cost_per_click: number | null
+          created_at: string
+          engagement_score: number | null
+          id: string
+          open_rate: number | null
+          revenue_generated: number | null
+          roi: number | null
+          total_bounced: number
+          total_clicked: number
+          total_delivered: number
+          total_opened: number
+          total_sent: number
+          total_unsubscribed: number
+          updated_at: string
+        }
+        Insert: {
+          bounce_rate?: number | null
+          campaign_id: string
+          click_rate?: number | null
+          conversion_rate?: number | null
+          cost_per_click?: number | null
+          created_at?: string
+          engagement_score?: number | null
+          id?: string
+          open_rate?: number | null
+          revenue_generated?: number | null
+          roi?: number | null
+          total_bounced?: number
+          total_clicked?: number
+          total_delivered?: number
+          total_opened?: number
+          total_sent?: number
+          total_unsubscribed?: number
+          updated_at?: string
+        }
+        Update: {
+          bounce_rate?: number | null
+          campaign_id?: string
+          click_rate?: number | null
+          conversion_rate?: number | null
+          cost_per_click?: number | null
+          created_at?: string
+          engagement_score?: number | null
+          id?: string
+          open_rate?: number | null
+          revenue_generated?: number | null
+          roi?: number | null
+          total_bounced?: number
+          total_clicked?: number
+          total_delivered?: number
+          total_opened?: number
+          total_sent?: number
+          total_unsubscribed?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_performance_summaries_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaigns: {
+        Row: {
+          audience_segment: Json | null
+          campaign_type: string
+          completed_at: string | null
+          content_template: string | null
+          created_at: string
+          id: string
+          name: string
+          schedule_config: Json | null
+          sent_at: string | null
+          status: string
+          subject_template: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          audience_segment?: Json | null
+          campaign_type?: string
+          completed_at?: string | null
+          content_template?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          schedule_config?: Json | null
+          sent_at?: string | null
+          status?: string
+          subject_template: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          audience_segment?: Json | null
+          campaign_type?: string
+          completed_at?: string | null
+          content_template?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          schedule_config?: Json | null
+          sent_at?: string | null
+          status?: string
+          subject_template?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       csv_imports: {
         Row: {
           completed_at: string | null
@@ -67,6 +186,107 @@ export type Database = {
           status?: string
           successful_rows?: number | null
           total_rows?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      export_dead_letter_queue: {
+        Row: {
+          created_at: string
+          export_config: Json
+          export_type: string
+          failure_reason: string
+          id: string
+          moved_to_dlq_at: string
+          original_job_id: string
+          retry_history: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          export_config?: Json
+          export_type: string
+          failure_reason: string
+          id?: string
+          moved_to_dlq_at?: string
+          original_job_id: string
+          retry_history?: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          export_config?: Json
+          export_type?: string
+          failure_reason?: string
+          id?: string
+          moved_to_dlq_at?: string
+          original_job_id?: string
+          retry_history?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "export_dead_letter_queue_original_job_id_fkey"
+            columns: ["original_job_id"]
+            isOneToOne: false
+            referencedRelation: "export_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      export_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          export_config: Json
+          export_type: string
+          file_size: number | null
+          file_url: string | null
+          id: string
+          max_retries: number
+          performance_metrics: Json | null
+          progress_percentage: number
+          retry_count: number
+          started_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          export_config?: Json
+          export_type: string
+          file_size?: number | null
+          file_url?: string | null
+          id?: string
+          max_retries?: number
+          performance_metrics?: Json | null
+          progress_percentage?: number
+          retry_count?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          export_config?: Json
+          export_type?: string
+          file_size?: number | null
+          file_url?: string | null
+          id?: string
+          max_retries?: number
+          performance_metrics?: Json | null
+          progress_percentage?: number
+          retry_count?: number
+          started_at?: string | null
+          status?: string
           updated_at?: string
           user_id?: string
         }

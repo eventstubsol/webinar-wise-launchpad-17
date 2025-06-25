@@ -2,13 +2,14 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Database, Settings, RefreshCw } from 'lucide-react';
+import { Database, Settings, RefreshCw, AlertCircle } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useZoomSync } from '@/hooks/useZoomSync';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { SyncStatusMessage } from '@/components/zoom/sync/SyncStatusMessage';
+import { RenderZoomService } from '@/services/zoom/RenderZoomService';
 
 export function ZoomSyncCard() {
   const { connection, isConnected, isExpired } = useZoomConnection();
@@ -75,6 +76,14 @@ export function ZoomSyncCard() {
     },
   });
 
+  // Check Render service health
+  const { data: renderHealth } = useQuery({
+    queryKey: ['render-health'],
+    queryFn: () => RenderZoomService.healthCheck(),
+    refetchInterval: 60000, // Check every minute
+    retry: 1,
+  });
+
   const handleSyncClick = () => {
     startSync('incremental');
   };
@@ -129,9 +138,21 @@ export function ZoomSyncCard() {
         <CardTitle className="flex items-center gap-2">
           <Database className="h-5 w-5" />
           Webinar Data Sync
+          {renderHealth && !renderHealth.success && (
+            <AlertCircle className="h-4 w-4 text-red-500" title="Render service unavailable" />
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {renderHealth && !renderHealth.success && (
+          <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+            <div className="flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              Sync service unavailable. Please try again later.
+            </div>
+          </div>
+        )}
+
         <SyncStatusMessage 
           status={currentSyncStatus}
           message={statusMessage}
@@ -151,13 +172,18 @@ export function ZoomSyncCard() {
                 style={{ width: `${syncProgress}%` }}
               />
             </div>
+            {currentOperation && (
+              <div className="text-xs text-muted-foreground">
+                {currentOperation}
+              </div>
+            )}
           </div>
         )}
 
         <div className="flex gap-2">
           <Button 
             onClick={handleSyncClick}
-            disabled={isSyncing || isExpired}
+            disabled={isSyncing || isExpired || (renderHealth && !renderHealth.success)}
             size="sm"
             className="flex-1"
           >
@@ -169,7 +195,7 @@ export function ZoomSyncCard() {
             onClick={handleConnectionTest}
             variant="outline"
             size="sm"
-            disabled={isSyncing}
+            disabled={isSyncing || (renderHealth && !renderHealth.success)}
           >
             Test Connection
           </Button>
@@ -186,6 +212,12 @@ export function ZoomSyncCard() {
           {syncStats?.lastSync && (
             <div>Last sync: {new Date(syncStats.lastSync).toLocaleString()}</div>
           )}
+          <div className="flex items-center gap-1 mt-1">
+            Sync service: 
+            <span className={renderHealth?.success ? 'text-green-600' : 'text-red-600'}>
+              {renderHealth?.success ? 'Online' : 'Offline'}
+            </span>
+          </div>
         </div>
       </CardContent>
     </Card>

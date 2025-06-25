@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,8 +21,8 @@ import {
   Skull
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { ExportJobRetryManager } from '@/services/export/job/ExportJobRetryManager';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ExportJob {
   id: string;
@@ -51,6 +52,7 @@ interface DeadLetterJob {
 }
 
 export function EnhancedExportQueueMonitor() {
+  const { user } = useAuth();
   const [jobs, setJobs] = useState<ExportJob[]>([]);
   const [deadLetterJobs, setDeadLetterJobs] = useState<DeadLetterJob[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,8 +63,10 @@ export function EnhancedExportQueueMonitor() {
   const { toast } = useToast();
 
   useEffect(() => {
-    loadJobs();
-    loadDeadLetterJobs();
+    if (user) {
+      loadJobs();
+      loadDeadLetterJobs();
+    }
     
     // Set up real-time subscription for job updates
     const subscription = supabase
@@ -79,13 +83,16 @@ export function EnhancedExportQueueMonitor() {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [user]);
 
   const loadJobs = async () => {
+    if (!user) return;
+    
     try {
       const { data, error } = await supabase
         .from('export_queue')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -103,25 +110,17 @@ export function EnhancedExportQueueMonitor() {
   };
 
   const loadDeadLetterJobs = async () => {
+    if (!user) return;
+    
     try {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) return;
+      const { data, error } = await supabase
+        .from('export_dead_letter_queue')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('moved_to_dlq_at', { ascending: false });
 
-      const { data, error } = await ExportJobRetryManager.getDeadLetterJobs(user.user.id);
       if (error) throw error;
-      
-      // Transform the data to match our interface
-      const transformedData: DeadLetterJob[] = data.map(job => ({
-        id: job.id,
-        original_job_id: job.original_job_id,
-        export_type: job.export_type,
-        failure_reason: job.failure_reason || 'Unknown error',
-        moved_to_dlq_at: job.moved_to_dlq_at,
-        retry_history: Array.isArray(job.retry_history) ? job.retry_history : [],
-        export_config: job.export_config
-      }));
-      
-      setDeadLetterJobs(transformedData);
+      setDeadLetterJobs(data || []);
     } catch (error) {
       console.error('Failed to load dead letter jobs:', error);
     }
@@ -129,16 +128,23 @@ export function EnhancedExportQueueMonitor() {
 
   const handleRetryJob = async (jobId: string) => {
     try {
-      const success = await ExportJobRetryManager.retryJob(jobId);
-      if (success) {
-        toast({
-          title: "Success",
-          description: "Job queued for retry"
-        });
-        loadJobs();
-      } else {
-        throw new Error('Retry failed');
-      }
+      const { error } = await supabase
+        .from('export_queue')
+        .update({ 
+          status: 'pending', 
+          retry_count: 0, 
+          error_message: null 
+        })
+        .eq('id', jobId)
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Job queued for retry"
+      });
+      loadJobs();
     } catch (error) {
       toast({
         title: "Error",
@@ -150,17 +156,38 @@ export function EnhancedExportQueueMonitor() {
 
   const handleRequeueFromDLQ = async (dlqId: string) => {
     try {
-      const success = await ExportJobRetryManager.requeueFromDeadLetter(dlqId);
-      if (success) {
-        toast({
-          title: "Success",
-          description: "Job requeued successfully"
+      // Get the dead letter job details
+      const dlqJob = deadLetterJobs.find(job => job.id === dlqId);
+      if (!dlqJob) return;
+
+      // Create a new job in the main queue
+      const { error: insertError } = await supabase
+        .from('export_queue')
+        .insert({
+          user_id: user?.id,
+          export_type: dlqJob.export_type,
+          export_config: dlqJob.export_config,
+          status: 'pending',
+          retry_count: 0
         });
-        loadJobs();
-        loadDeadLetterJobs();
-      } else {
-        throw new Error('Requeue failed');
-      }
+
+      if (insertError) throw insertError;
+
+      // Remove from dead letter queue
+      const { error: deleteError } = await supabase
+        .from('export_dead_letter_queue')
+        .delete()
+        .eq('id', dlqId)
+        .eq('user_id', user?.id);
+
+      if (deleteError) throw deleteError;
+
+      toast({
+        title: "Success",
+        description: "Job requeued successfully"
+      });
+      loadJobs();
+      loadDeadLetterJobs();
     } catch (error) {
       toast({
         title: "Error",
