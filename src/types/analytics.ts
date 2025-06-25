@@ -15,7 +15,7 @@ export interface ProcessingTask {
   error_message?: string;
   created_at: string;
   updated_at: string;
-  progress?: number; // Add missing progress property
+  progress?: number;
 }
 
 export interface PerformanceData {
@@ -27,4 +27,14 @@ export interface PerformanceData {
     averageDuration: number;
     successRate: number;
   };
+  // Add missing properties for PerformanceMetricsDashboard
+  avgWebinarSyncTime?: number;
+  totalApiCalls?: number;
+  dataVolumeSynced?: number;
+  trends?: Array<{
+    date: string;
+    avgDuration: number;
+    successRate: number;
+    apiCalls: number;
+  }>;
 }

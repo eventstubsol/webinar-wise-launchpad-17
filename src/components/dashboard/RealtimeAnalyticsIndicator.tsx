@@ -174,7 +174,7 @@ export const RealtimeAnalyticsIndicator: React.FC<RealtimeAnalyticsIndicatorProp
                     {getTaskIcon(task.status)}
                     <span className="text-sm">{task.task_type}</span>
                   </div>
-                  <Badge variant={getStatusBadgeVariant(task.status)} size="sm">
+                  <Badge variant={getStatusBadgeVariant(task.status)}>
                     {task.status}
                   </Badge>
                 </div>

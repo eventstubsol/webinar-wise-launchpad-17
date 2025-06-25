@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { PerformanceData } from '@/types/analytics';
@@ -109,6 +109,11 @@ export const useSyncPerformanceMetrics = (connectionId?: string, syncId?: string
       averageDuration: metricSummaries.find(m => m.metric_name === 'duration')?.average_value || 0,
       successRate: 95, // Calculate based on actual data
     },
+    // Add the missing properties
+    avgWebinarSyncTime: metricSummaries.find(m => m.metric_name === 'webinar_sync_time')?.average_value,
+    totalApiCalls: metricSummaries.find(m => m.metric_name === 'api_calls')?.average_value,
+    dataVolumeSynced: metricSummaries.find(m => m.metric_name === 'data_volume')?.average_value,
+    trends: [], // Will be populated with actual trend data
   }), [metrics, metricSummaries]);
 
   // Set up real-time subscription for new metrics
@@ -165,7 +170,7 @@ export const useSyncPerformanceMetrics = (connectionId?: string, syncId?: string
     metrics,
     realtimeMetrics,
     metricSummaries,
-    performanceData, // Add the missing performanceData property
+    performanceData,
     isLoading,
     error,
     refetch,

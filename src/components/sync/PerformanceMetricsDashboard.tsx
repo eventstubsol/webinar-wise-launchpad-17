@@ -131,7 +131,8 @@ export const PerformanceMetricsDashboard: React.FC<PerformanceMetricsDashboardPr
               <div>
                 <div className="text-sm text-muted-foreground">Avg Sync Time</div>
                 <div className="text-lg font-semibold">
-                  {performanceData ? formatDuration(performanceData.avgWebinarSyncTime) : '-'}
+                  {performanceData?.avgWebinarSyncTime ? formatDuration(performanceData.avgWebinarSyncTime) : 
+                   performanceData ? formatDuration(performanceData.summary.averageDuration) : '-'}
                 </div>
               </div>
             </div>
@@ -145,7 +146,7 @@ export const PerformanceMetricsDashboard: React.FC<PerformanceMetricsDashboardPr
               <div>
                 <div className="text-sm text-muted-foreground">Total API Calls</div>
                 <div className="text-lg font-semibold">
-                  {performanceData?.totalApiCalls || 0}
+                  {performanceData?.totalApiCalls || rateLimitData?.api_calls_made || 0}
                 </div>
               </div>
             </div>
@@ -159,7 +160,8 @@ export const PerformanceMetricsDashboard: React.FC<PerformanceMetricsDashboardPr
               <div>
                 <div className="text-sm text-muted-foreground">Success Rate</div>
                 <div className="text-lg font-semibold">
-                  {performanceData ? `${performanceData.successRate.toFixed(1)}%` : '-'}
+                  {performanceData?.successRate ? `${performanceData.successRate.toFixed(1)}%` :
+                   performanceData ? `${performanceData.summary.successRate.toFixed(1)}%` : '-'}
                 </div>
               </div>
             </div>
@@ -173,7 +175,8 @@ export const PerformanceMetricsDashboard: React.FC<PerformanceMetricsDashboardPr
               <div>
                 <div className="text-sm text-muted-foreground">Data Synced</div>
                 <div className="text-lg font-semibold">
-                  {performanceData ? formatBytes(performanceData.dataVolumeSynced) : '-'}
+                  {performanceData?.dataVolumeSynced ? formatBytes(performanceData.dataVolumeSynced) : 
+                   `${performanceData?.summary.totalSyncs || 0} items`}
                 </div>
               </div>
             </div>
@@ -252,7 +255,7 @@ export const PerformanceMetricsDashboard: React.FC<PerformanceMetricsDashboardPr
             <div className="flex items-center justify-between">
               <span className="text-sm">Last Successful Sync</span>
               <span className="text-sm text-muted-foreground">
-                {performanceData?.trends?.length > 0 ? 
+                {performanceData?.trends && performanceData.trends.length > 0 ? 
                   new Date(performanceData.trends[performanceData.trends.length - 1].date).toLocaleString() : 
                   'Never'
                 }

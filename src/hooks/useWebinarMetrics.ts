@@ -52,10 +52,14 @@ export const useWebinarMetrics = () => {
         setLoading(true);
         setError(null);
 
-        // Fetch webinars directly from zoom_webinars table
+        // Fetch webinars with related counts
         const { data: webinars, error: webinarsError } = await supabase
           .from('zoom_webinars')
-          .select('*')
+          .select(`
+            *,
+            zoom_registrants(count),
+            zoom_participants(count)
+          `)
           .eq('connection_id', connection.id);
 
         if (webinarsError) throw webinarsError;
@@ -75,13 +79,33 @@ export const useWebinarMetrics = () => {
           return;
         }
 
-        // Calculate aggregate metrics
+        // Calculate metrics by aggregating related data
         const totalWebinars = webinars.length;
-        const totalRegistrants = webinars.reduce((sum, w) => sum + (w.total_registrants || 0), 0);
-        const totalAttendees = webinars.reduce((sum, w) => sum + (w.total_attendees || 0), 0);
+        let totalRegistrants = 0;
+        let totalAttendees = 0;
+        let totalDuration = 0;
+
+        // For each webinar, get actual counts
+        for (const webinar of webinars) {
+          // Get registrant count
+          const { count: registrantCount } = await supabase
+            .from('zoom_registrants')
+            .select('*', { count: 'exact', head: true })
+            .eq('webinar_id', webinar.id);
+
+          // Get participant count  
+          const { count: participantCount } = await supabase
+            .from('zoom_participants')
+            .select('*', { count: 'exact', head: true })
+            .eq('webinar_id', webinar.id);
+
+          totalRegistrants += registrantCount || 0;
+          totalAttendees += participantCount || 0;
+          totalDuration += webinar.duration || 0;
+        }
+
         const attendanceRate = totalRegistrants > 0 ? (totalAttendees / totalRegistrants) * 100 : 0;
-        const totalEngagement = webinars.reduce((sum, w) => sum + (w.avg_attendance_duration || 0), 0);
-        const averageDuration = totalWebinars > 0 ? totalEngagement / totalWebinars : 0;
+        const averageDuration = totalWebinars > 0 ? totalDuration / totalWebinars : 0;
 
         // Generate monthly trends (last 6 months)
         const monthlyTrends = [];
@@ -94,11 +118,30 @@ export const useWebinarMetrics = () => {
             w.start_time?.startsWith(monthKey)
           );
           
+          // Calculate registrants and attendees for this month
+          let monthRegistrants = 0;
+          let monthAttendees = 0;
+          
+          for (const webinar of monthWebinars) {
+            const { count: regCount } = await supabase
+              .from('zoom_registrants')
+              .select('*', { count: 'exact', head: true })
+              .eq('webinar_id', webinar.id);
+            
+            const { count: partCount } = await supabase
+              .from('zoom_participants')
+              .select('*', { count: 'exact', head: true })
+              .eq('webinar_id', webinar.id);
+            
+            monthRegistrants += regCount || 0;
+            monthAttendees += partCount || 0;
+          }
+          
           monthlyTrends.push({
             month: date.toLocaleDateString('en', { month: 'short' }),
             webinars: monthWebinars.length,
-            registrants: monthWebinars.reduce((sum, w) => sum + (w.total_registrants || 0), 0),
-            attendees: monthWebinars.reduce((sum, w) => sum + (w.total_attendees || 0), 0),
+            registrants: monthRegistrants,
+            attendees: monthAttendees,
           });
         }
 
@@ -106,46 +149,69 @@ export const useWebinarMetrics = () => {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         
-        const recentWebinars = webinars
-          .filter(w => w.start_time && new Date(w.start_time) >= thirtyDaysAgo)
-          .sort((a, b) => new Date(b.start_time || 0).getTime() - new Date(a.start_time || 0).getTime())
-          .slice(0, 5)
-          .map(w => ({
-            id: w.id,
-            title: w.topic || 'Untitled Webinar',
-            date: w.start_time ? new Date(w.start_time).toLocaleDateString() : '',
-            duration: Math.round((w.avg_attendance_duration || 0) / 60), // Convert to minutes
-            attendees: w.total_attendees || 0,
-            registrants: w.total_registrants || 0,
-            attendanceRate: w.total_registrants && w.total_attendees ? `${Math.round((w.total_attendees / w.total_registrants) * 100)}%` : '0%',
-          }));
+        const recentWebinarsList = await Promise.all(
+          webinars
+            .filter(w => w.start_time && new Date(w.start_time) >= thirtyDaysAgo)
+            .sort((a, b) => new Date(b.start_time || 0).getTime() - new Date(a.start_time || 0).getTime())
+            .slice(0, 5)
+            .map(async (w) => {
+              const { count: regCount } = await supabase
+                .from('zoom_registrants')
+                .select('*', { count: 'exact', head: true })
+                .eq('webinar_id', w.id);
+              
+              const { count: partCount } = await supabase
+                .from('zoom_participants')
+                .select('*', { count: 'exact', head: true })
+                .eq('webinar_id', w.id);
+
+              return {
+                id: w.id,
+                title: w.topic || 'Untitled Webinar',
+                date: w.start_time ? new Date(w.start_time).toLocaleDateString() : '',
+                duration: Math.round((w.duration || 0) / 60), // Convert to minutes
+                attendees: partCount || 0,
+                registrants: regCount || 0,
+                attendanceRate: regCount && partCount ? `${Math.round((partCount / regCount) * 100)}%` : '0%',
+              };
+            })
+        );
 
         // Upcoming webinars (future dates)
         const now = new Date();
-        const upcomingWebinars = webinars
-          .filter(w => w.start_time && new Date(w.start_time) > now)
-          .sort((a, b) => new Date(a.start_time || 0).getTime() - new Date(b.start_time || 0).getTime())
-          .slice(0, 5)
-          .map(w => ({
-            id: w.id,
-            title: w.topic || 'Untitled Webinar',
-            date: w.start_time ? new Date(w.start_time).toLocaleDateString() : '',
-            time: w.start_time ? new Date(w.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-            duration: Math.round((w.duration || 0) / 60), // Convert to minutes
-            registrants: w.total_registrants || 0,
-            status: 'upcoming',
-          }));
+        const upcomingWebinarsList = await Promise.all(
+          webinars
+            .filter(w => w.start_time && new Date(w.start_time) > now)
+            .sort((a, b) => new Date(a.start_time || 0).getTime() - new Date(b.start_time || 0).getTime())
+            .slice(0, 5)
+            .map(async (w) => {
+              const { count: regCount } = await supabase
+                .from('zoom_registrants')
+                .select('*', { count: 'exact', head: true })
+                .eq('webinar_id', w.id);
+
+              return {
+                id: w.id,
+                title: w.topic || 'Untitled Webinar',
+                date: w.start_time ? new Date(w.start_time).toLocaleDateString() : '',
+                time: w.start_time ? new Date(w.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+                duration: Math.round((w.duration || 0) / 60), // Convert to minutes
+                registrants: regCount || 0,
+                status: 'upcoming',
+              };
+            })
+        );
 
         const metricsData: WebinarMetrics = {
           totalWebinars,
           totalRegistrants,
           totalAttendees,
           attendanceRate: Math.round(attendanceRate * 10) / 10, // Round to 1 decimal
-          totalEngagement: Math.round(totalEngagement / 3600), // Convert to hours
+          totalEngagement: Math.round(totalDuration / 3600), // Convert to hours
           averageDuration: Math.round(averageDuration / 60), // Convert to minutes
           monthlyTrends,
-          recentWebinars,
-          upcomingWebinars,
+          recentWebinars: recentWebinarsList,
+          upcomingWebinars: upcomingWebinarsList,
         };
 
         setMetrics(metricsData);
