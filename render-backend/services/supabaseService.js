@@ -52,6 +52,26 @@ class SupabaseService {
     }
   }
 
+  async getSyncLog(syncId) {
+    try {
+      const { data, error } = await this.supabase
+        .from('zoom_sync_logs')
+        .select('*')
+        .eq('id', syncId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching sync log:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch sync log:', error);
+      return null;
+    }
+  }
+
   async createSyncLog(syncLogData) {
     try {
       const { data, error } = await this.supabase
@@ -299,7 +319,6 @@ class SupabaseService {
     }
   }
 
-  // New method: Update webinar status using database function
   async updateWebinarStatus(webinarId, connectionId) {
     try {
       console.log(`🔄 Updating status for webinar DB ID: ${webinarId}`);
@@ -320,7 +339,6 @@ class SupabaseService {
     }
   }
 
-  // Enhanced method: Get webinars with calculated status
   async getWebinarsWithCalculatedStatus(connectionId, limit = 50) {
     try {
       const { data, error } = await this.supabase
