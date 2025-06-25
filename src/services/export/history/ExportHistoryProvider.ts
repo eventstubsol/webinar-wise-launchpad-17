@@ -14,6 +14,7 @@ export interface ExportQueueItem {
   progress_percentage: number;
   export_config: any;
   updated_at: string;
+  expires_at: string; // Added missing property
 }
 
 export class ExportHistoryProvider {
@@ -58,6 +59,9 @@ export class ExportHistoryProvider {
       progress_percentage: item.progress_percentage,
       export_config: item.export_config,
       updated_at: item.updated_at,
+      expires_at: item.completed_at ? 
+        new Date(new Date(item.completed_at).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString() : 
+        new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Default 24h expiry for active jobs
     }));
   }
 

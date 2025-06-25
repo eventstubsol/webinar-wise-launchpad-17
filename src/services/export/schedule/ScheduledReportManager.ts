@@ -15,7 +15,7 @@ export class ScheduledReportManager {
         id: 'mock-report-1',
         user_id: user.user.id,
         report_name: 'Weekly Analytics Summary',
-        report_type: 'analytics',
+        report_type: 'pdf', // Fixed: Use valid report_type
         template_id: 'template-1',
         schedule_frequency: 'weekly',
         schedule_config: { time: '09:00', day: 'monday' },
@@ -24,8 +24,8 @@ export class ScheduledReportManager {
         is_active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        last_run_at: null,
-        next_run_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        last_sent_at: null, // Fixed: Use correct property name
+        next_send_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       }
     ];
 
@@ -56,8 +56,8 @@ export class ScheduledReportManager {
       is_active: report.is_active !== false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      last_run_at: null,
-      next_run_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      last_sent_at: null, // Fixed: Use correct property name
+      next_send_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     };
     
     return mockReport;
