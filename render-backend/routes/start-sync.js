@@ -359,7 +359,7 @@ async function performEnhancedWebinarSync(syncId, connection, credentials, syncT
   }
 }
 
-// Enhanced helper function to store webinar data with comprehensive fields from Zoom API
+// Enhanced helper function to store webinar data with status correction
 async function storeWebinarWithAllFields(webinar, connectionId, accessToken) {
   console.log(`📝 Storing comprehensive webinar data: ${webinar.id} - ${webinar.topic}`);
   
@@ -381,11 +381,21 @@ async function storeWebinarWithAllFields(webinar, connectionId, accessToken) {
       });
       
       console.log(`✅ Comprehensive data merge completed for webinar: ${webinar.id}`);
-    } else {
-      console.warn(`⚠️ Could not fetch detailed info for webinar ${webinar.id}, using basic data only`);
     }
     
-    // Transform complete webinar data to database format with comprehensive fields
+    // Calculate correct status using time-based logic
+    const calculatedStatus = zoomService.calculateWebinarStatus(completeWebinar);
+    const originalStatus = completeWebinar.status;
+    
+    // Log status correction if different
+    if (originalStatus !== calculatedStatus) {
+      console.log(`🔄 Status correction for webinar ${completeWebinar.id}:`);
+      console.log(`  - Original: ${originalStatus} → Corrected: ${calculatedStatus}`);
+      console.log(`  - Start time: ${completeWebinar.start_time}`);
+      console.log(`  - Duration: ${completeWebinar.duration} minutes`);
+    }
+    
+    // Transform complete webinar data to database format with corrected status
     const webinarData = {
       connection_id: connectionId,
       zoom_webinar_id: completeWebinar.id?.toString() || completeWebinar.webinar_id?.toString(),
@@ -395,13 +405,13 @@ async function storeWebinarWithAllFields(webinar, connectionId, accessToken) {
       uuid: completeWebinar.uuid || null,
       occurrence_id: completeWebinar.occurrence_id || null,
       
-      // Basic webinar information
+      // Basic webinar information with corrected status
       host_id: completeWebinar.host_id || '',
       host_email: completeWebinar.host_email || '',
       topic: completeWebinar.topic || 'Untitled Webinar',
       agenda: completeWebinar.agenda || null,
       webinar_type: completeWebinar.type || 5,
-      status: completeWebinar.status || 'available',
+      status: calculatedStatus, // Use calculated status instead of stored status
       start_time: completeWebinar.start_time || new Date().toISOString(),
       duration: completeWebinar.duration || 60,
       timezone: completeWebinar.timezone || 'UTC',
@@ -443,27 +453,21 @@ async function storeWebinarWithAllFields(webinar, connectionId, accessToken) {
       attendees_count: 0,
       registrants_count: 0,
       
-      // Sync tracking
+      // Sync tracking with status correction note
       synced_at: new Date().toISOString(),
       last_synced_at: new Date().toISOString(),
-      participant_sync_status: 'not_applicable'
+      participant_sync_status: calculatedStatus === 'ended' ? 'pending' : 'not_applicable'
     };
 
-    // Log key fields that were extracted
+    // Log key fields that were extracted and status correction
     console.log(`📊 Key fields extracted for webinar ${completeWebinar.id}:`);
+    console.log(`  - Status corrected: ${originalStatus} → ${calculatedStatus}`);
+    console.log(`  - Participant sync status: ${webinarData.participant_sync_status}`);
     console.log(`  - uuid: ${webinarData.uuid || 'not available'}`);
-    console.log(`  - host_email: ${webinarData.host_email || 'not available'}`);
     console.log(`  - registration_url: ${webinarData.registration_url || 'not available'}`);
-    console.log(`  - start_url: ${webinarData.start_url ? 'available' : 'not available'}`);
-    console.log(`  - password: ${webinarData.password ? 'set' : 'not set'}`);
-    console.log(`  - is_simulive: ${webinarData.is_simulive}`);
-    console.log(`  - approval_type: ${webinarData.approval_type}`);
-    console.log(`  - registration_type: ${webinarData.registration_type}`);
-    console.log(`  - settings keys: ${Object.keys(webinarData.settings || {}).length} fields`);
-    console.log(`  - tracking_fields: ${Array.isArray(webinarData.tracking_fields) ? webinarData.tracking_fields.length : 0} fields`);
 
     const webinarDbId = await supabaseService.storeWebinar(webinarData);
-    console.log(`✅ Successfully stored comprehensive webinar data: ${completeWebinar.id} -> DB ID: ${webinarDbId}`);
+    console.log(`✅ Successfully stored comprehensive webinar data with corrected status: ${completeWebinar.id} → DB ID: ${webinarDbId}`);
     
     return webinarDbId;
   } catch (error) {

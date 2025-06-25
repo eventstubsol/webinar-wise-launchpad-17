@@ -1,4 +1,3 @@
-
 const axios = require('axios');
 
 class ZoomService {
@@ -156,13 +155,88 @@ class ZoomService {
     return this.makeAuthenticatedRequest('/users/me/webinars', accessToken, { params });
   }
 
+  // Enhanced webinar eligibility check with time-based status calculation
+  isWebinarEligibleForParticipants(webinar) {
+    console.log(`🕐 Checking participant eligibility for webinar ${webinar.id} (${webinar.topic})`);
+    
+    // Calculate actual status based on timing
+    const calculatedStatus = this.calculateWebinarStatus(webinar);
+    const storedStatus = webinar.status;
+    
+    console.log(`📊 Webinar ${webinar.id} status analysis:`);
+    console.log(`  - Stored status: ${storedStatus}`);
+    console.log(`  - Calculated status: ${calculatedStatus}`);
+    console.log(`  - Start time: ${webinar.start_time}`);
+    console.log(`  - Duration: ${webinar.duration} minutes`);
+    
+    // Use time-based calculation instead of relying on stored status
+    const isEligible = calculatedStatus === 'ended';
+    
+    console.log(`📊 Webinar ${webinar.id} participant eligibility: ${isEligible ? 'ELIGIBLE' : 'NOT ELIGIBLE'}`);
+    console.log(`  - Reason: ${isEligible ? 'Webinar has ended based on timing' : `Webinar is ${calculatedStatus}`}`);
+    
+    return isEligible;
+  }
+
+  // New method: Calculate webinar status based on timing (matches database function)
+  calculateWebinarStatus(webinar, currentTime = new Date()) {
+    if (!webinar.start_time || !webinar.duration) {
+      console.warn(`⚠️ Missing timing data for webinar ${webinar.id}: start_time=${webinar.start_time}, duration=${webinar.duration}`);
+      return 'unknown';
+    }
+    
+    const startTime = new Date(webinar.start_time);
+    const durationMs = webinar.duration * 60 * 1000; // Convert minutes to milliseconds
+    const bufferMs = 5 * 60 * 1000; // 5 minute buffer
+    const estimatedEndTime = new Date(startTime.getTime() + durationMs + bufferMs);
+    
+    if (currentTime < startTime) {
+      return 'upcoming';
+    } else if (currentTime >= startTime && currentTime <= estimatedEndTime) {
+      return 'live';
+    } else {
+      return 'ended';
+    }
+  }
+
+  // Enhanced webinar registrant eligibility check
+  isWebinarEligibleForRegistrants(webinar) {
+    console.log(`📋 Checking registrant eligibility for webinar ${webinar.id} (${webinar.topic})`);
+    
+    // Calculate actual status
+    const calculatedStatus = this.calculateWebinarStatus(webinar);
+    
+    console.log(`📊 Webinar ${webinar.id} registrant analysis:`);
+    console.log(`  - Calculated status: ${calculatedStatus}`);
+    console.log(`  - Registration URL: ${webinar.registration_url || 'not set'}`);
+    console.log(`  - Registration type: ${webinar.settings?.registration_type || 'not set'}`);
+    
+    // All webinars can have registrants regardless of status, but log the status for tracking
+    const hasRegistration = webinar.registration_url || 
+                           (webinar.settings && webinar.settings.registration_type !== undefined);
+    
+    console.log(`📋 Webinar ${webinar.id} registrant eligibility: ALWAYS ELIGIBLE (will check API)`);
+    console.log(`  - Has registration setup: ${hasRegistration}`);
+    
+    return true; // Try to fetch registrants for all webinars, let API determine eligibility
+  }
+
   // Get detailed webinar information with comprehensive field extraction
   async getWebinarDetails(accessToken, webinarId) {
     try {
       console.log(`🔍 Fetching comprehensive webinar details for: ${webinarId}`);
       const webinarDetails = await this.makeAuthenticatedRequest(`/webinars/${webinarId}`, accessToken);
       
+      // Calculate and log status information
+      const calculatedStatus = this.calculateWebinarStatus(webinarDetails);
+      const storedStatus = webinarDetails.status;
+      
       console.log(`✅ Successfully fetched comprehensive details for webinar: ${webinarId}`);
+      console.log(`📊 Status Analysis - Stored: ${storedStatus}, Calculated: ${calculatedStatus}`);
+      
+      // Add calculated status to the response for use in sync process
+      webinarDetails.calculated_status = calculatedStatus;
+      
       console.log('📊 Available fields in webinar details:', Object.keys(webinarDetails));
       
       // Log key fields we're particularly interested in
@@ -277,7 +351,7 @@ class ZoomService {
     });
   }
 
-  // Enhanced webinar participants with comprehensive data mapping
+  // Enhanced webinar participants with status validation
   async getWebinarParticipants(accessToken, webinarId) {
     try {
       console.log(`👥 Fetching comprehensive participant data for webinar ${webinarId}`);
@@ -475,29 +549,6 @@ class ZoomService {
     }
   }
 
-  // Check if webinar is eligible for participant sync
-  isWebinarEligibleForParticipants(webinar) {
-    const eligibleStatuses = ['ended'];
-    const isEligible = eligibleStatuses.includes(webinar.status);
-    
-    console.log(`📊 Webinar ${webinar.id} (${webinar.topic}) status: ${webinar.status} - Eligible for participants: ${isEligible}`);
-    
-    return isEligible;
-  }
-
-  // Check if webinar is eligible for registrant sync
-  isWebinarEligibleForRegistrants(webinar) {
-    // All webinars can potentially have registrants, regardless of status
-    // However, we should check if registration is enabled
-    const hasRegistration = webinar.registration_url || 
-                           (webinar.settings && webinar.settings.registration_type !== undefined);
-    
-    console.log(`📊 Webinar ${webinar.id} (${webinar.topic}) - Has registration: ${hasRegistration}`);
-    console.log(`  - registration_url: ${webinar.registration_url || 'not set'}`);
-    console.log(`  - registration_type: ${webinar.settings?.registration_type || 'not set'}`);
-    
-    return true; // Try to fetch registrants for all webinars, let API determine eligibility
-  }
 }
 
 module.exports = new ZoomService();

@@ -1,389 +1,347 @@
-
 const { createClient } = require('@supabase/supabase-js');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+class SupabaseService {
+  constructor() {
+    this.supabaseUrl = process.env.SUPABASE_URL;
+    this.supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+    if (!this.supabaseUrl || !this.supabaseKey) {
+      throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables');
+    }
 
-// Zoom Connection methods
-async function getZoomConnection(connectionId) {
-  const { data, error } = await supabase
-    .from('zoom_connections')
-    .select('*')
-    .eq('id', connectionId)
-    .single();
-
-  if (error) {
-    console.error('Failed to get Zoom connection:', error);
-    throw error;
+    this.supabase = createClient(this.supabaseUrl, this.supabaseKey);
   }
 
-  return data;
-}
+  async getUserCredentials(userId) {
+    try {
+      const { data, error } = await this.supabase
+        .from('zoom_credentials')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
 
-async function updateZoomConnection(connectionId, updates) {
-  const { data, error } = await supabase
-    .from('zoom_connections')
-    .update(updates)
-    .eq('id', connectionId)
-    .select();
+      if (error) {
+        console.error('Error fetching Zoom credentials:', error);
+        return null;
+      }
 
-  if (error) {
-    console.error('Failed to update Zoom connection:', error);
-    throw error;
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch Zoom credentials:', error);
+      return null;
+    }
   }
 
-  return data;
-}
+  async getZoomConnection(connectionId) {
+    try {
+      const { data, error } = await this.supabase
+        .from('zoom_connections')
+        .select('*')
+        .eq('id', connectionId)
+        .single();
 
-// User Credentials methods
-async function getUserCredentials(userId) {
-  const { data, error } = await supabase
-    .from('zoom_credentials')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
+      if (error) {
+        console.error('Error fetching Zoom connection:', error);
+        throw new Error(`Failed to fetch Zoom connection: ${error.message}`);
+      }
 
-  if (error) {
-    console.error('Failed to get user credentials:', error);
-    return null;
+      return data;
+    } catch (error) {
+      console.error('Failed to get Zoom connection:', error);
+      throw error;
+    }
   }
 
-  return data;
-}
+  async createSyncLog(syncLogData) {
+    try {
+      const { data, error } = await this.supabase
+        .from('zoom_sync_logs')
+        .insert([syncLogData]);
 
-async function storeUserCredentials(userId, credentials) {
-  const { data, error } = await supabase
-    .from('zoom_credentials')
-    .upsert(
-      { user_id: userId, ...credentials },
-      { onConflict: 'user_id', ignoreDuplicates: false }
-    )
-    .select();
+      if (error) {
+        console.error('Error creating sync log:', error);
+        throw new Error(`Failed to create sync log: ${error.message}`);
+      }
 
-  if (error) {
-    console.error('Failed to store user credentials:', error);
-    throw error;
+      return data;
+    } catch (error) {
+      console.error('Failed to create sync log:', error);
+      throw error;
+    }
   }
 
-  return data;
-}
+  async updateSyncLog(syncId, updateData) {
+    try {
+      const { data, error } = await this.supabase
+        .from('zoom_sync_logs')
+        .update(updateData)
+        .eq('id', syncId);
 
-// Sync Log methods
-async function createSyncLog(syncLogData) {
-  const { data, error } = await supabase
-    .from('zoom_sync_logs')
-    .insert([syncLogData])
-    .select();
+      if (error) {
+        console.error('Error updating sync log:', error);
+        throw new Error(`Failed to update sync log: ${error.message}`);
+      }
 
-  if (error) {
-    console.error('Failed to create sync log:', error);
-    throw error;
+      return data;
+    } catch (error) {
+      console.error('Failed to update sync log:', error);
+      throw error;
+    }
   }
 
-  return data;
-}
+  async storeWebinar(webinarData) {
+    try {
+      const { data, error } = await this.supabase
+        .from('zoom_webinars')
+        .upsert([webinarData], { onConflict: 'connection_id, webinar_id' })
+        .select('id');
 
-async function getSyncLog(syncId) {
-  const { data, error } = await supabase
-    .from('zoom_sync_logs')
-    .select('*')
-    .eq('id', syncId)
-    .single();
+      if (error) {
+        console.error('Error storing webinar:', error);
+        throw new Error(`Failed to store webinar: ${error.message}`);
+      }
 
-  if (error) {
-    console.error('Failed to get sync log:', error);
-    throw error;
-  }
-
-  return data;
-}
-
-async function updateSyncLog(syncId, updates) {
-  const { data, error } = await supabase
-    .from('zoom_sync_logs')
-    .update(updates)
-    .eq('id', syncId)
-    .select();
-
-  if (error) {
-    console.error('Failed to update sync log:', error);
-    throw error;
-  }
-
-  return data;
-}
-
-// Webinar methods
-async function storeWebinar(webinarData) {
-  try {
-    const { data, error } = await supabase
-      .from('zoom_webinars')
-      .upsert([webinarData], {
-        onConflict: 'connection_id,webinar_id',
-        ignoreDuplicates: false
-      })
-      .select();
-
-    if (error) {
+      return data && data.length > 0 ? data[0].id : null;
+    } catch (error) {
       console.error('Failed to store webinar:', error);
       throw error;
     }
-
-    return data[0].id;
-  } catch (error) {
-    console.error('Error storing webinar:', error);
-    throw error;
   }
-}
 
-async function getWebinarByZoomId(zoomWebinarId, connectionId) {
-  try {
-    const { data, error } = await supabase
-      .from('zoom_webinars')
-      .select('*')
-      .eq('zoom_webinar_id', zoomWebinarId)
-      .eq('connection_id', connectionId)
-      .single();
+  async storeParticipants(participantData) {
+    try {
+      const { data, error } = await this.supabase
+        .from('zoom_participants')
+        .upsert(participantData, { onConflict: 'webinar_id, participant_id' });
 
-    if (error) {
-      console.error('Failed to get webinar by Zoom ID:', error);
-      return null;
-    }
+      if (error) {
+        console.error('Error storing participants:', error);
+        throw new Error(`Failed to store participants: ${error.message}`);
+      }
 
-    return data;
-  } catch (error) {
-    console.error('Error getting webinar by Zoom ID:', error);
-    return null;
-  }
-}
-
-async function updateWebinarMetrics(webinarDbId, metricsData) {
-  try {
-    const { data, error } = await supabase
-      .from('zoom_webinars')
-      .update(metricsData)
-      .eq('id', webinarDbId)
-      .select();
-
-    if (error) {
-      console.error('Failed to update webinar metrics:', error);
-      throw error;
-    }
-
-    return data?.[0];
-  } catch (error) {
-    console.error('Error updating webinar metrics:', error);
-    throw error;
-  }
-}
-
-// Enhanced participant methods with comprehensive data handling
-async function storeParticipants(participantData) {
-  try {
-    console.log(`💾 Storing ${participantData.length} participants with enhanced data`);
-    
-    // Log sample participant data for debugging
-    if (participantData.length > 0) {
-      console.log(`📋 Sample participant data structure:`, Object.keys(participantData[0]));
-    }
-
-    const { data, error } = await supabase
-      .from('zoom_participants')
-      .upsert(participantData, {
-        onConflict: 'webinar_id,participant_id',
-        ignoreDuplicates: false
-      })
-      .select();
-
-    if (error) {
+      return data;
+    } catch (error) {
       console.error('Failed to store participants:', error);
       throw error;
     }
-
-    console.log(`✅ Successfully stored ${data.length} participants`);
-    return data;
-  } catch (error) {
-    console.error('Error storing participants:', error);
-    throw error;
   }
-}
 
-// Enhanced registrant methods with comprehensive data handling
-async function storeRegistrants(registrantData) {
-  try {
-    console.log(`💾 Storing ${registrantData.length} registrants with enhanced data`);
-    
-    // Log sample registrant data for debugging
-    if (registrantData.length > 0) {
-      console.log(`📋 Sample registrant data structure:`, Object.keys(registrantData[0]));
-    }
+  async storeRegistrants(registrantData) {
+    try {
+      const { data, error } = await this.supabase
+        .from('zoom_registrants')
+        .upsert(registrantData, { onConflict: 'webinar_id, registrant_id' });
 
-    const { data, error } = await supabase
-      .from('zoom_registrants')
-      .upsert(registrantData, {
-        onConflict: 'webinar_id,registrant_id',
-        ignoreDuplicates: false
-      })
-      .select();
+      if (error) {
+        console.error('Error storing registrants:', error);
+        throw new Error(`Failed to store registrants: ${error.message}`);
+      }
 
-    if (error) {
+      return data;
+    } catch (error) {
       console.error('Failed to store registrants:', error);
       throw error;
     }
-
-    console.log(`✅ Successfully stored ${data.length} registrants`);
-    return data;
-  } catch (error) {
-    console.error('Error storing registrants:', error);
-    throw error;
   }
-}
 
-// Get registrant count for a webinar
-async function getRegistrantCount(webinarDbId) {
-  try {
-    const { count, error } = await supabase
-      .from('zoom_registrants')
-      .select('*', { count: 'exact', head: true })
-      .eq('webinar_id', webinarDbId);
+  async getWebinarByZoomId(webinarId, connectionId) {
+    try {
+      const { data, error } = await this.supabase
+        .from('zoom_webinars')
+        .select('id')
+        .eq('webinar_id', webinarId)
+        .eq('connection_id', connectionId)
+        .single();
 
-    if (error) {
+      if (error) {
+        console.error('Error fetching webinar by Zoom ID:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Failed to get webinar by Zoom ID:', error);
+      return null;
+    }
+  }
+
+  async updateZoomConnection(connectionId, updateData) {
+    try {
+      const { data, error } = await this.supabase
+        .from('zoom_connections')
+        .update(updateData)
+        .eq('id', connectionId);
+
+      if (error) {
+        console.error('Error updating Zoom connection:', error);
+        throw new Error(`Failed to update Zoom connection: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Failed to update Zoom connection:', error);
+      throw error;
+    }
+  }
+
+  async getRegistrantCount(webinarId) {
+    try {
+      const { count, error } = await this.supabase
+        .from('zoom_registrants')
+        .select('*', { count: 'exact' })
+        .eq('webinar_id', webinarId);
+
+      if (error) {
+        console.error('Error fetching registrant count:', error);
+        return 0;
+      }
+
+      return count || 0;
+    } catch (error) {
       console.error('Failed to get registrant count:', error);
       return 0;
     }
-
-    return count || 0;
-  } catch (error) {
-    console.error('Error getting registrant count:', error);
-    return 0;
   }
-}
 
-// Enhanced participant metrics with comprehensive engagement data
-async function getParticipantMetrics(webinarDbId) {
-  try {
-    const { data: participants, error } = await supabase
-      .from('zoom_participants')
-      .select(`
-        duration, 
-        join_time, 
-        attentiveness_score,
-        camera_on_duration,
-        share_application_duration,
-        share_desktop_duration,
-        share_whiteboard_duration,
-        posted_chat,
-        raised_hand,
-        answered_polling,
-        asked_question
-      `)
-      .eq('webinar_id', webinarDbId);
+  async getParticipantMetrics(webinarId) {
+    try {
+      const { data, error } = await this.supabase.rpc('get_participant_metrics', {
+        p_webinar_id: webinarId
+      });
 
-    if (error) {
+      if (error) {
+        console.error('Error fetching participant metrics:', error);
+        return {
+          totalAttendees: 0,
+          totalMinutes: 0,
+          avgDuration: 0,
+          avgAttentiveness: 0,
+          avgCameraUsage: 0,
+          totalInteractions: 0
+        };
+      }
+
+      return {
+        totalAttendees: data?.total_attendees || 0,
+        totalMinutes: data?.total_minutes || 0,
+        avgDuration: data?.avg_duration || 0,
+        avgAttentiveness: data?.avg_attentiveness || 0,
+        avgCameraUsage: data?.avg_camera_usage || 0,
+        totalInteractions: data?.total_interactions || 0
+      };
+    } catch (error) {
       console.error('Failed to get participant metrics:', error);
-      return { 
-        totalAttendees: 0, 
-        totalMinutes: 0, 
+      return {
+        totalAttendees: 0,
+        totalMinutes: 0,
         avgDuration: 0,
         avgAttentiveness: 0,
         avgCameraUsage: 0,
         totalInteractions: 0
       };
     }
-
-    const totalAttendees = participants?.length || 0;
-    const totalMinutes = participants?.reduce((sum, p) => sum + (p.duration || 0), 0) || 0;
-    const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
-    
-    // Enhanced metrics calculations
-    const totalAttentiveness = participants?.reduce((sum, p) => sum + (p.attentiveness_score || 0), 0) || 0;
-    const avgAttentiveness = totalAttendees > 0 ? Math.round(totalAttentiveness / totalAttendees) : 0;
-    
-    const totalCameraTime = participants?.reduce((sum, p) => sum + (p.camera_on_duration || 0), 0) || 0;
-    const avgCameraUsage = totalAttendees > 0 ? Math.round(totalCameraTime / totalAttendees) : 0;
-    
-    const totalInteractions = participants?.reduce((sum, p) => {
-      return sum + 
-        (p.posted_chat ? 1 : 0) + 
-        (p.raised_hand ? 1 : 0) + 
-        (p.answered_polling ? 1 : 0) + 
-        (p.asked_question ? 1 : 0);
-    }, 0) || 0;
-
-    return {
-      totalAttendees,
-      totalMinutes,
-      avgDuration,
-      avgAttentiveness,
-      avgCameraUsage,
-      totalInteractions
-    };
-  } catch (error) {
-    console.error('Error calculating participant metrics:', error);
-    return { 
-      totalAttendees: 0, 
-      totalMinutes: 0, 
-      avgDuration: 0,
-      avgAttentiveness: 0,
-      avgCameraUsage: 0,
-      totalInteractions: 0
-    };
   }
-}
 
-// Enhanced function to update registrant attendance data
-async function updateRegistrantAttendance(webinarDbId, attendanceData) {
-  try {
-    console.log(`📊 Updating attendance for ${attendanceData.length} registrants`);
-    
-    const updatePromises = attendanceData.map(async (attendance) => {
-      const { data, error } = await supabase
-        .from('zoom_registrants')
-        .update({
-          attended: attendance.attended,
-          join_time: attendance.join_time,
-          leave_time: attendance.leave_time,
-          duration: attendance.duration
-        })
-        .eq('webinar_id', webinarDbId)
-        .eq('registrant_id', attendance.registrant_id)
-        .select();
+  async updateWebinarMetrics(webinarId, updateData) {
+    try {
+      const { data, error } = await this.supabase
+        .from('zoom_webinars')
+        .update(updateData)
+        .eq('id', webinarId);
 
       if (error) {
-        console.error(`Failed to update attendance for registrant ${attendance.registrant_id}:`, error);
-        return null;
+        console.error('Error updating webinar metrics:', error);
+        throw new Error(`Failed to update webinar metrics: ${error.message}`);
       }
 
       return data;
-    });
+    } catch (error) {
+      console.error('Failed to update webinar metrics:', error);
+      throw error;
+    }
+  }
 
-    const results = await Promise.allSettled(updatePromises);
-    const successful = results.filter(r => r.status === 'fulfilled' && r.value).length;
-    
-    console.log(`✅ Updated attendance for ${successful}/${attendanceData.length} registrants`);
-    return successful;
-  } catch (error) {
-    console.error('Error updating registrant attendance:', error);
-    return 0;
+  async updateRegistrantAttendance(webinarId, attendanceData) {
+    try {
+      // Prepare the updates in a single query
+      const updates = attendanceData.map(item => ({
+        registrant_id: item.registrant_id,
+        attended: item.attended,
+        join_time: item.join_time,
+        leave_time: item.leave_time,
+        duration: item.duration
+      }));
+
+      // Execute the batch update
+      const { data, error } = await this.supabase
+        .from('zoom_registrants')
+        .upsert(
+          updates.map(update => ({
+            webinar_id: webinarId,
+            registrant_id: update.registrant_id,
+            attended: update.attended,
+            join_time: update.join_time,
+            leave_time: update.leave_time,
+            duration: update.duration
+          })),
+          { onConflict: 'webinar_id, registrant_id' }
+        );
+
+      if (error) {
+        console.error('Error updating registrant attendance:', error);
+        throw new Error(`Failed to update registrant attendance: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Failed to update registrant attendance:', error);
+      throw error;
+    }
+  }
+
+  // New method: Update webinar status using database function
+  async updateWebinarStatus(webinarId, connectionId) {
+    try {
+      console.log(`🔄 Updating status for webinar DB ID: ${webinarId}`);
+      
+      const { data, error } = await this.supabase
+        .rpc('batch_update_webinar_statuses');
+      
+      if (error) {
+        console.error('Error updating webinar statuses:', error);
+        throw error;
+      }
+      
+      console.log(`✅ Batch status update completed:`, data);
+      return data;
+    } catch (error) {
+      console.error(`❌ Failed to update webinar status:`, error);
+      throw error;
+    }
+  }
+
+  // Enhanced method: Get webinars with calculated status
+  async getWebinarsWithCalculatedStatus(connectionId, limit = 50) {
+    try {
+      const { data, error } = await this.supabase
+        .from('zoom_webinars_with_calculated_status')
+        .select('*')
+        .eq('connection_id', connectionId)
+        .order('start_time', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error('Error fetching webinars with calculated status:', error);
+        throw error;
+      }
+
+      console.log(`📊 Fetched ${data?.length || 0} webinars with calculated status`);
+      return data || [];
+    } catch (error) {
+      console.error('Failed to fetch webinars with calculated status:', error);
+      throw error;
+    }
   }
 }
 
-module.exports = {
-  getZoomConnection,
-  updateZoomConnection,
-  getUserCredentials,
-  storeUserCredentials,
-  createSyncLog,
-  getSyncLog,
-  updateSyncLog,
-  storeWebinar,
-  getWebinarByZoomId,
-  storeParticipants,
-  storeRegistrants,
-  getRegistrantCount,
-  getParticipantMetrics,
-  updateWebinarMetrics,
-  updateRegistrantAttendance
-};
+module.exports = new SupabaseService();
