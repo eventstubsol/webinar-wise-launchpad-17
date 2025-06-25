@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, Calendar, Users, Clock, Activity } from 'lucide-react';
 import { useWebinarMetrics } from '@/hooks/useWebinarMetrics';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyDashboardState } from './EmptyDashboardState';
 
 interface MetricCardProps {
   title: string;
@@ -55,16 +56,27 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, change, trend, ic
 export function MetricsCards() {
   const { metrics, loading, error } = useWebinarMetrics();
 
-  // Calculate trends (simplified - comparing with previous period)
-  const calculateTrend = (current: number, previous: number): { value: string; trend: 'up' | 'down' } => {
-    if (previous === 0) return { value: 'No previous data', trend: 'up' };
-    const change = ((current - previous) / previous) * 100;
-    return {
-      value: `${Math.abs(Math.round(change))}% from last period`,
-      trend: change >= 0 ? 'up' : 'down'
-    };
-  };
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <MetricCard
+            key={index}
+            title=""
+            value=""
+            change=""
+            trend="up"
+            icon={Calendar}
+            bgColor="bg-gray-50"
+            loading={true}
+          />
+        ))}
+      </div>
+    );
+  }
 
+  // Show error state
   if (error) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -75,13 +87,33 @@ export function MetricsCards() {
     );
   }
 
-  // Use real data or fallback to defaults
-  const totalWebinars = metrics?.totalWebinars || 0;
-  const totalRegistrants = metrics?.totalRegistrants || 0;
-  const totalAttendees = metrics?.totalAttendees || 0;
-  const attendanceRate = metrics?.attendanceRate || 0;
-  const totalEngagement = metrics?.totalEngagement || 0;
-  const averageDuration = metrics?.averageDuration || 0;
+  // Show empty state when no data
+  if (!metrics || metrics.isEmpty) {
+    return (
+      <EmptyDashboardState 
+        lastSyncAt={metrics?.lastSyncAt}
+        syncHistoryCount={metrics?.syncHistoryCount || 0}
+      />
+    );
+  }
+
+  // Calculate trends (simplified - comparing with previous period)
+  const calculateTrend = (current: number, previous: number): { value: string; trend: 'up' | 'down' } => {
+    if (previous === 0) return { value: 'No previous data', trend: 'up' };
+    const change = ((current - previous) / previous) * 100;
+    return {
+      value: `${Math.abs(Math.round(change))}% from last period`,
+      trend: change >= 0 ? 'up' : 'down'
+    };
+  };
+
+  // Use real data
+  const totalWebinars = metrics.totalWebinars;
+  const totalRegistrants = metrics.totalRegistrants;
+  const totalAttendees = metrics.totalAttendees;
+  const attendanceRate = metrics.attendanceRate;
+  const totalEngagement = metrics.totalEngagement;
+  const averageDuration = metrics.averageDuration;
 
   // Calculate simple trends based on recent vs older data
   const recentTrend = calculateTrend(totalWebinars, Math.max(1, totalWebinars - 2));

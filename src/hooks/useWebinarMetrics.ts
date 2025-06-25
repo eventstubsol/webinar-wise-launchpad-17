@@ -35,6 +35,11 @@ interface WebinarMetrics {
     registrants: number;
     status: string;
   }>;
+  // New properties for better empty state handling
+  hasData: boolean;
+  isEmpty: boolean;
+  lastSyncAt?: string;
+  syncHistoryCount: number;
 }
 
 export const useWebinarMetrics = () => {
@@ -45,12 +50,45 @@ export const useWebinarMetrics = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user?.id || !connection?.id) return;
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
 
     const fetchMetrics = async () => {
       try {
         setLoading(true);
         setError(null);
+
+        // Always fetch sync history, even without a connection
+        const { data: syncHistory } = await supabase
+          .from('zoom_sync_logs')
+          .select('completed_at, sync_status')
+          .eq('connection_id', connection?.id || '')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        const lastSync = syncHistory?.[0];
+        const syncHistoryCount = syncHistory?.length || 0;
+
+        // If no connection, return minimal metrics with helpful info
+        if (!connection?.id) {
+          setMetrics({
+            totalWebinars: 0,
+            totalRegistrants: 0,
+            totalAttendees: 0,
+            attendanceRate: 0,
+            totalEngagement: 0,
+            averageDuration: 0,
+            monthlyTrends: [],
+            recentWebinars: [],
+            upcomingWebinars: [],
+            hasData: false,
+            isEmpty: true,
+            syncHistoryCount: 0,
+          });
+          return;
+        }
 
         // Fetch webinars with related counts
         const { data: webinars, error: webinarsError } = await supabase
@@ -64,7 +102,9 @@ export const useWebinarMetrics = () => {
 
         if (webinarsError) throw webinarsError;
 
-        if (!webinars) {
+        const hasData = webinars && webinars.length > 0;
+
+        if (!hasData) {
           setMetrics({
             totalWebinars: 0,
             totalRegistrants: 0,
@@ -75,6 +115,10 @@ export const useWebinarMetrics = () => {
             monthlyTrends: [],
             recentWebinars: [],
             upcomingWebinars: [],
+            hasData: false,
+            isEmpty: true,
+            lastSyncAt: lastSync?.completed_at,
+            syncHistoryCount,
           });
           return;
         }
@@ -212,12 +256,32 @@ export const useWebinarMetrics = () => {
           monthlyTrends,
           recentWebinars: recentWebinarsList,
           upcomingWebinars: upcomingWebinarsList,
+          hasData: true,
+          isEmpty: false,
+          lastSyncAt: lastSync?.completed_at,
+          syncHistoryCount,
         };
 
         setMetrics(metricsData);
       } catch (err) {
         console.error('Error fetching webinar metrics:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch metrics');
+        
+        // Set empty metrics even on error
+        setMetrics({
+          totalWebinars: 0,
+          totalRegistrants: 0,
+          totalAttendees: 0,
+          attendanceRate: 0,
+          totalEngagement: 0,
+          averageDuration: 0,
+          monthlyTrends: [],
+          recentWebinars: [],
+          upcomingWebinars: [],
+          hasData: false,
+          isEmpty: true,
+          syncHistoryCount: 0,
+        });
       } finally {
         setLoading(false);
       }

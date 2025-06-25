@@ -42,10 +42,15 @@ export function ChartsSection() {
     );
   }
 
-  const monthlyData = metrics?.monthlyTrends || [];
-  const registrationData = metrics?.monthlyTrends || [];
+  // Don't render charts section if no data (handled by EmptyDashboardState)
+  if (!metrics || metrics.isEmpty) {
+    return null;
+  }
 
-  // If no data, show empty state
+  const monthlyData = metrics.monthlyTrends || [];
+  const registrationData = metrics.monthlyTrends || [];
+
+  // If we have a connection but no webinar data yet
   if (monthlyData.length === 0) {
     return (
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -57,7 +62,10 @@ export function ChartsSection() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-center h-[300px] text-gray-500">
-              No webinar data available yet. Connect your Zoom account to see analytics.
+              <div className="text-center">
+                <div className="text-lg font-medium mb-2">No webinar data available yet</div>
+                <div className="text-sm">Start a sync to import your webinar history and see analytics here.</div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -70,7 +78,10 @@ export function ChartsSection() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-center h-[300px] text-gray-500">
-              No registration data available yet. Connect your Zoom account to see analytics.
+              <div className="text-center">
+                <div className="text-lg font-medium mb-2">No registration data available yet</div>
+                <div className="text-sm">Start a sync to import your webinar history and see analytics here.</div>
+              </div>
             </div>
           </CardContent>
         </Card>
