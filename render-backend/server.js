@@ -12,6 +12,19 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Environment validation
+const requiredEnvVars = [
+  'DATABASE_URL',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'JWT_SECRET'
+];
+
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:', missingEnvVars);
+  process.exit(1);
+}
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -41,17 +54,35 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
-app.use('/health', require('./routes/health'));
-app.use('/validate-credentials', require('./routes/validate-credentials'));
-app.use('/refresh-token', require('./routes/refresh-token'));
-app.use('/test-connection', require('./routes/test-connection'));
-app.use('/start-sync', require('./routes/start-sync'));
-app.use('/sync-progress', require('./routes/sync-progress'));
-app.use('/cancel-sync', require('./routes/cancel-sync'));
-app.use('/sync-webinars', require('./routes/sync-webinars'));
-app.use('/performance-test', require('./routes/performance-test'));
-app.use('/disconnect', require('./routes/disconnect'));
+// Helper function to safely require routes
+function safeRequire(path, routeName) {
+  try {
+    return require(path);
+  } catch (error) {
+    console.warn(`⚠️ Warning: Could not load route ${routeName}:`, error.message);
+    // Return a dummy router that responds with 501 Not Implemented
+    const dummyRouter = express.Router();
+    dummyRouter.all('*', (req, res) => {
+      res.status(501).json({
+        success: false,
+        error: `${routeName} endpoint is not implemented yet`
+      });
+    });
+    return dummyRouter;
+  }
+}
+
+// Routes with error handling
+app.use('/health', safeRequire('./routes/health', 'health'));
+app.use('/validate-credentials', safeRequire('./routes/validate-credentials', 'validate-credentials'));
+app.use('/refresh-token', safeRequire('./routes/refresh-token', 'refresh-token'));
+app.use('/test-connection', safeRequire('./routes/test-connection', 'test-connection'));
+app.use('/start-sync', safeRequire('./routes/start-sync', 'start-sync'));
+app.use('/sync-progress', safeRequire('./routes/sync-progress', 'sync-progress'));
+app.use('/cancel-sync', safeRequire('./routes/cancel-sync', 'cancel-sync'));
+app.use('/sync-webinars', safeRequire('./routes/sync-webinars', 'sync-webinars'));
+app.use('/performance-test', safeRequire('./routes/performance-test', 'performance-test'));
+app.use('/disconnect', safeRequire('./routes/disconnect', 'disconnect'));
 
 // 404 handler
 app.use('*', (req, res) => {

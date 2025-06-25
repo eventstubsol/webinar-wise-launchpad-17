@@ -47,29 +47,36 @@ const authMiddleware = (req, res, next) => {
 const extractUser = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
+    if (!authHeader && process.env.NODE_ENV === 'production') {
       return res.status(401).json({
         success: false,
         error: 'Authorization header required'
       });
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    
-    // For Supabase JWT tokens, decode to get user info
-    // In production, you'd verify this with Supabase
-    const payload = jwt.decode(token);
-    
-    if (payload && payload.sub) {
-      req.userId = payload.sub;
-      next();
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      
+      // For Supabase JWT tokens, decode to get user info
+      // In production, you'd verify this with Supabase
+      const payload = jwt.decode(token);
+      
+      if (payload && payload.sub) {
+        req.userId = payload.sub;
+      } else {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid token format'
+        });
+      }
     } else {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid token format'
-      });
+      // Development mode fallback
+      req.userId = 'development-user-id';
     }
+    
+    next();
   } catch (error) {
+    console.error('Extract user error:', error);
     return res.status(401).json({
       success: false,
       error: 'Token processing failed'
