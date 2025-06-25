@@ -4,11 +4,12 @@ const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const zoomService = require('../services/zoomService');
 const supabaseService = require('../services/supabaseService');
-const authMiddleware = require('../middleware/auth');
+const { authMiddleware, extractUser } = require('../middleware/auth');
 
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, extractUser, async (req, res) => {
   try {
-    const { account_id, client_id, client_secret, user_id } = req.body;
+    const { account_id, client_id, client_secret } = req.body;
+    const userId = req.userId; // From extractUser middleware
 
     if (!account_id || !client_id || !client_secret) {
       return res.status(400).json({
@@ -17,9 +18,16 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log('Validating Zoom credentials for account:', account_id);
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID required'
+      });
+    }
 
-    // Validate credentials with Zoom
+    console.log('Validating Zoom credentials for user:', userId);
+
+    // Validate credentials with Zoom using user-provided credentials
     const validation = await zoomService.validateCredentials(account_id, client_id, client_secret);
 
     if (!validation.valid) {
@@ -29,10 +37,10 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    // Create connection record in Supabase
+    // Create connection record in Supabase with user-specific data
     const connectionData = {
       id: uuidv4(),
-      user_id: user_id || 'system', // Use provided user_id or default
+      user_id: userId,
       zoom_user_id: validation.userInfo.id,
       zoom_account_id: account_id,
       zoom_email: validation.userInfo.email,

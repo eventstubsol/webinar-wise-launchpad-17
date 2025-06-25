@@ -2,27 +2,35 @@
 const express = require('express');
 const router = express.Router();
 const supabaseService = require('../services/supabaseService');
-const authMiddleware = require('../middleware/auth');
+const { authMiddleware, extractUser } = require('../middleware/auth');
 
-router.get('/:syncId', authMiddleware, async (req, res) => {
+router.get('/:syncId', authMiddleware, extractUser, async (req, res) => {
   try {
     const { syncId } = req.params;
+    const userId = req.userId;
 
-    console.log('Getting sync progress for:', syncId);
+    console.log('Getting sync progress for:', syncId, 'user:', userId);
 
-    // Get sync log from database
-    const syncLog = await supabaseService.getZoomConnection(syncId); // This should be getSyncLog, but we'll simulate
+    // Get sync log and verify ownership through connection
+    const syncLog = await supabaseService.getSyncLog(syncId);
+    const connection = await supabaseService.getZoomConnection(syncLog.connection_id);
+    
+    if (connection.user_id !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this sync operation'
+      });
+    }
 
-    // For now, simulate progress
-    const progress = Math.floor(Math.random() * 100);
-    const status = progress === 100 ? 'completed' : (progress > 0 ? 'running' : 'pending');
-
+    // Return actual sync progress from database
     res.json({
       success: true,
-      progress,
-      status,
-      currentOperation: status === 'running' ? 'Syncing webinars...' : null,
-      sync_id: syncId
+      progress: Math.floor((syncLog.processed_items / Math.max(syncLog.total_items, 1)) * 100),
+      status: syncLog.sync_status,
+      currentOperation: syncLog.sync_stage || 'Processing...',
+      sync_id: syncId,
+      total_items: syncLog.total_items,
+      processed_items: syncLog.processed_items
     });
 
   } catch (error) {

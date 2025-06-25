@@ -1,17 +1,16 @@
 
 import axios, { AxiosError } from 'axios';
+import { supabase } from '@/integrations/supabase/client';
 
 // Update this URL after deploying to Render.com
-// Replace 'your-service-name' with your actual Render service name
 const RENDER_API_BASE_URL = process.env.NODE_ENV === 'production' 
   ? 'https://your-service-name.onrender.com'
-  : 'https://zoom-auth-api-latest.onrender.com'; // Fallback for development
+  : 'https://zoom-auth-api-latest.onrender.com';
 
 interface ValidationCredentialsPayload {
   account_id: string;
   client_id: string;
   client_secret: string;
-  user_id?: string;
 }
 
 // Enhanced ApiResponse interface with all expected properties
@@ -30,25 +29,41 @@ interface ApiResponse<T = any> {
 }
 
 class RenderZoomServiceClass {
+  private async getAuthHeaders(): Promise<Record<string, string>> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('No valid session found');
+      }
+      
+      return {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      };
+    } catch (error) {
+      console.error('Failed to get auth headers:', error);
+      throw new Error('Authentication required');
+    }
+  }
+
   private async makeRequest<T = any>(
     endpoint: string, 
     method: 'GET' | 'POST' = 'GET', 
     data?: any
   ): Promise<ApiResponse<T>> {
     try {
+      const headers = await this.getAuthHeaders();
+      
       const config = {
         method,
         url: `${RENDER_API_BASE_URL}${endpoint}`,
-        headers: {
-          'Content-Type': 'application/json',
-          // Add API key header if available in environment
-          ...(process.env.RENDER_API_KEY && { 'X-API-Key': process.env.RENDER_API_KEY })
-        },
+        headers,
         timeout: 30000, // 30 second timeout
         ...(data && { data })
       };
 
-      console.log(`🚀 Making request to: ${config.url}`);
+      console.log(`🚀 Making authenticated request to: ${config.url}`);
       
       const response = await axios(config);
       
@@ -72,6 +87,20 @@ class RenderZoomServiceClass {
           return {
             success: false,
             error: 'Render service is currently starting up. Please wait a moment and try again.'
+          };
+        }
+
+        if (error.response?.status === 401) {
+          return {
+            success: false,
+            error: 'Authentication failed. Please log in again.'
+          };
+        }
+
+        if (error.response?.status === 403) {
+          return {
+            success: false,
+            error: 'Access denied. You do not have permission to access this resource.'
           };
         }
         

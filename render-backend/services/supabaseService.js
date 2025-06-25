@@ -27,6 +27,44 @@ class SupabaseService {
     throw new Error('Could not extract Supabase URL from DATABASE_URL');
   }
 
+  // User and credential management
+  async getUserCredentials(userId) {
+    const { data, error } = await this.client
+      .from('zoom_credentials')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  }
+
+  async getConnectionWithCredentials(connectionId) {
+    const { data: connection, error: connError } = await this.client
+      .from('zoom_connections')
+      .select('*')
+      .eq('id', connectionId)
+      .single();
+
+    if (connError) throw connError;
+
+    const { data: credentials, error: credError } = await this.client
+      .from('zoom_credentials')
+      .select('*')
+      .eq('user_id', connection.user_id)
+      .eq('is_active', true)
+      .single();
+
+    if (credError && credError.code !== 'PGRST116') throw credError;
+
+    return {
+      connection,
+      credentials
+    };
+  }
+
+  // Connection management
   async createZoomConnection(connectionData) {
     const { data, error } = await this.client
       .from('zoom_connections')
@@ -71,6 +109,7 @@ class SupabaseService {
     return true;
   }
 
+  // Sync logging
   async createSyncLog(logData) {
     const { data, error } = await this.client
       .from('zoom_sync_logs')
@@ -90,6 +129,17 @@ class SupabaseService {
 
     if (error) throw error;
     return true;
+  }
+
+  async getSyncLog(id) {
+    const { data, error } = await this.client
+      .from('zoom_sync_logs')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 }
 

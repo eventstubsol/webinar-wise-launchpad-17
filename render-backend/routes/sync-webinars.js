@@ -4,9 +4,9 @@ const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const zoomService = require('../services/zoomService');
 const supabaseService = require('../services/supabaseService');
-const authMiddleware = require('../middleware/auth');
+const { authMiddleware, extractUser } = require('../middleware/auth');
 
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, extractUser, async (req, res) => {
   try {
     const { 
       connection_id, 
@@ -16,6 +16,7 @@ router.post('/', authMiddleware, async (req, res) => {
       testMode = false,
       priority = 'normal' 
     } = req.body;
+    const userId = req.userId;
 
     if (!connection_id) {
       return res.status(400).json({
@@ -24,10 +25,17 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log('Syncing webinars for connection:', connection_id);
+    console.log('Syncing webinars for connection:', connection_id, 'user:', userId);
 
-    // Get connection details
+    // Get connection and verify ownership
     const connection = await supabaseService.getZoomConnection(connection_id);
+    
+    if (connection.user_id !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this connection'
+      });
+    }
 
     // Create sync log
     const syncId = uuidv4();
@@ -47,7 +55,8 @@ router.post('/', authMiddleware, async (req, res) => {
         debug,
         testMode,
         priority,
-        sync_id: syncId
+        sync_id: syncId,
+        user_id: userId
       }
     };
 

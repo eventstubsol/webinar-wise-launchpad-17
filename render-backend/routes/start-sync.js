@@ -3,11 +3,12 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const supabaseService = require('../services/supabaseService');
-const authMiddleware = require('../middleware/auth');
+const { authMiddleware, extractUser } = require('../middleware/auth');
 
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, extractUser, async (req, res) => {
   try {
     const { connection_id, sync_type = 'manual' } = req.body;
+    const userId = req.userId;
 
     if (!connection_id) {
       return res.status(400).json({
@@ -16,7 +17,17 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log('Starting sync for connection:', connection_id, 'type:', sync_type);
+    console.log('Starting sync for connection:', connection_id, 'type:', sync_type, 'user:', userId);
+
+    // Verify connection ownership
+    const connection = await supabaseService.getZoomConnection(connection_id);
+    
+    if (connection.user_id !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this connection'
+      });
+    }
 
     // Create sync log entry
     const syncId = uuidv4();
@@ -33,7 +44,8 @@ router.post('/', authMiddleware, async (req, res) => {
       processed_items: 0,
       metadata: {
         requested_at: new Date().toISOString(),
-        sync_id: syncId
+        sync_id: syncId,
+        user_id: userId
       }
     };
 

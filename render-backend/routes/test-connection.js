@@ -3,11 +3,12 @@ const express = require('express');
 const router = express.Router();
 const zoomService = require('../services/zoomService');
 const supabaseService = require('../services/supabaseService');
-const authMiddleware = require('../middleware/auth');
+const { authMiddleware, extractUser } = require('../middleware/auth');
 
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', authMiddleware, extractUser, async (req, res) => {
   try {
     const { connection_id } = req.query;
+    const userId = req.userId;
 
     if (!connection_id) {
       return res.status(400).json({
@@ -16,10 +17,17 @@ router.get('/', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log('Testing Zoom connection:', connection_id);
+    console.log('Testing Zoom connection:', connection_id, 'for user:', userId);
 
-    // Get connection from database
+    // Get connection and verify ownership
     const connection = await supabaseService.getZoomConnection(connection_id);
+    
+    if (connection.user_id !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this connection'
+      });
+    }
 
     // Test the connection by making a simple API call
     const userInfo = await zoomService.makeAuthenticatedRequest('/users/me', connection.access_token);
@@ -39,7 +47,7 @@ router.get('/', authMiddleware, async (req, res) => {
     console.error('Connection test error:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Connection test failed'
+      message: error.message || 'Connection test failed'
     });
   }
 });

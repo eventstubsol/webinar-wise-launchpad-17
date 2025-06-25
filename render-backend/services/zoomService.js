@@ -53,7 +53,7 @@ class ZoomService {
     }
   }
 
-  async refreshToken(refreshToken) {
+  async refreshTokenWithCredentials(refreshToken, clientId, clientSecret) {
     try {
       const response = await axios.post(`${this.oauthURL}/token`, null, {
         params: {
@@ -61,7 +61,7 @@ class ZoomService {
           refresh_token: refreshToken
         },
         headers: {
-          'Authorization': `Basic ${Buffer.from(`${process.env.ZOOM_CLIENT_ID}:${process.env.ZOOM_CLIENT_SECRET}`).toString('base64')}`,
+          'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
           'Content-Type': 'application/x-www-form-urlencoded'
         }
       });

@@ -1,13 +1,21 @@
 
-# Render.com Deployment Guide
+# Render.com Multi-Tenant Deployment Guide
 
-This guide will walk you through deploying the Node.js backend to Render.com.
+This guide will walk you through deploying the multi-tenant Node.js backend to Render.com.
+
+## Multi-Tenant Architecture
+
+This backend now supports **true multi-tenancy** where:
+- Zoom credentials are stored per-user in the database
+- No hardcoded API credentials in environment variables
+- Each API request is authenticated and scoped to the requesting user
+- All operations are isolated by user ownership
 
 ## Prerequisites
 
 1. **GitHub Repository**: Your code should be in a GitHub repository
 2. **Render Account**: Sign up at [render.com](https://render.com)
-3. **Environment Variables**: Have your Zoom API credentials and Supabase details ready
+3. **Supabase Configuration**: Have your Supabase details ready (no Zoom credentials needed)
 
 ## Step 1: Prepare Your Repository
 
@@ -42,6 +50,8 @@ This guide will walk you through deploying the Node.js backend to Render.com.
 
 ## Step 4: Set Environment Variables
 
+⚠️ **Important**: No Zoom credentials needed in environment variables!
+
 In the Render dashboard, go to your service → Environment tab and add:
 
 ### Required Variables
@@ -53,11 +63,6 @@ PORT=3001
 DATABASE_URL=your_supabase_database_url
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-
-# Zoom API Configuration
-ZOOM_CLIENT_ID=your_zoom_client_id
-ZOOM_CLIENT_SECRET=your_zoom_client_secret
-ZOOM_ACCOUNT_ID=your_zoom_account_id
 
 # Security (generate strong random strings)
 JWT_SECRET=your_jwt_secret_key
@@ -71,14 +76,6 @@ API_KEY=your_api_key
 2. **SUPABASE_URL**: Project Settings → API → Project URL
 3. **SUPABASE_SERVICE_ROLE_KEY**: Project Settings → API → service_role key
 4. **DATABASE_URL**: Project Settings → Database → Connection string (URI format)
-
-#### Zoom API Values
-1. Go to [Zoom Marketplace](https://marketplace.zoom.us/)
-2. Sign in and go to "Develop" → "Build App"
-3. Create or select your Server-to-Server OAuth app
-4. **ZOOM_CLIENT_ID**: App Credentials → Client ID
-5. **ZOOM_CLIENT_SECRET**: App Credentials → Client Secret
-6. **ZOOM_ACCOUNT_ID**: App Credentials → Account ID
 
 #### Security Values
 Generate random strings for:
@@ -102,11 +99,36 @@ After successful deployment, update your frontend:
 const RENDER_API_BASE_URL = 'https://your-actual-service-name.onrender.com';
 ```
 
+## Multi-Tenant API Flow
+
+### 1. User Authentication
+- Frontend sends Supabase JWT token in Authorization header
+- Backend extracts user ID from token
+- All operations are scoped to that user
+
+### 2. Credential Management
+- Users input their Zoom credentials in the frontend
+- Credentials are validated and stored in `zoom_credentials` table
+- Each user's credentials are isolated and secure
+
+### 3. API Operations
+- All Zoom API calls use user-specific credentials
+- Connection and sync operations are tied to the authenticated user
+- No shared credentials or cross-user data access
+
 ## Step 7: Test the Integration
 
 1. **Health Check**: Visit `https://your-service-name.onrender.com/health`
 2. **Frontend Test**: Try connecting your Zoom account in the app
 3. **Monitor Logs**: Check Render service logs for any issues
+
+## Security Features
+
+✅ **User Isolation**: All operations scoped to authenticated user
+✅ **Credential Security**: User credentials stored securely in database
+✅ **Access Control**: Connection ownership verified on every request
+✅ **Authentication**: JWT token validation on all endpoints
+✅ **No Shared State**: Each user's data completely isolated
 
 ## Troubleshooting
 
@@ -122,21 +144,24 @@ const RENDER_API_BASE_URL = 'https://your-actual-service-name.onrender.com';
    - Check DATABASE_URL format
    - Ensure Supabase project is active
 
-3. **Zoom API Errors**
-   - Verify Zoom credentials are correct
-   - Check Zoom app permissions and scopes
-   - Ensure Zoom app is activated
+3. **Authentication Errors**
+   - Verify JWT_SECRET is set
+   - Check frontend is sending proper Authorization header
+   - Ensure user is logged in on frontend
 
 4. **CORS Issues**
    - The backend is configured to allow all origins
    - If issues persist, check browser developer tools
 
-### Render-Specific Notes
+### Multi-Tenant Specific Issues
 
-- **Cold Starts**: Free tier services may sleep after inactivity
-- **Build Time**: Initial deploys may take 5-10 minutes
-- **Logs**: Access logs via Render dashboard → your service → Logs
-- **Scaling**: Upgrade plan for production workloads
+1. **User Credentials Not Found**
+   - User must set up Zoom credentials in frontend first
+   - Check `zoom_credentials` table in Supabase
+
+2. **Access Denied Errors**
+   - Verify user is trying to access their own resources
+   - Check user authentication status
 
 ## Production Recommendations
 
@@ -144,7 +169,8 @@ const RENDER_API_BASE_URL = 'https://your-actual-service-name.onrender.com';
 2. **Add Monitoring**: Set up health check monitoring
 3. **Enable Alerts**: Configure deployment and error alerts
 4. **Review Logs**: Regularly check service logs
-5. **Backup Strategy**: Ensure database backups are configured
+5. **Security Audit**: Regular review of access patterns
+6. **Rate Limiting**: Monitor per-user API usage
 
 ## Need Help?
 
@@ -154,3 +180,5 @@ const RENDER_API_BASE_URL = 'https://your-actual-service-name.onrender.com';
 
 Once deployed, your service URL will be available at:
 `https://your-service-name.onrender.com`
+
+**No Zoom credentials needed in environment variables - they're managed per-user!**
