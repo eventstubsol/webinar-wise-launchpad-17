@@ -15,9 +15,12 @@ export class PollOperations {
     const transformedPolls = polls.map(poll => {
       const transformed = InteractionTransformers.transformPoll(poll, webinarDbId);
       return {
-        ...transformed,
-        // FIXED: Properly handle questions field
+        webinar_id: webinarDbId,
+        poll_id: transformed.poll_id || poll.id,
+        title: transformed.poll_title || poll.title || 'Untitled Poll',
+        poll_type: transformed.poll_type || poll.type || 1,
         questions: transformed.questions ? JSON.parse(JSON.stringify(transformed.questions)) : [],
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
     });

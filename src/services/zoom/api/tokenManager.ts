@@ -83,3 +83,7 @@ export class ZoomTokenManager {
     return this.refreshAccessToken(connectionId);
   }
 }
+
+// Export as both named and default for backward compatibility
+export const TokenManager = ZoomTokenManager;
+export default ZoomTokenManager;

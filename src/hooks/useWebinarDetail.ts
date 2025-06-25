@@ -1,7 +1,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { ParticipantAnalyticsService } from '@/services/zoom/analytics';
+import { WebinarEngagementService } from '@/services/zoom/analytics';
 
 interface WebinarDetailData {
   webinar: any;
@@ -70,8 +70,8 @@ export const useWebinarDetail = (webinarId: string, connectionId: string) => {
 
       if (registrantsError) throw registrantsError;
 
-      // Calculate analytics
-      const analytics = await ParticipantAnalyticsService.calculateWebinarEngagement(webinarId);
+      // Calculate analytics - fixed to use correct method name
+      const analytics = await WebinarEngagementService.getWebinarEngagement(webinarId);
 
       return {
         webinar: webinar || {},

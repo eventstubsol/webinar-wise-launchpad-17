@@ -1,10 +1,9 @@
-
 import { ZoomConnection } from '@/types/zoom';
 import { ZoomConnectionService } from '../ZoomConnectionService';
 import { ApiResponse, RequestOptions, QueuedRequest, RateLimitConfig } from './types';
 import { HttpClient } from './httpClient';
 import { ErrorHandler } from './errorHandler';
-import { TokenManager } from './tokenManager';
+import { ZoomTokenManager } from './tokenManager';
 import { rateLimitManager } from '../utils/RateLimitManager';
 import { RequestPriority } from '../utils/types/rateLimitTypes';
 import { supabase } from '@/integrations/supabase/client';

@@ -13,7 +13,7 @@ export type { ZoomWebinarApiResponse, ListWebinarsOptions, SyncProgress } from '
 // Export utilities
 export { HttpClient } from './httpClient';
 export { ErrorHandler } from './errorHandler';
-export { TokenManager } from './tokenManager';
+export { ZoomTokenManager } from './tokenManager';
 
 // Export data transformation utilities
 export { ZoomDataTransformers } from '../utils/dataTransformers';

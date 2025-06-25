@@ -17,12 +17,12 @@ export class WebinarOperations {
       .upsert(
         {
           ...transformedWebinar,
-          // Ensure uuid field is present (required by database schema)
-          uuid: transformedWebinar.webinar_uuid || webinarData.uuid || null,
-          updated_at_db: new Date().toISOString()
+          // Store uuid in zoom_uuid field instead of uuid field
+          zoom_uuid: transformedWebinar.webinar_uuid || webinarData.uuid || null,
+          updated_at: new Date().toISOString()
         },
         {
-          onConflict: 'connection_id,webinar_id',
+          onConflict: 'connection_id,zoom_webinar_id',
           ignoreDuplicates: false
         }
       )
@@ -42,8 +42,8 @@ export class WebinarOperations {
   static async getWebinarByZoomId(zoomWebinarId: string, connectionId: string): Promise<any> {
     const { data, error } = await supabase
       .from('zoom_webinars')
-      .select('id, webinar_id, updated_at_db')
-      .eq('webinar_id', zoomWebinarId)
+      .select('id, zoom_webinar_id, updated_at')
+      .eq('zoom_webinar_id', zoomWebinarId)
       .eq('connection_id', connectionId)
       .single();
 

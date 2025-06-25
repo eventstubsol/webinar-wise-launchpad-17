@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,11 +40,10 @@ export const MultiAccountManager: React.FC = () => {
     refetchInterval: 30000,
   });
 
-  // Set primary connection mutation
+  // Set primary connection mutation - fixed to use only connectionId
   const setPrimaryMutation = useMutation({
     mutationFn: async ({ connectionId }: { connectionId: string }) => {
-      if (!user?.id) throw new Error('User not authenticated');
-      const success = await ZoomConnectionService.setPrimaryConnection(connectionId, user.id);
+      const success = await ZoomConnectionService.setPrimaryConnection(connectionId);
       if (!success) throw new Error('Failed to set primary connection');
       return success;
     },

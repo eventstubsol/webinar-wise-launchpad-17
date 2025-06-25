@@ -1,4 +1,3 @@
-
 import { ZoomConnectionService } from '../ZoomConnectionService';
 import { ZoomConnection, SyncType, SyncStatus } from '@/types/zoom';
 import { SyncOperation, SyncPriority } from './types';
@@ -249,14 +248,19 @@ export class ZoomSyncOrchestrator {
   }
 
   /**
-   * Validate connection and refresh token if needed
+   * Validate connection and refresh token if needed - fixed return type
    */
   private async validateConnection(connectionId: string): Promise<ZoomConnection | null> {
     const connection = await ZoomConnectionService.getConnection(connectionId);
     if (!connection) return null;
 
     if (ZoomConnectionService.isTokenExpired(connection.token_expires_at)) {
-      return await ZoomConnectionService.refreshToken(connection);
+      const refreshResult = await ZoomConnectionService.refreshToken(connectionId);
+      if (!refreshResult.success) {
+        return null;
+      }
+      // Return the refreshed connection
+      return await ZoomConnectionService.getConnection(connectionId);
     }
 
     return connection;
