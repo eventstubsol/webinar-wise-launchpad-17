@@ -114,3 +114,6 @@ export class ZoomConnectionStatusService {
     }
   }
 }
+
+// Export for backward compatibility
+export const ConnectionStatusOperations = ZoomConnectionStatusService;
