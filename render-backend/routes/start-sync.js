@@ -56,7 +56,8 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
         sync_id: syncId,
         user_id: userId,
         date_range: '90 days past to 90 days future',
-        enhanced_sync: true
+        enhanced_sync: true,
+        error_details: []
       }
     };
 
@@ -94,9 +95,11 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
   }
 });
 
-// Enhanced async function to perform comprehensive webinar sync
+// Enhanced async function to perform comprehensive webinar sync with detailed error tracking
 async function performEnhancedWebinarSync(syncId, connection, credentials, syncType) {
   console.log(`🚀 Starting ENHANCED comprehensive webinar sync process for sync ID: ${syncId}`);
+  
+  const errorDetails = [];
   
   try {
     // Update status to running
@@ -132,7 +135,8 @@ async function performEnhancedWebinarSync(syncId, connection, credentials, syncT
         date_range_from: fromDate.toISOString(),
         date_range_to: toDate.toISOString(),
         sync_type: syncType,
-        enhanced_sync: true
+        enhanced_sync: true,
+        error_details: errorDetails
       }
     });
 
@@ -164,34 +168,56 @@ async function performEnhancedWebinarSync(syncId, connection, credentials, syncT
       
       console.log(`🔄 Processing ENHANCED batch ${Math.floor(i/batchSize) + 1}, webinars ${i + 1}-${Math.min(i + batchSize, webinars.length)}`);
 
-      // Process batch with enhanced data collection
+      // Process batch with enhanced data collection and error tracking
       for (const webinar of batch) {
+        let webinarErrors = [];
+        
         try {
-          console.log(`🎯 ENHANCED processing webinar: ${webinar.id} - ${webinar.topic}`);
+          console.log(`🎯 ENHANCED processing webinar: ${webinar.id} - ${webinar.topic} (status: ${webinar.status})`);
           
           // Store webinar in database with comprehensive field extraction
           const webinarDbId = await storeWebinarWithAllFields(webinar, connection.id, accessToken);
           
           // Phase 1: Enhanced registrant processing for ALL webinars
           console.log(`📋 ENHANCED: Fetching registrants for webinar ${webinar.id} (status: ${webinar.status})`);
+          
           try {
-            const registrants = await zoomService.getWebinarRegistrants(accessToken, webinar.id);
-            if (registrants && registrants.length > 0) {
-              await storeEnhancedRegistrants(registrants, webinar.id, connection.id, webinarDbId);
-              registrantsProcessed += registrants.length;
-              console.log(`✅ ENHANCED: Stored ${registrants.length} registrants for webinar ${webinar.id}`);
+            // Check if webinar is eligible for registrants
+            const isEligibleForRegistrants = zoomService.isWebinarEligibleForRegistrants(webinar);
+            
+            if (isEligibleForRegistrants) {
+              const registrants = await zoomService.getWebinarRegistrants(accessToken, webinar.id);
+              if (registrants && registrants.length > 0) {
+                await storeEnhancedRegistrants(registrants, webinar.id, connection.id, webinarDbId);
+                registrantsProcessed += registrants.length;
+                console.log(`✅ ENHANCED: Stored ${registrants.length} registrants for webinar ${webinar.id}`);
+              } else {
+                console.log(`📭 No registrants found for webinar ${webinar.id} (may not have registration enabled)`);
+              }
             } else {
-              console.log(`📭 No registrants found for webinar ${webinar.id}`);
+              console.log(`⏭️ Skipping registrants for webinar ${webinar.id} - not eligible`);
             }
           } catch (registrantError) {
-            console.warn(`⚠️ Failed to fetch registrants for webinar ${webinar.id}:`, registrantError.message);
+            const errorMsg = `Failed to fetch registrants for webinar ${webinar.id}: ${registrantError.message}`;
+            console.error(`❌ ${errorMsg}`);
+            console.error(`❌ Registrant error details:`, registrantError.response?.data || registrantError);
+            webinarErrors.push({
+              type: 'registrants',
+              error: errorMsg,
+              details: registrantError.response?.data || registrantError.message
+            });
           }
           
-          // Phase 2: Enhanced participant processing for ended webinars
-          if (webinar.status === 'ended') {
-            console.log(`👥 ENHANCED: Fetching participants for ended webinar ${webinar.id}`);
-            try {
+          // Phase 2: Enhanced participant processing for ended webinars ONLY
+          console.log(`👥 ENHANCED: Checking participant eligibility for webinar ${webinar.id} (status: ${webinar.status})`);
+          
+          try {
+            const isEligibleForParticipants = zoomService.isWebinarEligibleForParticipants(webinar);
+            
+            if (isEligibleForParticipants) {
+              console.log(`👥 ENHANCED: Fetching participants for ended webinar ${webinar.id}`);
               const participants = await zoomService.getWebinarParticipants(accessToken, webinar.id);
+              
               if (participants && participants.length > 0) {
                 await storeEnhancedParticipants(participants, webinar.id, connection.id, webinarDbId);
                 participantsProcessed += participants.length;
@@ -203,24 +229,57 @@ async function performEnhancedWebinarSync(syncId, connection, credentials, syncT
               } else {
                 console.log(`👥 No participants found for ended webinar ${webinar.id}`);
               }
-            } catch (participantError) {
-              console.warn(`⚠️ Failed to fetch participants for webinar ${webinar.id}:`, participantError.message);
+            } else {
+              console.log(`⏭️ Skipping participants for webinar ${webinar.id} (status: ${webinar.status}) - only 'ended' webinars have participant data`);
             }
-          } else {
-            console.log(`⏭️ Skipping participants for non-ended webinar ${webinar.id} (status: ${webinar.status})`);
+          } catch (participantError) {
+            const errorMsg = `Failed to fetch participants for webinar ${webinar.id}: ${participantError.message}`;
+            console.error(`❌ ${errorMsg}`);
+            console.error(`❌ Participant error details:`, participantError.response?.data || participantError);
+            webinarErrors.push({
+              type: 'participants',
+              error: errorMsg,
+              details: participantError.response?.data || participantError.message
+            });
           }
 
           // Phase 4: Enhanced metrics calculation and update
           await calculateAndUpdateEnhancedMetrics(webinarDbId, connection.id);
 
           processedCount++;
+          
+          // Log webinar processing results
+          if (webinarErrors.length > 0) {
+            console.log(`⚠️ Webinar ${webinar.id} processed with ${webinarErrors.length} errors:`, webinarErrors);
+            errorDetails.push({
+              webinar_id: webinar.id,
+              webinar_topic: webinar.topic,
+              errors: webinarErrors
+            });
+          } else {
+            console.log(`✅ Webinar ${webinar.id} processed successfully`);
+          }
+          
         } catch (webinarError) {
-          console.error(`❌ Failed to process webinar ${webinar.id}:`, webinarError.message);
+          const errorMsg = `Failed to process webinar ${webinar.id}: ${webinarError.message}`;
+          console.error(`❌ ${errorMsg}`);
+          console.error(`❌ Webinar processing error details:`, webinarError.response?.data || webinarError);
+          
+          errorDetails.push({
+            webinar_id: webinar.id,
+            webinar_topic: webinar.topic,
+            errors: [{
+              type: 'webinar_processing',
+              error: errorMsg,
+              details: webinarError.response?.data || webinarError.message
+            }]
+          });
+          
           errorCount++;
         }
       }
 
-      // Update progress with enhanced metrics
+      // Update progress with enhanced metrics and error details
       const progressPercentage = 25 + Math.round((processedCount / webinars.length) * 70);
       await supabaseService.updateSyncLog(syncId, {
         processed_items: processedCount,
@@ -228,7 +287,9 @@ async function performEnhancedWebinarSync(syncId, connection, credentials, syncT
         metadata: {
           registrants_processed: registrantsProcessed,
           participants_processed: participantsProcessed,
-          enhanced_sync: true
+          enhanced_sync: true,
+          error_details: errorDetails,
+          total_errors: errorCount
         }
       });
 
@@ -236,14 +297,19 @@ async function performEnhancedWebinarSync(syncId, connection, credentials, syncT
       await new Promise(resolve => setTimeout(resolve, 200));
     }
 
+    // Determine final sync status
+    const finalStatus = errorCount === webinars.length ? 'failed' : 
+                       errorCount > 0 ? 'completed_with_errors' : 'completed';
+
     // Complete the enhanced sync
     await supabaseService.updateSyncLog(syncId, {
-      sync_status: 'completed',
-      status: 'completed',
+      sync_status: finalStatus,
+      status: finalStatus,
       completed_at: new Date().toISOString(),
       sync_stage: 'completed_enhanced',
       stage_progress_percentage: 100,
       processed_items: processedCount,
+      error_message: errorCount > 0 ? `${errorCount} webinars failed to process` : null,
       metadata: {
         total_webinars: webinars.length,
         processed_count: processedCount,
@@ -255,7 +321,8 @@ async function performEnhancedWebinarSync(syncId, connection, credentials, syncT
         completed_at: new Date().toISOString(),
         sync_duration_days: 180,
         enhanced_metrics_enabled: true,
-        engagement_data_captured: true
+        engagement_data_captured: true,
+        error_details: errorDetails
       }
     });
 
@@ -264,8 +331,10 @@ async function performEnhancedWebinarSync(syncId, connection, credentials, syncT
       last_sync_at: new Date().toISOString()
     });
 
-    console.log(`✅ ENHANCED sync completed successfully. Processed ${processedCount}/${webinars.length} webinars`);
-    console.log(`📊 ENHANCED sync stats: ${registrantsProcessed} registrants, ${participantsProcessed} participants with engagement data`);
+    console.log(`✅ ENHANCED sync completed with status: ${finalStatus}`);
+    console.log(`📊 Results: ${processedCount}/${webinars.length} webinars processed`);
+    console.log(`📊 Data captured: ${registrantsProcessed} registrants, ${participantsProcessed} participants`);
+    console.log(`📊 Errors: ${errorCount} webinars had processing errors`);
 
   } catch (error) {
     console.error('Enhanced sync process failed:', error);
@@ -276,7 +345,14 @@ async function performEnhancedWebinarSync(syncId, connection, credentials, syncT
       error_message: error.message,
       completed_at: new Date().toISOString(),
       sync_stage: 'failed',
-      stage_progress_percentage: 0
+      stage_progress_percentage: 0,
+      metadata: {
+        error_details: errorDetails,
+        fatal_error: {
+          message: error.message,
+          details: error.response?.data || error.stack
+        }
+      }
     });
 
     throw error;

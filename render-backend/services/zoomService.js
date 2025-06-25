@@ -180,8 +180,9 @@ class ZoomService {
       
       return webinarDetails;
     } catch (error) {
-      console.warn(`⚠️ Failed to fetch details for webinar ${webinarId}:`, error.message);
-      return null;
+      console.error(`❌ Failed to fetch details for webinar ${webinarId}:`, error.message);
+      console.error(`❌ Error details:`, error.response?.data || error);
+      throw error; // Re-throw to capture in sync logs
     }
   }
 
@@ -345,8 +346,9 @@ class ZoomService {
       return enhancedParticipants;
       
     } catch (error) {
-      console.warn(`Could not fetch participants for webinar ${webinarId}:`, error.message);
-      return [];
+      console.error(`❌ Failed to fetch participants for webinar ${webinarId}:`, error.message);
+      console.error(`❌ Error details:`, error.response?.data || error);
+      throw error; // Re-throw to capture in sync logs
     }
   }
 
@@ -388,6 +390,7 @@ class ZoomService {
           }
         } catch (pageError) {
           console.error(`❌ Failed to fetch registrants page ${pageNumber}:`, pageError.message);
+          console.error(`❌ Error details:`, pageError.response?.data || pageError);
           break;
         }
       }
@@ -450,8 +453,9 @@ class ZoomService {
       return enhancedRegistrants;
       
     } catch (error) {
-      console.warn(`Could not fetch registrants for webinar ${webinarId}:`, error.message);
-      return [];
+      console.error(`❌ Failed to fetch registrants for webinar ${webinarId}:`, error.message);
+      console.error(`❌ Error details:`, error.response?.data || error);
+      throw error; // Re-throw to capture in sync logs
     }
   }
 
@@ -465,9 +469,34 @@ class ZoomService {
       
       return response;
     } catch (error) {
-      console.warn(`Could not fetch registrant details for ${registrantId}:`, error.message);
-      return null;
+      console.error(`❌ Failed to fetch registrant details for ${registrantId}:`, error.message);
+      console.error(`❌ Error details:`, error.response?.data || error);
+      throw error; // Re-throw to capture in sync logs
     }
+  }
+
+  // Check if webinar is eligible for participant sync
+  isWebinarEligibleForParticipants(webinar) {
+    const eligibleStatuses = ['ended'];
+    const isEligible = eligibleStatuses.includes(webinar.status);
+    
+    console.log(`📊 Webinar ${webinar.id} (${webinar.topic}) status: ${webinar.status} - Eligible for participants: ${isEligible}`);
+    
+    return isEligible;
+  }
+
+  // Check if webinar is eligible for registrant sync
+  isWebinarEligibleForRegistrants(webinar) {
+    // All webinars can potentially have registrants, regardless of status
+    // However, we should check if registration is enabled
+    const hasRegistration = webinar.registration_url || 
+                           (webinar.settings && webinar.settings.registration_type !== undefined);
+    
+    console.log(`📊 Webinar ${webinar.id} (${webinar.topic}) - Has registration: ${hasRegistration}`);
+    console.log(`  - registration_url: ${webinar.registration_url || 'not set'}`);
+    console.log(`  - registration_type: ${webinar.settings?.registration_type || 'not set'}`);
+    
+    return true; // Try to fetch registrants for all webinars, let API determine eligibility
   }
 }
 
