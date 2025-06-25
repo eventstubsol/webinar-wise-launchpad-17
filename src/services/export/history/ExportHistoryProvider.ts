@@ -1,21 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-
-export interface ExportQueueItem {
-  id: string;
-  export_type: 'pdf' | 'excel' | 'powerpoint' | 'csv';
-  status: string;
-  file_url?: string;
-  file_size?: number;
-  created_at: string;
-  completed_at?: string;
-  error_message?: string;
-  user_id: string;
-  progress_percentage: number;
-  export_config: any;
-  updated_at: string;
-  expires_at: string;
-}
+import { ExportQueueItem } from '@/services/export/types';
 
 export class ExportHistoryProvider {
   static async getExportHistory(userId?: string, limit = 50): Promise<ExportQueueItem[]> {
@@ -48,20 +33,21 @@ export class ExportHistoryProvider {
     // Map export_queue data to ExportQueueItem format with proper type casting
     return data.map(item => ({
       id: item.id,
+      user_id: item.user_id,
       export_type: item.export_type as 'pdf' | 'excel' | 'powerpoint' | 'csv',
-      status: item.status,
+      status: item.status as 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled',
+      progress_percentage: item.progress_percentage,
       file_url: item.file_url,
       file_size: item.file_size,
-      created_at: item.created_at,
-      completed_at: item.completed_at,
-      error_message: item.error_message,
-      user_id: item.user_id,
-      progress_percentage: item.progress_percentage,
       export_config: item.export_config,
-      updated_at: item.updated_at,
+      error_message: item.error_message,
+      started_at: item.started_at,
+      completed_at: item.completed_at,
       expires_at: item.completed_at ? 
         new Date(new Date(item.completed_at).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString() : 
-        new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      created_at: item.created_at,
+      updated_at: item.updated_at
     }));
   }
 
