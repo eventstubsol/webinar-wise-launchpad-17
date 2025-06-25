@@ -30,6 +30,84 @@ class ZoomService {
     }
   }
 
+  // Validate credentials by attempting authentication and fetching user info
+  async validateCredentials(account_id, client_id, client_secret) {
+    try {
+      console.log('Validating Zoom credentials...');
+      
+      // Create credentials object
+      const credentials = {
+        account_id,
+        client_id,
+        client_secret
+      };
+
+      // Step 1: Try to get access token
+      const accessToken = await this.getAccessToken(credentials);
+      
+      if (!accessToken) {
+        return {
+          valid: false,
+          error: 'Failed to obtain access token'
+        };
+      }
+
+      // Step 2: Get user info to verify the token works
+      const userInfo = await this.getUserInfo(accessToken);
+      
+      if (!userInfo) {
+        return {
+          valid: false,
+          error: 'Failed to retrieve user information'
+        };
+      }
+
+      console.log('Zoom credentials validated successfully');
+      
+      return {
+        valid: true,
+        userInfo: {
+          id: userInfo.id,
+          email: userInfo.email,
+          type: userInfo.type,
+          account_id: userInfo.account_id,
+          first_name: userInfo.first_name,
+          last_name: userInfo.last_name,
+          display_name: userInfo.display_name,
+          timezone: userInfo.timezone,
+          language: userInfo.language,
+          status: userInfo.status
+        },
+        tokenData: {
+          access_token: accessToken,
+          expires_in: 3600, // Zoom S2S tokens typically expire in 1 hour
+          scope: 'webinar:read webinar:write meeting:read meeting:write user:read'
+        }
+      };
+
+    } catch (error) {
+      console.error('Credential validation failed:', error.message);
+      
+      // Provide more specific error messages based on error type
+      let errorMessage = 'Invalid credentials';
+      
+      if (error.message.includes('authenticate')) {
+        errorMessage = 'Invalid Account ID, Client ID, or Client Secret';
+      } else if (error.message.includes('user information')) {
+        errorMessage = 'Authentication succeeded but failed to retrieve user information';
+      } else if (error.response?.status === 401) {
+        errorMessage = 'Invalid Account ID, Client ID, or Client Secret';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Access denied. Check your app permissions and scopes';
+      }
+      
+      return {
+        valid: false,
+        error: errorMessage
+      };
+    }
+  }
+
   // Make authenticated request to Zoom API
   async makeAuthenticatedRequest(endpoint, accessToken, options = {}) {
     try {
