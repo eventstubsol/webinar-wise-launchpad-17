@@ -1,3 +1,4 @@
+
 const { createClient } = require('@supabase/supabase-js');
 
 class SupabaseService {
@@ -357,6 +358,67 @@ class SupabaseService {
       return data || [];
     } catch (error) {
       console.error('Failed to fetch webinars with calculated status:', error);
+      throw error;
+    }
+  }
+
+  // New method: Get webinars that need participant data sync
+  async getWebinarsNeedingParticipantSync(connectionId, limit = 10) {
+    try {
+      console.log(`🔍 Finding webinars needing participant sync for connection: ${connectionId}`);
+      
+      const { data, error } = await this.supabase
+        .from('zoom_webinars_with_calculated_status')
+        .select('*')
+        .eq('connection_id', connectionId)
+        .eq('calculated_status', 'ended')
+        .in('participant_sync_status', ['pending', 'not_applicable'])
+        .order('start_time', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error('Error fetching webinars needing participant sync:', error);
+        throw error;
+      }
+
+      console.log(`🎯 Found ${data?.length || 0} webinars needing participant sync`);
+      return data || [];
+    } catch (error) {
+      console.error('Failed to fetch webinars needing participant sync:', error);
+      throw error;
+    }
+  }
+
+  // New method: Update participant sync status
+  async updateParticipantSyncStatus(webinarDbId, status, error = null) {
+    try {
+      const updateData = {
+        participant_sync_status: status,
+        participant_sync_attempted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      if (status === 'completed') {
+        updateData.participant_sync_completed_at = new Date().toISOString();
+        updateData.participant_sync_error = null;
+      } else if (status === 'failed' && error) {
+        updateData.participant_sync_error = error;
+      }
+
+      const { data, dbError } = await this.supabase
+        .from('zoom_webinars')
+        .update(updateData)
+        .eq('id', webinarDbId);
+
+      if (dbError) {
+        console.error('Error updating participant sync status:', dbError);
+        throw dbError;
+      }
+
+      console.log(`✅ Updated participant sync status to: ${status} for webinar: ${webinarDbId}`);
+      return data;
+    } catch (error) {
+      console.error('Failed to update participant sync status:', error);
       throw error;
     }
   }

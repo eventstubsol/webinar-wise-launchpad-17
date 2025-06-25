@@ -1,3 +1,4 @@
+
 const axios = require('axios');
 
 class ZoomService {
@@ -157,31 +158,31 @@ class ZoomService {
 
   // Enhanced webinar eligibility check with time-based status calculation
   isWebinarEligibleForParticipants(webinar) {
-    console.log(`🕐 Checking participant eligibility for webinar ${webinar.id} (${webinar.topic})`);
+    console.log(`🕐 Checking participant eligibility for webinar ${webinar.id || webinar.webinar_id} (${webinar.topic})`);
     
-    // Calculate actual status based on timing
-    const calculatedStatus = this.calculateWebinarStatus(webinar);
+    // Use the database-calculated status if available, otherwise calculate locally
+    const calculatedStatus = webinar.calculated_status || this.calculateWebinarStatus(webinar);
     const storedStatus = webinar.status;
     
-    console.log(`📊 Webinar ${webinar.id} status analysis:`);
+    console.log(`📊 Webinar ${webinar.id || webinar.webinar_id} status analysis:`);
     console.log(`  - Stored status: ${storedStatus}`);
     console.log(`  - Calculated status: ${calculatedStatus}`);
     console.log(`  - Start time: ${webinar.start_time}`);
     console.log(`  - Duration: ${webinar.duration} minutes`);
     
-    // Use time-based calculation instead of relying on stored status
+    // Use time-based calculation - webinar must be ended to have participant data
     const isEligible = calculatedStatus === 'ended';
     
-    console.log(`📊 Webinar ${webinar.id} participant eligibility: ${isEligible ? 'ELIGIBLE' : 'NOT ELIGIBLE'}`);
+    console.log(`📊 Webinar ${webinar.id || webinar.webinar_id} participant eligibility: ${isEligible ? 'ELIGIBLE' : 'NOT ELIGIBLE'}`);
     console.log(`  - Reason: ${isEligible ? 'Webinar has ended based on timing' : `Webinar is ${calculatedStatus}`}`);
     
     return isEligible;
   }
 
-  // New method: Calculate webinar status based on timing (matches database function)
+  // Calculate webinar status based on timing (matches database function)
   calculateWebinarStatus(webinar, currentTime = new Date()) {
     if (!webinar.start_time || !webinar.duration) {
-      console.warn(`⚠️ Missing timing data for webinar ${webinar.id}: start_time=${webinar.start_time}, duration=${webinar.duration}`);
+      console.warn(`⚠️ Missing timing data for webinar ${webinar.id || webinar.webinar_id}: start_time=${webinar.start_time}, duration=${webinar.duration}`);
       return 'unknown';
     }
     
@@ -201,12 +202,12 @@ class ZoomService {
 
   // Enhanced webinar registrant eligibility check
   isWebinarEligibleForRegistrants(webinar) {
-    console.log(`📋 Checking registrant eligibility for webinar ${webinar.id} (${webinar.topic})`);
+    console.log(`📋 Checking registrant eligibility for webinar ${webinar.id || webinar.webinar_id} (${webinar.topic})`);
     
     // Calculate actual status
-    const calculatedStatus = this.calculateWebinarStatus(webinar);
+    const calculatedStatus = webinar.calculated_status || this.calculateWebinarStatus(webinar);
     
-    console.log(`📊 Webinar ${webinar.id} registrant analysis:`);
+    console.log(`📊 Webinar ${webinar.id || webinar.webinar_id} registrant analysis:`);
     console.log(`  - Calculated status: ${calculatedStatus}`);
     console.log(`  - Registration URL: ${webinar.registration_url || 'not set'}`);
     console.log(`  - Registration type: ${webinar.settings?.registration_type || 'not set'}`);
@@ -215,7 +216,7 @@ class ZoomService {
     const hasRegistration = webinar.registration_url || 
                            (webinar.settings && webinar.settings.registration_type !== undefined);
     
-    console.log(`📋 Webinar ${webinar.id} registrant eligibility: ALWAYS ELIGIBLE (will check API)`);
+    console.log(`📋 Webinar ${webinar.id || webinar.webinar_id} registrant eligibility: ALWAYS ELIGIBLE (will check API)`);
     console.log(`  - Has registration setup: ${hasRegistration}`);
     
     return true; // Try to fetch registrants for all webinars, let API determine eligibility
@@ -422,6 +423,13 @@ class ZoomService {
     } catch (error) {
       console.error(`❌ Failed to fetch participants for webinar ${webinarId}:`, error.message);
       console.error(`❌ Error details:`, error.response?.data || error);
+      
+      // If it's a 404, the webinar might not have participant data available
+      if (error.response?.status === 404) {
+        console.log(`ℹ️ No participant data available for webinar ${webinarId} (404 - webinar may be too recent or no participants)`);
+        return [];
+      }
+      
       throw error; // Re-throw to capture in sync logs
     }
   }
