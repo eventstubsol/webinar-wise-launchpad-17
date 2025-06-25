@@ -27,9 +27,26 @@ export interface WorkflowSubscription {
   subscriber_email: string;
   subscriber_id: string;
   current_step: number;
-  status: string;
+  status: 'active' | 'paused' | 'completed' | 'cancelled';
   started_at: string;
   completed_at?: string;
   next_action_at?: string;
   metadata: Record<string, any>;
+}
+
+export interface ExecutionQueueItem {
+  id: string;
+  campaign_id?: string;
+  workflow_id?: string;
+  execution_type: 'immediate' | 'scheduled' | 'triggered';
+  scheduled_for?: string;
+  priority: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  execution_config: Record<string, any>;
+  progress_data: Record<string, any>;
+  error_message?: string;
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
 }
