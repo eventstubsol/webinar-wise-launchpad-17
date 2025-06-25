@@ -33,3 +33,10 @@ export function castScoringModelType(value: any): 'engagement' | 'churn' | 'ltv'
   }
   return 'engagement';
 }
+
+export function castRuleType(value: any): 'subject_line' | 'content_block' | 'send_time' {
+  if (value === 'subject_line' || value === 'content_block' || value === 'send_time') {
+    return value;
+  }
+  return 'subject_line';
+}

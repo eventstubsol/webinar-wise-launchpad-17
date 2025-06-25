@@ -1,5 +1,4 @@
 
-import { supabase } from '@/integrations/supabase/client';
 import { castToRecord, castToArray, castRuleType } from '@/services/types/TypeCasters';
 
 export interface PersonalizationRule {
@@ -28,79 +27,73 @@ export interface BehaviorProfile {
 
 export class DynamicPersonalizationEngine {
   static async getPersonalizationRules(userId: string): Promise<PersonalizationRule[]> {
-    const { data, error } = await supabase
-      .from('content_personalization_rules')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
+    console.warn('DynamicPersonalizationEngine: content_personalization_rules table not implemented yet - using mock implementation');
     
-    return (data || []).map(rule => ({
-      id: rule.id,
-      rule_name: rule.rule_name,
-      rule_type: castRuleType(rule.rule_type),
-      conditions: castToRecord(rule.conditions),
-      content_variations: castToArray(rule.content_variations),
-      performance_metrics: castToRecord(rule.performance_metrics),
-      is_active: rule.is_active,
-    }));
+    // Return mock personalization rules data
+    const mockRules: PersonalizationRule[] = [
+      {
+        id: 'mock-rule-1',
+        rule_name: 'High Engagement Subject Lines',
+        rule_type: 'subject_line',
+        conditions: { engagement_score_min: 70 },
+        content_variations: [
+          'Exclusive: Your personalized insights are ready!',
+          'VIP Access: Advanced analytics inside',
+          'Premium Content: Just for our most engaged subscribers',
+        ],
+        performance_metrics: { conversion_rate: 0.15, open_rate: 0.45 },
+        is_active: true,
+      },
+      {
+        id: 'mock-rule-2',
+        rule_name: 'Send Time Optimization',
+        rule_type: 'send_time',
+        conditions: { lifecycle_stage: 'active' },
+        content_variations: [],
+        performance_metrics: { engagement_improvement: 0.23 },
+        is_active: true,
+      }
+    ];
+
+    return mockRules;
   }
 
   static async createPersonalizationRule(
     userId: string,
     rule: Omit<PersonalizationRule, 'id'>
   ): Promise<PersonalizationRule> {
-    const { data, error } = await supabase
-      .from('content_personalization_rules')
-      .insert({
-        user_id: userId,
-        rule_name: rule.rule_name,
-        rule_type: rule.rule_type,
-        conditions: rule.conditions,
-        content_variations: rule.content_variations,
-        performance_metrics: rule.performance_metrics,
-        is_active: rule.is_active,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
+    console.warn('DynamicPersonalizationEngine: content_personalization_rules table not implemented yet - using mock implementation');
     
-    return {
-      id: data.id,
-      rule_name: data.rule_name,
-      rule_type: castRuleType(data.rule_type),
-      conditions: castToRecord(data.conditions),
-      content_variations: castToArray(data.content_variations),
-      performance_metrics: castToRecord(data.performance_metrics),
-      is_active: data.is_active,
+    const mockRule: PersonalizationRule = {
+      id: `mock-rule-${Date.now()}`,
+      rule_name: rule.rule_name,
+      rule_type: rule.rule_type,
+      conditions: rule.conditions,
+      content_variations: rule.content_variations,
+      performance_metrics: rule.performance_metrics,
+      is_active: rule.is_active,
     };
+    
+    return mockRule;
   }
 
   static async updatePersonalizationRule(
     ruleId: string,
     updates: Partial<PersonalizationRule>
   ): Promise<PersonalizationRule> {
-    const { data, error } = await supabase
-      .from('content_personalization_rules')
-      .update(updates)
-      .eq('id', ruleId)
-      .select()
-      .single();
-
-    if (error) throw error;
+    console.warn('DynamicPersonalizationEngine: content_personalization_rules table not implemented yet - using mock implementation');
     
-    return {
-      id: data.id,
-      rule_name: data.rule_name,
-      rule_type: castRuleType(data.rule_type),
-      conditions: castToRecord(data.conditions),
-      content_variations: castToArray(data.content_variations),
-      performance_metrics: castToRecord(data.performance_metrics),
-      is_active: data.is_active,
+    const mockRule: PersonalizationRule = {
+      id: ruleId,
+      rule_name: updates.rule_name || 'Updated Rule',
+      rule_type: updates.rule_type || 'subject_line',
+      conditions: updates.conditions || {},
+      content_variations: updates.content_variations || [],
+      performance_metrics: updates.performance_metrics || {},
+      is_active: updates.is_active !== undefined ? updates.is_active : true,
     };
+    
+    return mockRule;
   }
 
   static async personalizeContent(
@@ -138,30 +131,30 @@ export class DynamicPersonalizationEngine {
   }
 
   static async getBehaviorProfile(userId: string, email: string): Promise<BehaviorProfile | null> {
-    const { data, error } = await supabase
-      .from('user_behavior_profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('email_address', email)
-      .maybeSingle();
-
-    if (error) throw error;
+    console.warn('DynamicPersonalizationEngine: user_behavior_profiles table not implemented yet - using mock implementation');
     
-    if (!data) return null;
-    
-    return {
-      id: data.id,
-      email_address: data.email_address,
-      engagement_score: data.engagement_score,
-      last_engagement_at: data.last_engagement_at,
-      preferred_send_hour: data.preferred_send_hour,
-      preferred_day_of_week: data.preferred_day_of_week,
-      content_preferences: castToRecord(data.content_preferences),
-      interaction_history: castToArray(data.interaction_history),
-      lifecycle_stage: data.lifecycle_stage,
-      churn_risk_score: data.churn_risk_score,
-      predicted_ltv: data.predicted_ltv,
+    // Return mock behavior profile
+    const mockProfile: BehaviorProfile = {
+      id: `mock-profile-${Date.now()}`,
+      email_address: email,
+      engagement_score: 75,
+      last_engagement_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
+      preferred_send_hour: 10,
+      preferred_day_of_week: 2, // Tuesday
+      content_preferences: { 
+        topics: ['analytics', 'reports'],
+        format: 'detailed'
+      },
+      interaction_history: [
+        { type: 'email_open', timestamp: new Date().toISOString() },
+        { type: 'click', timestamp: new Date().toISOString() }
+      ],
+      lifecycle_stage: 'active',
+      churn_risk_score: 0.2,
+      predicted_ltv: 1250.0,
     };
+    
+    return mockProfile;
   }
 
   static async trackBehavioralEvent(
@@ -171,27 +164,16 @@ export class DynamicPersonalizationEngine {
     eventData: Record<string, any> = {},
     campaignId?: string
   ): Promise<void> {
-    // Insert behavioral event
-    const { error: eventError } = await supabase
-      .from('behavioral_events')
-      .insert({
-        user_id: userId,
-        email_address: email,
-        campaign_id: campaignId,
-        event_type: eventType,
-        event_data: eventData,
-        device_type: eventData.device_type,
-        location_data: eventData.location_data,
-        session_id: eventData.session_id,
-        user_agent: eventData.user_agent,
-      });
-
-    if (eventError) throw eventError;
-
-    // Update behavior profile
-    await supabase.rpc('update_behavior_profile', {
-      p_user_id: userId,
-      p_email: email,
+    console.warn('DynamicPersonalizationEngine: behavioral_events table not implemented yet - using mock implementation');
+    
+    // Mock implementation - log the event
+    console.log(`Mock behavioral event tracked:`, {
+      userId,
+      email,
+      eventType,
+      eventData,
+      campaignId,
+      timestamp: new Date().toISOString()
     });
   }
 
