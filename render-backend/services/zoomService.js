@@ -276,30 +276,197 @@ class ZoomService {
     });
   }
 
-  // Get webinar participants
+  // Enhanced webinar participants with comprehensive data mapping
   async getWebinarParticipants(accessToken, webinarId) {
     try {
-      return this.makeAuthenticatedRequest(
-        `/webinars/${webinarId}/participants`,
-        accessToken
+      console.log(`👥 Fetching comprehensive participant data for webinar ${webinarId}`);
+      
+      const response = await this.makeAuthenticatedRequest(
+        `/past_webinars/${webinarId}/participants`,
+        accessToken,
+        {
+          params: {
+            page_size: 300,  // Maximum allowed
+            include_fields: 'registrant_id,customer_key,join_time,leave_time,duration,attentiveness_score'
+          }
+        }
       );
+
+      const participants = response.participants || [];
+      console.log(`📊 Found ${participants.length} participants for webinar ${webinarId}`);
+      
+      // Enhanced participant data with comprehensive field mapping
+      const enhancedParticipants = participants.map(participant => {
+        console.log(`🔍 Processing participant: ${participant.name || participant.user_name || 'Unknown'}`);
+        console.log(`📋 Available participant fields:`, Object.keys(participant));
+        
+        return {
+          // Core identification
+          participant_id: participant.id || participant.participant_uuid,
+          participant_uuid: participant.participant_uuid || participant.id,
+          participant_name: participant.name || participant.user_name || 'Unknown',
+          participant_email: participant.email || participant.user_email || null,
+          participant_user_id: participant.user_id || null,
+          registrant_id: participant.registrant_id || null,
+          
+          // Timing information
+          join_time: participant.join_time || null,
+          leave_time: participant.leave_time || null,
+          duration: participant.duration || 0,
+          
+          // Engagement metrics (from Zoom Dashboard API)
+          attentiveness_score: participant.attentiveness_score || null,
+          camera_on_duration: participant.camera_on_duration || 0,
+          share_application_duration: participant.share_application_duration || 0,
+          share_desktop_duration: participant.share_desktop_duration || 0,
+          share_whiteboard_duration: participant.share_whiteboard_duration || 0,
+          
+          // Interaction flags
+          posted_chat: participant.posted_chat || false,
+          raised_hand: participant.raised_hand || false,
+          answered_polling: participant.answered_polling || false,
+          asked_question: participant.asked_question || false,
+          
+          // Technical information
+          device: participant.device || null,
+          ip_address: participant.ip_address || null,
+          location: participant.location || null,
+          network_type: participant.network_type || null,
+          version: participant.version || null,
+          customer_key: participant.customer_key || null,
+          
+          // Status and other
+          participant_status: participant.status || 'in_meeting',
+          failover: participant.failover || false
+        };
+      });
+
+      console.log(`✅ Enhanced ${enhancedParticipants.length} participants with comprehensive data`);
+      return enhancedParticipants;
+      
     } catch (error) {
-      // Some webinars might not have participants data available
       console.warn(`Could not fetch participants for webinar ${webinarId}:`, error.message);
-      return { participants: [] };
+      return [];
     }
   }
 
-  // Get webinar registrants
+  // Enhanced webinar registrants with comprehensive data mapping
   async getWebinarRegistrants(accessToken, webinarId) {
     try {
-      return this.makeAuthenticatedRequest(
-        `/webinars/${webinarId}/registrants`,
-        accessToken
-      );
+      console.log(`📋 Fetching comprehensive registrant data for webinar ${webinarId}`);
+      
+      let allRegistrants = [];
+      let pageNumber = 1;
+      let hasMore = true;
+
+      while (hasMore) {
+        try {
+          const response = await this.makeAuthenticatedRequest(
+            `/webinars/${webinarId}/registrants`,
+            accessToken,
+            {
+              params: {
+                page_size: 300,  // Maximum allowed
+                page_number: pageNumber,
+                status: 'approved'  // Get approved registrants
+              }
+            }
+          );
+
+          const registrants = response.registrants || [];
+          console.log(`📊 Found ${registrants.length} registrants on page ${pageNumber} for webinar ${webinarId}`);
+          
+          allRegistrants = allRegistrants.concat(registrants);
+          
+          hasMore = registrants.length === 300;
+          pageNumber++;
+
+          // Safety limit
+          if (pageNumber > 50) {
+            console.warn(`⚠️ Reached pagination limit for registrants in webinar ${webinarId}`);
+            break;
+          }
+        } catch (pageError) {
+          console.error(`❌ Failed to fetch registrants page ${pageNumber}:`, pageError.message);
+          break;
+        }
+      }
+
+      // Enhanced registrant data with comprehensive field mapping
+      const enhancedRegistrants = allRegistrants.map(registrant => {
+        console.log(`🔍 Processing registrant: ${registrant.email}`);
+        console.log(`📋 Available registrant fields:`, Object.keys(registrant));
+        
+        return {
+          // Core identification
+          registrant_id: registrant.id || registrant.registrant_id,
+          registrant_uuid: registrant.registrant_uuid || null,
+          email: registrant.email,
+          
+          // Personal information
+          first_name: registrant.first_name || null,
+          last_name: registrant.last_name || null,
+          
+          // Contact information
+          address: registrant.address || null,
+          city: registrant.city || null,
+          country: registrant.country || null,
+          zip: registrant.zip || null,
+          state: registrant.state || null,
+          phone: registrant.phone || null,
+          
+          // Professional information
+          industry: registrant.industry || null,
+          org: registrant.org || registrant.organization || null,
+          job_title: registrant.job_title || null,
+          purchasing_time_frame: registrant.purchasing_time_frame || null,
+          role_in_purchase_process: registrant.role_in_purchase_process || null,
+          no_of_employees: registrant.no_of_employees || null,
+          
+          // Registration details
+          comments: registrant.comments || null,
+          status: registrant.status || 'approved',
+          create_time: registrant.create_time || null,
+          registration_time: registrant.registration_time || registrant.create_time || null,
+          join_url: registrant.join_url || null,
+          
+          // Additional tracking
+          source_id: registrant.source_id || null,
+          tracking_source: registrant.tracking_source || null,
+          language: registrant.language || null,
+          
+          // Custom questions (JSONB)
+          custom_questions: registrant.custom_questions || [],
+          
+          // Attendance tracking (will be populated during sync)
+          attended: false,
+          join_time: null,
+          leave_time: null,
+          duration: null
+        };
+      });
+
+      console.log(`✅ Enhanced ${enhancedRegistrants.length} registrants with comprehensive data`);
+      return enhancedRegistrants;
+      
     } catch (error) {
       console.warn(`Could not fetch registrants for webinar ${webinarId}:`, error.message);
-      return { registrants: [] };
+      return [];
+    }
+  }
+
+  // Helper method to get registrant details by ID
+  async getRegistrantDetails(accessToken, webinarId, registrantId) {
+    try {
+      const response = await this.makeAuthenticatedRequest(
+        `/webinars/${webinarId}/registrants/${registrantId}`,
+        accessToken
+      );
+      
+      return response;
+    } catch (error) {
+      console.warn(`Could not fetch registrant details for ${registrantId}:`, error.message);
+      return null;
     }
   }
 }

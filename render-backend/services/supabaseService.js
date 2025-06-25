@@ -1,3 +1,4 @@
+
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -163,13 +164,20 @@ async function updateWebinarMetrics(webinarDbId, metricsData) {
   }
 }
 
-// Participant methods
+// Enhanced participant methods with comprehensive data handling
 async function storeParticipants(participantData) {
   try {
+    console.log(`💾 Storing ${participantData.length} participants with enhanced data`);
+    
+    // Log sample participant data for debugging
+    if (participantData.length > 0) {
+      console.log(`📋 Sample participant data structure:`, Object.keys(participantData[0]));
+    }
+
     const { data, error } = await supabase
       .from('zoom_participants')
       .upsert(participantData, {
-        onConflict: 'webinar_id,participant_uuid',
+        onConflict: 'webinar_id,participant_id',
         ignoreDuplicates: false
       })
       .select();
@@ -179,6 +187,7 @@ async function storeParticipants(participantData) {
       throw error;
     }
 
+    console.log(`✅ Successfully stored ${data.length} participants`);
     return data;
   } catch (error) {
     console.error('Error storing participants:', error);
@@ -186,9 +195,16 @@ async function storeParticipants(participantData) {
   }
 }
 
-// Registrant methods
+// Enhanced registrant methods with comprehensive data handling
 async function storeRegistrants(registrantData) {
   try {
+    console.log(`💾 Storing ${registrantData.length} registrants with enhanced data`);
+    
+    // Log sample registrant data for debugging
+    if (registrantData.length > 0) {
+      console.log(`📋 Sample registrant data structure:`, Object.keys(registrantData[0]));
+    }
+
     const { data, error } = await supabase
       .from('zoom_registrants')
       .upsert(registrantData, {
@@ -202,6 +218,7 @@ async function storeRegistrants(registrantData) {
       throw error;
     }
 
+    console.log(`✅ Successfully stored ${data.length} registrants`);
     return data;
   } catch (error) {
     console.error('Error storing registrants:', error);
@@ -229,31 +246,112 @@ async function getRegistrantCount(webinarDbId) {
   }
 }
 
-// Get participant metrics for a webinar
+// Enhanced participant metrics with comprehensive engagement data
 async function getParticipantMetrics(webinarDbId) {
   try {
     const { data: participants, error } = await supabase
       .from('zoom_participants')
-      .select('duration, join_time')
+      .select(`
+        duration, 
+        join_time, 
+        attentiveness_score,
+        camera_on_duration,
+        share_application_duration,
+        share_desktop_duration,
+        share_whiteboard_duration,
+        posted_chat,
+        raised_hand,
+        answered_polling,
+        asked_question
+      `)
       .eq('webinar_id', webinarDbId);
 
     if (error) {
       console.error('Failed to get participant metrics:', error);
-      return { totalAttendees: 0, totalMinutes: 0, avgDuration: 0 };
+      return { 
+        totalAttendees: 0, 
+        totalMinutes: 0, 
+        avgDuration: 0,
+        avgAttentiveness: 0,
+        avgCameraUsage: 0,
+        totalInteractions: 0
+      };
     }
 
     const totalAttendees = participants?.length || 0;
     const totalMinutes = participants?.reduce((sum, p) => sum + (p.duration || 0), 0) || 0;
     const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
+    
+    // Enhanced metrics calculations
+    const totalAttentiveness = participants?.reduce((sum, p) => sum + (p.attentiveness_score || 0), 0) || 0;
+    const avgAttentiveness = totalAttendees > 0 ? Math.round(totalAttentiveness / totalAttendees) : 0;
+    
+    const totalCameraTime = participants?.reduce((sum, p) => sum + (p.camera_on_duration || 0), 0) || 0;
+    const avgCameraUsage = totalAttendees > 0 ? Math.round(totalCameraTime / totalAttendees) : 0;
+    
+    const totalInteractions = participants?.reduce((sum, p) => {
+      return sum + 
+        (p.posted_chat ? 1 : 0) + 
+        (p.raised_hand ? 1 : 0) + 
+        (p.answered_polling ? 1 : 0) + 
+        (p.asked_question ? 1 : 0);
+    }, 0) || 0;
 
     return {
       totalAttendees,
       totalMinutes,
-      avgDuration
+      avgDuration,
+      avgAttentiveness,
+      avgCameraUsage,
+      totalInteractions
     };
   } catch (error) {
     console.error('Error calculating participant metrics:', error);
-    return { totalAttendees: 0, totalMinutes: 0, avgDuration: 0 };
+    return { 
+      totalAttendees: 0, 
+      totalMinutes: 0, 
+      avgDuration: 0,
+      avgAttentiveness: 0,
+      avgCameraUsage: 0,
+      totalInteractions: 0
+    };
+  }
+}
+
+// Enhanced function to update registrant attendance data
+async function updateRegistrantAttendance(webinarDbId, attendanceData) {
+  try {
+    console.log(`📊 Updating attendance for ${attendanceData.length} registrants`);
+    
+    const updatePromises = attendanceData.map(async (attendance) => {
+      const { data, error } = await supabase
+        .from('zoom_registrants')
+        .update({
+          attended: attendance.attended,
+          join_time: attendance.join_time,
+          leave_time: attendance.leave_time,
+          duration: attendance.duration
+        })
+        .eq('webinar_id', webinarDbId)
+        .eq('registrant_id', attendance.registrant_id)
+        .select();
+
+      if (error) {
+        console.error(`Failed to update attendance for registrant ${attendance.registrant_id}:`, error);
+        return null;
+      }
+
+      return data;
+    });
+
+    const results = await Promise.allSettled(updatePromises);
+    const successful = results.filter(r => r.status === 'fulfilled' && r.value).length;
+    
+    console.log(`✅ Updated attendance for ${successful}/${attendanceData.length} registrants`);
+    return successful;
+  } catch (error) {
+    console.error('Error updating registrant attendance:', error);
+    return 0;
   }
 }
 
@@ -267,8 +365,9 @@ module.exports = {
   storeWebinar,
   getWebinarByZoomId,
   storeParticipants,
+  storeRegistrants,
   getRegistrantCount,
   getParticipantMetrics,
   updateWebinarMetrics,
-  storeRegistrants
+  updateRegistrantAttendance
 };

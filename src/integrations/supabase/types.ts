@@ -927,51 +927,111 @@ export type Database = {
       }
       zoom_participants: {
         Row: {
+          answered_polling: boolean | null
+          asked_question: boolean | null
+          attentiveness_score: number | null
+          camera_on_duration: number | null
           created_at: string
+          customer_key: string | null
+          device: string | null
           duration: number | null
           email: string | null
           failover: boolean | null
           id: string
+          ip_address: string | null
           join_time: string | null
           leave_time: string | null
+          location: string | null
           name: string
+          network_type: string | null
+          participant_email: string | null
+          participant_id: string | null
+          participant_name: string | null
+          participant_status: string | null
+          participant_user_id: string | null
           participant_uuid: string | null
+          posted_chat: boolean | null
+          raised_hand: boolean | null
           registrant_id: string | null
+          share_application_duration: number | null
+          share_desktop_duration: number | null
+          share_whiteboard_duration: number | null
           status: string | null
           updated_at: string
           user_id: string | null
+          version: string | null
           webinar_id: string | null
         }
         Insert: {
+          answered_polling?: boolean | null
+          asked_question?: boolean | null
+          attentiveness_score?: number | null
+          camera_on_duration?: number | null
           created_at?: string
+          customer_key?: string | null
+          device?: string | null
           duration?: number | null
           email?: string | null
           failover?: boolean | null
           id?: string
+          ip_address?: string | null
           join_time?: string | null
           leave_time?: string | null
+          location?: string | null
           name: string
+          network_type?: string | null
+          participant_email?: string | null
+          participant_id?: string | null
+          participant_name?: string | null
+          participant_status?: string | null
+          participant_user_id?: string | null
           participant_uuid?: string | null
+          posted_chat?: boolean | null
+          raised_hand?: boolean | null
           registrant_id?: string | null
+          share_application_duration?: number | null
+          share_desktop_duration?: number | null
+          share_whiteboard_duration?: number | null
           status?: string | null
           updated_at?: string
           user_id?: string | null
+          version?: string | null
           webinar_id?: string | null
         }
         Update: {
+          answered_polling?: boolean | null
+          asked_question?: boolean | null
+          attentiveness_score?: number | null
+          camera_on_duration?: number | null
           created_at?: string
+          customer_key?: string | null
+          device?: string | null
           duration?: number | null
           email?: string | null
           failover?: boolean | null
           id?: string
+          ip_address?: string | null
           join_time?: string | null
           leave_time?: string | null
+          location?: string | null
           name?: string
+          network_type?: string | null
+          participant_email?: string | null
+          participant_id?: string | null
+          participant_name?: string | null
+          participant_status?: string | null
+          participant_user_id?: string | null
           participant_uuid?: string | null
+          posted_chat?: boolean | null
+          raised_hand?: boolean | null
           registrant_id?: string | null
+          share_application_duration?: number | null
+          share_desktop_duration?: number | null
+          share_whiteboard_duration?: number | null
           status?: string | null
           updated_at?: string
           user_id?: string | null
+          version?: string | null
           webinar_id?: string | null
         }
         Relationships: [
@@ -1169,84 +1229,108 @@ export type Database = {
       zoom_registrants: {
         Row: {
           address: string | null
+          attended: boolean | null
           city: string | null
           comments: string | null
           country: string | null
           create_time: string | null
           created_at: string
           custom_questions: Json | null
+          duration: number | null
           email: string
           first_name: string | null
           id: string
           industry: string | null
           job_title: string | null
+          join_time: string | null
           join_url: string | null
+          language: string | null
           last_name: string | null
+          leave_time: string | null
           no_of_employees: string | null
           org: string | null
           phone: string | null
           purchasing_time_frame: string | null
           registrant_id: string | null
           registrant_uuid: string | null
+          registration_time: string | null
           role_in_purchase_process: string | null
+          source_id: string | null
           state: string | null
           status: string | null
+          tracking_source: string | null
           updated_at: string
           webinar_id: string | null
           zip: string | null
         }
         Insert: {
           address?: string | null
+          attended?: boolean | null
           city?: string | null
           comments?: string | null
           country?: string | null
           create_time?: string | null
           created_at?: string
           custom_questions?: Json | null
+          duration?: number | null
           email: string
           first_name?: string | null
           id?: string
           industry?: string | null
           job_title?: string | null
+          join_time?: string | null
           join_url?: string | null
+          language?: string | null
           last_name?: string | null
+          leave_time?: string | null
           no_of_employees?: string | null
           org?: string | null
           phone?: string | null
           purchasing_time_frame?: string | null
           registrant_id?: string | null
           registrant_uuid?: string | null
+          registration_time?: string | null
           role_in_purchase_process?: string | null
+          source_id?: string | null
           state?: string | null
           status?: string | null
+          tracking_source?: string | null
           updated_at?: string
           webinar_id?: string | null
           zip?: string | null
         }
         Update: {
           address?: string | null
+          attended?: boolean | null
           city?: string | null
           comments?: string | null
           country?: string | null
           create_time?: string | null
           created_at?: string
           custom_questions?: Json | null
+          duration?: number | null
           email?: string
           first_name?: string | null
           id?: string
           industry?: string | null
           job_title?: string | null
+          join_time?: string | null
           join_url?: string | null
+          language?: string | null
           last_name?: string | null
+          leave_time?: string | null
           no_of_employees?: string | null
           org?: string | null
           phone?: string | null
           purchasing_time_frame?: string | null
           registrant_id?: string | null
           registrant_uuid?: string | null
+          registration_time?: string | null
           role_in_purchase_process?: string | null
+          source_id?: string | null
           state?: string | null
           status?: string | null
+          tracking_source?: string | null
           updated_at?: string
           webinar_id?: string | null
           zip?: string | null
