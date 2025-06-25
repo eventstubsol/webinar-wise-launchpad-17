@@ -26,64 +26,31 @@ export class ZoomSegmentationEngine {
     userId: string,
     rule: Omit<ZoomSegmentationRule, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'last_applied_at'>
   ): Promise<ZoomSegmentationRule> {
-    console.warn('ZoomSegmentationEngine: zoom_segmentation_rules table not implemented yet - using mock implementation');
-    
-    // Return mock created rule
-    const mockRule: ZoomSegmentationRule = {
-      id: `mock-rule-${Date.now()}`,
-      user_id: userId,
-      rule_name: rule.rule_name,
-      webinar_criteria: rule.webinar_criteria,
-      segment_criteria: rule.segment_criteria,
-      auto_apply: rule.auto_apply,
-      last_applied_at: undefined,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    const { data, error } = await supabase
+      .from('zoom_segmentation_rules')
+      .insert({
+        user_id: userId,
+        rule_name: rule.rule_name,
+        webinar_criteria: rule.webinar_criteria,
+        segment_criteria: rule.segment_criteria,
+        auto_apply: rule.auto_apply,
+      })
+      .select()
+      .single();
 
-    return mockRule;
+    if (error) throw error;
+    return data;
   }
 
   static async getSegmentationRules(userId: string): Promise<ZoomSegmentationRule[]> {
-    console.warn('ZoomSegmentationEngine: zoom_segmentation_rules table not implemented yet - using mock implementation');
-    
-    // Return mock rules data
-    const mockRules: ZoomSegmentationRule[] = [
-      {
-        id: 'mock-rule-1',
-        user_id: userId,
-        rule_name: 'Highly Engaged Attendees',
-        webinar_criteria: {
-          attendance_status: 'attended',
-          min_duration_minutes: 30
-        },
-        segment_criteria: {
-          min_engagement_score: 80,
-          min_duration_percentage: 75
-        },
-        auto_apply: true,
-        last_applied_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: 'mock-rule-2',
-        user_id: userId,
-        rule_name: 'No-Show Registrants',
-        webinar_criteria: {
-          attendance_status: 'registered'
-        },
-        segment_criteria: {
-          required_attendance: false
-        },
-        auto_apply: true,
-        last_applied_at: undefined,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-    ];
+    const { data, error } = await supabase
+      .from('zoom_segmentation_rules')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
-    return mockRules;
+    if (error) throw error;
+    return data || [];
   }
 
   static async applySegmentationRules(userId: string, webinarId?: string): Promise<ZoomSegment[]> {
@@ -107,37 +74,92 @@ export class ZoomSegmentationEngine {
     rule: ZoomSegmentationRule,
     webinarId?: string
   ): Promise<ZoomSegment | null> {
-    console.warn('ZoomSegmentationEngine: webinar_participations table not implemented yet - using mock implementation');
-    
-    // For now, let's use the profiles table as a placeholder since webinar_participations doesn't exist
-    // This would need to be updated once the proper Zoom integration tables are in place
-    const { data: participants, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId);
+    // Query participants with engagement data
+    let query = supabase
+      .from('zoom_participants')
+      .select(`
+        *,
+        zoom_webinars!inner(
+          id,
+          topic,
+          start_time,
+          total_attendees,
+          total_registrants,
+          connection_id,
+          zoom_connections!inner(user_id)
+        )
+      `)
+      .eq('zoom_webinars.zoom_connections.user_id', userId);
 
-    if (error) throw error;
+    if (webinarId) {
+      query = query.eq('webinar_id', webinarId);
+    }
+
+    const { data: participants, error } = await query;
+
+    if (error) {
+      console.error('Error fetching participants:', error);
+      return null;
+    }
 
     if (!participants || participants.length === 0) {
       return null;
     }
 
-    // Create audience segment based on the rule
-    await this.createAudienceSegment(userId, rule, []);
+    // Apply segmentation criteria
+    const matchingParticipants = participants.filter(participant => 
+      this.meetsCriteria(participant, rule.segment_criteria)
+    );
 
-    // Update rule last applied time - mock implementation
-    console.log(`Mock: Updated last_applied_at for rule ${rule.id}`);
+    // Create or update audience segment
+    await this.createAudienceSegment(userId, rule, matchingParticipants.map(p => p.email || p.name));
+
+    // Update rule last applied time
+    await supabase
+      .from('zoom_segmentation_rules')
+      .update({ last_applied_at: new Date().toISOString() })
+      .eq('id', rule.id);
 
     return {
       segment_name: rule.rule_name,
-      participants: [],
+      participants: matchingParticipants.map(p => p.email || p.name).filter(Boolean),
       criteria_met: {
-        total_participants: 0,
-        avg_duration: 0,
-        attendance_rate: 0
+        total_participants: matchingParticipants.length,
+        avg_duration: matchingParticipants.reduce((sum, p) => sum + (p.duration || 0), 0) / matchingParticipants.length,
+        engagement_score: matchingParticipants.reduce((sum, p) => sum + (p.attentiveness_score || 0), 0) / matchingParticipants.length
       },
-      engagement_score: 0
+      engagement_score: matchingParticipants.reduce((sum, p) => sum + (p.attentiveness_score || 0), 0) / matchingParticipants.length
     };
+  }
+
+  private static meetsCriteria(participant: any, criteria: Record<string, any>): boolean {
+    // Check minimum engagement score
+    if (criteria.min_engagement_score && (participant.attentiveness_score || 0) < criteria.min_engagement_score) {
+      return false;
+    }
+
+    // Check maximum engagement score
+    if (criteria.max_engagement_score && (participant.attentiveness_score || 0) > criteria.max_engagement_score) {
+      return false;
+    }
+
+    // Check minimum duration percentage
+    if (criteria.min_duration_percentage && participant.zoom_webinars) {
+      const webinarDuration = participant.zoom_webinars.duration || 1;
+      const participantDuration = participant.duration || 0;
+      const durationPercentage = (participantDuration / webinarDuration) * 100;
+      if (durationPercentage < criteria.min_duration_percentage) {
+        return false;
+      }
+    }
+
+    // Check if attendance is required
+    if (criteria.required_attendance === false) {
+      // This criteria is for non-attendees (registrants who didn't attend)
+      return false; // For now, we only have attendee data
+    }
+
+    return true;
   }
 
   private static async createAudienceSegment(
@@ -145,10 +167,23 @@ export class ZoomSegmentationEngine {
     rule: ZoomSegmentationRule,
     participants: string[]
   ): Promise<void> {
-    console.warn('ZoomSegmentationEngine: audience_segments table not implemented yet - using mock implementation');
-    
-    // Mock implementation - log the segment creation
-    console.log(`Mock: Would create/update audience segment "${rule.rule_name}" for user ${userId} with ${participants.length} participants`);
+    // Upsert audience segment
+    const { error: segmentError } = await supabase
+      .from('audience_segments')
+      .upsert({
+        user_id: userId,
+        segment_name: rule.rule_name,
+        description: `Auto-generated segment from rule: ${rule.rule_name}`,
+        filter_criteria: rule.segment_criteria,
+        estimated_size: participants.length,
+        is_dynamic: true,
+        tags: ['zoom', 'auto-generated'],
+        last_calculated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,segment_name' });
+
+    if (segmentError) {
+      console.error('Error creating audience segment:', segmentError);
+    }
   }
 
   static async createPresetSegmentationRules(userId: string): Promise<ZoomSegmentationRule[]> {
@@ -166,34 +201,25 @@ export class ZoomSegmentationEngine {
         auto_apply: true
       },
       {
-        rule_name: 'No-Show Registrants',
-        webinar_criteria: {
-          attendance_status: 'registered'
-        },
-        segment_criteria: {
-          required_attendance: false
-        },
-        auto_apply: true
-      },
-      {
         rule_name: 'Early Leavers',
         webinar_criteria: {
           attendance_status: 'attended',
           max_duration_minutes: 15
         },
         segment_criteria: {
-          max_engagement_score: 40
+          max_engagement_score: 40,
+          max_duration_percentage: 25
         },
         auto_apply: true
       },
       {
-        rule_name: 'Repeat Attendees',
+        rule_name: 'Moderate Engagement',
         webinar_criteria: {
-          attendance_status: 'attended',
-          webinar_count_min: 2
+          attendance_status: 'attended'
         },
         segment_criteria: {
-          min_engagement_score: 60
+          min_engagement_score: 40,
+          max_engagement_score: 80
         },
         auto_apply: true
       }

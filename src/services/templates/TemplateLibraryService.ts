@@ -1,4 +1,5 @@
 
+import { supabase } from '@/integrations/supabase/client';
 import { castToRecord, castToArray } from '@/services/types/TypeCasters';
 
 export interface TemplateLibraryItem {
@@ -32,89 +33,49 @@ export class TemplateLibraryService {
     featured?: boolean,
     tags?: string[]
   ): Promise<TemplateLibraryItem[]> {
-    console.warn('TemplateLibraryService: template_library table not implemented yet - using mock implementation');
-    
-    // Return mock templates data
-    const mockTemplates: TemplateLibraryItem[] = [
-      {
-        id: 'mock-template-1',
-        template_name: 'Welcome Email',
-        category: 'webinar_registration',
-        description: 'Professional welcome email for new registrants',
-        template_content: {
-          subject: 'Welcome to {{webinar_title}}!',
-          html_content: '<h1>Welcome {{first_name}}!</h1><p>Thank you for registering for {{webinar_title}}.</p>',
-          merge_tags: ['first_name', 'webinar_title']
-        },
-        is_system_template: true,
-        is_featured: true,
-        usage_count: 150,
-        rating: 4.5,
-        rating_count: 30,
-        tags: ['welcome', 'registration'],
-        preview_image_url: null,
-        created_by: 'system',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: 'mock-template-2',
-        template_name: 'Follow-up Sequence',
-        category: 'follow_up',
-        description: 'Multi-step follow-up campaign template',
-        template_content: {
-          subject: 'Thanks for attending {{webinar_title}}',
-          html_content: '<h1>Thank you {{first_name}}!</h1><p>Here are the resources from {{webinar_title}}.</p>',
-          merge_tags: ['first_name', 'webinar_title']
-        },
-        is_system_template: true,
-        is_featured: false,
-        usage_count: 75,
-        rating: 4.2,
-        rating_count: 15,
-        tags: ['follow-up', 'resources'],
-        preview_image_url: null,
-        created_by: 'system',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-    ];
-
-    // Apply filters
-    let filteredTemplates = mockTemplates;
+    let query = supabase.from('template_library').select('*');
 
     if (category && category !== 'all') {
-      filteredTemplates = filteredTemplates.filter(t => t.category === category);
+      query = query.eq('category', category);
     }
 
     if (featured !== undefined) {
-      filteredTemplates = filteredTemplates.filter(t => t.is_featured === featured);
+      query = query.eq('is_featured', featured);
     }
 
     if (tags && tags.length > 0) {
-      filteredTemplates = filteredTemplates.filter(t => 
-        tags.some(tag => t.tags.includes(tag))
-      );
+      query = query.overlaps('tags', tags);
     }
 
-    return filteredTemplates;
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
   }
 
   static async getCategories(): Promise<TemplateCategory[]> {
-    console.warn('TemplateLibraryService: template_library table not implemented yet - using mock implementation');
-    
+    // Get category counts from database
+    const { data: categoryCounts, error } = await supabase
+      .from('template_library')
+      .select('category')
+      .group('category');
+
+    if (error) {
+      console.error('Error fetching category counts:', error);
+    }
+
     const categoryInfo: Record<string, TemplateCategory> = {
       'webinar_registration': {
         name: 'webinar_registration',
         display_name: 'Webinar Registration',
         description: 'Templates for webinar registration confirmation and reminders',
-        template_count: 1
+        template_count: 0
       },
       'follow_up': {
         name: 'follow_up',
         display_name: 'Follow-up',
         description: 'Post-webinar follow-up sequences and nurture campaigns',
-        template_count: 1
+        template_count: 0
       },
       'thank_you': {
         name: 'thank_you',
@@ -143,41 +104,89 @@ export class TemplateLibraryService {
     userId: string,
     template: Omit<TemplateLibraryItem, 'id' | 'created_by' | 'created_at' | 'updated_at' | 'usage_count' | 'rating' | 'rating_count'>
   ): Promise<TemplateLibraryItem> {
-    console.warn('TemplateLibraryService: template_library table not implemented yet - using mock implementation');
-    
-    const mockTemplate: TemplateLibraryItem = {
-      id: `mock-template-${Date.now()}`,
-      template_name: template.template_name,
-      category: template.category,
-      description: template.description,
-      template_content: template.template_content,
-      is_system_template: template.is_system_template,
-      is_featured: template.is_featured,
-      usage_count: 0,
-      rating: 0,
-      rating_count: 0,
-      tags: template.tags,
-      preview_image_url: template.preview_image_url,
-      created_by: userId,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    const { data, error } = await supabase
+      .from('template_library')
+      .insert({
+        user_id: userId,
+        template_name: template.template_name,
+        category: template.category,
+        description: template.description,
+        template_content: template.template_content,
+        is_system_template: template.is_system_template,
+        is_featured: template.is_featured,
+        tags: template.tags,
+        preview_image_url: template.preview_image_url,
+      })
+      .select()
+      .single();
 
-    return mockTemplate;
+    if (error) throw error;
+    return data;
   }
 
   static async initializeSystemTemplates(): Promise<void> {
-    console.warn('TemplateLibraryService: template_library table not implemented yet - using mock implementation');
-    
-    // Mock implementation - log that system templates would be initialized
-    console.log('Mock: System templates initialized');
+    const systemTemplates = [
+      {
+        template_name: 'Welcome Email',
+        category: 'webinar_registration',
+        description: 'Professional welcome email for new registrants',
+        template_content: {
+          subject: 'Welcome to {{webinar_title}}!',
+          html_content: '<h1>Welcome {{first_name}}!</h1><p>Thank you for registering for {{webinar_title}}.</p>',
+          merge_tags: ['first_name', 'webinar_title']
+        },
+        is_system_template: true,
+        is_featured: true,
+        tags: ['welcome', 'registration'],
+      },
+      {
+        template_name: 'Follow-up Sequence',
+        category: 'follow_up',
+        description: 'Multi-step follow-up campaign template',
+        template_content: {
+          subject: 'Thanks for attending {{webinar_title}}',
+          html_content: '<h1>Thank you {{first_name}}!</h1><p>Here are the resources from {{webinar_title}}.</p>',
+          merge_tags: ['first_name', 'webinar_title']
+        },
+        is_system_template: true,
+        is_featured: false,
+        tags: ['follow-up', 'resources'],
+      }
+    ];
+
+    for (const template of systemTemplates) {
+      try {
+        // Check if template already exists
+        const { data: existing } = await supabase
+          .from('template_library')
+          .select('id')
+          .eq('template_name', template.template_name)
+          .eq('is_system_template', true)
+          .single();
+
+        if (!existing) {
+          await supabase
+            .from('template_library')
+            .insert({
+              ...template,
+              user_id: null, // System templates don't have a user_id
+            });
+        }
+      } catch (error) {
+        console.error(`Failed to create system template: ${template.template_name}`, error);
+      }
+    }
   }
 
   static async incrementUsageCount(templateId: string): Promise<void> {
-    console.warn('TemplateLibraryService: template_library table not implemented yet - using mock implementation');
-    
-    // Mock implementation - log the usage increment
-    console.log(`Mock: Usage count incremented for template ${templateId}`);
+    const { error } = await supabase
+      .from('template_library')
+      .update({ usage_count: supabase.sql`usage_count + 1` })
+      .eq('id', templateId);
+
+    if (error) {
+      console.error('Failed to increment usage count:', error);
+    }
   }
 
   static async rateTemplate(
@@ -185,9 +194,18 @@ export class TemplateLibraryService {
     rating: number,
     userId: string
   ): Promise<void> {
-    console.warn('TemplateLibraryService: template_library table not implemented yet - using mock implementation');
-    
-    // Mock implementation - log the rating
-    console.log(`Mock: Template ${templateId} rated ${rating} by user ${userId}`);
+    // In a full implementation, you'd track individual ratings
+    // For now, we'll just update the average rating
+    const { error } = await supabase
+      .from('template_library')
+      .update({ 
+        rating_count: supabase.sql`rating_count + 1`,
+        rating: supabase.sql`((rating * rating_count) + ${rating}) / (rating_count + 1)`
+      })
+      .eq('id', templateId);
+
+    if (error) {
+      console.error('Failed to rate template:', error);
+    }
   }
 }

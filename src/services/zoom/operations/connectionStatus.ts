@@ -1,158 +1,116 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { ZoomConnection, ConnectionStatus } from '@/types/zoom';
-import { TokenUtils, TokenStatus } from '../utils/tokenUtils';
-import { RenderConnectionService } from '../RenderConnectionService';
 
-export class ConnectionStatusOperations {
-  static async setPrimaryConnection(connectionId: string, userId: string): Promise<boolean> {
-    try {
-      // First, unset all primary connections for the user
-      await supabase
-        .from('zoom_connections')
-        .update({ is_primary: false })
-        .eq('user_id', userId);
+export enum ConnectionStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+  ERROR = 'error',
+  EXPIRED = 'expired'
+}
 
-      // Then set the specified connection as primary
-      const { error } = await supabase
-        .from('zoom_connections')
-        .update({ is_primary: true })
-        .eq('id', connectionId)
-        .eq('user_id', userId);
+export interface ConnectionHealth {
+  status: ConnectionStatus;
+  lastSync: string | null;
+  tokenExpiry: string;
+  isTokenValid: boolean;
+  errorMessage?: string;
+  apiCallsRemaining?: number;
+}
 
-      return !error;
-    } catch (error) {
-      console.error('Error setting primary connection:', error);
-      return false;
-    }
-  }
-
-  static async updateConnectionStatus(connectionId: string, status: ConnectionStatus): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('zoom_connections')
-        .update({ 
-          connection_status: status,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', connectionId);
-
-      return !error;
-    } catch (error) {
-      console.error('Error updating connection status:', error);
-      return false;
-    }
-  }
-
-  static async checkConnectionStatus(connectionId: string): Promise<{
-    status: ConnectionStatus;
-    tokenStatus: TokenStatus;
-    isHealthy: boolean;
-  }> {
-    try {
-      // Use Render API for comprehensive health check
-      const healthCheck = await RenderConnectionService.checkConnectionHealth(connectionId);
-      
-      // Update local database with current status
-      const dbStatus = healthCheck.isHealthy ? 'active' : 'inactive';
-      await this.updateConnectionStatus(connectionId, dbStatus as ConnectionStatus);
-
-      return {
-        status: dbStatus as ConnectionStatus,
-        tokenStatus: healthCheck.status,
-        isHealthy: healthCheck.isHealthy,
-      };
-    } catch (error) {
-      console.error('Error checking connection status:', error);
-      return {
-        status: 'inactive',
-        tokenStatus: TokenStatus.INVALID,
-        isHealthy: false,
-      };
-    }
-  }
-
-  static async refreshToken(connectionId: string): Promise<{ success: boolean; connection?: ZoomConnection; error?: string }> {
-    try {
-      // Use Render API for token refresh
-      const result = await RenderConnectionService.refreshToken(connectionId);
-      
-      if (result.success && result.connection) {
-        // Update local database with new token information
-        const { error } = await supabase
-          .from('zoom_connections')
-          .update({
-            access_token: result.connection.access_token,
-            refresh_token: result.connection.refresh_token,
-            token_expires_at: result.newTokenExpiresAt || result.connection.token_expires_at,
-            connection_status: 'active',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', connectionId);
-
-        if (error) {
-          console.error('Error updating connection with new tokens:', error);
-          return { success: false, error: 'Failed to update connection in database' };
-        }
-
-        return { success: true, connection: result.connection };
-      }
-
-      return { success: false, error: result.error || 'Token refresh failed' };
-    } catch (error) {
-      console.error('Token refresh error:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
-  }
-
-  static async refreshTokenSilently(connectionId: string): Promise<boolean> {
-    try {
-      const result = await RenderConnectionService.refreshTokenSilently(connectionId);
-      return result;
-    } catch (error) {
-      console.error('Silent token refresh error:', error);
-      return false;
-    }
-  }
-
-  static async getPrimaryConnection(userId: string): Promise<ZoomConnection | null> {
+export class ZoomConnectionStatusService {
+  static async checkConnectionHealth(connectionId: string): Promise<ConnectionHealth> {
     try {
       const { data: connection, error } = await supabase
         .from('zoom_connections')
         .select('*')
-        .eq('user_id', userId)
-        .eq('is_primary', true)
-        .maybeSingle();
+        .eq('id', connectionId)
+        .single();
 
-      if (error) {
-        console.error('Error fetching primary connection:', error);
-        return null;
+      if (error || !connection) {
+        return {
+          status: ConnectionStatus.ERROR,
+          lastSync: null,
+          tokenExpiry: '',
+          isTokenValid: false,
+          errorMessage: 'Connection not found'
+        };
       }
 
-      if (connection) {
-        // Perform health check via Render API
-        const healthCheck = await RenderConnectionService.checkConnectionHealth(connection.id);
-        
-        // Update connection status based on health check
-        if (!healthCheck.isHealthy) {
-          await this.updateConnectionStatus(connection.id, 'inactive');
-          connection.connection_status = 'inactive';
-        }
+      const tokenExpiry = new Date(connection.token_expires_at);
+      const now = new Date();
+      const isTokenValid = tokenExpiry.getTime() > now.getTime();
+
+      let status = ConnectionStatus.ACTIVE;
+      if (!isTokenValid) {
+        status = ConnectionStatus.EXPIRED;
+      } else if (connection.connection_status === 'inactive') {
+        status = ConnectionStatus.INACTIVE;
       }
 
-      return connection;
+      return {
+        status,
+        lastSync: connection.last_sync_at,
+        tokenExpiry: connection.token_expires_at,
+        isTokenValid,
+        errorMessage: status === ConnectionStatus.EXPIRED ? 'Token has expired' : undefined
+      };
     } catch (error) {
-      console.error('Error getting primary connection:', error);
-      return null;
+      console.error('Error checking connection health:', error);
+      return {
+        status: ConnectionStatus.ERROR,
+        lastSync: null,
+        tokenExpiry: '',
+        isTokenValid: false,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
   }
 
-  // Auto-recovery for connections
-  static async attemptConnectionRecovery(connectionId: string): Promise<{
-    success: boolean;
-    recoverySteps: string[];
-    finalStatus: string;
-  }> {
-    return await RenderConnectionService.attemptConnectionRecovery(connectionId);
+  static async updateConnectionStatus(
+    connectionId: string, 
+    status: ConnectionStatus,
+    errorMessage?: string
+  ): Promise<void> {
+    try {
+      const updateData: any = {
+        connection_status: status,
+        updated_at: new Date().toISOString()
+      };
+
+      if (status === ConnectionStatus.ACTIVE) {
+        updateData.last_sync_at = new Date().toISOString();
+      }
+
+      const { error } = await supabase
+        .from('zoom_connections')
+        .update(updateData)
+        .eq('id', connectionId);
+
+      if (error) {
+        console.error('Error updating connection status:', error);
+      }
+    } catch (error) {
+      console.error('Error updating connection status:', error);
+    }
+  }
+
+  static async getAllConnectionsHealth(userId: string): Promise<ConnectionHealth[]> {
+    try {
+      const { data: connections, error } = await supabase
+        .from('zoom_connections')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      const healthChecks = await Promise.all(
+        (connections || []).map(conn => this.checkConnectionHealth(conn.id))
+      );
+
+      return healthChecks;
+    } catch (error) {
+      console.error('Error checking all connections:', error);
+      return [];
+    }
   }
 }
