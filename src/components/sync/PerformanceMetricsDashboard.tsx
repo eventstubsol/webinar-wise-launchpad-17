@@ -55,6 +55,13 @@ export const PerformanceMetricsDashboard: React.FC<PerformanceMetricsDashboardPr
     return 'text-green-500';
   };
 
+  // Helper function to get success rate from performance data
+  const getSuccessRate = () => {
+    if (performanceData?.successRate !== undefined) return performanceData.successRate;
+    if (performanceData?.summary?.successRate !== undefined) return performanceData.summary.successRate;
+    return 0;
+  };
+
   if (metricsLoading) {
     return (
       <Card>
@@ -160,8 +167,7 @@ export const PerformanceMetricsDashboard: React.FC<PerformanceMetricsDashboardPr
               <div>
                 <div className="text-sm text-muted-foreground">Success Rate</div>
                 <div className="text-lg font-semibold">
-                  {performanceData?.successRate ? `${performanceData.successRate.toFixed(1)}%` :
-                   performanceData ? `${performanceData.summary.successRate.toFixed(1)}%` : '-'}
+                  {getSuccessRate().toFixed(1)}%
                 </div>
               </div>
             </div>

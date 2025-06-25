@@ -31,6 +31,7 @@ export interface PerformanceData {
   avgWebinarSyncTime?: number;
   totalApiCalls?: number;
   dataVolumeSynced?: number;
+  successRate?: number; // Add this at the top level as well
   trends?: Array<{
     date: string;
     avgDuration: number;

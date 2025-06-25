@@ -42,6 +42,45 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_log: {
+        Row: {
+          action: string
+          change_context: string | null
+          changed_at: string
+          changed_by: string | null
+          created_at: string
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+          record_id: string
+          table_name: string
+        }
+        Insert: {
+          action: string
+          change_context?: string | null
+          changed_at?: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id: string
+          table_name: string
+        }
+        Update: {
+          action?: string
+          change_context?: string | null
+          changed_at?: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id?: string
+          table_name?: string
+        }
+        Relationships: []
+      }
       campaign_performance_summaries: {
         Row: {
           bounce_rate: number | null
@@ -1393,6 +1432,16 @@ export type Database = {
           p_user_id?: string
         }
         Returns: string
+      }
+      get_record_history: {
+        Args: { p_table_name: string; p_record_id: string }
+        Returns: {
+          audit_id: string
+          action: string
+          changes: Json
+          changed_by: string
+          changed_at: string
+        }[]
       }
       invalidate_cache_dependencies: {
         Args: { dep_pattern: string }

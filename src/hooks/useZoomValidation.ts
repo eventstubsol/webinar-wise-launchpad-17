@@ -15,6 +15,14 @@ interface UseZoomValidationProps {
   onConnectionError?: (error: string) => void;
 }
 
+// Enhanced interface to handle both types of responses
+interface ValidationResult {
+  success: boolean;
+  connection?: ZoomConnection;
+  message?: string;
+  error?: string;
+}
+
 export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: UseZoomValidationProps = {}) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -22,10 +30,10 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
   const [isValidating, setIsValidating] = useState(false);
   const { credentials } = useZoomCredentials();
   const { connection } = useZoomConnection();
-  const [validationResult, setValidationResult] = useState<any>(null);
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
   const validateCredentialsMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<ValidationResult> => {
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
@@ -43,7 +51,11 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
           // Recovery successful, test the connection
           const healthCheck = await RenderConnectionService.checkConnectionHealth(connection.id);
           if (healthCheck.isHealthy) {
-            return { success: true, connection, message: 'Connection recovered successfully' };
+            return { 
+              success: true, 
+              connection, 
+              message: 'Connection recovered successfully' 
+            };
           }
         }
         
@@ -60,9 +72,14 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
         throw new Error(result.error || 'Failed to validate credentials');
       }
 
-      return result;
+      // Convert the result to our interface format
+      return {
+        success: result.success,
+        connection: result.connection,
+        message: result.message || 'Credentials validated successfully'
+      };
     },
-    onSuccess: (result) => {
+    onSuccess: (result: ValidationResult) => {
       setIsValidating(false);
       setValidationResult(result);
       
