@@ -39,6 +39,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           // Invalidate queries to refresh data
           queryClient.invalidateQueries({ queryKey: ['zoom-webinars'] });
           queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
+          queryClient.invalidateQueries({ queryKey: ['zoom-sync-stats'] });
           
           toast({
             title: "Sync completed successfully",

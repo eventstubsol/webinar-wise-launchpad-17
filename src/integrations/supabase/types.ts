@@ -328,6 +328,76 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_syncs: {
+        Row: {
+          connection_id: string
+          created_at: string
+          id: string
+          scheduled_for: string
+          status: string
+          sync_config: Json
+          updated_at: string
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string
+          id?: string
+          scheduled_for: string
+          status?: string
+          sync_config?: Json
+          updated_at?: string
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string
+          id?: string
+          scheduled_for?: string
+          status?: string
+          sync_config?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_syncs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_schedules: {
+        Row: {
+          config: Json
+          connection_id: string
+          created_at: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          connection_id: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          connection_id?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_schedules_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_settings: {
         Row: {
           created_at: string | null
@@ -462,8 +532,10 @@ export type Database = {
           completed_at: string | null
           connection_id: string
           created_at: string
+          duration_seconds: number | null
           error_message: string | null
           id: string
+          metadata: Json | null
           processed_items: number | null
           stage_progress_percentage: number | null
           started_at: string
@@ -472,13 +544,16 @@ export type Database = {
           sync_type: string
           total_items: number | null
           updated_at: string
+          webinars_synced: number | null
         }
         Insert: {
           completed_at?: string | null
           connection_id: string
           created_at?: string
+          duration_seconds?: number | null
           error_message?: string | null
           id?: string
+          metadata?: Json | null
           processed_items?: number | null
           stage_progress_percentage?: number | null
           started_at?: string
@@ -487,13 +562,16 @@ export type Database = {
           sync_type: string
           total_items?: number | null
           updated_at?: string
+          webinars_synced?: number | null
         }
         Update: {
           completed_at?: string | null
           connection_id?: string
           created_at?: string
+          duration_seconds?: number | null
           error_message?: string | null
           id?: string
+          metadata?: Json | null
           processed_items?: number | null
           stage_progress_percentage?: number | null
           started_at?: string
@@ -502,6 +580,7 @@ export type Database = {
           sync_type?: string
           total_items?: number | null
           updated_at?: string
+          webinars_synced?: number | null
         }
         Relationships: [
           {

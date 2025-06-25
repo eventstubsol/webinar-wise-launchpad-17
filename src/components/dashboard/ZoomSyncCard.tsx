@@ -137,7 +137,7 @@ export function ZoomSyncCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Database className="h-5 w-5" />
-          Webinar Data Sync
+          Webinar Data Sync (Render API)
           {renderHealth && !renderHealth.success && (
             <AlertCircle className="h-4 w-4 text-red-500" />
           )}
@@ -148,7 +148,7 @@ export function ZoomSyncCard() {
           <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
             <div className="flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
-              Sync service unavailable. Please try again later.
+              Render sync service unavailable. Please try again later.
             </div>
           </div>
         )}
@@ -213,7 +213,7 @@ export function ZoomSyncCard() {
             <div>Last sync: {new Date(syncStats.lastSync).toLocaleString()}</div>
           )}
           <div className="flex items-center gap-1 mt-1">
-            Sync service: 
+            Render API status: 
             <span className={renderHealth?.success ? 'text-green-600' : 'text-red-600'}>
               {renderHealth?.success ? 'Online' : 'Offline'}
             </span>

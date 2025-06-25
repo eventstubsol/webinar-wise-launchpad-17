@@ -15,8 +15,27 @@ interface RenderSyncResponse {
   error?: string;
 }
 
+interface RenderSyncProgressResponse {
+  success: boolean;
+  progress?: number;
+  status?: string;
+  currentOperation?: string;
+  error?: string;
+}
+
+interface RenderHealthResponse {
+  success: boolean;
+  status?: string;
+  error?: string;
+}
+
+interface RenderTestResponse {
+  success: boolean;
+  message: string;
+}
+
 /**
- * Service for handling Zoom authentication and operations via Render instead of Supabase Edge Functions
+ * Service for handling Zoom authentication and operations via Render.com API
  */
 export class RenderZoomService {
   private static RENDER_API_URL = process.env.NODE_ENV === 'production' 
@@ -61,7 +80,7 @@ export class RenderZoomService {
   /**
    * Test API connection via Render service
    */
-  static async testConnection(): Promise<{ success: boolean; message: string }> {
+  static async testConnection(): Promise<RenderTestResponse> {
     try {
       const response = await fetch(`${this.RENDER_API_URL}/api/zoom/test`, {
         method: 'GET',
@@ -123,13 +142,7 @@ export class RenderZoomService {
   /**
    * Get sync progress via Render service
    */
-  static async getSyncProgress(syncId: string): Promise<{
-    success: boolean;
-    progress?: number;
-    status?: string;
-    currentOperation?: string;
-    error?: string;
-  }> {
+  static async getSyncProgress(syncId: string): Promise<RenderSyncProgressResponse> {
     try {
       const response = await fetch(`${this.RENDER_API_URL}/api/zoom/sync/${syncId}/progress`, {
         method: 'GET',
@@ -185,19 +198,9 @@ export class RenderZoomService {
   }
 
   /**
-   * Get authentication token for Render API calls
-   * This would typically be a JWT token or API key
-   */
-  private static async getAuthToken(): Promise<string> {
-    // In a real implementation, you would get this from your auth system
-    // For now, we'll use a placeholder
-    return 'your-api-token';
-  }
-
-  /**
    * Health check for Render service
    */
-  static async healthCheck(): Promise<{ success: boolean; status?: string; error?: string }> {
+  static async healthCheck(): Promise<RenderHealthResponse> {
     try {
       const response = await fetch(`${this.RENDER_API_URL}/health`, {
         method: 'GET',
@@ -254,5 +257,89 @@ export class RenderZoomService {
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       };
     }
+  }
+
+  /**
+   * Sync webinars via Render service
+   */
+  static async syncWebinars(connectionId: string, options: {
+    type?: 'manual' | 'progressive' | 'incremental';
+    webinarId?: string;
+    debug?: boolean;
+    testMode?: boolean;
+    priority?: 'low' | 'normal' | 'high';
+  } = {}): Promise<RenderSyncResponse> {
+    try {
+      const response = await fetch(`${this.RENDER_API_URL}/api/zoom/sync/webinars`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await this.getAuthToken()}`
+        },
+        body: JSON.stringify({
+          connection_id: connectionId,
+          sync_type: options.type || 'manual',
+          webinar_id: options.webinarId,
+          debug: options.debug || false,
+          test_mode: options.testMode || false,
+          priority: options.priority || 'normal'
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error syncing webinars via Render:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
+  /**
+   * Run performance test via Render service
+   */
+  static async runPerformanceTest(connectionId: string): Promise<RenderSyncResponse> {
+    try {
+      const response = await fetch(`${this.RENDER_API_URL}/api/zoom/test/performance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await this.getAuthToken()}`
+        },
+        body: JSON.stringify({
+          connection_id: connectionId
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error running performance test via Render:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
+  /**
+   * Get authentication token for Render API calls
+   */
+  private static async getAuthToken(): Promise<string> {
+    // In a real implementation, you would get this from your auth system
+    // For now, we'll use a placeholder that should be replaced with actual auth
+    return 'render-api-token-placeholder';
   }
 }
