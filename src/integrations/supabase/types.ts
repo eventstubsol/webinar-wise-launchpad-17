@@ -886,6 +886,342 @@ export type Database = {
         }
         Relationships: []
       }
+      zoom_participants: {
+        Row: {
+          created_at: string
+          duration: number | null
+          email: string | null
+          failover: boolean | null
+          id: string
+          join_time: string | null
+          leave_time: string | null
+          name: string
+          participant_uuid: string | null
+          registrant_id: string | null
+          status: string | null
+          updated_at: string
+          user_id: string | null
+          webinar_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration?: number | null
+          email?: string | null
+          failover?: boolean | null
+          id?: string
+          join_time?: string | null
+          leave_time?: string | null
+          name: string
+          participant_uuid?: string | null
+          registrant_id?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string | null
+          webinar_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration?: number | null
+          email?: string | null
+          failover?: boolean | null
+          id?: string
+          join_time?: string | null
+          leave_time?: string | null
+          name?: string
+          participant_uuid?: string | null
+          registrant_id?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string | null
+          webinar_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_participants_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zoom_poll_responses: {
+        Row: {
+          created_at: string
+          date_time: string | null
+          id: string
+          participant_email: string | null
+          participant_name: string | null
+          poll_id: string | null
+          question_details: Json | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date_time?: string | null
+          id?: string
+          participant_email?: string | null
+          participant_name?: string | null
+          poll_id?: string | null
+          question_details?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date_time?: string | null
+          id?: string
+          participant_email?: string | null
+          participant_name?: string | null
+          poll_id?: string | null
+          question_details?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_poll_responses_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_polls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zoom_polls: {
+        Row: {
+          anonymous: boolean | null
+          created_at: string
+          id: string
+          poll_id: string
+          poll_type: number | null
+          questions: Json | null
+          status: string | null
+          title: string
+          updated_at: string
+          webinar_id: string | null
+        }
+        Insert: {
+          anonymous?: boolean | null
+          created_at?: string
+          id?: string
+          poll_id: string
+          poll_type?: number | null
+          questions?: Json | null
+          status?: string | null
+          title: string
+          updated_at?: string
+          webinar_id?: string | null
+        }
+        Update: {
+          anonymous?: boolean | null
+          created_at?: string
+          id?: string
+          poll_id?: string
+          poll_type?: number | null
+          questions?: Json | null
+          status?: string | null
+          title?: string
+          updated_at?: string
+          webinar_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_polls_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zoom_qna: {
+        Row: {
+          answer_details: Json | null
+          created_at: string
+          id: string
+          question_details: Json | null
+          updated_at: string
+          webinar_id: string | null
+        }
+        Insert: {
+          answer_details?: Json | null
+          created_at?: string
+          id?: string
+          question_details?: Json | null
+          updated_at?: string
+          webinar_id?: string | null
+        }
+        Update: {
+          answer_details?: Json | null
+          created_at?: string
+          id?: string
+          question_details?: Json | null
+          updated_at?: string
+          webinar_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_qna_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zoom_recordings: {
+        Row: {
+          created_at: string
+          download_url: string | null
+          file_size: number | null
+          file_type: string | null
+          id: string
+          meeting_uuid: string | null
+          play_url: string | null
+          recording_end: string | null
+          recording_id: string
+          recording_start: string | null
+          recording_type: string | null
+          status: string | null
+          updated_at: string
+          webinar_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          download_url?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          meeting_uuid?: string | null
+          play_url?: string | null
+          recording_end?: string | null
+          recording_id: string
+          recording_start?: string | null
+          recording_type?: string | null
+          status?: string | null
+          updated_at?: string
+          webinar_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          download_url?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          meeting_uuid?: string | null
+          play_url?: string | null
+          recording_end?: string | null
+          recording_id?: string
+          recording_start?: string | null
+          recording_type?: string | null
+          status?: string | null
+          updated_at?: string
+          webinar_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_recordings_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zoom_registrants: {
+        Row: {
+          address: string | null
+          city: string | null
+          comments: string | null
+          country: string | null
+          create_time: string | null
+          created_at: string
+          custom_questions: Json | null
+          email: string
+          first_name: string | null
+          id: string
+          industry: string | null
+          job_title: string | null
+          join_url: string | null
+          last_name: string | null
+          no_of_employees: string | null
+          org: string | null
+          phone: string | null
+          purchasing_time_frame: string | null
+          registrant_id: string | null
+          registrant_uuid: string | null
+          role_in_purchase_process: string | null
+          state: string | null
+          status: string | null
+          updated_at: string
+          webinar_id: string | null
+          zip: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          comments?: string | null
+          country?: string | null
+          create_time?: string | null
+          created_at?: string
+          custom_questions?: Json | null
+          email: string
+          first_name?: string | null
+          id?: string
+          industry?: string | null
+          job_title?: string | null
+          join_url?: string | null
+          last_name?: string | null
+          no_of_employees?: string | null
+          org?: string | null
+          phone?: string | null
+          purchasing_time_frame?: string | null
+          registrant_id?: string | null
+          registrant_uuid?: string | null
+          role_in_purchase_process?: string | null
+          state?: string | null
+          status?: string | null
+          updated_at?: string
+          webinar_id?: string | null
+          zip?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          comments?: string | null
+          country?: string | null
+          create_time?: string | null
+          created_at?: string
+          custom_questions?: Json | null
+          email?: string
+          first_name?: string | null
+          id?: string
+          industry?: string | null
+          job_title?: string | null
+          join_url?: string | null
+          last_name?: string | null
+          no_of_employees?: string | null
+          org?: string | null
+          phone?: string | null
+          purchasing_time_frame?: string | null
+          registrant_id?: string | null
+          registrant_uuid?: string | null
+          role_in_purchase_process?: string | null
+          state?: string | null
+          status?: string | null
+          updated_at?: string
+          webinar_id?: string | null
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_registrants_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       zoom_sync_logs: {
         Row: {
           completed_at: string | null

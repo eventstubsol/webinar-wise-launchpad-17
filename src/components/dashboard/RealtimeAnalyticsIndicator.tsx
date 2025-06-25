@@ -2,193 +2,199 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { 
-  Activity, 
-  Wifi, 
-  WifiOff, 
-  RefreshCw, 
-  Clock, 
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Loader2
-} from 'lucide-react';
-import { useRealtimeDashboard } from '@/hooks/useRealtimeDashboard';
+import { Activity, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { useRealtimeAnalytics } from '@/hooks/useRealtimeAnalytics';
 
 interface RealtimeAnalyticsIndicatorProps {
-  webinarId?: string;
-  compact?: boolean;
+  connectionId?: string;
 }
 
 export const RealtimeAnalyticsIndicator: React.FC<RealtimeAnalyticsIndicatorProps> = ({
-  webinarId,
-  compact = false
+  connectionId,
 }) => {
   const {
-    dashboardData,
-    liveAlerts,
-    connectionHealth,
-    processingTasks,
-    actions
-  } = useRealtimeDashboard(webinarId);
+    activeTasks,
+    completedTasks,
+    performance,
+    isLoading,
+    error,
+  } = useRealtimeAnalytics(connectionId);
 
-  const activeTasks = processingTasks.filter(task => 
-    task.status === 'processing' || task.status === 'pending'
-  );
+  const getTaskIcon = (status: string) => {
+    switch (status) {
+      case 'processing':
+        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'failed':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-orange-500" />;
+    }
+  };
 
-  const visibleAlerts = liveAlerts.filter(alert => !alert.dismissed).slice(0, 3);
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'processing':
+        return 'default';
+      case 'completed':
+        return 'secondary';
+      case 'failed':
+        return 'destructive';
+      default:
+        return 'outline';
+    }
+  };
 
-  if (compact) {
+  if (isLoading) {
     return (
-      <div className="flex items-center space-x-2">
-        {/* Connection Status */}
-        <div className="flex items-center space-x-1">
-          {connectionHealth.isConnected ? (
-            <Wifi className="w-4 h-4 text-green-500" />
-          ) : (
-            <WifiOff className="w-4 h-4 text-red-500" />
-          )}
-          <span className="text-xs text-gray-500">
-            {connectionHealth.isConnected ? 'Live' : 'Offline'}
-          </span>
-        </div>
-
-        {/* Active Processing */}
-        {activeTasks.length > 0 && (
-          <div className="flex items-center space-x-1">
-            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-            <span className="text-xs text-gray-500">
-              {activeTasks.length} processing
-            </span>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Real-time Analytics
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span className="ml-2">Loading analytics...</span>
           </div>
-        )}
+        </CardContent>
+      </Card>
+    );
+  }
 
-        {/* Alert Count */}
-        {visibleAlerts.length > 0 && (
-          <Badge variant="outline" className="text-xs">
-            {visibleAlerts.length} alerts
-          </Badge>
-        )}
-      </div>
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Real-time Analytics
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-4 text-red-600">
+            Failed to load analytics data
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Activity className="w-5 h-5" />
-            <span>Real-time Analytics</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="flex items-center space-x-1">
-              {connectionHealth.isConnected ? (
-                <Wifi className="w-4 h-4 text-green-500" />
-              ) : (
-                <WifiOff className="w-4 h-4 text-red-500" />
-              )}
-              <span className="text-sm text-gray-500">
-                {connectionHealth.isConnected ? 'Connected' : 'Disconnected'}
-              </span>
+    <div className="space-y-4">
+      {/* Performance Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Performance Overview
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">
+                {Math.round(performance.averageProcessingTime)}s
+              </div>
+              <div className="text-sm text-muted-foreground">Avg Processing Time</div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={actions.refreshDashboard}
-              disabled={activeTasks.length > 0}
-            >
-              <RefreshCw className="w-4 h-4 mr-1" />
-              Refresh
-            </Button>
-          </div>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Connection Health */}
-        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-          <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full ${
-              connectionHealth.isConnected ? 'bg-green-500' : 'bg-red-500'
-            }`} />
-            <span className="text-sm font-medium">
-              {connectionHealth.isConnected ? 'Live Connection' : 'Connection Lost'}
-            </span>
-          </div>
-          {connectionHealth.lastHeartbeat && (
-            <div className="flex items-center space-x-1 text-xs text-gray-500">
-              <Clock className="w-3 h-3" />
-              <span>Last: {new Date(connectionHealth.lastHeartbeat).toLocaleTimeString()}</span>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">
+                {Math.round(performance.successRate)}%
+              </div>
+              <div className="text-sm text-muted-foreground">Success Rate</div>
             </div>
-          )}
-        </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold">
+                {performance.totalProcessed}
+              </div>
+              <div className="text-sm text-muted-foreground">Total Processed</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Processing Tasks */}
-        {activeTasks.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-sm font-medium">Active Processing</h4>
-            {activeTasks.map(task => (
-              <div key={task.id} className="p-2 border rounded-lg">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm">{task.task_type.replace('_', ' ')}</span>
-                  <Badge variant={task.status === 'processing' ? 'default' : 'secondary'}>
+      {/* Active Tasks */}
+      {activeTasks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Active Tasks ({activeTasks.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {activeTasks.slice(0, 5).map((task) => (
+                <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    {getTaskIcon(task.status)}
+                    <div>
+                      <div className="font-medium">{task.task_type}</div>
+                      <div className="text-sm text-muted-foreground">
+                        Priority: {task.priority}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={getStatusBadgeVariant(task.status)}>
+                      {task.status}
+                    </Badge>
+                    {task.status === 'processing' && task.progress !== undefined && (
+                      <div className="w-24">
+                        <Progress value={task.progress} className="h-2" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              
+              {activeTasks.length > 5 && (
+                <div className="text-center py-2 text-sm text-muted-foreground">
+                  ... and {activeTasks.length - 5} more active tasks
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recent Completed Tasks */}
+      {completedTasks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Completed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {completedTasks.slice(0, 3).map((task) => (
+                <div key={task.id} className="flex items-center justify-between p-2 border rounded">
+                  <div className="flex items-center gap-2">
+                    {getTaskIcon(task.status)}
+                    <span className="text-sm">{task.task_type}</span>
+                  </div>
+                  <Badge variant={getStatusBadgeVariant(task.status)} size="sm">
                     {task.status}
                   </Badge>
                 </div>
-                {task.progress !== undefined && (
-                  <Progress value={task.progress} className="h-1" />
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Live Alerts */}
-        {visibleAlerts.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-sm font-medium">Live Alerts</h4>
-            {visibleAlerts.map(alert => (
-              <Alert key={alert.id} className="p-2">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-2">
-                    {alert.type === 'warning' && <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5" />}
-                    {alert.type === 'error' && <XCircle className="w-4 h-4 text-red-500 mt-0.5" />}
-                    {alert.type === 'success' && <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />}
-                    {alert.type === 'info' && <Activity className="w-4 h-4 text-blue-500 mt-0.5" />}
-                    <div>
-                      <AlertDescription className="text-sm">
-                        {alert.message}
-                      </AlertDescription>
-                      <span className="text-xs text-gray-500">
-                        {new Date(alert.timestamp).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => actions.dismissAlert(alert.id)}
-                    className="h-6 w-6 p-0"
-                  >
-                    <XCircle className="w-3 h-3" />
-                  </Button>
-                </div>
-              </Alert>
-            ))}
-          </div>
-        )}
-
-        {/* Dashboard Status */}
-        <div className="text-xs text-gray-500 flex items-center justify-between">
-          <span>Last updated: {new Date(dashboardData.lastUpdated).toLocaleTimeString()}</span>
-          {dashboardData.engagement && (
-            <span>Engagement Score: {Math.round(dashboardData.engagement.avg_engagement_score || 0)}%</span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      {/* No Active Tasks State */}
+      {activeTasks.length === 0 && completedTasks.length === 0 && (
+        <Card>
+          <CardContent className="text-center py-8">
+            <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <div className="text-muted-foreground">
+              No active tasks at the moment
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 };

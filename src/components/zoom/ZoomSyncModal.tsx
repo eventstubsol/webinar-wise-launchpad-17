@@ -6,6 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useZoomSync } from '@/hooks/useZoomSync';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
+import { SyncType } from '@/types/zoom';
 
 interface ZoomSyncModalProps {
   open: boolean;
@@ -30,7 +31,7 @@ export const ZoomSyncModal: React.FC<ZoomSyncModalProps> = ({
     setCurrentOperation('Starting sync...');
     
     try {
-      await startSync('initial');
+      await startSync(SyncType.INITIAL);
       setStep('success');
       setTimeout(() => {
         onOpenChange(false);

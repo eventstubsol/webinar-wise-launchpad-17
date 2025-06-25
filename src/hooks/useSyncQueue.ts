@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -81,6 +81,11 @@ export const useSyncQueue = (connectionId?: string, syncId?: string) => {
       completionRate: total > 0 ? (completed / total) * 100 : 0,
     };
   }, [queueItems]);
+
+  // Helper functions
+  const getQueueSummary = () => queueStats;
+  const getCurrentItem = () => queueItems.find(item => item.status === 'processing');
+  const getEstimatedTimeRemaining = () => queueStats.estimatedTotalTime;
 
   // Set up real-time subscription
   useEffect(() => {
@@ -182,6 +187,9 @@ export const useSyncQueue = (connectionId?: string, syncId?: string) => {
     queueItems,
     realtimeUpdates,
     queueStats,
+    getQueueSummary, // Add missing helper functions
+    getCurrentItem,
+    getEstimatedTimeRemaining,
     isLoading,
     error,
     refetch,

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,15 +25,13 @@ export const SyncQueueVisualization: React.FC<SyncQueueVisualizationProps> = ({
   const { 
     queueItems, 
     queueStats,
+    getQueueSummary,
+    getCurrentItem,
+    getEstimatedTimeRemaining,
     isLoading, 
     error, 
     refetch, 
   } = useSyncQueue(connectionId);
-
-  // Helper functions
-  const getQueueSummary = () => queueStats;
-  const getCurrentItem = () => queueItems.find(item => item.status === 'processing');
-  const getEstimatedTimeRemaining = () => queueStats.estimatedTotalTime;
 
   const currentItem = getCurrentItem();
   const estimatedTimeRemaining = getEstimatedTimeRemaining();
@@ -97,7 +96,7 @@ export const SyncQueueVisualization: React.FC<SyncQueueVisualizationProps> = ({
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-red-600">
-            Failed to load sync queue: {error.message || 'Unknown error'}
+            Failed to load sync queue: {error instanceof Error ? error.message : 'Unknown error'}
           </div>
         </CardContent>
       </Card>

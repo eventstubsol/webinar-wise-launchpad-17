@@ -1,9 +1,9 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { ZoomConnection, SyncType } from '@/types/zoom';
 import { RenderZoomService } from '@/services/zoom/RenderZoomService';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 interface SyncProgress {
   progress: number;
@@ -14,6 +14,9 @@ interface SyncProgress {
 
 export const useZoomSync = (connection: ZoomConnection | null) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
   const [syncProgress, setSyncProgress] = useState<SyncProgress>({
     progress: 0,
     status: 'idle',
@@ -28,9 +31,59 @@ export const useZoomSync = (connection: ZoomConnection | null) => {
     retry: 1,
   });
 
+  const clearProgressInterval = useCallback(() => {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+  }, []);
+
   const isSyncing = syncProgress.status === 'syncing';
   const syncStatus = syncProgress.status;
   const currentOperation = syncProgress.currentOperation;
+  const activeSyncId = syncProgress.syncId;
+
+  const pollSyncProgress = useCallback(async (syncId: string) => {
+    try {
+      const result = await RenderZoomService.getSyncProgress(syncId);
+      
+      if (result.success) {
+        setSyncProgress(prev => ({
+          ...prev,
+          progress: result.progress || prev.progress,
+          currentOperation: result.currentOperation || prev.currentOperation,
+          status: result.status === 'completed' ? 'completed' : 
+                 result.status === 'failed' ? 'failed' : 'syncing',
+        }));
+
+        if (result.status === 'completed') {
+          clearProgressInterval();
+          queryClient.invalidateQueries({ queryKey: ['zoom-webinars'] });
+          queryClient.invalidateQueries({ queryKey: ['zoom-sync-history'] });
+          
+          toast({
+            title: "Sync Completed",
+            description: "Webinar data has been synchronized successfully.",
+          });
+        } else if (result.status === 'failed') {
+          clearProgressInterval();
+          toast({
+            title: "Sync Failed",
+            description: result.error || "Sync operation failed.",
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error polling sync progress:', error);
+      clearProgressInterval();
+      setSyncProgress(prev => ({
+        ...prev,
+        status: 'failed',
+        currentOperation: 'Failed to get sync progress',
+      }));
+    }
+  }, [clearProgressInterval, queryClient, toast]);
 
   const startSync = useCallback(async (syncType: SyncType) => {
     if (!connection) {
@@ -77,7 +130,9 @@ export const useZoomSync = (connection: ZoomConnection | null) => {
         }));
 
         // Start polling for progress
-        pollSyncProgress(result.syncId);
+        progressIntervalRef.current = setInterval(() => {
+          pollSyncProgress(result.syncId!);
+        }, 2000);
 
         toast({
           title: "Sync Started",
@@ -100,47 +155,38 @@ export const useZoomSync = (connection: ZoomConnection | null) => {
         variant: "destructive",
       });
     }
-  }, [connection, healthCheck, toast]);
+  }, [connection, healthCheck, toast, pollSyncProgress]);
 
-  const pollSyncProgress = useCallback(async (syncId: string) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const result = await RenderZoomService.getSyncProgress(syncId);
+  const cancelSync = useCallback(async () => {
+    if (!activeSyncId) return;
+
+    try {
+      const result = await RenderZoomService.cancelSync(activeSyncId);
+      
+      if (result.success) {
+        setSyncProgress({
+          progress: 0,
+          status: 'idle',
+          currentOperation: '',
+        });
+        clearProgressInterval();
         
-        if (result.success) {
-          setSyncProgress(prev => ({
-            ...prev,
-            progress: result.progress || prev.progress,
-            currentOperation: result.currentOperation || prev.currentOperation,
-            status: result.status === 'completed' ? 'completed' : 
-                   result.status === 'failed' ? 'failed' : 'syncing',
-          }));
-
-          if (result.status === 'completed' || result.status === 'failed') {
-            clearInterval(pollInterval);
-            
-            if (result.status === 'completed') {
-              toast({
-                title: "Sync Completed",
-                description: "Webinar data has been synchronized successfully.",
-              });
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error polling sync progress:', error);
-        clearInterval(pollInterval);
-        setSyncProgress(prev => ({
-          ...prev,
-          status: 'failed',
-          currentOperation: 'Failed to get sync progress',
-        }));
+        toast({
+          title: "Sync cancelled",
+          description: "The synchronization has been cancelled.",
+        });
+      } else {
+        throw new Error(result.error || 'Failed to cancel sync');
       }
-    }, 2000);
-
-    // Clear interval after 5 minutes to prevent infinite polling
-    setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000);
-  }, [toast]);
+    } catch (error) {
+      console.error('Error cancelling sync:', error);
+      toast({
+        title: "Cancel failed",
+        description: "Unable to cancel the sync operation.",
+        variant: "destructive",
+      });
+    }
+  }, [activeSyncId, clearProgressInterval, toast]);
 
   const testApiConnection = useCallback(async () => {
     if (!connection) {
@@ -176,13 +222,22 @@ export const useZoomSync = (connection: ZoomConnection | null) => {
     }
   }, [connection, toast]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      clearProgressInterval();
+    };
+  }, [clearProgressInterval]);
+
   return {
     startSync,
+    cancelSync,
     testApiConnection,
     isSyncing,
     syncProgress: syncProgress.progress,
     syncStatus,
     currentOperation,
+    activeSyncId,
     healthCheck,
   };
 };

@@ -7,6 +7,7 @@ import { useZoomConnection } from "@/hooks/useZoomConnection";
 import { useZoomSync } from "@/hooks/useZoomSync";
 import { useQueryClient } from "@tanstack/react-query";
 import { SyncConfiguration, SyncConfig } from "./SyncConfiguration";
+import { SyncType } from "@/types/zoom";
 import {
   Dialog,
   DialogContent,
@@ -49,7 +50,7 @@ export function EnhancedZoomSyncButton({
 
     try {
       // Convert config to sync type
-      const syncType = config.syncMode === 'full' ? 'initial' : 'incremental';
+      const syncType = config.syncMode === 'full' ? SyncType.INITIAL : SyncType.INCREMENTAL;
       await startSync(syncType);
     } catch (error: any) {
       console.error('Sync error:', error);
