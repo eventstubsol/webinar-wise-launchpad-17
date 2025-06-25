@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { ExportQueueItem } from '@/services/export/types';
+import { ExportQueueItem, ExportConfig } from '@/services/export/types';
 
 export class ExportHistoryProvider {
   static async getExportHistory(userId?: string, limit = 50): Promise<ExportQueueItem[]> {
@@ -39,7 +39,7 @@ export class ExportHistoryProvider {
       progress_percentage: item.progress_percentage,
       file_url: item.file_url,
       file_size: item.file_size,
-      export_config: item.export_config,
+      export_config: this.castToExportConfig(item.export_config),
       error_message: item.error_message,
       started_at: item.started_at,
       completed_at: item.completed_at,
@@ -49,6 +49,26 @@ export class ExportHistoryProvider {
       created_at: item.created_at,
       updated_at: item.updated_at
     }));
+  }
+
+  private static castToExportConfig(value: any): ExportConfig {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return {
+        title: value.title || 'Untitled Export',
+        description: value.description,
+        dateRange: value.dateRange,
+        webinarIds: value.webinarIds || [],
+        includeCharts: value.includeCharts || false,
+        includeRawData: value.includeRawData || false,
+        brandingConfig: value.brandingConfig,
+        templateId: value.templateId
+      };
+    }
+    return {
+      title: 'Untitled Export',
+      includeCharts: false,
+      includeRawData: false
+    };
   }
 
   static async deleteExportFile(exportId: string): Promise<void> {
