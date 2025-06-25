@@ -6,6 +6,9 @@
 // Connection and authentication types
 export type { ZoomConnection, ZoomTokenRefreshLog } from './connectionTypes';
 
+// Credentials types
+export type { ZoomCredentials, ZoomScopes } from './credentialsTypes';
+
 // Webinar and related types
 export type { ZoomWebinar, ZoomRegistrant, ZoomRecording, ZoomPanelist, ZoomChatMessage, ZoomWebinarTracking } from './webinarTypes';
 
