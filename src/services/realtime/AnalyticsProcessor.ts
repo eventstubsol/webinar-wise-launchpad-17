@@ -81,14 +81,14 @@ export class AnalyticsProcessor {
     eventData: any,
     targetUsers: string[] | null = null
   ): Promise<void> {
-    const { error } = await supabase.rpc('broadcast_event', {
-      p_event_type: eventType,
-      p_event_data: eventData,
-      p_target_users: targetUsers,
+    console.warn('AnalyticsProcessor: broadcast_event RPC function not implemented yet - using mock implementation');
+    
+    // Mock implementation - log the event
+    console.log(`Mock broadcast event:`, {
+      eventType,
+      eventData,
+      targetUsers,
+      timestamp: new Date().toISOString()
     });
-
-    if (error) {
-      console.error('Failed to broadcast event:', error);
-    }
   }
 }

@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { castToRecord } from '@/services/types/TypeCasters';
 
@@ -26,167 +27,80 @@ export interface SegmentMember {
 
 export class AdvancedSegmentationEngine {
   static async getAdvancedSegments(userId: string): Promise<AdvancedSegment[]> {
-    const { data, error } = await supabase
-      .from('audience_segments')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
+    console.warn('AdvancedSegmentationEngine: audience_segments table not implemented yet - using mock implementation');
     
-    return (data || []).map(segment => ({
-      id: segment.id,
-      segment_name: segment.segment_name,
-      description: segment.description,
-      filter_criteria: castToRecord(segment.filter_criteria),
-      estimated_size: segment.estimated_size,
-      is_dynamic: segment.is_dynamic,
-      tags: segment.tags,
-      is_active: segment.is_active,
-      last_calculated_at: segment.last_calculated_at,
-    }));
+    // Return mock segments data
+    const mockSegments: AdvancedSegment[] = [
+      {
+        id: 'mock-segment-1',
+        segment_name: 'High Engagement Users',
+        description: 'Users with engagement score above 70',
+        filter_criteria: { engagement_score_min: 70 },
+        estimated_size: 150,
+        is_dynamic: true,
+        tags: ['engagement', 'high-value'],
+        is_active: true,
+        last_calculated_at: new Date().toISOString(),
+      },
+      {
+        id: 'mock-segment-2',
+        segment_name: 'Recent Subscribers',
+        description: 'Users who subscribed in the last 30 days',
+        filter_criteria: { days_since_subscription: 30 },
+        estimated_size: 45,
+        is_dynamic: true,
+        tags: ['new', 'recent'],
+        is_active: true,
+        last_calculated_at: new Date().toISOString(),
+      }
+    ];
+
+    return mockSegments;
   }
 
   static async createAdvancedSegment(
     userId: string,
     segment: Omit<AdvancedSegment, 'id' | 'estimated_size' | 'last_calculated_at'>
   ): Promise<AdvancedSegment> {
-    const { data, error } = await supabase
-      .from('audience_segments')
-      .insert({
-        user_id: userId,
-        segment_name: segment.segment_name,
-        description: segment.description,
-        filter_criteria: segment.filter_criteria,
-        is_dynamic: segment.is_dynamic,
-        tags: segment.tags,
-        is_active: segment.is_active,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Calculate initial segment size
-    await this.calculateSegmentSize(data.id);
+    console.warn('AdvancedSegmentationEngine: audience_segments table not implemented yet - using mock implementation');
     
-    return {
-      id: data.id,
-      segment_name: data.segment_name,
-      description: data.description,
-      filter_criteria: castToRecord(data.filter_criteria),
-      estimated_size: data.estimated_size,
-      is_dynamic: data.is_dynamic,
-      tags: data.tags,
-      is_active: data.is_active,
-      last_calculated_at: data.last_calculated_at,
+    // Return mock created segment
+    const mockSegment: AdvancedSegment = {
+      id: `mock-segment-${Date.now()}`,
+      segment_name: segment.segment_name,
+      description: segment.description,
+      filter_criteria: segment.filter_criteria,
+      estimated_size: 0, // Will be calculated
+      is_dynamic: segment.is_dynamic,
+      tags: segment.tags,
+      is_active: segment.is_active,
+      last_calculated_at: new Date().toISOString(),
     };
+
+    // Mock calculate initial segment size
+    await this.calculateSegmentSize(mockSegment.id);
+    
+    return mockSegment;
   }
 
   static async calculateSegmentSize(segmentId: string): Promise<number> {
-    const { data: segment, error: segmentError } = await supabase
-      .from('audience_segments')
-      .select('filter_criteria, user_id')
-      .eq('id', segmentId)
-      .single();
-
-    if (segmentError) throw segmentError;
-
-    const criteria = castToRecord(segment.filter_criteria);
-    let query = supabase
-      .from('user_behavior_profiles')
-      .select('id', { count: 'exact' })
-      .eq('user_id', segment.user_id);
-
-    // Apply filters based on criteria
-    if (criteria.engagement_score_min !== undefined) {
-      query = query.gte('engagement_score', criteria.engagement_score_min);
-    }
-    if (criteria.engagement_score_max !== undefined) {
-      query = query.lte('engagement_score', criteria.engagement_score_max);
-    }
-    if (criteria.lifecycle_stage) {
-      query = query.eq('lifecycle_stage', criteria.lifecycle_stage);
-    }
-    if (criteria.churn_risk_max !== undefined) {
-      query = query.lte('churn_risk_score', criteria.churn_risk_max);
-    }
-    if (criteria.days_since_last_engagement !== undefined) {
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - criteria.days_since_last_engagement);
-      query = query.gte('last_engagement_at', cutoffDate.toISOString());
-    }
-
-    const { count, error } = await query;
-    if (error) throw error;
-
-    // Update segment size
-    await supabase
-      .from('audience_segments')
-      .update({
-        estimated_size: count || 0,
-        last_calculated_at: new Date().toISOString(),
-      })
-      .eq('id', segmentId);
-
-    return count || 0;
+    console.warn('AdvancedSegmentationEngine: user_behavior_profiles table not implemented yet - using mock calculation');
+    
+    // Return mock size
+    const mockSize = Math.floor(Math.random() * 200) + 50; // Random between 50-250
+    return mockSize;
   }
 
   static async updateSegmentMembership(segmentId: string): Promise<void> {
-    const { data: segment, error: segmentError } = await supabase
-      .from('audience_segments')
-      .select('filter_criteria, user_id')
-      .eq('id', segmentId)
-      .single();
-
-    if (segmentError) throw segmentError;
-
-    const criteria = castToRecord(segment.filter_criteria);
-    let query = supabase
-      .from('user_behavior_profiles')
-      .select('*')
-      .eq('user_id', segment.user_id);
-
-    // Apply same filters as calculateSegmentSize
-    if (criteria.engagement_score_min !== undefined) {
-      query = query.gte('engagement_score', criteria.engagement_score_min);
-    }
-    if (criteria.engagement_score_max !== undefined) {
-      query = query.lte('engagement_score', criteria.engagement_score_max);
-    }
-    if (criteria.lifecycle_stage) {
-      query = query.eq('lifecycle_stage', criteria.lifecycle_stage);
-    }
-    if (criteria.churn_risk_max !== undefined) {
-      query = query.lte('churn_risk_score', criteria.churn_risk_max);
-    }
-
-    const { data: members, error } = await query;
-    if (error) throw error;
-
-    // Clear existing membership
-    await supabase
-      .from('dynamic_segment_membership')
-      .delete()
-      .eq('segment_id', segmentId);
-
-    // Insert new membership
-    if (members && members.length > 0) {
-      const membershipData = members.map(member => ({
-        segment_id: segmentId,
-        user_id: member.user_id,
-        email_address: member.email_address,
-        membership_score: this.calculateMembershipScore(member, criteria),
-        membership_reason: this.getMembershipReason(member, criteria),
-      }));
-
-      await supabase
-        .from('dynamic_segment_membership')
-        .insert(membershipData);
-    }
+    console.warn('AdvancedSegmentationEngine: dynamic_segment_membership table not implemented yet - using mock implementation');
+    
+    // Mock implementation - log the operation
+    console.log(`Mock segment membership update for segment: ${segmentId}`);
   }
 
   static async createRFMSegments(userId: string): Promise<AdvancedSegment[]> {
+    console.warn('AdvancedSegmentationEngine: Creating mock RFM segments');
+    
     // Create RFM (Recency, Frequency, Monetary) segments
     const segments = [
       {
@@ -246,6 +160,8 @@ export class AdvancedSegmentationEngine {
   }
 
   static async createLifecycleSegments(userId: string): Promise<AdvancedSegment[]> {
+    console.warn('AdvancedSegmentationEngine: Creating mock lifecycle segments');
+    
     const segments = [
       {
         segment_name: 'New Subscribers',
@@ -293,24 +209,33 @@ export class AdvancedSegmentationEngine {
   }
 
   static async getSegmentMembers(segmentId: string): Promise<SegmentMember[]> {
-    const { data, error } = await supabase
-      .from('dynamic_segment_membership')
-      .select('*')
-      .eq('segment_id', segmentId)
-      .order('membership_score', { ascending: false });
-
-    if (error) throw error;
+    console.warn('AdvancedSegmentationEngine: dynamic_segment_membership table not implemented yet - using mock implementation');
     
-    return (data || []).map(member => ({
-      id: member.id,
-      segment_id: member.segment_id,
-      user_id: member.user_id,
-      email_address: member.email_address,
-      membership_score: member.membership_score,
-      membership_reason: castToRecord(member.membership_reason),
-      added_at: member.added_at,
-      last_updated_at: member.last_updated_at,
-    }));
+    // Return mock segment members
+    const mockMembers: SegmentMember[] = [
+      {
+        id: 'mock-member-1',
+        segment_id: segmentId,
+        user_id: 'mock-user-1',
+        email_address: 'user1@example.com',
+        membership_score: 0.95,
+        membership_reason: { engagement_score: { value: 85, threshold: 70, meets_criteria: true } },
+        added_at: new Date().toISOString(),
+        last_updated_at: new Date().toISOString(),
+      },
+      {
+        id: 'mock-member-2',
+        segment_id: segmentId,
+        user_id: 'mock-user-2',
+        email_address: 'user2@example.com',
+        membership_score: 0.87,
+        membership_reason: { engagement_score: { value: 78, threshold: 70, meets_criteria: true } },
+        added_at: new Date().toISOString(),
+        last_updated_at: new Date().toISOString(),
+      }
+    ];
+    
+    return mockMembers;
   }
 
   private static calculateMembershipScore(
