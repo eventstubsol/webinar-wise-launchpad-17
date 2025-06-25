@@ -156,12 +156,28 @@ class ZoomService {
     return this.makeAuthenticatedRequest('/users/me/webinars', accessToken, { params });
   }
 
-  // Get detailed webinar information
+  // Get detailed webinar information with comprehensive field extraction
   async getWebinarDetails(accessToken, webinarId) {
     try {
-      console.log(`🔍 Fetching detailed info for webinar: ${webinarId}`);
+      console.log(`🔍 Fetching comprehensive webinar details for: ${webinarId}`);
       const webinarDetails = await this.makeAuthenticatedRequest(`/webinars/${webinarId}`, accessToken);
-      console.log(`✅ Successfully fetched details for webinar: ${webinarId}`);
+      
+      console.log(`✅ Successfully fetched comprehensive details for webinar: ${webinarId}`);
+      console.log('📊 Available fields in webinar details:', Object.keys(webinarDetails));
+      
+      // Log key fields we're particularly interested in
+      if (webinarDetails.registration_url || (webinarDetails.settings && webinarDetails.settings.registration_type)) {
+        console.log(`🔗 Registration info found:`);
+        console.log(`  - registration_url: ${webinarDetails.registration_url || 'not set'}`);
+        console.log(`  - registration_type: ${webinarDetails.settings?.registration_type || 'not set'}`);
+        console.log(`  - approval_type: ${webinarDetails.settings?.approval_type || 'not set'}`);
+      }
+      
+      // Log settings object structure for debugging
+      if (webinarDetails.settings) {
+        console.log(`⚙️ Settings object keys:`, Object.keys(webinarDetails.settings));
+      }
+      
       return webinarDetails;
     } catch (error) {
       console.warn(`⚠️ Failed to fetch details for webinar ${webinarId}:`, error.message);

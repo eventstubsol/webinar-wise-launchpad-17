@@ -1335,24 +1335,50 @@ export type Database = {
       zoom_webinars: {
         Row: {
           agenda: string | null
+          approval_type: number | null
+          attendees_count: number | null
+          avg_attendance_duration: number | null
           connection_id: string
           created_at: string
+          creation_source: string | null
           duration: number
+          encrypted_passcode: string | null
+          h323_passcode: string | null
           host_email: string
           host_id: string
           id: string
+          is_simulive: boolean | null
           join_url: string
+          last_synced_at: string | null
+          occurrence_id: string | null
+          occurrences: Json | null
           participant_sync_attempted_at: string | null
           participant_sync_completed_at: string | null
           participant_sync_error: string | null
           participant_sync_status: string | null
+          password: string | null
+          record_file_id: string | null
+          recurrence: Json | null
+          registrants_count: number | null
+          registrants_restrict_number: number | null
+          registration_type: number | null
           registration_url: string | null
+          settings: Json | null
           start_time: string
+          start_url: string | null
           status: string
           synced_at: string
           timezone: string
           topic: string
+          total_absentees: number | null
+          total_attendees: number | null
+          total_minutes: number | null
+          total_registrants: number | null
+          tracking_fields: Json | null
+          transition_to_live: boolean | null
           updated_at: string
+          uuid: string | null
+          webinar_created_at: string | null
           webinar_id: string | null
           webinar_type: number
           zoom_uuid: string | null
@@ -1360,24 +1386,50 @@ export type Database = {
         }
         Insert: {
           agenda?: string | null
+          approval_type?: number | null
+          attendees_count?: number | null
+          avg_attendance_duration?: number | null
           connection_id: string
           created_at?: string
+          creation_source?: string | null
           duration: number
+          encrypted_passcode?: string | null
+          h323_passcode?: string | null
           host_email: string
           host_id: string
           id?: string
+          is_simulive?: boolean | null
           join_url: string
+          last_synced_at?: string | null
+          occurrence_id?: string | null
+          occurrences?: Json | null
           participant_sync_attempted_at?: string | null
           participant_sync_completed_at?: string | null
           participant_sync_error?: string | null
           participant_sync_status?: string | null
+          password?: string | null
+          record_file_id?: string | null
+          recurrence?: Json | null
+          registrants_count?: number | null
+          registrants_restrict_number?: number | null
+          registration_type?: number | null
           registration_url?: string | null
+          settings?: Json | null
           start_time: string
+          start_url?: string | null
           status: string
           synced_at?: string
           timezone: string
           topic: string
+          total_absentees?: number | null
+          total_attendees?: number | null
+          total_minutes?: number | null
+          total_registrants?: number | null
+          tracking_fields?: Json | null
+          transition_to_live?: boolean | null
           updated_at?: string
+          uuid?: string | null
+          webinar_created_at?: string | null
           webinar_id?: string | null
           webinar_type: number
           zoom_uuid?: string | null
@@ -1385,24 +1437,50 @@ export type Database = {
         }
         Update: {
           agenda?: string | null
+          approval_type?: number | null
+          attendees_count?: number | null
+          avg_attendance_duration?: number | null
           connection_id?: string
           created_at?: string
+          creation_source?: string | null
           duration?: number
+          encrypted_passcode?: string | null
+          h323_passcode?: string | null
           host_email?: string
           host_id?: string
           id?: string
+          is_simulive?: boolean | null
           join_url?: string
+          last_synced_at?: string | null
+          occurrence_id?: string | null
+          occurrences?: Json | null
           participant_sync_attempted_at?: string | null
           participant_sync_completed_at?: string | null
           participant_sync_error?: string | null
           participant_sync_status?: string | null
+          password?: string | null
+          record_file_id?: string | null
+          recurrence?: Json | null
+          registrants_count?: number | null
+          registrants_restrict_number?: number | null
+          registration_type?: number | null
           registration_url?: string | null
+          settings?: Json | null
           start_time?: string
+          start_url?: string | null
           status?: string
           synced_at?: string
           timezone?: string
           topic?: string
+          total_absentees?: number | null
+          total_attendees?: number | null
+          total_minutes?: number | null
+          total_registrants?: number | null
+          tracking_fields?: Json | null
+          transition_to_live?: boolean | null
           updated_at?: string
+          uuid?: string | null
+          webinar_created_at?: string | null
           webinar_id?: string | null
           webinar_type?: number
           zoom_uuid?: string | null
