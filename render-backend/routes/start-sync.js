@@ -170,12 +170,11 @@ async function performWebinarSync(syncId, connection, credentials, syncType) {
         }
       }
 
-      // Update progress
+      // Update progress - removed current_webinar_id field
       const progressPercentage = 25 + Math.round((processedCount / webinars.length) * 70);
       await supabaseService.updateSyncLog(syncId, {
         processed_items: processedCount,
-        stage_progress_percentage: progressPercentage,
-        current_webinar_id: batch[batch.length - 1]?.id?.toString()
+        stage_progress_percentage: progressPercentage
       });
 
       // Small delay to avoid overwhelming the API
