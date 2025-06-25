@@ -211,7 +211,7 @@ class SupabaseService {
       const { data, error } = await this.client
         .from('zoom_webinars')
         .upsert(webinarData, {
-          onConflict: 'webinar_id,connection_id'
+          onConflict: 'zoom_webinar_id,connection_id'
         })
         .select()
         .single();
@@ -220,6 +220,24 @@ class SupabaseService {
       return data;
     } catch (error) {
       console.error('Error storing webinar:', error);
+      throw error;
+    }
+  }
+
+  // Get webinar by Zoom ID (helper for participant/registrant storage)
+  async getWebinarByZoomId(zoomWebinarId, connectionId) {
+    try {
+      const { data, error } = await this.client
+        .from('zoom_webinars')
+        .select('id, zoom_webinar_id')
+        .eq('zoom_webinar_id', zoomWebinarId.toString())
+        .eq('connection_id', connectionId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    } catch (error) {
+      console.error('Error getting webinar by Zoom ID:', error);
       throw error;
     }
   }

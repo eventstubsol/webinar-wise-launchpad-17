@@ -170,7 +170,7 @@ async function performWebinarSync(syncId, connection, credentials, syncType) {
         }
       }
 
-      // Update progress - removed current_webinar_id field
+      // Update progress
       const progressPercentage = 25 + Math.round((processedCount / webinars.length) * 70);
       await supabaseService.updateSyncLog(syncId, {
         processed_items: processedCount,
@@ -222,32 +222,126 @@ async function performWebinarSync(syncId, connection, credentials, syncType) {
 
 // Helper function to store webinar data
 async function storeWebinar(webinar, connectionId) {
-  // This would integrate with your Supabase service to store webinar data
-  // For now, just log the operation
-  console.log(`Storing webinar: ${webinar.id} - ${webinar.topic}`);
+  console.log(`📝 Storing webinar: ${webinar.id} - ${webinar.topic}`);
   
-  // TODO: Implement actual database storage
-  // await supabaseService.storeWebinar({
-  //   webinar_id: webinar.id,
-  //   connection_id: connectionId,
-  //   topic: webinar.topic,
-  //   start_time: webinar.start_time,
-  //   duration: webinar.duration,
-  //   status: webinar.status,
-  //   // ... other fields
-  // });
+  try {
+    // Transform Zoom API webinar data to database format
+    const webinarData = {
+      connection_id: connectionId,
+      zoom_webinar_id: webinar.id?.toString() || webinar.webinar_id?.toString(),
+      webinar_id: webinar.id?.toString() || webinar.webinar_id?.toString(),
+      zoom_uuid: webinar.uuid || null,
+      host_id: webinar.host_id || '',
+      host_email: webinar.host_email || '',
+      topic: webinar.topic || 'Untitled Webinar',
+      agenda: webinar.agenda || null,
+      webinar_type: webinar.type || 5,
+      status: webinar.status || 'available',
+      start_time: webinar.start_time || new Date().toISOString(),
+      duration: webinar.duration || 60,
+      timezone: webinar.timezone || 'UTC',
+      registration_url: webinar.registration_url || null,
+      join_url: webinar.join_url || '',
+      synced_at: new Date().toISOString(),
+      participant_sync_status: 'not_applicable'
+    };
+
+    await supabaseService.storeWebinar(webinarData);
+    console.log(`✅ Successfully stored webinar: ${webinar.id}`);
+  } catch (error) {
+    console.error(`❌ Failed to store webinar ${webinar.id}:`, error);
+    throw error;
+  }
 }
 
 // Helper function to store participants
 async function storeParticipants(participants, webinarId, connectionId) {
-  console.log(`Storing ${participants.length} participants for webinar ${webinarId}`);
-  // TODO: Implement participant storage
+  if (!participants || participants.length === 0) {
+    console.log(`No participants to store for webinar ${webinarId}`);
+    return;
+  }
+
+  console.log(`📝 Storing ${participants.length} participants for webinar ${webinarId}`);
+  
+  try {
+    // Get the internal webinar UUID from our database
+    const webinarRecord = await supabaseService.getWebinarByZoomId(webinarId, connectionId);
+    if (!webinarRecord) {
+      console.warn(`Webinar record not found for Zoom ID ${webinarId}`);
+      return;
+    }
+
+    const participantData = participants.map(participant => ({
+      webinar_id: webinarRecord.id,
+      participant_uuid: participant.id || participant.participant_uuid,
+      name: participant.name || 'Unknown',
+      email: participant.email || null,
+      user_id: participant.user_id || null,
+      registrant_id: participant.registrant_id || null,
+      join_time: participant.join_time || null,
+      leave_time: participant.leave_time || null,
+      duration: participant.duration || 0,
+      status: participant.status || 'joined',
+      failover: participant.failover || false
+    }));
+
+    await supabaseService.storeParticipants(participantData);
+    console.log(`✅ Successfully stored ${participants.length} participants`);
+  } catch (error) {
+    console.error(`❌ Failed to store participants for webinar ${webinarId}:`, error);
+    throw error;
+  }
 }
 
 // Helper function to store registrants
 async function storeRegistrants(registrants, webinarId, connectionId) {
-  console.log(`Storing ${registrants.length} registrants for webinar ${webinarId}`);
-  // TODO: Implement registrant storage
+  if (!registrants || registrants.length === 0) {
+    console.log(`No registrants to store for webinar ${webinarId}`);
+    return;
+  }
+
+  console.log(`📝 Storing ${registrants.length} registrants for webinar ${webinarId}`);
+  
+  try {
+    // Get the internal webinar UUID from our database
+    const webinarRecord = await supabaseService.getWebinarByZoomId(webinarId, connectionId);
+    if (!webinarRecord) {
+      console.warn(`Webinar record not found for Zoom ID ${webinarId}`);
+      return;
+    }
+
+    const registrantData = registrants.map(registrant => ({
+      webinar_id: webinarRecord.id,
+      registrant_id: registrant.id || registrant.registrant_id,
+      registrant_uuid: registrant.registrant_uuid || null,
+      email: registrant.email || '',
+      first_name: registrant.first_name || null,
+      last_name: registrant.last_name || null,
+      address: registrant.address || null,
+      city: registrant.city || null,
+      country: registrant.country || null,
+      zip: registrant.zip || null,
+      state: registrant.state || null,
+      phone: registrant.phone || null,
+      industry: registrant.industry || null,
+      org: registrant.org || null,
+      job_title: registrant.job_title || null,
+      purchasing_time_frame: registrant.purchasing_time_frame || null,
+      role_in_purchase_process: registrant.role_in_purchase_process || null,
+      no_of_employees: registrant.no_of_employees || null,
+      comments: registrant.comments || null,
+      status: registrant.status || 'approved',
+      create_time: registrant.create_time || null,
+      join_url: registrant.join_url || null,
+      custom_questions: registrant.custom_questions || []
+    }));
+
+    await supabaseService.storeRegistrants(registrantData);
+    console.log(`✅ Successfully stored ${registrants.length} registrants`);
+  } catch (error) {
+    console.error(`❌ Failed to store registrants for webinar ${webinarId}:`, error);
+    throw error;
+  }
 }
 
 module.exports = router;
