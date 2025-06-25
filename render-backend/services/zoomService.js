@@ -4,114 +4,129 @@ const axios = require('axios');
 class ZoomService {
   constructor() {
     this.baseURL = 'https://api.zoom.us/v2';
-    this.oauthURL = 'https://zoom.us/oauth';
   }
 
-  async getAccessToken(accountId, clientId, clientSecret) {
+  // Get access token using credentials
+  async getAccessToken(credentials) {
     try {
-      const response = await axios.post(`${this.oauthURL}/token`, null, {
+      const response = await axios.post('https://zoom.us/oauth/token', null, {
         params: {
           grant_type: 'account_credentials',
-          account_id: accountId
+          account_id: credentials.account_id
+        },
+        auth: {
+          username: credentials.client_id,
+          password: credentials.client_secret
         },
         headers: {
-          'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
           'Content-Type': 'application/x-www-form-urlencoded'
         }
       });
 
-      return response.data;
+      return response.data.access_token;
     } catch (error) {
-      console.error('Zoom token error:', error.response?.data || error.message);
-      throw new Error(error.response?.data?.error_description || 'Failed to get access token');
+      console.error('Failed to get access token:', error.response?.data || error.message);
+      throw new Error('Failed to authenticate with Zoom API');
     }
   }
 
-  async validateCredentials(accountId, clientId, clientSecret) {
+  // Make authenticated request to Zoom API
+  async makeAuthenticatedRequest(endpoint, accessToken, options = {}) {
     try {
-      // Get access token
-      const tokenData = await this.getAccessToken(accountId, clientId, clientSecret);
-      
-      // Test the token by making a user info request
-      const userResponse = await axios.get(`${this.baseURL}/users/me`, {
-        headers: {
-          'Authorization': `Bearer ${tokenData.access_token}`
-        }
-      });
-
-      return {
-        valid: true,
-        tokenData,
-        userInfo: userResponse.data
-      };
-    } catch (error) {
-      console.error('Zoom validation error:', error.response?.data || error.message);
-      return {
-        valid: false,
-        error: error.response?.data?.message || error.message
-      };
-    }
-  }
-
-  async refreshTokenWithCredentials(refreshToken, clientId, clientSecret) {
-    try {
-      const response = await axios.post(`${this.oauthURL}/token`, null, {
-        params: {
-          grant_type: 'refresh_token',
-          refresh_token: refreshToken
-        },
-        headers: {
-          'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('Zoom refresh error:', error.response?.data || error.message);
-      throw new Error(error.response?.data?.error_description || 'Failed to refresh token');
-    }
-  }
-
-  async makeAuthenticatedRequest(endpoint, accessToken, method = 'GET', data = null) {
-    try {
-      const config = {
-        method,
+      const response = await axios({
+        method: options.method || 'GET',
         url: `${this.baseURL}${endpoint}`,
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      };
+          'Content-Type': 'application/json',
+          ...options.headers
+        },
+        params: options.params,
+        data: options.data,
+        timeout: 30000
+      });
 
-      if (data && (method === 'POST' || method === 'PUT')) {
-        config.data = data;
-      }
-
-      const response = await axios(config);
       return response.data;
     } catch (error) {
-      console.error('Zoom API error:', error.response?.data || error.message);
-      throw new Error(error.response?.data?.message || 'Zoom API request failed');
+      console.error(`Zoom API request failed for ${endpoint}:`, error.response?.data || error.message);
+      throw error;
     }
   }
 
+  // Get user info
+  async getUserInfo(accessToken) {
+    return this.makeAuthenticatedRequest('/users/me', accessToken);
+  }
+
+  // Get webinars with pagination
   async getWebinars(accessToken, options = {}) {
-    const params = new URLSearchParams({
-      page_size: options.pageSize || 30,
-      type: 'scheduled',
-      ...options
-    });
+    const params = {
+      type: options.type || 'scheduled',
+      page_size: options.page_size || 30,
+      page_number: options.page_number || 1,
+      ...options.params
+    };
 
-    return this.makeAuthenticatedRequest(`/users/me/webinars?${params}`, accessToken);
+    return this.makeAuthenticatedRequest('/users/me/webinars', accessToken, { params });
   }
 
-  async getWebinar(webinarId, accessToken) {
-    return this.makeAuthenticatedRequest(`/webinars/${webinarId}`, accessToken);
+  // Get all webinars (handles pagination)
+  async getAllWebinars(accessToken, options = {}) {
+    let allWebinars = [];
+    let pageNumber = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      try {
+        const response = await this.getWebinars(accessToken, {
+          ...options,
+          page_number: pageNumber
+        });
+
+        allWebinars = allWebinars.concat(response.webinars || []);
+        
+        hasMore = response.webinars && response.webinars.length === (options.page_size || 30);
+        pageNumber++;
+
+        // Safety limit to prevent infinite loops
+        if (pageNumber > 100) {
+          console.warn('Reached pagination limit of 100 pages');
+          break;
+        }
+      } catch (error) {
+        console.error(`Failed to fetch webinars page ${pageNumber}:`, error.message);
+        break;
+      }
+    }
+
+    return allWebinars;
   }
 
-  async getWebinarParticipants(webinarId, accessToken) {
-    return this.makeAuthenticatedRequest(`/report/webinars/${webinarId}/participants`, accessToken);
+  // Get webinar participants
+  async getWebinarParticipants(accessToken, webinarId) {
+    try {
+      return this.makeAuthenticatedRequest(
+        `/webinars/${webinarId}/participants`,
+        accessToken
+      );
+    } catch (error) {
+      // Some webinars might not have participants data available
+      console.warn(`Could not fetch participants for webinar ${webinarId}:`, error.message);
+      return { participants: [] };
+    }
+  }
+
+  // Get webinar registrants
+  async getWebinarRegistrants(accessToken, webinarId) {
+    try {
+      return this.makeAuthenticatedRequest(
+        `/webinars/${webinarId}/registrants`,
+        accessToken
+      );
+    } catch (error) {
+      console.warn(`Could not fetch registrants for webinar ${webinarId}:`, error.message);
+      return { registrants: [] };
+    }
   }
 }
 

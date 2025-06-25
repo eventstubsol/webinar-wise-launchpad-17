@@ -107,7 +107,10 @@ class SupabaseService {
     try {
       const { data, error } = await this.client
         .from('zoom_connections')
-        .update(updates)
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id)
         .select()
         .single();
@@ -172,7 +175,10 @@ class SupabaseService {
     try {
       const { error } = await this.client
         .from('zoom_sync_logs')
-        .update(updates)
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id);
 
       if (error) throw error;
@@ -196,6 +202,61 @@ class SupabaseService {
     } catch (error) {
       console.error('Error getting sync log:', error);
       throw error;
+    }
+  }
+
+  // Webinar data storage
+  async storeWebinar(webinarData) {
+    try {
+      const { data, error } = await this.client
+        .from('zoom_webinars')
+        .upsert(webinarData, {
+          onConflict: 'webinar_id,connection_id'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error storing webinar:', error);
+      throw error;
+    }
+  }
+
+  // Participant data storage
+  async storeParticipants(participantData) {
+    try {
+      const { data, error } = await this.client
+        .from('zoom_participants')
+        .upsert(participantData, {
+          onConflict: 'participant_uuid,webinar_id'
+        })
+        .select();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error storing participants:', error);
+      throw error;
+    }
+  }
+
+  // Registrant data storage
+  async storeRegistrants(registrantData) {
+    try {
+      const { data, error } = await this.client
+        .from('zoom_registrants')
+        .upsert(registrantData, {
+          onConflict: 'registrant_id,webinar_id'
+        })
+        .select();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error storing registrants:', error);
+      throw error;  
     }
   }
 }

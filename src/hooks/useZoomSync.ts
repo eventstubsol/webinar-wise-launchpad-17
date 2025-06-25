@@ -1,243 +1,214 @@
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { ZoomConnection, SyncType } from '@/types/zoom';
 import { RenderZoomService } from '@/services/zoom/RenderZoomService';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ZoomConnection, SyncType } from '@/types/zoom';
 
 interface SyncProgress {
   progress: number;
-  status: 'idle' | 'syncing' | 'completed' | 'failed' | 'no_data';
-  currentOperation: string;
+  status: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  currentOperation?: string;
   syncId?: string;
+  totalItems?: number;
+  processedItems?: number;
+  errorMessage?: string;
 }
 
-export const useZoomSync = (connection: ZoomConnection | null) => {
+export function useZoomSync(connection: ZoomConnection | null) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
-  const [syncProgress, setSyncProgress] = useState<SyncProgress>({
-    progress: 0,
-    status: 'idle',
-    currentOperation: '',
-  });
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
+  const [syncStatus, setSyncStatus] = useState<SyncProgress['status']>('idle');
+  const [currentOperation, setCurrentOperation] = useState<string>('');
+  const [activeSyncId, setActiveSyncId] = useState<string | null>(null);
+  const [healthCheck, setHealthCheck] = useState<{ success: boolean; error?: string } | null>(null);
 
-  // Health check query
-  const { data: healthCheck } = useQuery({
-    queryKey: ['render-health'],
-    queryFn: () => RenderZoomService.healthCheck(),
-    refetchInterval: 60000,
-    retry: 1,
-  });
+  // Health check on mount and periodically
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const response = await RenderZoomService.healthCheck();
+        setHealthCheck(response);
+      } catch (error) {
+        setHealthCheck({ success: false, error: 'Service unavailable' });
+      }
+    };
 
-  const clearProgressInterval = useCallback(() => {
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = null;
-    }
+    checkHealth();
+    const interval = setInterval(checkHealth, 60000); // Check every minute
+    return () => clearInterval(interval);
   }, []);
 
-  const isSyncing = syncProgress.status === 'syncing';
-  const syncStatus = syncProgress.status;
-  const currentOperation = syncProgress.currentOperation;
-  const activeSyncId = syncProgress.syncId;
+  // Progress polling effect
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout | null = null;
 
-  const pollSyncProgress = useCallback(async (syncId: string) => {
-    try {
-      const result = await RenderZoomService.getSyncProgress(syncId);
-      
-      if (result.success) {
-        setSyncProgress(prev => ({
-          ...prev,
-          progress: result.progress || prev.progress,
-          currentOperation: result.currentOperation || prev.currentOperation,
-          status: result.status === 'completed' ? 'completed' : 
-                 result.status === 'failed' ? 'failed' : 'syncing',
-        }));
-
-        if (result.status === 'completed') {
-          clearProgressInterval();
-          queryClient.invalidateQueries({ queryKey: ['zoom-webinars'] });
-          queryClient.invalidateQueries({ queryKey: ['zoom-sync-history'] });
+    if (activeSyncId && (syncStatus === 'pending' || syncStatus === 'running')) {
+      pollInterval = setInterval(async () => {
+        try {
+          const response = await RenderZoomService.getSyncProgress(activeSyncId);
           
-          toast({
-            title: "Sync Completed",
-            description: "Webinar data has been synchronized successfully.",
-          });
-        } else if (result.status === 'failed') {
-          clearProgressInterval();
-          toast({
-            title: "Sync Failed",
-            description: result.error || "Sync operation failed.",
-            variant: "destructive",
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error polling sync progress:', error);
-      clearProgressInterval();
-      setSyncProgress(prev => ({
-        ...prev,
-        status: 'failed',
-        currentOperation: 'Failed to get sync progress',
-      }));
-    }
-  }, [clearProgressInterval, queryClient, toast]);
+          if (response.success) {
+            const progress = Math.min(100, Math.max(0, response.progress || 0));
+            setSyncProgress(progress);
+            setSyncStatus(response.status || 'running');
+            setCurrentOperation(response.currentOperation || 'Processing...');
 
-  const startSync = useCallback(async (syncType: SyncType) => {
-    if (!connection) {
+            // Check if sync is complete
+            if (response.status === 'completed') {
+              setIsSyncing(false);
+              setActiveSyncId(null);
+              toast({
+                title: 'Sync Completed',
+                description: `Successfully synced ${response.processed_items || 0} items`,
+              });
+            } else if (response.status === 'failed') {
+              setIsSyncing(false);
+              setActiveSyncId(null);
+              toast({
+                title: 'Sync Failed',
+                description: response.error_message || 'Unknown error occurred',
+                variant: 'destructive',
+              });
+            } else if (response.status === 'cancelled') {
+              setIsSyncing(false);
+              setActiveSyncId(null);
+              toast({
+                title: 'Sync Cancelled',
+                description: 'The sync operation was cancelled',
+              });
+            }
+          } else {
+            console.error('Failed to get sync progress:', response.error);
+          }
+        } catch (error) {
+          console.error('Error polling sync progress:', error);
+        }
+      }, 2000); // Poll every 2 seconds
+    }
+
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [activeSyncId, syncStatus, toast]);
+
+  const startSync = useCallback(async (syncType: SyncType = SyncType.INCREMENTAL) => {
+    if (!connection?.id) {
       toast({
-        title: "No Connection",
-        description: "Please connect your Zoom account first.",
-        variant: "destructive",
+        title: 'No Connection',
+        description: 'Please connect your Zoom account first',
+        variant: 'destructive',
       });
       return;
     }
 
-    if (!healthCheck?.success) {
+    if (isSyncing) {
       toast({
-        title: "Service Unavailable",
-        description: "Render sync service is currently unavailable. Please try again later.",
-        variant: "destructive",
+        title: 'Sync In Progress',
+        description: 'A sync operation is already running',
       });
       return;
     }
 
     try {
-      setSyncProgress({
-        progress: 0,
-        status: 'syncing',
-        currentOperation: 'Starting sync...',
-      });
+      setIsSyncing(true);
+      setSyncProgress(0);
+      setSyncStatus('pending');
+      setCurrentOperation('Starting sync...');
 
-      const syncTypeMap = {
-        [SyncType.INITIAL]: 'initial' as const,
-        [SyncType.INCREMENTAL]: 'incremental' as const,
-        [SyncType.MANUAL]: 'incremental' as const,
-      };
-
-      const result = await RenderZoomService.startSync(
-        connection.id,
-        syncTypeMap[syncType]
-      );
-
-      if (result.success && result.syncId) {
-        setSyncProgress(prev => ({
-          ...prev,
-          syncId: result.syncId,
-          currentOperation: 'Sync started successfully',
-        }));
-
-        // Start polling for progress
-        progressIntervalRef.current = setInterval(() => {
-          pollSyncProgress(result.syncId!);
-        }, 2000);
-
+      const response = await RenderZoomService.startSync(connection.id, syncType);
+      
+      if (response.success && response.syncId) {
+        setActiveSyncId(response.syncId);
         toast({
-          title: "Sync Started",
-          description: result.message || "Webinar sync has been started.",
+          title: 'Sync Started',
+          description: 'Your webinar data sync has been started',
         });
       } else {
-        throw new Error(result.error || 'Failed to start sync');
+        throw new Error(response.error || 'Failed to start sync');
       }
     } catch (error) {
-      console.error('Sync error:', error);
-      setSyncProgress({
-        progress: 0,
-        status: 'failed',
-        currentOperation: '',
-      });
-
+      setIsSyncing(false);
+      setSyncStatus('failed');
+      setCurrentOperation('');
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       toast({
-        title: "Sync Failed",
-        description: error instanceof Error ? error.message : 'Unknown error occurred',
-        variant: "destructive",
+        title: 'Sync Failed to Start',
+        description: errorMessage,
+        variant: 'destructive',
       });
     }
-  }, [connection, healthCheck, toast, pollSyncProgress]);
+  }, [connection?.id, isSyncing, toast]);
+
+  const testApiConnection = useCallback(async () => {
+    if (!connection?.id) {
+      toast({
+        title: 'No Connection',
+        description: 'Please connect your Zoom account first',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const response = await RenderZoomService.testConnection(connection.id);
+      
+      if (response.success) {
+        toast({
+          title: 'Connection Test Successful',
+          description: 'Your Zoom API connection is working properly',
+        });
+      } else {
+        toast({
+          title: 'Connection Test Failed',
+          description: response.error || 'Unknown error',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast({
+        title: 'Connection Test Failed',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    }
+  }, [connection?.id, toast]);
 
   const cancelSync = useCallback(async () => {
     if (!activeSyncId) return;
 
     try {
-      const result = await RenderZoomService.cancelSync(activeSyncId);
+      const response = await RenderZoomService.cancelSync(activeSyncId);
       
-      if (result.success) {
-        setSyncProgress({
-          progress: 0,
-          status: 'idle',
-          currentOperation: '',
-        });
-        clearProgressInterval();
+      if (response.success) {
+        setIsSyncing(false);
+        setSyncStatus('cancelled');
+        setActiveSyncId(null);
+        setCurrentOperation('');
         
         toast({
-          title: "Sync cancelled",
-          description: "The synchronization has been cancelled.",
-        });
-      } else {
-        throw new Error(result.error || 'Failed to cancel sync');
-      }
-    } catch (error) {
-      console.error('Error cancelling sync:', error);
-      toast({
-        title: "Cancel failed",
-        description: "Unable to cancel the sync operation.",
-        variant: "destructive",
-      });
-    }
-  }, [activeSyncId, clearProgressInterval, toast]);
-
-  const testApiConnection = useCallback(async () => {
-    if (!connection) {
-      toast({
-        title: "No Connection",
-        description: "Please connect your Zoom account first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const result = await RenderZoomService.testConnection(connection.id);
-      
-      if (result.success) {
-        toast({
-          title: "Connection Test Successful",
-          description: result.message,
-        });
-      } else {
-        toast({
-          title: "Connection Test Failed",
-          description: result.message,
-          variant: "destructive",
+          title: 'Sync Cancelled',
+          description: 'The sync operation has been cancelled',
         });
       }
     } catch (error) {
-      toast({
-        title: "Test Failed",
-        description: error instanceof Error ? error.message : 'Unknown error occurred',
-        variant: "destructive",
-      });
+      console.error('Failed to cancel sync:', error);
     }
-  }, [connection, toast]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      clearProgressInterval();
-    };
-  }, [clearProgressInterval]);
+  }, [activeSyncId, toast]);
 
   return {
-    startSync,
-    cancelSync,
-    testApiConnection,
     isSyncing,
-    syncProgress: syncProgress.progress,
+    syncProgress,
     syncStatus,
     currentOperation,
     activeSyncId,
     healthCheck,
+    startSync,
+    testApiConnection,
+    cancelSync,
   };
-};
+}
