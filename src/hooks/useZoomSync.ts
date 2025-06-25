@@ -199,7 +199,7 @@ export const useZoomSync = (connection: ZoomConnection | null) => {
     }
 
     try {
-      const result = await RenderZoomService.testConnection();
+      const result = await RenderZoomService.testConnection(connection.id);
       
       if (result.success) {
         toast({

@@ -14,11 +14,19 @@ interface ValidationCredentialsPayload {
   user_id?: string;
 }
 
+// Enhanced ApiResponse interface with all expected properties
 interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   error?: string;
   message?: string;
+  // Sync-specific properties
+  syncId?: string;
+  status?: 'pending' | 'running' | 'completed' | 'failed' | 'no_data';
+  progress?: number;
+  currentOperation?: string;
+  // Connection-specific properties
+  connection?: any;
 }
 
 class RenderZoomServiceClass {
@@ -88,8 +96,11 @@ class RenderZoomServiceClass {
     return this.makeRequest('/validate-credentials', 'POST', credentials);
   }
 
-  async testConnection(connectionId: string): Promise<ApiResponse> {
-    return this.makeRequest(`/test-connection?connection_id=${connectionId}`);
+  async testConnection(connectionId?: string): Promise<ApiResponse> {
+    const endpoint = connectionId 
+      ? `/test-connection?connection_id=${connectionId}`
+      : '/test-connection';
+    return this.makeRequest(endpoint);
   }
 
   async refreshToken(refreshToken: string, connectionId?: string): Promise<ApiResponse> {

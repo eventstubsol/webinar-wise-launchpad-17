@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
@@ -83,7 +82,7 @@ export function ParticipantSyncTester() {
     onSuccess: (data) => {
       toast.success('Participant sync started successfully');
       
-      // Poll for results
+      // Poll for results if syncId is available
       const pollForResults = async () => {
         if (!data.syncId) return;
         

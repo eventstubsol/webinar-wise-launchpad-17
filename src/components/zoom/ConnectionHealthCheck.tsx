@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -59,8 +58,8 @@ export function ConnectionHealthCheck() {
 
   const testConnectionMutation = useMutation({
     mutationFn: async () => {
-      // Use RenderZoomService for testing connection
-      const result = await RenderZoomService.testConnection();
+      // Use RenderZoomService for testing connection with connection ID
+      const result = await RenderZoomService.testConnection(connection?.id);
       
       // Log the test result to connection_health_log if possible
       if (connection?.user_id) {
