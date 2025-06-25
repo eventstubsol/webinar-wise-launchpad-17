@@ -18,11 +18,11 @@ export class TemplateLibraryService {
         id: 'mock-template-1',
         user_id: options?.userId || 'mock-user',
         template_name: 'Welcome Email',
-        category: 'onboarding',
+        category: 'registration', // Use valid category
         design_json: {},
         html_template: '<h1>Welcome!</h1>',
         variables: [],
-        tags: ['welcome', 'onboarding'],
+        tags: ['welcome', 'registration'],
         is_public: false,
         is_system_template: true,
         subject_template: 'Welcome to our platform!',
@@ -48,7 +48,7 @@ export class TemplateLibraryService {
       id: `mock-template-${Date.now()}`,
       user_id: userId,
       template_name: newName || 'Duplicated Template',
-      category: 'general',
+      category: 'custom', // Use valid category
       design_json: {},
       html_template: '<h1>Duplicated Template</h1>',
       variables: [],
@@ -83,7 +83,8 @@ export class TemplateLibraryService {
         html_template: '<h1>Version 1</h1>',
         variables: [],
         created_by: 'mock-user',
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        is_published: false // Add missing property
       }
     ];
 
@@ -98,7 +99,7 @@ export class TemplateLibraryService {
       id: templateId,
       user_id: 'mock-user',
       template_name: 'Restored Template',
-      category: 'general',
+      category: 'custom', // Use valid category
       design_json: {},
       html_template: '<h1>Restored Template</h1>',
       variables: [],
@@ -127,7 +128,7 @@ export class TemplateLibraryService {
       id: templateId,
       user_id: 'mock-user',
       template_name: 'Updated Template',
-      category: 'general',
+      category: 'custom', // Use valid category
       design_json: {},
       html_template: '<h1>Updated Template</h1>',
       variables: [],
