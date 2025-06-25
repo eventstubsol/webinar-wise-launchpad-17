@@ -1,5 +1,5 @@
 
-import { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { ZoomConnection } from '@/types/zoom';
@@ -201,6 +201,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     syncProgress,
     syncStatus,
     currentOperation,
+    activeSyncId: syncId,
     startSync,
     cancelSync,
     testApiConnection,

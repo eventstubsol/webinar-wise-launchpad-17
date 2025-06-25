@@ -139,7 +139,7 @@ export function ZoomSyncCard() {
           <Database className="h-5 w-5" />
           Webinar Data Sync
           {renderHealth && !renderHealth.success && (
-            <AlertCircle className="h-4 w-4 text-red-500" title="Render service unavailable" />
+            <AlertCircle className="h-4 w-4 text-red-500" />
           )}
         </CardTitle>
       </CardHeader>

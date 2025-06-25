@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -120,7 +119,17 @@ export function EnhancedExportQueueMonitor() {
         .order('moved_to_dlq_at', { ascending: false });
 
       if (error) throw error;
-      setDeadLetterJobs(data || []);
+      
+      // Transform the data to match our interface, handling Json types
+      const transformedData = (data || []).map(item => ({
+        ...item,
+        retry_history: Array.isArray(item.retry_history) ? item.retry_history : 
+                     typeof item.retry_history === 'string' ? JSON.parse(item.retry_history) : [],
+        export_config: typeof item.export_config === 'object' ? item.export_config : 
+                      typeof item.export_config === 'string' ? JSON.parse(item.export_config) : {}
+      }));
+      
+      setDeadLetterJobs(transformedData);
     } catch (error) {
       console.error('Failed to load dead letter jobs:', error);
     }
