@@ -55,7 +55,8 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
       metadata: {
         requested_at: new Date().toISOString(),
         sync_id: syncId,
-        user_id: userId
+        user_id: userId,
+        date_range: '90 days past to 90 days future'
       }
     };
 
@@ -112,17 +113,36 @@ async function performWebinarSync(syncId, connection, credentials, syncType) {
     
     // Update progress
     await supabaseService.updateSyncLog(syncId, {
+      sync_stage: 'calculating_date_range',
+      stage_progress_percentage: 10
+    });
+
+    // Calculate date range (90 days past to 90 days future)
+    const now = new Date();
+    const fromDate = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000)); // 90 days ago
+    const toDate = new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000));   // 90 days future
+    
+    console.log(`📅 Sync date range: ${fromDate.toISOString().split('T')[0]} to ${toDate.toISOString().split('T')[0]}`);
+
+    // Update progress
+    await supabaseService.updateSyncLog(syncId, {
       sync_stage: 'fetching_webinars',
-      stage_progress_percentage: 15
+      stage_progress_percentage: 15,
+      metadata: {
+        date_range_from: fromDate.toISOString(),
+        date_range_to: toDate.toISOString(),
+        sync_type: syncType
+      }
     });
 
-    // Fetch all webinars
-    console.log('Fetching webinars from Zoom API...');
+    // Fetch all webinars with date range
+    console.log('Fetching webinars from Zoom API with 90-day range...');
     const webinars = await zoomService.getAllWebinars(accessToken, {
-      type: 'all' // Get all webinars (scheduled, live, ended)
+      from: fromDate,
+      to: toDate
     });
 
-    console.log(`Found ${webinars.length} webinars to sync`);
+    console.log(`📊 Found ${webinars.length} webinars to sync in date range`);
 
     // Update total items
     await supabaseService.updateSyncLog(syncId, {
@@ -193,7 +213,10 @@ async function performWebinarSync(syncId, connection, credentials, syncType) {
         total_webinars: webinars.length,
         processed_count: processedCount,
         error_count: errorCount,
-        completed_at: new Date().toISOString()
+        date_range_from: fromDate.toISOString(),
+        date_range_to: toDate.toISOString(),
+        completed_at: new Date().toISOString(),
+        sync_duration_days: 180 // 90 days past + 90 days future
       }
     });
 
@@ -202,7 +225,7 @@ async function performWebinarSync(syncId, connection, credentials, syncType) {
       last_sync_at: new Date().toISOString()
     });
 
-    console.log(`✅ Sync completed successfully. Processed ${processedCount}/${webinars.length} webinars`);
+    console.log(`✅ Sync completed successfully. Processed ${processedCount}/${webinars.length} webinars from 90-day range`);
 
   } catch (error) {
     console.error('Sync process failed:', error);

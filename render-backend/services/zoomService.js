@@ -1,4 +1,3 @@
-
 const axios = require('axios');
 
 class ZoomService {
@@ -136,7 +135,7 @@ class ZoomService {
     return this.makeAuthenticatedRequest('/users/me', accessToken);
   }
 
-  // Get webinars with pagination
+  // Get webinars with pagination and date range support
   async getWebinars(accessToken, options = {}) {
     const params = {
       type: options.type || 'scheduled',
@@ -145,39 +144,106 @@ class ZoomService {
       ...options.params
     };
 
+    // Add date range parameters if provided
+    if (options.from) {
+      params.from = this.formatDateForZoomAPI(options.from);
+    }
+    if (options.to) {
+      params.to = this.formatDateForZoomAPI(options.to);
+    }
+
     return this.makeAuthenticatedRequest('/users/me/webinars', accessToken, { params });
   }
 
-  // Get all webinars (handles pagination)
+  // Get all webinars with enhanced date range support (handles pagination)
   async getAllWebinars(accessToken, options = {}) {
     let allWebinars = [];
-    let pageNumber = 1;
-    let hasMore = true;
+    
+    // Calculate 90-day range if no dates provided
+    const dateRange = this.calculateDateRange(options.from, options.to);
+    
+    console.log(`📅 Fetching webinars from ${dateRange.from} to ${dateRange.to}`);
 
-    while (hasMore) {
-      try {
-        const response = await this.getWebinars(accessToken, {
-          ...options,
-          page_number: pageNumber
-        });
+    // Get different types of webinars to ensure comprehensive coverage
+    const webinarTypes = ['scheduled', 'live', 'ended'];
+    
+    for (const type of webinarTypes) {
+      console.log(`🔍 Fetching ${type} webinars...`);
+      
+      let pageNumber = 1;
+      let hasMore = true;
 
-        allWebinars = allWebinars.concat(response.webinars || []);
-        
-        hasMore = response.webinars && response.webinars.length === (options.page_size || 30);
-        pageNumber++;
+      while (hasMore) {
+        try {
+          const response = await this.getWebinars(accessToken, {
+            type: type,
+            page_number: pageNumber,
+            page_size: options.page_size || 30,
+            from: dateRange.from,
+            to: dateRange.to,
+            ...options
+          });
 
-        // Safety limit to prevent infinite loops
-        if (pageNumber > 100) {
-          console.warn('Reached pagination limit of 100 pages');
+          const webinars = response.webinars || [];
+          console.log(`📊 Found ${webinars.length} ${type} webinars on page ${pageNumber}`);
+          
+          allWebinars = allWebinars.concat(webinars);
+          
+          hasMore = webinars.length === (options.page_size || 30);
+          pageNumber++;
+
+          // Safety limit to prevent infinite loops
+          if (pageNumber > 100) {
+            console.warn(`⚠️ Reached pagination limit of 100 pages for ${type} webinars`);
+            break;
+          }
+        } catch (error) {
+          console.error(`❌ Failed to fetch ${type} webinars page ${pageNumber}:`, error.message);
           break;
         }
-      } catch (error) {
-        console.error(`Failed to fetch webinars page ${pageNumber}:`, error.message);
-        break;
       }
     }
 
-    return allWebinars;
+    // Remove duplicates based on webinar ID
+    const uniqueWebinars = this.removeDuplicateWebinars(allWebinars);
+    console.log(`✅ Total unique webinars found: ${uniqueWebinars.length}`);
+
+    return uniqueWebinars;
+  }
+
+  // Format date for Zoom API (YYYY-MM-DD format)
+  formatDateForZoomAPI(date) {
+    if (!date) return null;
+    
+    const dateObj = date instanceof Date ? date : new Date(date);
+    return dateObj.toISOString().split('T')[0];
+  }
+
+  // Calculate 90-day date range
+  calculateDateRange(fromDate, toDate) {
+    const now = new Date();
+    
+    // Default: 90 days in the past to 90 days in the future
+    const from = fromDate ? new Date(fromDate) : new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+    const to = toDate ? new Date(toDate) : new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000));
+    
+    return {
+      from: from,
+      to: to
+    };
+  }
+
+  // Remove duplicate webinars based on ID
+  removeDuplicateWebinars(webinars) {
+    const seen = new Set();
+    return webinars.filter(webinar => {
+      const id = webinar.id || webinar.webinar_id;
+      if (seen.has(id)) {
+        return false;
+      }
+      seen.add(id);
+      return true;
+    });
   }
 
   // Get webinar participants
