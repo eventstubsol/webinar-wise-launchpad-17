@@ -42,9 +42,13 @@ export const useCSVImports = () => {
 
         if (fetchError) throw fetchError;
 
-        // Transform the data to match our interface
+        // Transform the data to match our interface with safe defaults
         const transformedData = (data || []).map(item => ({
           ...item,
+          duplicate_rows: item.duplicate_rows || 0,
+          successful_rows: item.successful_rows || 0,
+          failed_rows: item.failed_rows || 0,
+          progress_percentage: item.progress_percentage || 0,
           validation_errors: Array.isArray(item.validation_errors) ? item.validation_errors : [],
           processing_errors: Array.isArray(item.processing_errors) ? item.processing_errors : []
         }));

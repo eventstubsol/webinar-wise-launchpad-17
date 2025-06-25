@@ -165,6 +165,7 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
+          duplicate_rows: number | null
           failed_rows: number | null
           field_mapping: Json
           file_name: string
@@ -181,10 +182,12 @@ export type Database = {
           total_rows: number
           updated_at: string
           user_id: string
+          validation_errors: Json | null
         }
         Insert: {
           completed_at?: string | null
           created_at?: string
+          duplicate_rows?: number | null
           failed_rows?: number | null
           field_mapping: Json
           file_name: string
@@ -201,10 +204,12 @@ export type Database = {
           total_rows: number
           updated_at?: string
           user_id: string
+          validation_errors?: Json | null
         }
         Update: {
           completed_at?: string | null
           created_at?: string
+          duplicate_rows?: number | null
           failed_rows?: number | null
           field_mapping?: Json
           file_name?: string
@@ -221,6 +226,7 @@ export type Database = {
           total_rows?: number
           updated_at?: string
           user_id?: string
+          validation_errors?: Json | null
         }
         Relationships: []
       }
@@ -320,6 +326,39 @@ export type Database = {
           retry_count?: number
           started_at?: string | null
           status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notification_preferences: {
+        Row: {
+          browser_notifications_enabled: boolean | null
+          created_at: string
+          email_notifications_enabled: boolean | null
+          id: string
+          notification_types: Json | null
+          toast_notifications_enabled: boolean | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          browser_notifications_enabled?: boolean | null
+          created_at?: string
+          email_notifications_enabled?: boolean | null
+          id?: string
+          notification_types?: Json | null
+          toast_notifications_enabled?: boolean | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          browser_notifications_enabled?: boolean | null
+          created_at?: string
+          email_notifications_enabled?: boolean | null
+          id?: string
+          notification_types?: Json | null
+          toast_notifications_enabled?: boolean | null
           updated_at?: string
           user_id?: string
         }
