@@ -85,6 +85,21 @@ async function createSyncLog(syncLogData) {
   return data;
 }
 
+async function getSyncLog(syncId) {
+  const { data, error } = await supabase
+    .from('zoom_sync_logs')
+    .select('*')
+    .eq('id', syncId)
+    .single();
+
+  if (error) {
+    console.error('Failed to get sync log:', error);
+    throw error;
+  }
+
+  return data;
+}
+
 async function updateSyncLog(syncId, updates) {
   const { data, error } = await supabase
     .from('zoom_sync_logs')
@@ -361,6 +376,7 @@ module.exports = {
   getUserCredentials,
   storeUserCredentials,
   createSyncLog,
+  getSyncLog,
   updateSyncLog,
   storeWebinar,
   getWebinarByZoomId,
