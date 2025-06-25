@@ -1,24 +1,5 @@
 
-import { supabase } from '@/integrations/supabase/client';
-
-// Simplified AI insights types that work with existing tables
-export interface AIInsight {
-  id: string;
-  user_id: string;
-  insight_type: string;
-  insight_title: string;
-  ai_model_name: string;
-  confidence_score?: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CreateAIInsightRequest {
-  insight_type: string;
-  insight_title: string;
-  ai_model_name: string;
-  confidence_score?: number;
-}
+import { AIInsight, CreateAIInsightRequest } from '@/types/ai-analytics';
 
 export class AIInsightsService {
   /**
@@ -31,23 +12,23 @@ export class AIInsightsService {
     status?: string;
     limit?: number;
     offset?: number;
-  }) {
+  }): Promise<AIInsight[]> {
     console.warn('AIInsightsService: ai_insights table not implemented yet');
-    return [] as AIInsight[];
+    return [];
   }
 
   /**
    * Get a specific AI insight by ID
    */
-  static async getInsightById(id: string) {
+  static async getInsightById(id: string): Promise<AIInsight | null> {
     console.warn('AIInsightsService: ai_insights table not implemented yet');
-    throw new Error('AI insights feature not yet implemented');
+    return null;
   }
 
   /**
    * Create a new AI insight
    */
-  static async createInsight(insight: CreateAIInsightRequest) {
+  static async createInsight(insight: CreateAIInsightRequest): Promise<AIInsight> {
     console.warn('AIInsightsService: ai_insights table not implemented yet');
     throw new Error('AI insights feature not yet implemented');
   }
@@ -55,7 +36,7 @@ export class AIInsightsService {
   /**
    * Update an AI insight
    */
-  static async updateInsight(id: string, updates: Partial<AIInsight>) {
+  static async updateInsight(id: string, updates: Partial<AIInsight>): Promise<AIInsight> {
     console.warn('AIInsightsService: ai_insights table not implemented yet');
     throw new Error('AI insights feature not yet implemented');
   }
@@ -68,7 +49,7 @@ export class AIInsightsService {
     status: string, 
     errorMessage?: string,
     processingDuration?: number
-  ) {
+  ): Promise<AIInsight> {
     console.warn('AIInsightsService: ai_insights table not implemented yet');
     throw new Error('AI insights feature not yet implemented');
   }
@@ -76,7 +57,7 @@ export class AIInsightsService {
   /**
    * Delete an AI insight
    */
-  static async deleteInsight(id: string) {
+  static async deleteInsight(id: string): Promise<void> {
     console.warn('AIInsightsService: ai_insights table not implemented yet');
     throw new Error('AI insights feature not yet implemented');
   }
