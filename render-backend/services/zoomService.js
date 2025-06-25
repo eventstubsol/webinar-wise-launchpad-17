@@ -1,4 +1,3 @@
-
 const axios = require('axios');
 
 class ZoomService {
@@ -352,7 +351,7 @@ class ZoomService {
     });
   }
 
-  // Enhanced webinar participants with status validation
+  // Enhanced webinar participants with proper field mapping
   async getWebinarParticipants(accessToken, webinarId) {
     try {
       console.log(`👥 Fetching comprehensive participant data for webinar ${webinarId}`);
@@ -371,18 +370,23 @@ class ZoomService {
       const participants = response.participants || [];
       console.log(`📊 Found ${participants.length} participants for webinar ${webinarId}`);
       
-      // Enhanced participant data with comprehensive field mapping
+      // Enhanced participant data with proper field mapping to match database schema
       const enhancedParticipants = participants.map(participant => {
         console.log(`🔍 Processing participant: ${participant.name || participant.user_name || 'Unknown'}`);
         console.log(`📋 Available participant fields:`, Object.keys(participant));
         
         return {
+          // Map to database 'name' field (NOT NULL constraint)
+          name: participant.name || participant.user_name || participant.participant_name || 'Unknown Participant',
+          
           // Core identification
           participant_id: participant.id || participant.participant_uuid,
           participant_uuid: participant.participant_uuid || participant.id,
-          participant_name: participant.name || participant.user_name || 'Unknown',
+          participant_name: participant.name || participant.user_name || 'Unknown Participant', // Keep for compatibility
           participant_email: participant.email || participant.user_email || null,
           participant_user_id: participant.user_id || null,
+          email: participant.email || participant.user_email || null, // Map to database email field
+          user_id: participant.user_id || null, // Map to database user_id field
           registrant_id: participant.registrant_id || null,
           
           // Timing information
@@ -405,19 +409,20 @@ class ZoomService {
           
           // Technical information
           device: participant.device || null,
-          ip_address: participant.ip_address || null,
+          ip_address: participant.ip_address ? String(participant.ip_address) : null,
           location: participant.location || null,
           network_type: participant.network_type || null,
           version: participant.version || null,
           customer_key: participant.customer_key || null,
           
-          // Status and other
+          // Status and other - map to database fields
+          status: participant.status || 'joined', // Map to database status field
           participant_status: participant.status || 'in_meeting',
           failover: participant.failover || false
         };
       });
 
-      console.log(`✅ Enhanced ${enhancedParticipants.length} participants with comprehensive data`);
+      console.log(`✅ Enhanced ${enhancedParticipants.length} participants with comprehensive data and proper field mapping`);
       return enhancedParticipants;
       
     } catch (error) {
@@ -556,7 +561,6 @@ class ZoomService {
       throw error; // Re-throw to capture in sync logs
     }
   }
-
 }
 
 module.exports = new ZoomService();

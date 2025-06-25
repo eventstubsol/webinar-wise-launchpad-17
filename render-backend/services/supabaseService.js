@@ -1,4 +1,3 @@
-
 const { createClient } = require('@supabase/supabase-js');
 
 class SupabaseService {
@@ -131,18 +130,46 @@ class SupabaseService {
 
   async storeParticipants(participantData) {
     try {
+      console.log(`📥 Storing ${participantData.length} participants in database`);
+      
+      // Validate required fields before insertion
+      const validatedParticipants = participantData.map((participant, index) => {
+        // Ensure required 'name' field is present (NOT NULL constraint)
+        if (!participant.name) {
+          console.warn(`⚠️ Participant ${index} missing required 'name' field, using fallback`);
+          participant.name = participant.participant_name || 
+                           participant.participant_email || 
+                           participant.email || 
+                           'Unknown Participant';
+        }
+        
+        // Log participant data for debugging
+        console.log(`🔍 Participant ${index}: name="${participant.name}", id="${participant.participant_id}"`);
+        
+        return {
+          ...participant,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      });
+
       const { data, error } = await this.supabase
         .from('zoom_participants')
-        .upsert(participantData, { onConflict: 'webinar_id, participant_id' });
+        .upsert(validatedParticipants, { 
+          onConflict: 'webinar_id,participant_id',
+          ignoreDuplicates: false 
+        });
 
       if (error) {
-        console.error('Error storing participants:', error);
+        console.error('❌ Error storing participants:', error);
+        console.error('❌ Sample participant data:', JSON.stringify(validatedParticipants[0], null, 2));
         throw new Error(`Failed to store participants: ${error.message}`);
       }
 
+      console.log(`✅ Successfully stored ${participantData.length} participants`);
       return data;
     } catch (error) {
-      console.error('Failed to store participants:', error);
+      console.error('❌ Failed to store participants:', error);
       throw error;
     }
   }
@@ -389,20 +416,85 @@ class SupabaseService {
     }
   }
 
-  // New method: Update participant sync status
+  // NEW: Reset participant sync status for data recovery
+  async resetParticipantSyncForRecovery(connectionId) {
+    try {
+      console.log(`🔄 Resetting participant sync status for data recovery, connection: ${connectionId}`);
+      
+      // Reset all ended webinars back to pending for participant sync
+      const { data, error } = await this.supabase
+        .from('zoom_webinars_with_calculated_status')
+        .select('id, webinar_id, topic, calculated_status, participant_sync_status')
+        .eq('connection_id', connectionId)
+        .eq('calculated_status', 'ended');
+
+      if (error) {
+        console.error('❌ Error fetching webinars for reset:', error);
+        throw error;
+      }
+
+      console.log(`📊 Found ${data?.length || 0} ended webinars for participant sync reset`);
+      
+      const webinarsToReset = data?.filter(w => 
+        w.participant_sync_status !== 'synced' && 
+        w.participant_sync_status !== 'pending'
+      ) || [];
+
+      if (webinarsToReset.length === 0) {
+        console.log(`ℹ️ No webinars need participant sync reset`);
+        return { resetCount: 0, totalEnded: data?.length || 0 };
+      }
+
+      // Reset participant sync status
+      const { error: updateError } = await this.supabase
+        .from('zoom_webinars')
+        .update({
+          participant_sync_status: 'pending',
+          participant_sync_attempted_at: null,
+          participant_sync_completed_at: null,
+          participant_sync_error: null,
+          updated_at: new Date().toISOString()
+        })
+        .in('id', webinarsToReset.map(w => w.id));
+
+      if (updateError) {
+        console.error('❌ Error resetting participant sync status:', updateError);
+        throw updateError;
+      }
+
+      console.log(`✅ Reset participant sync status for ${webinarsToReset.length} webinars`);
+      return { 
+        resetCount: webinarsToReset.length, 
+        totalEnded: data?.length || 0,
+        resetWebinars: webinarsToReset.map(w => ({ id: w.id, topic: w.topic }))
+      };
+    } catch (error) {
+      console.error('❌ Failed to reset participant sync for recovery:', error);
+      throw error;
+    }
+  }
+
   async updateParticipantSyncStatus(webinarDbId, status, error = null) {
     try {
+      console.log(`🔄 Updating participant sync status for webinar ${webinarDbId}: ${status}`);
+      
       const updateData = {
         participant_sync_status: status,
         participant_sync_attempted_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
-      if (status === 'completed') {
+      if (status === 'synced') {
         updateData.participant_sync_completed_at = new Date().toISOString();
         updateData.participant_sync_error = null;
+        console.log(`✅ Marking participant sync as completed for webinar: ${webinarDbId}`);
       } else if (status === 'failed' && error) {
         updateData.participant_sync_error = error;
+        console.log(`❌ Marking participant sync as failed for webinar: ${webinarDbId}, error: ${error}`);
+      } else if (status === 'pending') {
+        updateData.participant_sync_completed_at = null;
+        updateData.participant_sync_error = null;
+        console.log(`🔄 Resetting participant sync status to pending for webinar: ${webinarDbId}`);
       }
 
       const { data, dbError } = await this.supabase
@@ -411,14 +503,14 @@ class SupabaseService {
         .eq('id', webinarDbId);
 
       if (dbError) {
-        console.error('Error updating participant sync status:', dbError);
+        console.error('❌ Error updating participant sync status:', dbError);
         throw dbError;
       }
 
       console.log(`✅ Updated participant sync status to: ${status} for webinar: ${webinarDbId}`);
       return data;
     } catch (error) {
-      console.error('Failed to update participant sync status:', error);
+      console.error('❌ Failed to update participant sync status:', error);
       throw error;
     }
   }
