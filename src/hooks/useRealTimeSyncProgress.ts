@@ -21,7 +21,8 @@ interface SyncLogData {
   sync_status: SyncStatus;
   total_items: number | null;
   processed_items: number | null;
-  failed_items: number | null;
+  // Use processed_items instead of failed_items to match database schema
+  webinars_synced: number | null;
   error_message: string | null;
   started_at: string;
   completed_at: string | null;
@@ -69,7 +70,7 @@ export const useRealTimeSyncProgress = (connectionId: string) => {
     try {
       const { data: syncLogs, error: syncError } = await supabase
         .from('zoom_sync_logs')
-        .select('*')
+        .select('id, sync_status, total_items, processed_items, webinars_synced, error_message, started_at, completed_at')
         .eq('connection_id', connectionId)
         .in('sync_status', ['started', 'in_progress'])
         .order('started_at', { ascending: false })
@@ -108,7 +109,7 @@ export const useRealTimeSyncProgress = (connectionId: string) => {
     try {
       const { data: logs, error } = await supabase
         .from('zoom_sync_logs')
-        .select('*')
+        .select('id, sync_status, completed_at, updated_at')
         .eq('connection_id', connectionId)
         .in('sync_status', ['completed', 'failed'])
         .order('completed_at', { ascending: false })
@@ -119,7 +120,7 @@ export const useRealTimeSyncProgress = (connectionId: string) => {
       if (logs) {
         const webinars: RecentWebinar[] = logs.map((log: any) => ({
           id: log.id,
-          name: log.resource_id ? `Webinar ${log.resource_id}` : `${log.sync_type} sync`,
+          name: `Sync ${log.id.slice(0, 8)}`,
           status: log.sync_status === 'completed' ? 'completed' : 'failed',
           completedAt: log.completed_at || log.updated_at
         }));
@@ -187,10 +188,19 @@ export const useRealTimeSyncProgress = (connectionId: string) => {
         },
         (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            const syncLog = payload.new as SyncLogData;
+            const syncLog = payload.new as any;
             
             if (syncLog.sync_status === 'started' || syncLog.sync_status === 'in_progress') {
-              setActiveSyncLog(syncLog);
+              setActiveSyncLog({
+                id: syncLog.id,
+                sync_status: syncLog.sync_status,
+                total_items: syncLog.total_items,
+                processed_items: syncLog.processed_items,
+                webinars_synced: syncLog.webinars_synced,
+                error_message: syncLog.error_message,
+                started_at: syncLog.started_at,
+                completed_at: syncLog.completed_at
+              });
             } else if (syncLog.sync_status === 'completed' || 
                       syncLog.sync_status === 'failed' || 
                       syncLog.sync_status === 'cancelled') {
