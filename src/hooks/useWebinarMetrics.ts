@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -60,16 +59,21 @@ export const useWebinarMetrics = () => {
         setLoading(true);
         setError(null);
 
-        // Always fetch sync history, even without a connection
-        const { data: syncHistory } = await supabase
-          .from('zoom_sync_logs')
-          .select('completed_at, sync_status')
-          .eq('connection_id', connection?.id || '')
-          .order('created_at', { ascending: false })
-          .limit(1);
+        // Only fetch sync history if we have a valid connection ID
+        let lastSync = null;
+        let syncHistoryCount = 0;
+        
+        if (connection?.id) {
+          const { data: syncHistory } = await supabase
+            .from('zoom_sync_logs')
+            .select('completed_at, sync_status')
+            .eq('connection_id', connection.id)
+            .order('created_at', { ascending: false })
+            .limit(1);
 
-        const lastSync = syncHistory?.[0];
-        const syncHistoryCount = syncHistory?.length || 0;
+          lastSync = syncHistory?.[0];
+          syncHistoryCount = syncHistory?.length || 0;
+        }
 
         // If no connection, return minimal metrics with helpful info
         if (!connection?.id) {
