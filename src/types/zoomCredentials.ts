@@ -5,6 +5,7 @@ export interface ZoomCredentials {
   account_id: string;
   client_id: string;
   client_secret: string;
+  app_type: string;
   app_name?: string;
   description?: string;
   is_active: boolean;
@@ -17,6 +18,7 @@ export interface ZoomCredentialsInsert {
   account_id: string;
   client_id: string;
   client_secret: string;
+  app_type?: string;
   app_name?: string;
   description?: string;
   is_active?: boolean;
@@ -26,6 +28,7 @@ export interface ZoomCredentialsUpdate {
   account_id?: string;
   client_id?: string;
   client_secret?: string;
+  app_type?: string;
   app_name?: string;
   description?: string;
   is_active?: boolean;

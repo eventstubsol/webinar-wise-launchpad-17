@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useZoomCredentials } from '@/hooks/useZoomCredentials';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
-import { supabase } from '@/integrations/supabase/client';
+import { RenderZoomService } from '@/services/zoom/RenderZoomService';
 import { ZoomConnection } from '@/types/zoom';
 
 interface UseZoomValidationProps {
@@ -42,16 +42,14 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      // Use Supabase client to call the edge function
-      const { data, error } = await supabase.functions.invoke('validate-zoom-credentials', {
-        body: {},
-      });
-
-      if (error) {
-        throw new Error(error.message || 'Failed to validate credentials');
+      // Use Render service instead of Supabase Edge Function
+      const result = await RenderZoomService.validateCredentials(credentials);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to validate credentials');
       }
 
-      return data;
+      return result;
     },
     onSuccess: (result) => {
       setIsValidating(false);
@@ -67,7 +65,7 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
       
       toast({
         title: "Success!",
-        description: "Your Zoom credentials have been validated and Server-to-Server connection established.",
+        description: "Your Zoom credentials have been validated and Server-to-Server connection established via Render.",
       });
       
       if (result.connection) {

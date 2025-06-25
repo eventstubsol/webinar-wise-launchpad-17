@@ -42,12 +42,14 @@ export function ZoomSyncCard() {
             .maybeSingle(),
         ]);
 
+        const lastSyncData = syncLogsResult.data;
+
         return {
           totalWebinars: webinarsResult.count || 0,
-          lastSync: syncLogsResult.data?.completed_at || connection.last_sync_at,
-          lastSyncStatus: syncLogsResult.data?.sync_status || 'idle',
-          lastSyncError: syncLogsResult.data?.error_message,
-          processedItems: syncLogsResult.data?.processed_items || 0,
+          lastSync: lastSyncData?.completed_at || connection.last_sync_at,
+          lastSyncStatus: lastSyncData?.sync_status || 'idle',
+          lastSyncError: lastSyncData?.error_message,
+          processedItems: lastSyncData?.processed_items || 0,
         };
       } catch (error) {
         console.error('Error fetching sync stats:', error);

@@ -58,7 +58,9 @@ export function CSVImportConfirmation({
         .select()
         .single();
 
-      if (importError) throw importError;
+      if (importError || !importRecord) {
+        throw new Error(importError?.message || 'Failed to create import record');
+      }
 
       setProgress(10);
       setCurrentOperation('Processing data...');

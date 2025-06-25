@@ -9,7 +9,361 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      csv_imports: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          failed_rows: number | null
+          field_mapping: Json
+          file_name: string
+          file_size: number
+          id: string
+          import_options: Json
+          import_type: string
+          original_filename: string
+          processing_errors: Json | null
+          progress_percentage: number | null
+          started_at: string | null
+          status: string
+          successful_rows: number | null
+          total_rows: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          failed_rows?: number | null
+          field_mapping: Json
+          file_name: string
+          file_size: number
+          id?: string
+          import_options: Json
+          import_type: string
+          original_filename: string
+          processing_errors?: Json | null
+          progress_percentage?: number | null
+          started_at?: string | null
+          status?: string
+          successful_rows?: number | null
+          total_rows: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          failed_rows?: number | null
+          field_mapping?: Json
+          file_name?: string
+          file_size?: number
+          id?: string
+          import_options?: Json
+          import_type?: string
+          original_filename?: string
+          processing_errors?: Json | null
+          progress_percentage?: number | null
+          started_at?: string | null
+          status?: string
+          successful_rows?: number | null
+          total_rows?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          company: string | null
+          created_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          job_title: string | null
+          phone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          company?: string | null
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          job_title?: string | null
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          company?: string | null
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          job_title?: string | null
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_settings: {
+        Row: {
+          created_at: string | null
+          email_notifications: boolean | null
+          id: string
+          marketing_emails: boolean | null
+          theme_preference: string | null
+          timezone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email_notifications?: boolean | null
+          id: string
+          marketing_emails?: boolean | null
+          theme_preference?: string | null
+          timezone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          marketing_emails?: boolean | null
+          theme_preference?: string | null
+          timezone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      zoom_connections: {
+        Row: {
+          access_token: string
+          connection_status: string
+          connection_type: string
+          created_at: string
+          id: string
+          is_primary: boolean
+          last_sync_at: string | null
+          refresh_token: string | null
+          scopes: string[]
+          token_expires_at: string
+          updated_at: string
+          user_id: string
+          zoom_account_id: string
+          zoom_account_type: string
+          zoom_email: string
+          zoom_user_id: string
+        }
+        Insert: {
+          access_token: string
+          connection_status?: string
+          connection_type?: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          last_sync_at?: string | null
+          refresh_token?: string | null
+          scopes?: string[]
+          token_expires_at: string
+          updated_at?: string
+          user_id: string
+          zoom_account_id: string
+          zoom_account_type?: string
+          zoom_email: string
+          zoom_user_id: string
+        }
+        Update: {
+          access_token?: string
+          connection_status?: string
+          connection_type?: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          last_sync_at?: string | null
+          refresh_token?: string | null
+          scopes?: string[]
+          token_expires_at?: string
+          updated_at?: string
+          user_id?: string
+          zoom_account_id?: string
+          zoom_account_type?: string
+          zoom_email?: string
+          zoom_user_id?: string
+        }
+        Relationships: []
+      }
+      zoom_credentials: {
+        Row: {
+          account_id: string
+          app_name: string | null
+          app_type: string
+          client_id: string
+          client_secret: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          app_name?: string | null
+          app_type?: string
+          client_id: string
+          client_secret: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          app_name?: string | null
+          app_type?: string
+          client_id?: string
+          client_secret?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      zoom_sync_logs: {
+        Row: {
+          completed_at: string | null
+          connection_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          processed_items: number | null
+          stage_progress_percentage: number | null
+          started_at: string
+          sync_stage: string | null
+          sync_status: string
+          sync_type: string
+          total_items: number | null
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          connection_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          processed_items?: number | null
+          stage_progress_percentage?: number | null
+          started_at?: string
+          sync_stage?: string | null
+          sync_status?: string
+          sync_type: string
+          total_items?: number | null
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          connection_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          processed_items?: number | null
+          stage_progress_percentage?: number | null
+          started_at?: string
+          sync_stage?: string | null
+          sync_status?: string
+          sync_type?: string
+          total_items?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_sync_logs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zoom_webinars: {
+        Row: {
+          agenda: string | null
+          connection_id: string
+          created_at: string
+          duration: number
+          host_email: string
+          host_id: string
+          id: string
+          join_url: string
+          registration_url: string | null
+          start_time: string
+          status: string
+          synced_at: string
+          timezone: string
+          topic: string
+          updated_at: string
+          webinar_type: number
+          zoom_uuid: string | null
+          zoom_webinar_id: string
+        }
+        Insert: {
+          agenda?: string | null
+          connection_id: string
+          created_at?: string
+          duration: number
+          host_email: string
+          host_id: string
+          id?: string
+          join_url: string
+          registration_url?: string | null
+          start_time: string
+          status: string
+          synced_at?: string
+          timezone: string
+          topic: string
+          updated_at?: string
+          webinar_type: number
+          zoom_uuid?: string | null
+          zoom_webinar_id: string
+        }
+        Update: {
+          agenda?: string | null
+          connection_id?: string
+          created_at?: string
+          duration?: number
+          host_email?: string
+          host_id?: string
+          id?: string
+          join_url?: string
+          registration_url?: string | null
+          start_time?: string
+          status?: string
+          synced_at?: string
+          timezone?: string
+          topic?: string
+          updated_at?: string
+          webinar_type?: number
+          zoom_uuid?: string | null
+          zoom_webinar_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_webinars_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

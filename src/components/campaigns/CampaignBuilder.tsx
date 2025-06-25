@@ -1,413 +1,336 @@
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { CampaignService } from '@/services/campaigns/CampaignService';
-import { AudienceSegmentService } from '@/services/campaigns/AudienceSegmentService';
-import { Campaign, CampaignBuilderStep, AudienceSegment, CampaignCreateData, transformDatabaseAudienceSegment } from '@/types/campaign';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, ArrowRight, Check, Save, Send } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { TemplateSelector } from './builder/TemplateSelector';
-import { AudienceBuilder } from './builder/AudienceBuilder';
-import { ABTestingSetup } from './builder/ABTestingSetup';
-import { SchedulingSetup } from './builder/SchedulingSetup';
-import { CampaignPreview } from './builder/CampaignPreview';
+import { Loader2, Save, Send, Eye, Plus, X } from 'lucide-react';
 
-interface CampaignBuilderProps {
-  onClose: () => void;
-  onComplete: () => void;
-  editingCampaign?: Campaign;
+interface Campaign {
+  id?: string;
+  name: string;
+  subject: string;
+  content: string;
+  recipientGroups: string[];
+  scheduledAt?: Date;
+  status: 'draft' | 'scheduled' | 'sent';
 }
 
-export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
-  onClose,
-  onComplete,
-  editingCampaign
-}) => {
-  const { user } = useAuth();
+interface CampaignBuilderProps {
+  campaignId?: string;
+  onSave?: (campaign: Campaign) => void;
+  onSend?: (campaign: Campaign) => void;
+}
+
+export function CampaignBuilder({ campaignId, onSave, onSend }: CampaignBuilderProps) {
   const { toast } = useToast();
-  const [currentStep, setCurrentStep] = useState(0);
-  const [campaignData, setCampaignData] = useState<Partial<Campaign>>({
-    campaign_type: '',
-    subject_template: '',
-    status: 'draft',
-    audience_segment: {},
-    user_id: user?.id
-  });
-  const [segments, setSegments] = useState<AudienceSegment[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [newCampaign, setNewCampaign] = useState<Campaign>({
+    name: '',
+    subject: '',
+    content: '',
+    recipientGroups: [],
+    status: 'draft'
+  });
 
-  const steps: CampaignBuilderStep[] = [
-    {
-      id: 'basics',
-      title: 'Campaign Basics',
-      description: 'Set up campaign name and type',
-      component: CampaignBasics,
-      isComplete: !!(campaignData.campaign_type && campaignData.subject_template)
-    },
-    {
-      id: 'template',
-      title: 'Email Template',
-      description: 'Choose your email template',
-      component: TemplateSelector,
-      isComplete: !!campaignData.template_id
-    },
-    {
-      id: 'audience',
-      title: 'Audience',
-      description: 'Select your target audience',
-      component: AudienceBuilder,
-      isComplete: !!(campaignData.audience_segment && Object.keys(campaignData.audience_segment).length > 0)
-    },
-    {
-      id: 'abtesting',
-      title: 'A/B Testing',
-      description: 'Set up A/B tests (optional)',
-      component: ABTestingSetup,
-      isComplete: true,
-      isOptional: true
-    },
-    {
-      id: 'scheduling',
-      title: 'Scheduling',
-      description: 'Schedule your campaign',
-      component: SchedulingSetup,
-      isComplete: !!campaignData.send_schedule
-    },
-    {
-      id: 'preview',
-      title: 'Review & Launch',
-      description: 'Review and launch your campaign',
-      component: CampaignPreview,
-      isComplete: true
-    }
-  ];
+  const [availableGroups] = useState([
+    'All Participants',
+    'Webinar Attendees',
+    'High Engagement',
+    'Recent Registrants',
+    'VIP Members'
+  ]);
+
+  const [newGroupName, setNewGroupName] = useState('');
 
   useEffect(() => {
-    if (editingCampaign) {
-      setCampaignData(editingCampaign);
+    if (campaignId) {
+      loadCampaign(campaignId);
     }
-    loadSegments();
-  }, [editingCampaign]);
+  }, [campaignId]);
 
-  const loadSegments = async () => {
+  const loadCampaign = async (id: string) => {
+    setLoading(true);
     try {
-      const data = await AudienceSegmentService.getSegments(user!.id);
-      setSegments(data.map(transformDatabaseAudienceSegment));
-    } catch (error) {
-      console.error('Error loading segments:', error);
-    }
-  };
-
-  const handleNext = () => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
-  const handleBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const handleSaveDraft = async () => {
-    try {
-      setSaving(true);
+      // Simulate loading campaign data
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Ensure required fields are present
-      if (!campaignData.campaign_type || !campaignData.subject_template || !user?.id) {
-        toast({
-          title: "Error",
-          description: "Please fill in required fields: Campaign Name and Subject Line",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      const createData: CampaignCreateData = {
-        campaign_type: campaignData.campaign_type,
-        subject_template: campaignData.subject_template,
-        status: 'draft',
-        user_id: user.id,
-        audience_segment: campaignData.audience_segment,
-        template_id: campaignData.template_id,
-        workflow_id: campaignData.workflow_id,
-        send_schedule: campaignData.send_schedule
+      // Mock campaign data
+      const mockCampaign: Campaign = {
+        id,
+        name: 'Sample Campaign',
+        subject: 'Join our upcoming webinar!',
+        content: 'Hello! We have an exciting webinar coming up...',
+        recipientGroups: ['Webinar Attendees'],
+        status: 'draft'
       };
       
-      if (editingCampaign) {
-        await CampaignService.updateCampaign(editingCampaign.id, createData);
-      } else {
-        await CampaignService.createCampaign(createData);
-      }
-      
-      toast({
-        title: "Success",
-        description: "Campaign saved as draft"
-      });
-      
-      onComplete();
+      setNewCampaign(mockCampaign);
     } catch (error) {
-      console.error('Error saving campaign:', error);
       toast({
         title: "Error",
-        description: "Failed to save campaign",
-        variant: "destructive"
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleLaunch = async () => {
-    try {
-      setLoading(true);
-      
-      // Ensure required fields are present
-      if (!campaignData.campaign_type || !campaignData.subject_template || !user?.id) {
-        toast({
-          title: "Error",
-          description: "Please fill in required fields before launching",
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      let campaignId = editingCampaign?.id;
-      
-      if (!campaignId) {
-        const createData: CampaignCreateData = {
-          campaign_type: campaignData.campaign_type,
-          subject_template: campaignData.subject_template,
-          status: 'active',
-          user_id: user.id,
-          audience_segment: campaignData.audience_segment,
-          template_id: campaignData.template_id,
-          workflow_id: campaignData.workflow_id,
-          send_schedule: campaignData.send_schedule
-        };
-
-        const newCampaign = await CampaignService.createCampaign(createData);
-        campaignId = newCampaign.id;
-      }
-      
-      if (campaignId) {
-        await CampaignService.launchCampaign(campaignId);
-      }
-      
-      toast({
-        title: "Success",
-        description: "Campaign launched successfully"
-      });
-      
-      onComplete();
-    } catch (error) {
-      console.error('Error launching campaign:', error);
-      toast({
-        title: "Error",
-        description: "Failed to launch campaign",
-        variant: "destructive"
+        description: "Failed to load campaign",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const completedSteps = steps.filter(step => step.isComplete).length;
-  const progressPercentage = (completedSteps / steps.length) * 100;
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Simulate save operation
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      onSave?.(newCampaign);
+      
+      toast({
+        title: "Campaign Saved",
+        description: "Your campaign has been saved successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save campaign",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  const CurrentStepComponent = steps[currentStep].component;
+  const handleSend = async () => {
+    if (!newCampaign.name || !newCampaign.subject || !newCampaign.content) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <Button variant="ghost" onClick={onClose}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Campaigns
-              </Button>
-              <div>
-                <h1 className="text-xl font-semibold">
-                  {editingCampaign ? 'Edit Campaign' : 'Create New Campaign'}
-                </h1>
-                <p className="text-sm text-gray-500">
-                  Step {currentStep + 1} of {steps.length}: {steps[currentStep].title}
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-3">
-              <Button variant="outline" onClick={handleSaveDraft} disabled={saving}>
-                <Save className="h-4 w-4 mr-2" />
-                {saving ? 'Saving...' : 'Save Draft'}
-              </Button>
-            </div>
-          </div>
-          
-          <div className="pb-4">
-            <Progress value={progressPercentage} className="w-full" />
-            <div className="flex justify-between mt-2 text-xs text-gray-500">
-              <span>{completedSteps} of {steps.length} completed</span>
-              <span>{Math.round(progressPercentage)}% complete</span>
-            </div>
-          </div>
-        </div>
-      </div>
+    setLoading(true);
+    try {
+      // Simulate send operation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const sentCampaign = { ...newCampaign, status: 'sent' as const };
+      setNewCampaign(sentCampaign);
+      
+      onSend?.(sentCampaign);
+      
+      toast({
+        title: "Campaign Sent",
+        description: "Your campaign has been sent successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to send campaign",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Step Navigation */}
-          <div className="lg:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Campaign Builder</CardTitle>
-                <CardDescription>Follow these steps to create your campaign</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <nav className="space-y-2">
-                  {steps.map((step, index) => (
-                    <button
-                      key={step.id}
-                      onClick={() => setCurrentStep(index)}
-                      className={`w-full text-left p-3 rounded-lg transition-colors ${
-                        index === currentStep
-                          ? 'bg-blue-50 border border-blue-200'
-                          : step.isComplete
-                          ? 'bg-green-50 border border-green-200'
-                          : 'bg-gray-50 border border-gray-200'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                          step.isComplete
-                            ? 'bg-green-500 text-white'
-                            : index === currentStep
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-300 text-gray-600'
-                        }`}>
-                          {step.isComplete ? <Check className="h-3 w-3" /> : index + 1}
-                        </div>
-                        <div>
-                          <div className="font-medium text-sm">{step.title}</div>
-                          <div className="text-xs text-gray-500">{step.description}</div>
-                          {step.isOptional && (
-                            <div className="text-xs text-blue-500">Optional</div>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </nav>
-              </CardContent>
-            </Card>
-          </div>
+  const addRecipientGroup = (groupName: string) => {
+    if (groupName && !newCampaign.recipientGroups.includes(groupName)) {
+      setNewCampaign(prev => ({
+        ...prev,
+        recipientGroups: [...prev.recipientGroups, groupName]
+      }));
+    }
+  };
 
-          {/* Step Content */}
-          <div className="lg:col-span-3">
-            <Card>
-              <CardHeader>
-                <CardTitle>{steps[currentStep].title}</CardTitle>
-                <CardDescription>{steps[currentStep].description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <CurrentStepComponent
-                  campaignData={campaignData}
-                  setCampaignData={setCampaignData}
-                  segments={segments}
-                  onNext={handleNext}
-                />
-              </CardContent>
-            </Card>
+  const removeRecipientGroup = (groupName: string) => {
+    setNewCampaign(prev => ({
+      ...prev,
+      recipientGroups: prev.recipientGroups.filter(g => g !== groupName)
+    }));
+  };
 
-            {/* Navigation */}
-            <div className="flex justify-between mt-6">
-              <Button
-                variant="outline"
-                onClick={handleBack}
-                disabled={currentStep === 0}
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Previous
-              </Button>
+  const addCustomGroup = () => {
+    if (newGroupName.trim()) {
+      addRecipientGroup(newGroupName.trim());
+      setNewGroupName('');
+    }
+  };
 
-              <div className="flex space-x-3">
-                {currentStep === steps.length - 1 ? (
-                  <Button onClick={handleLaunch} disabled={loading}>
-                    <Send className="h-4 w-4 mr-2" />
-                    {loading ? 'Launching...' : 'Launch Campaign'}
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleNext}
-                    disabled={!steps[currentStep].isComplete && !steps[currentStep].isOptional}
-                  >
-                    Next
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+  if (loading && campaignId) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+          Loading campaign...
+        </CardContent>
+      </Card>
+    );
+  }
 
-// Campaign Basics Component
-const CampaignBasics: React.FC<{
-  campaignData: Partial<Campaign>;
-  setCampaignData: (data: Partial<Campaign>) => void;
-}> = ({ campaignData, setCampaignData }) => {
   return (
     <div className="space-y-6">
-      <div className="space-y-4">
-        <div>
-          <Label htmlFor="campaign-name">Campaign Name</Label>
-          <Input
-            id="campaign-name"
-            value={campaignData.campaign_type || ''}
-            onChange={(e) => setCampaignData({ ...campaignData, campaign_type: e.target.value })}
-            placeholder="Enter campaign name"
-          />
-        </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {campaignId ? 'Edit Campaign' : 'Create New Campaign'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Basic Information */}
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="campaignName">Campaign Name *</Label>
+              <Input
+                id="campaignName"
+                value={newCampaign.name}
+                onChange={(e) => setNewCampaign(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Enter campaign name"
+              />
+            </div>
 
-        <div>
-          <Label htmlFor="subject-line">Subject Line</Label>
-          <Input
-            id="subject-line"
-            value={campaignData.subject_template || ''}
-            onChange={(e) => setCampaignData({ ...campaignData, subject_template: e.target.value })}
-            placeholder="Enter email subject line"
-          />
-        </div>
+            <div>
+              <Label htmlFor="subject">Email Subject *</Label>
+              <Input
+                id="subject"
+                value={newCampaign.subject}
+                onChange={(e) => setNewCampaign(prev => ({ ...prev, subject: e.target.value }))}
+                placeholder="Enter email subject"
+              />
+            </div>
 
-        <div>
-          <Label htmlFor="campaign-type">Campaign Type</Label>
-          <Select value={campaignData.campaign_type} onValueChange={(value) => setCampaignData({ ...campaignData, campaign_type: value })}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select campaign type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newsletter">Newsletter</SelectItem>
-              <SelectItem value="promotional">Promotional</SelectItem>
-              <SelectItem value="product_launch">Product Launch</SelectItem>
-              <SelectItem value="welcome_series">Welcome Series</SelectItem>
-              <SelectItem value="re_engagement">Re-engagement</SelectItem>
-              <SelectItem value="educational">Educational</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+            <div>
+              <Label htmlFor="content">Email Content *</Label>
+              <Textarea
+                id="content"
+                value={newCampaign.content}
+                onChange={(e) => setNewCampaign(prev => ({ ...prev, content: e.target.value }))}
+                placeholder="Enter email content"
+                rows={6}
+              />
+            </div>
+          </div>
+
+          {/* Recipient Groups */}
+          <div className="space-y-4">
+            <Label>Recipient Groups</Label>
+            
+            {/* Selected Groups */}
+            <div className="flex flex-wrap gap-2">
+              {newCampaign.recipientGroups.map((group) => (
+                <Badge key={group} variant="secondary" className="flex items-center gap-1">
+                  {group}
+                  <X
+                    className="w-3 h-3 cursor-pointer"
+                    onClick={() => removeRecipientGroup(group)}
+                  />
+                </Badge>
+              ))}
+            </div>
+
+            {/* Available Groups */}
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">Available Groups:</div>
+              <div className="flex flex-wrap gap-2">
+                {availableGroups
+                  .filter(group => !newCampaign.recipientGroups.includes(group))
+                  .map((group) => (
+                    <Button
+                      key={group}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addRecipientGroup(group)}
+                    >
+                      <Plus className="w-3 h-3 mr-1" />
+                      {group}
+                    </Button>
+                  ))}
+              </div>
+            </div>
+
+            {/* Custom Group */}
+            <div className="flex gap-2">
+              <Input
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="Enter custom group name"
+                onKeyPress={(e) => e.key === 'Enter' && addCustomGroup()}
+              />
+              <Button onClick={addCustomGroup} disabled={!newGroupName.trim()}>
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-4">
+            <Button
+              onClick={handleSave}
+              disabled={saving || !newCampaign.name}
+              variant="outline"
+            >
+              {saving ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              Save Draft
+            </Button>
+
+            <Button
+              onClick={() => {
+                // Preview functionality
+                toast({
+                  title: "Preview",
+                  description: "Preview functionality would open here.",
+                });
+              }}
+              variant="outline"
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              Preview
+            </Button>
+
+            <Button
+              onClick={handleSend}
+              disabled={loading || !newCampaign.name || !newCampaign.subject || !newCampaign.content}
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
+              Send Campaign
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Campaign Preview */}
+      {newCampaign.subject && newCampaign.content && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Email Preview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="border rounded-lg p-4 bg-gray-50">
+              <div className="mb-2">
+                <strong>Subject:</strong> {newCampaign.subject}
+              </div>
+              <div className="mb-2">
+                <strong>To:</strong> {newCampaign.recipientGroups.join(', ') || 'No recipients selected'}
+              </div>
+              <hr className="my-3" />
+              <div className="whitespace-pre-wrap">{newCampaign.content}</div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
-};
+}

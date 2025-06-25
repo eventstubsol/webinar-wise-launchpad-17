@@ -1,11 +1,10 @@
-
 import { useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { ZoomConnection } from '@/types/zoom';
 import { TokenUtils, TokenStatus } from '@/services/zoom/utils/tokenUtils';
-import { zoomSyncOrchestrator } from '@/services/zoom/sync/ZoomSyncOrchestrator';
+import { RenderZoomService } from '@/services/zoom/RenderZoomService';
 import { ZoomWebinarDataService } from '@/services/zoom/api/ZoomWebinarDataService';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -37,44 +36,18 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
     try {
       console.log('🔍 Testing API connection before sync...');
-      const testResult = await ZoomWebinarDataService.testApiConnection();
+      const testResult = await RenderZoomService.testConnection();
       
-      if (testResult.errorCategory === 'AUTH') {
+      if (!testResult.success) {
         toast({
-          title: "Authentication Error",
-          description: testResult.userMessage,
-          variant: "destructive",
-          action: (
-            <Button asChild variant="secondary" size="sm">
-              <Link to="/settings">Reconnect Zoom</Link>
-            </Button>
-          ),
-        });
-        return false;
-      } else if (testResult.errorCategory === 'PERMISSIONS') {
-        toast({
-          title: "Permission Error",
-          description: testResult.userMessage,
+          title: "Connection Test Failed",
+          description: testResult.message,
           variant: "destructive",
           action: (
             <Button asChild variant="secondary" size="sm">
               <Link to="/settings">Check Settings</Link>
             </Button>
           ),
-        });
-        return false;
-      } else if (testResult.errorCategory === 'RATE_LIMIT') {
-        toast({
-          title: "Rate Limited",
-          description: testResult.userMessage,
-          variant: "destructive",
-        });
-        return false;
-      } else if (testResult.errorCategory === 'API_ERROR') {
-        toast({
-          title: "API Connection Error",
-          description: testResult.userMessage,
-          variant: "destructive",
         });
         return false;
       }
@@ -85,7 +58,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       console.error('❌ API connection test failed:', error);
       toast({
         title: "Connection Test Failed",
-        description: "Unable to connect to Zoom API. Please check your connection.",
+        description: "Unable to connect to Zoom API via Render service. Please check your connection.",
         variant: "destructive",
       });
       return false;
@@ -121,7 +94,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
   };
 
   const startSync = useCallback(async (syncType: 'initial' | 'incremental' = 'incremental') => {
-    console.log('=== Starting Client-Side Sync ===');
+    console.log('=== Starting Client-Side Sync via Render ===');
     console.log('User:', user?.id);
     console.log('Connection:', connection?.id);
     console.log('Sync type:', syncType);
@@ -189,37 +162,35 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     setCurrentOperation('Starting sync...');
 
     try {
-      console.log('Starting sync via ZoomSyncOrchestrator...');
+      console.log('Starting sync via Render service...');
       
-      let syncId: string;
-      if (syncType === 'initial') {
-        syncId = await zoomSyncOrchestrator.startInitialSync(connection.id);
-      } else {
-        syncId = await zoomSyncOrchestrator.startIncrementalSync(connection.id);
+      const result = await RenderZoomService.startSync(connection.id, syncType);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to start sync');
       }
 
-      // Validate that we got a proper UUID
-      if (!isValidUUID(syncId)) {
-        console.error('Invalid sync ID format received:', syncId);
-        throw new Error('Invalid sync ID format received from orchestrator');
+      if (!result.syncId || !isValidUUID(result.syncId)) {
+        console.error('Invalid sync ID format received:', result.syncId);
+        throw new Error('Invalid sync ID format received from Render service');
       }
 
-      console.log('Sync started successfully with ID:', syncId);
-      setActiveSyncId(syncId);
+      console.log('Sync started successfully with ID:', result.syncId);
+      setActiveSyncId(result.syncId);
       
       toast({
         title: "Sync Started",
-        description: `${syncType === 'initial' ? 'Full' : 'Incremental'} sync has been initiated.`,
+        description: `${syncType === 'initial' ? 'Full' : 'Incremental'} sync has been initiated via Render.`,
       });
 
       // Wait a moment for sync log to be created, then validate and start polling
       setTimeout(async () => {
-        const exists = await validateSyncIdExists(syncId);
+        const exists = await validateSyncIdExists(result.syncId!);
         if (exists) {
-          console.log('Sync log validated, starting polling for:', syncId);
-          pollSyncStatus(syncId);
+          console.log('Sync log validated, starting polling for:', result.syncId);
+          pollSyncStatus(result.syncId!);
         } else {
-          console.error('Sync log not found after creation delay:', syncId);
+          console.error('Sync log not found after creation delay:', result.syncId);
           handleSyncError('Sync setup failed - could not initialize sync tracking');
         }
       }, 2000);
@@ -329,12 +300,12 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           console.log('Sync log found:', syncLog);
           consecutiveErrors = 0; // Reset error counter
           
-          if (syncLog.status === 'completed' || syncLog.sync_status === 'completed') {
+          if (syncLog.sync_status === 'completed') {
             console.log('Sync completed successfully');
             clearInterval(pollInterval);
             handleSyncComplete(syncLog.processed_items || 0);
             
-          } else if (syncLog.status === 'failed' || syncLog.sync_status === 'failed') {
+          } else if (syncLog.sync_status === 'failed') {
             console.error('Sync failed:', syncLog.error_message);
             clearInterval(pollInterval);
             handleSyncError(syncLog.error_message || "Unknown error occurred during sync");
@@ -365,7 +336,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
   const cancelSync = useCallback(async () => {
     if (activeSyncId && isValidUUID(activeSyncId)) {
       try {
-        await zoomSyncOrchestrator.cancelSync(activeSyncId);
+        // For now, just reset local state since we'd need Render service to handle cancellation
         setIsSyncing(false);
         setSyncProgress(0);
         setSyncStatus('idle');
@@ -374,7 +345,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         
         toast({
           title: "Sync Cancelled",
-          description: "The sync operation has been cancelled.",
+          description: "The sync operation has been cancelled locally.",
         });
       } catch (error) {
         console.error('Error cancelling sync:', error);
