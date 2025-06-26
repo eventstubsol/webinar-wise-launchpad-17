@@ -1,17 +1,18 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { MetricsTransformers } from '../../utils/transformers/metricsTransformers';
 
 /**
  * Database operations for metrics calculations
+ * ENHANCED: Now uses only primary columns to avoid duplicate column issues
  */
 export class MetricsOperations {
   /**
    * Update webinar metrics after syncing all data
+   * FIXED: Uses only primary columns, not duplicate ones
    */
   static async updateWebinarMetrics(webinarDbId: string): Promise<void> {
     try {
-      console.log(`Updating metrics for webinar: ${webinarDbId}`);
+      console.log(`📊 Updating metrics for webinar: ${webinarDbId}`);
       
       // Calculate metrics from participants
       const { data: participants, error: participantsError } = await supabase
@@ -24,6 +25,8 @@ export class MetricsOperations {
         return;
       }
 
+      console.log(`📊 Found ${participants?.length || 0} participants for metrics`);
+
       // Calculate metrics from registrants
       const { count: registrantCount, error: registrantsError } = await supabase
         .from('zoom_registrants')
@@ -35,6 +38,8 @@ export class MetricsOperations {
         return;
       }
 
+      console.log(`📊 Found ${registrantCount || 0} registrants for metrics`);
+
       // Calculate comprehensive metrics
       const totalAttendees = participants?.length || 0;
       const totalRegistrants = registrantCount || 0;
@@ -42,7 +47,15 @@ export class MetricsOperations {
       const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
       const totalAbsentees = Math.max(0, totalRegistrants - totalAttendees);
 
-      // Update webinar with calculated metrics using correct field names
+      console.log(`📊 Calculated metrics:`, {
+        totalAttendees,
+        totalRegistrants,
+        totalMinutes,
+        avgDuration,
+        totalAbsentees
+      });
+
+      // Update webinar with calculated metrics - ONLY use primary columns
       const { error: updateError } = await supabase
         .from('zoom_webinars')
         .update({
@@ -51,8 +64,7 @@ export class MetricsOperations {
           total_absentees: totalAbsentees,
           total_minutes: totalMinutes,
           avg_attendance_duration: avgDuration,
-          attendees_count: totalAttendees,
-          registrants_count: totalRegistrants,
+          // Remove duplicate columns - don't use attendees_count, registrants_count
           updated_at: new Date().toISOString()
         })
         .eq('id', webinarDbId);
@@ -62,7 +74,7 @@ export class MetricsOperations {
         throw updateError;
       }
 
-      console.log(`Successfully updated metrics for webinar ${webinarDbId}: ${totalAttendees} attendees, ${totalRegistrants} registrants`);
+      console.log(`✅ Successfully updated metrics for webinar ${webinarDbId}: ${totalAttendees} attendees, ${totalRegistrants} registrants`);
     } catch (error) {
       console.error('Error updating webinar metrics:', error);
       throw error;
@@ -71,15 +83,16 @@ export class MetricsOperations {
 
   /**
    * Batch update metrics for all webinars with missing data
+   * ENHANCED: Better logging and error handling
    */
   static async batchUpdateMissingMetrics(connectionId?: string): Promise<number> {
     try {
-      console.log('Starting batch metrics update for webinars with missing data...');
+      console.log('🔧 Starting batch metrics update for webinars with missing data...');
 
       // Find webinars with zero or null attendee counts
       let query = supabase
         .from('zoom_webinars')
-        .select('id')
+        .select('id, zoom_webinar_id, topic')
         .or('total_attendees.is.null,total_attendees.eq.0');
 
       if (connectionId) {
@@ -102,17 +115,27 @@ export class MetricsOperations {
 
       // Update metrics for each webinar
       let updatedCount = 0;
+      const errors: string[] = [];
+
       for (const webinar of webinars) {
         try {
+          console.log(`🔧 Updating metrics for webinar: ${webinar.zoom_webinar_id} (${webinar.topic})`);
           await this.updateWebinarMetrics(webinar.id);
           updatedCount++;
+          console.log(`✅ Updated metrics for webinar: ${webinar.zoom_webinar_id}`);
         } catch (error) {
-          console.error(`Failed to update metrics for webinar ${webinar.id}:`, error);
-          // Continue with next webinar
+          const errorMsg = `Failed to update metrics for webinar ${webinar.zoom_webinar_id}: ${error.message}`;
+          console.error(`❌ ${errorMsg}`);
+          errors.push(errorMsg);
         }
       }
 
-      console.log(`Batch update completed: ${updatedCount}/${webinars.length} webinars updated`);
+      console.log(`🎉 Batch update completed: ${updatedCount}/${webinars.length} webinars updated`);
+      
+      if (errors.length > 0) {
+        console.log(`❌ Errors encountered:`, errors);
+      }
+
       return updatedCount;
     } catch (error) {
       console.error('Error in batch metrics update:', error);

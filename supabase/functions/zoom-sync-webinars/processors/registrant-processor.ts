@@ -1,11 +1,11 @@
 
 /**
  * Enhanced registrant processor with proper error handling and scope detection
- * UPDATED: Now triggers metrics update after successful registrant sync
+ * FIXED: Now properly triggers metrics update after successful registrant sync
  */
 
 /**
- * Update webinar metrics after registrant sync
+ * Update webinar metrics after registrant sync - ENHANCED VERSION
  */
 async function updateWebinarMetricsAfterRegistrantSync(supabase: any, webinarDbId: string): Promise<void> {
   try {
@@ -22,6 +22,8 @@ async function updateWebinarMetricsAfterRegistrantSync(supabase: any, webinarDbI
       return;
     }
 
+    console.log(`📊 Found ${participants?.length || 0} participants for metrics calculation`);
+
     // Get registrant count
     const { count: registrantCount, error: registrantsError } = await supabase
       .from('zoom_registrants')
@@ -33,6 +35,8 @@ async function updateWebinarMetricsAfterRegistrantSync(supabase: any, webinarDbI
       return;
     }
 
+    console.log(`📊 Found ${registrantCount || 0} registrants for metrics calculation`);
+
     // Calculate metrics
     const totalAttendees = participants?.length || 0;
     const totalRegistrants = registrantCount || 0;
@@ -40,7 +44,15 @@ async function updateWebinarMetricsAfterRegistrantSync(supabase: any, webinarDbI
     const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
     const totalAbsentees = Math.max(0, totalRegistrants - totalAttendees);
 
-    // Update webinar with calculated metrics
+    console.log(`📊 Calculated metrics:`, {
+      totalAttendees,
+      totalRegistrants,
+      totalMinutes,
+      avgDuration,
+      totalAbsentees
+    });
+
+    // Update webinar with calculated metrics - ONLY use the primary columns
     const { error: updateError } = await supabase
       .from('zoom_webinars')
       .update({
@@ -49,8 +61,7 @@ async function updateWebinarMetricsAfterRegistrantSync(supabase: any, webinarDbI
         total_absentees: totalAbsentees,
         total_minutes: totalMinutes,
         avg_attendance_duration: avgDuration,
-        attendees_count: totalAttendees,
-        registrants_count: totalRegistrants,
+        // Remove duplicate columns - use only the primary ones
         updated_at: new Date().toISOString()
       })
       .eq('id', webinarDbId);
@@ -60,12 +71,12 @@ async function updateWebinarMetricsAfterRegistrantSync(supabase: any, webinarDbI
       throw updateError;
     }
 
-    console.log(`✅ METRICS UPDATED after registrant sync for webinar ${webinarDbId}:`);
-    console.log(`  👥 Attendees: ${totalAttendees}`);
-    console.log(`  📝 Registrants: ${totalRegistrants}`);
+    console.log(`✅ METRICS UPDATED successfully for webinar ${webinarDbId}:`);
+    console.log(`  👥 Total Attendees: ${totalAttendees}`);
+    console.log(`  📝 Total Registrants: ${totalRegistrants}`);
     console.log(`  ⏱️ Total Minutes: ${totalMinutes}`);
     console.log(`  📊 Avg Duration: ${avgDuration}m`);
-    console.log(`  ❌ Absentees: ${totalAbsentees}`);
+    console.log(`  ❌ Total Absentees: ${totalAbsentees}`);
   } catch (error) {
     console.error('❌ Error updating webinar metrics after registrant sync:', error);
     // Don't throw - metrics update failure shouldn't fail the sync
@@ -73,30 +84,28 @@ async function updateWebinarMetricsAfterRegistrantSync(supabase: any, webinarDbI
 }
 
 /**
- * NEW: Test Zoom API registrant access and scopes
+ * Test Zoom API registrant access and scopes
  */
 export async function testRegistrantAPIAccess(client: any, webinarId: string): Promise<{
   hasAccess: boolean;
   error?: string;
   scopeIssue?: boolean;
 }> {
-  console.log(`🧪 TESTING registrant API access for webinar ${webinarId}...`);
+  console.log(`🧪 Testing registrant API access for webinar ${webinarId}...`);
   
   try {
-    // Try to fetch registrants - this will reveal scope issues
     const registrants = await client.getWebinarRegistrants(webinarId);
     
     if (Array.isArray(registrants)) {
-      console.log(`✅ REGISTRANT API ACCESS: Success - found ${registrants.length} registrants`);
+      console.log(`✅ Registrant API access successful - found ${registrants.length} registrants`);
       return { hasAccess: true };
     } else {
-      console.log(`⚠️ REGISTRANT API ACCESS: Unexpected response format:`, registrants);
+      console.log(`⚠️ Unexpected registrant API response format:`, registrants);
       return { hasAccess: false, error: 'Unexpected API response format' };
     }
   } catch (error) {
-    console.error(`❌ REGISTRANT API ACCESS ERROR:`, error);
+    console.error(`❌ Registrant API access error:`, error);
     
-    // Check for specific scope/permission errors
     const errorMessage = error.message?.toLowerCase() || '';
     const isScopeIssue = errorMessage.includes('scope') || 
                         errorMessage.includes('permission') || 
@@ -104,7 +113,7 @@ export async function testRegistrantAPIAccess(client: any, webinarId: string): P
                         errorMessage.includes('forbidden');
     
     if (isScopeIssue) {
-      console.error(`🚨 SCOPE ISSUE DETECTED: Missing webinar:read:admin scope or insufficient permissions`);
+      console.error(`🚨 SCOPE ISSUE: Missing webinar:read:admin scope`);
       return { 
         hasAccess: false, 
         error: error.message, 
@@ -118,7 +127,7 @@ export async function testRegistrantAPIAccess(client: any, webinarId: string): P
 
 /**
  * Enhanced sync registrants with proper error handling and debugging
- * UPDATED: Now triggers metrics update after successful registrant sync
+ * FIXED: Now properly triggers metrics update after successful registrant sync
  */
 export async function syncWebinarRegistrants(
   supabase: any,
@@ -127,17 +136,16 @@ export async function syncWebinarRegistrants(
   webinarDbId: string,
   testMode: boolean = false
 ): Promise<number> {
-  console.log(`🎯 ENHANCED REGISTRANT SYNC starting for webinar ${webinarId} (DB: ${webinarDbId})`);
-  console.log(`  - Test mode: ${testMode}`);
+  console.log(`🚀 Starting registrant sync for webinar ${webinarId} (DB: ${webinarDbId})`);
   
   try {
-    // STEP 1: Test API access first
-    console.log(`🧪 STEP 1: Testing registrant API access...`);
+    // Test API access first
+    console.log(`🧪 Testing registrant API access...`);
     const accessTest = await testRegistrantAPIAccess(client, webinarId);
     
     if (!accessTest.hasAccess) {
       if (accessTest.scopeIssue) {
-        const errorMsg = `❌ ZOOM SCOPE ERROR: Missing 'webinar:read:admin' scope. Please update your Zoom app configuration to include this scope.`;
+        const errorMsg = `❌ ZOOM SCOPE ERROR: Missing 'webinar:read:admin' scope`;
         console.error(errorMsg);
         throw new Error(`Scope Error: ${accessTest.error}`);
       } else {
@@ -147,63 +155,44 @@ export async function syncWebinarRegistrants(
       }
     }
     
-    // STEP 2: Fetch registrants from Zoom API
-    console.log(`📥 STEP 2: Fetching registrants from Zoom API...`);
+    // Fetch registrants from Zoom API
+    console.log(`🔄 Fetching registrants from Zoom API...`);
     const registrants = await client.getWebinarRegistrants(webinarId);
     
-    // ENHANCED: Better validation and logging
     if (!registrants) {
-      console.log(`⚠️ REGISTRANTS NULL: API returned null/undefined for webinar ${webinarId}`);
-      // Still update metrics even if no registrants
+      console.log(`📭 No registrants returned for webinar ${webinarId}`);
       await updateWebinarMetricsAfterRegistrantSync(supabase, webinarDbId);
       return 0;
     }
     
     if (!Array.isArray(registrants)) {
-      console.log(`⚠️ REGISTRANTS NOT ARRAY: API returned non-array for webinar ${webinarId}:`, typeof registrants);
-      // Still update metrics even if no registrants
+      console.log(`⚠️ Registrants not an array for webinar ${webinarId}:`, typeof registrants);
       await updateWebinarMetricsAfterRegistrantSync(supabase, webinarDbId);
       return 0;
     }
     
     if (registrants.length === 0) {
-      console.log(`📭 NO REGISTRANTS: API returned empty array for webinar ${webinarId}`);
-      console.log(`  - This could mean: no registrations, or webinar doesn't require registration`);
-      // Still update metrics even if no registrants
+      console.log(`📭 Empty registrants array for webinar ${webinarId}`);
       await updateWebinarMetricsAfterRegistrantSync(supabase, webinarDbId);
       return 0;
     }
     
-    console.log(`✅ REGISTRANTS FOUND: ${registrants.length} registrants for webinar ${webinarId}`);
+    console.log(`📊 Found ${registrants.length} registrants for webinar ${webinarId}`);
     
     // Log sample registrant data for debugging
     if (registrants.length > 0) {
-      const sampleRegistrant = registrants[0];
-      console.log(`📋 SAMPLE REGISTRANT DATA:`, {
-        id: sampleRegistrant.id,
-        email: sampleRegistrant.email,
-        firstName: sampleRegistrant.first_name,
-        lastName: sampleRegistrant.last_name,
-        status: sampleRegistrant.status,
-        registrationTime: sampleRegistrant.registration_time,
-        availableFields: Object.keys(sampleRegistrant)
+      console.log(`📋 Sample registrant:`, {
+        id: registrants[0].id,
+        email: registrants[0].email,
+        firstName: registrants[0].first_name,
+        status: registrants[0].status
       });
     }
     
-    // STEP 3: Transform registrant data
-    console.log(`🔄 STEP 3: Transforming ${registrants.length} registrants for database...`);
-    const transformedRegistrants = registrants.map((registrant, index) => {
+    // Transform registrant data
+    console.log(`🔄 Transforming ${registrants.length} registrants...`);
+    const transformedRegistrants = registrants.map((registrant) => {
       const transformed = transformRegistrantForDatabase(registrant, webinarDbId);
-      
-      if (index === 0) {
-        console.log(`📋 SAMPLE TRANSFORMED DATA:`, {
-          webinar_id: transformed.webinar_id,
-          registrant_id: transformed.registrant_id,
-          registrant_email: transformed.registrant_email,
-          status: transformed.status,
-          registration_time: transformed.registration_time
-        });
-      }
       
       return {
         ...transformed,
@@ -213,12 +202,12 @@ export async function syncWebinarRegistrants(
     });
     
     if (testMode) {
-      console.log(`🧪 TEST MODE: Skipping database insert, would have inserted ${transformedRegistrants.length} registrants`);
+      console.log(`🧪 TEST MODE: Would insert ${transformedRegistrants.length} registrants`);
       return transformedRegistrants.length;
     }
     
-    // STEP 4: Upsert registrants to database
-    console.log(`💾 STEP 4: Upserting ${transformedRegistrants.length} registrants to database...`);
+    // Upsert registrants to database
+    console.log(`💾 Saving ${transformedRegistrants.length} registrants to database...`);
     const { error } = await supabase
       .from('zoom_registrants')
       .upsert(
@@ -230,33 +219,31 @@ export async function syncWebinarRegistrants(
       );
 
     if (error) {
-      console.error(`❌ DATABASE UPSERT ERROR:`, error);
+      console.error(`❌ Database upsert error:`, error);
       throw new Error(`Failed to upsert registrants: ${error.message}`);
     }
 
-    // CRITICAL FIX: Update metrics AFTER successful registrant sync
+    console.log(`✅ Successfully saved ${registrants.length} registrants`);
+
+    // CRITICAL: Update metrics AFTER successful registrant sync
+    console.log(`📊 Triggering metrics update for webinar ${webinarDbId}`);
     await updateWebinarMetricsAfterRegistrantSync(supabase, webinarDbId);
 
-    console.log(`✅ REGISTRANT SYNC SUCCESS: ${registrants.length} registrants synced for webinar ${webinarId}`);
-    console.log(`  - Metrics updated: YES`);
+    console.log(`🎉 Registrant sync completed successfully for webinar ${webinarId}`);
     return registrants.length;
     
   } catch (error) {
-    console.error(`💥 REGISTRANT SYNC ERROR for webinar ${webinarId}:`, error);
+    console.error(`💥 Registrant sync error for webinar ${webinarId}:`, error);
     
     // Enhanced error categorization
     const errorMessage = error.message?.toLowerCase() || '';
     
     if (errorMessage.includes('scope') || errorMessage.includes('permission')) {
-      console.error(`🚨 ZOOM PERMISSION ERROR: Check your Zoom app scopes and permissions`);
-      console.error(`   Required scope: webinar:read:admin`);
-      console.error(`   Please visit: https://marketplace.zoom.us/develop/apps`);
+      console.error(`🚨 ZOOM PERMISSION ERROR: Check app scopes and permissions`);
     } else if (errorMessage.includes('rate limit')) {
       console.error(`⏱️ ZOOM RATE LIMIT: API rate limit exceeded`);
     } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
       console.error(`🌐 NETWORK ERROR: Connection to Zoom API failed`);
-    } else {
-      console.error(`❓ UNKNOWN ERROR: ${error.message}`);
     }
     
     throw error;
@@ -267,7 +254,6 @@ export async function syncWebinarRegistrants(
  * Transform Zoom API registrant to database format - enhanced with better error handling
  */
 function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string): any {
-  // Enhanced validation
   if (!apiRegistrant) {
     throw new Error('Cannot transform null/undefined registrant');
   }
@@ -288,11 +274,10 @@ function transformRegistrantForDatabase(apiRegistrant: any, webinarDbId: string)
     normalizedStatus = statusMap[apiRegistrant.status.toLowerCase()] || 'approved';
   }
 
-  // Enhanced registrant data transformation
   return {
     webinar_id: webinarDbId,
     registrant_id: apiRegistrant.id || apiRegistrant.registrant_id,
-    registrant_email: apiRegistrant.email,
+    email: apiRegistrant.email, // Using 'email' instead of 'registrant_email'
     first_name: apiRegistrant.first_name || null,
     last_name: apiRegistrant.last_name || null,
     address: apiRegistrant.address || null,

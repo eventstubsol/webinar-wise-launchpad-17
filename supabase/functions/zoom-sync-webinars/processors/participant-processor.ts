@@ -5,7 +5,7 @@ import { transformParticipantForDatabase } from './participant-transformer.ts';
 import { saveParticipantsToDatabase } from './participant-database.ts';
 
 /**
- * Update webinar metrics after participant sync
+ * Update webinar metrics after participant sync - ENHANCED VERSION
  */
 async function updateWebinarMetricsAfterParticipantSync(supabase: any, webinarDbId: string): Promise<void> {
   try {
@@ -22,6 +22,8 @@ async function updateWebinarMetricsAfterParticipantSync(supabase: any, webinarDb
       return;
     }
 
+    console.log(`📊 Found ${participants?.length || 0} participants for metrics calculation`);
+
     // Get registrant count
     const { count: registrantCount, error: registrantsError } = await supabase
       .from('zoom_registrants')
@@ -33,6 +35,8 @@ async function updateWebinarMetricsAfterParticipantSync(supabase: any, webinarDb
       return;
     }
 
+    console.log(`📊 Found ${registrantCount || 0} registrants for metrics calculation`);
+
     // Calculate metrics
     const totalAttendees = participants?.length || 0;
     const totalRegistrants = registrantCount || 0;
@@ -40,7 +44,15 @@ async function updateWebinarMetricsAfterParticipantSync(supabase: any, webinarDb
     const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
     const totalAbsentees = Math.max(0, totalRegistrants - totalAttendees);
 
-    // Update webinar with calculated metrics
+    console.log(`📊 Calculated metrics:`, {
+      totalAttendees,
+      totalRegistrants,
+      totalMinutes,
+      avgDuration,
+      totalAbsentees
+    });
+
+    // Update webinar with calculated metrics - ONLY use the primary columns
     const { error: updateError } = await supabase
       .from('zoom_webinars')
       .update({
@@ -49,8 +61,7 @@ async function updateWebinarMetricsAfterParticipantSync(supabase: any, webinarDb
         total_absentees: totalAbsentees,
         total_minutes: totalMinutes,
         avg_attendance_duration: avgDuration,
-        attendees_count: totalAttendees,
-        registrants_count: totalRegistrants,
+        // Remove duplicate columns - use only the primary ones
         updated_at: new Date().toISOString()
       })
       .eq('id', webinarDbId);
@@ -60,21 +71,21 @@ async function updateWebinarMetricsAfterParticipantSync(supabase: any, webinarDb
       throw updateError;
     }
 
-    console.log(`✅ METRICS UPDATED after participant sync for webinar ${webinarDbId}:`);
-    console.log(`  👥 Attendees: ${totalAttendees}`);
-    console.log(`  📝 Registrants: ${totalRegistrants}`);
+    console.log(`✅ METRICS UPDATED successfully for webinar ${webinarDbId}:`);
+    console.log(`  👥 Total Attendees: ${totalAttendees}`);
+    console.log(`  📝 Total Registrants: ${totalRegistrants}`);
     console.log(`  ⏱️ Total Minutes: ${totalMinutes}`);
     console.log(`  📊 Avg Duration: ${avgDuration}m`);
-    console.log(`  ❌ Absentees: ${totalAbsentees}`);
+    console.log(`  ❌ Total Absentees: ${totalAbsentees}`);
   } catch (error) {
     console.error('❌ Error updating webinar metrics after participant sync:', error);
-    // Don't throw - metrics update failure shouldn't fail the sync
+    // Log the error but don't throw - metrics update failure shouldn't fail the sync
   }
 }
 
 /**
  * Sync participants for a specific webinar with enhanced logging and eligibility checks
- * UPDATED: Now triggers metrics update after successful participant sync
+ * FIXED: Now properly completes sync status and triggers metrics update
  */
 export async function syncWebinarParticipants(
   supabase: any,
@@ -85,28 +96,29 @@ export async function syncWebinarParticipants(
   debugMode = false
 ): Promise<{ count: number; skipped: boolean; reason?: string }> {
   const startTime = Date.now();
-  console.log(`${debugMode ? 'DEBUG: ' : ''}Starting participant sync for webinar ${webinarId}`);
+  console.log(`${debugMode ? 'DEBUG: ' : ''}🚀 Starting participant sync for webinar ${webinarId}`);
   
   try {
     // Enhanced logging: Log sync initiation
     if (debugMode) {
-      console.log(`DEBUG: Sync parameters:`);
-      console.log(`  - webinarId: ${webinarId}`);
-      console.log(`  - webinarDbId: ${webinarDbId}`);
-      console.log(`  - debugMode: ${debugMode}`);
-      console.log(`  - API client type: ${client.constructor.name}`);
-      console.log(`  - Webinar data provided: ${!!webinarData}`);
+      console.log(`DEBUG: Sync parameters:`, {
+        webinarId,
+        webinarDbId,
+        debugMode,
+        hasWebinarData: !!webinarData
+      });
     }
 
     // Update status to indicate sync attempt is starting
     await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'pending');
+    console.log(`📝 Set participant sync status to 'pending' for webinar ${webinarDbId}`);
 
     // Check if webinar is eligible for participant sync
     if (webinarData) {
       const eligibility = isWebinarEligibleForParticipantSync(webinarData, debugMode);
       
       if (!eligibility.eligible) {
-        console.log(`SKIPPING participant sync for webinar ${webinarId}: ${eligibility.reason}`);
+        console.log(`⏭️ SKIPPING participant sync for webinar ${webinarId}: ${eligibility.reason}`);
         
         // Update status to not_applicable for ineligible webinars
         await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'not_applicable', eligibility.reason);
@@ -114,148 +126,90 @@ export async function syncWebinarParticipants(
         // Still update metrics for ineligible webinars (they might have registrants)
         await updateWebinarMetricsAfterParticipantSync(supabase, webinarDbId);
         
-        if (debugMode) {
-          console.log(`DEBUG: Webinar eligibility check failed:`);
-          console.log(`  - Reason: ${eligibility.reason}`);
-          console.log(`  - Webinar data:`, JSON.stringify(webinarData, null, 2));
-        }
-        
         return { count: 0, skipped: true, reason: eligibility.reason };
       } else {
-        console.log(`PROCEEDING with participant sync for webinar ${webinarId} - eligibility confirmed`);
-        
-        if (debugMode) {
-          console.log(`DEBUG: Webinar passed eligibility check`);
-        }
+        console.log(`✅ PROCEEDING with participant sync for webinar ${webinarId} - eligibility confirmed`);
       }
-    } else {
-      console.log(`WARNING: No webinar data provided for eligibility check, proceeding with participant sync for webinar ${webinarId}`);
     }
 
     // Fetch participants from Zoom API with debug mode
-    console.log(`ENHANCED: Initiating participants fetch for webinar ${webinarId}`);
+    console.log(`🔄 Fetching participants from Zoom API for webinar ${webinarId}`);
     const participants = await client.getWebinarParticipants(webinarId, debugMode);
     
     const fetchTime = Date.now() - startTime;
-    console.log(`ENHANCED: Participants fetch completed in ${fetchTime}ms`);
+    console.log(`⏱️ Participants fetch completed in ${fetchTime}ms`);
     
     if (!participants || participants.length === 0) {
-      console.log(`ENHANCED: No participants found for webinar ${webinarId} (${participants ? 'empty array' : 'null/undefined result'})`);
+      console.log(`📭 No participants found for webinar ${webinarId}`);
       
-      // Update status to no_participants for webinars with no participants
+      // Update status to no_participants 
       await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'no_participants', 'No participants found in API response');
       
       // Update metrics even if no participants (might have registrants)
       await updateWebinarMetricsAfterParticipantSync(supabase, webinarDbId);
       
-      if (debugMode) {
-        console.log(`DEBUG: Participants result type: ${typeof participants}`);
-        console.log(`DEBUG: Participants value: ${JSON.stringify(participants)}`);
-      }
-      
       return { count: 0, skipped: false, reason: 'No participants found in API response' };
     }
     
-    console.log(`ENHANCED: Processing ${participants.length} participants for webinar ${webinarId}`);
+    console.log(`📊 Processing ${participants.length} participants for webinar ${webinarId}`);
     
     // Enhanced logging: Log raw API response structure
-    if (debugMode) {
-      console.log(`DEBUG: Raw participants API response analysis:`);
-      console.log(`  - Total participants: ${participants.length}`);
-      console.log(`  - First participant keys: [${Object.keys(participants[0] || {}).join(', ')}]`);
-      console.log(`  - Sample participant data:`, JSON.stringify(participants[0], null, 2));
+    if (debugMode && participants.length > 0) {
+      console.log(`DEBUG: Sample participant data:`, participants[0]);
     }
 
-    // Log detailed transformation for each participant
+    // Transform participants for database
     const transformedParticipants = participants.map((participant, index) => {
-      if (debugMode && index < 3) { // Log first 3 participants in debug mode
-        console.log(`DEBUG: Transforming participant ${index + 1}/${participants.length}:`);
-        console.log(`  - Raw data:`, JSON.stringify(participant, null, 2));
+      if (debugMode && index < 2) {
+        console.log(`DEBUG: Transforming participant ${index + 1}:`, participant);
       }
 
       const transformed = transformParticipantForDatabase(participant, webinarDbId, debugMode);
       
-      if (debugMode && index < 3) {
-        console.log(`  - Transformed data:`, JSON.stringify(transformed, null, 2));
-      }
-
-      const final = {
+      return {
         ...transformed,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-
-      if (debugMode && index < 3) {
-        console.log(`  - Final database payload:`, JSON.stringify(final, null, 2));
-      }
-
-      return final;
     });
     
     const transformTime = Date.now() - startTime - fetchTime;
-    console.log(`ENHANCED: Participant transformation completed in ${transformTime}ms`);
+    console.log(`🔄 Participant transformation completed in ${transformTime}ms`);
 
     // Save to database
+    console.log(`💾 Saving ${transformedParticipants.length} participants to database`);
     const saveResult = await saveParticipantsToDatabase(supabase, transformedParticipants, webinarId, debugMode);
     
     if (!saveResult.success) {
+      console.error(`❌ Failed to save participants: ${saveResult.error?.message}`);
       // Update status to failed if database save fails
       await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'failed', `Failed to save participants: ${saveResult.error?.message}`);
       throw new Error(`Failed to upsert participants: ${saveResult.error?.message}`);
     }
 
-    const insertTime = Date.now() - startTime - fetchTime - transformTime;
-    const totalTime = Date.now() - startTime;
+    console.log(`✅ Successfully saved ${participants.length} participants to database`);
 
-    // Update status to synced on successful completion
-    await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'synced');
+    // CRITICAL: Update status to completed BEFORE metrics update
+    await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'completed');
+    console.log(`📝 Set participant sync status to 'completed' for webinar ${webinarDbId}`);
 
-    // CRITICAL FIX: Update metrics AFTER successful participant sync
+    // CRITICAL: Update metrics AFTER successful participant sync and status update
+    console.log(`📊 Triggering metrics update for webinar ${webinarDbId}`);
     await updateWebinarMetricsAfterParticipantSync(supabase, webinarDbId);
 
-    // Enhanced success logging
-    console.log(`ENHANCED: Participant sync completed successfully for webinar ${webinarId}:`);
-    console.log(`  - Participants processed: ${participants.length}`);
-    console.log(`  - Database records affected: ${saveResult.data?.length || 'unknown'}`);
-    console.log(`  - Fetch time: ${fetchTime}ms`);
-    console.log(`  - Transform time: ${transformTime}ms`);
-    console.log(`  - Insert time: ${insertTime}ms`);
-    console.log(`  - Total time: ${totalTime}ms`);
-    console.log(`  - Metrics updated: YES`);
-
-    if (debugMode) {
-      console.log(`DEBUG: Sync performance metrics:`);
-      console.log(`  - Avg transform time per participant: ${(transformTime / participants.length).toFixed(2)}ms`);
-      console.log(`  - Records per second: ${(participants.length / (totalTime / 1000)).toFixed(2)}`);
-    }
+    const totalTime = Date.now() - startTime;
+    console.log(`🎉 Participant sync completed successfully for webinar ${webinarId} in ${totalTime}ms`);
 
     return { count: participants.length, skipped: false };
     
   } catch (error) {
     const totalTime = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    
+    console.error(`💥 Participant sync failed for webinar ${webinarId} after ${totalTime}ms:`, error);
     
     // Update status to failed on any error
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'failed', errorMessage);
-    
-    console.error(`ENHANCED: Participant sync failed for webinar ${webinarId}:`);
-    console.error(`  - Error type: ${error.constructor.name}`);
-    console.error(`  - Error message: ${error.message}`);
-    console.error(`  - Time spent: ${totalTime}ms`);
-    console.error(`  - Full error:`, {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      type: error.type,
-      status: error.status,
-      details: error.details
-    });
-    
-    if (debugMode) {
-      console.log(`DEBUG: Exception caught in syncWebinarParticipants`);
-      console.log(`DEBUG: Error occurred after ${totalTime}ms`);
-      console.log(`DEBUG: Error object properties:`, Object.getOwnPropertyNames(error));
-    }
     
     throw error;
   }
