@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { SyncStatusMessage } from '@/components/zoom/sync/SyncStatusMessage';
+import { ServiceStatusAlert } from '@/components/zoom/sync/ServiceStatusAlert';
 import { SyncType } from '@/types/zoom';
 
 export function ZoomSyncCard() {
@@ -20,7 +21,8 @@ export function ZoomSyncCard() {
     syncProgress, 
     syncStatus, 
     currentOperation,
-    healthCheck 
+    healthCheck,
+    forceHealthCheck
   } = useZoomSync(connection);
 
   // Get sync statistics
@@ -140,14 +142,10 @@ export function ZoomSyncCard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {healthCheck && !healthCheck.success && (
-          <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-            <div className="flex items-center gap-1">
-              <AlertCircle className="h-3 w-3" />
-              Render sync service unavailable. Please try again later.
-            </div>
-          </div>
-        )}
+        <ServiceStatusAlert 
+          healthCheck={healthCheck}
+          onRefresh={forceHealthCheck}
+        />
 
         <SyncStatusMessage 
           status={currentSyncStatus}
