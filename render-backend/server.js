@@ -144,7 +144,7 @@ console.log('=== REGISTERING API ROUTES ===');
 registerRoute('/', require('./routes/validate-credentials'), 'POST /validate-credentials');
 registerRoute('/', require('./routes/refresh-token'), 'POST /refresh-token');
 registerRoute('/', require('./routes/test-connection'), 'GET /test-connection');
-registerRoute('/', require('./routes/start-sync'), 'POST /start-sync');
+registerRoute('/', require('./routes/start-sync-async'), 'POST /start-sync');
 registerRoute('/', require('./routes/sync-progress'), 'GET /sync-progress/:id');
 registerRoute('/', require('./routes/cancel-sync'), 'POST /cancel-sync/:id');
 registerRoute('/', require('./routes/disconnect'), 'POST /disconnect');

@@ -6,12 +6,15 @@ import { SimpleTokenEncryption } from "./encryption.ts";
 // Types
 interface SyncRequest {
   connectionId: string;
+  syncLogId?: string; // Sync log ID passed from backend
   syncMode?: 'full' | 'delta' | 'smart';
   dateRange?: {
     pastDays?: number;
     futureDays?: number;
   };
   resumeSyncId?: string;
+  syncType?: string;
+  requestId?: string;
 }
 
 interface WebinarQueueItem {
@@ -731,7 +734,7 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { connectionId, syncMode = 'full', dateRange = { pastDays: 90, futureDays: 180 }, resumeSyncId } = await req.json() as SyncRequest;
+    const { connectionId, syncLogId, syncMode = 'full', dateRange = { pastDays: 90, futureDays: 180 }, resumeSyncId, requestId } = await req.json() as SyncRequest;
 
     // Validate connection
     if (!connectionId) {
@@ -759,16 +762,32 @@ serve(async (req) => {
       }
     }
 
-    if (!syncId) {
+    // Use syncLogId if provided from backend, otherwise check for resumeSyncId or create new
+    if (syncLogId) {
+      syncId = syncLogId;
+      console.log(`[SYNC] Using provided sync log ID: ${syncId}`);
+      
+      // Update sync log status to running if needed
+      await supabase
+        .from('zoom_sync_logs')
+        .update({
+          sync_status: 'running',
+          started_at: new Date().toISOString(),
+          metadata: { dateRange, requestId }
+        })
+        .eq('id', syncId);
+        
+      await broadcastProgress(supabase, syncId, 'status', 'Sync process started...', { syncMode, dateRange });
+    } else if (!syncId) {
       // Create new sync log
       const { data: newSync, error: syncError } = await supabase
         .from('zoom_sync_logs')
         .insert({
           connection_id: connectionId,
-          status: 'running',
+          sync_status: 'running',
           started_at: new Date().toISOString(),
           sync_type: syncMode,
-          metadata: { dateRange }
+          metadata: { dateRange, requestId }
         })
         .select()
         .single();
@@ -970,16 +989,19 @@ serve(async (req) => {
     }
 
     // Phase 4: Complete sync
+    const finalProcessedCount = queuedItems ? processedCount : 0;
     await supabase
       .from('zoom_sync_logs')
       .update({
-        status: 'completed',
-        ended_at: new Date().toISOString(),
-        webinars_synced: allWebinars.length,
+        sync_status: 'completed',
+        completed_at: new Date().toISOString(),
+        total_items: allWebinars.length,
+        processed_items: finalProcessedCount,
         metadata: {
           dateRange,
           syncMode,
-          totalWebinars: allWebinars.length
+          totalWebinars: allWebinars.length,
+          requestId
         }
       })
       .eq('id', syncId);

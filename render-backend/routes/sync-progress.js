@@ -1,4 +1,3 @@
-
 const express = require('express');
 const router = express.Router();
 const { supabaseService } = require('../services/supabaseService');
@@ -6,96 +5,157 @@ const { extractUser } = require('../middleware/auth');
 
 router.get('/sync-progress/:syncId', extractUser, async (req, res) => {
   const requestId = req.requestId || Math.random().toString(36).substring(7);
+  const { syncId } = req.params;
   
+  console.log(`📊 [${requestId}] GET /sync-progress/${syncId}`);
+
   try {
-    const { syncId } = req.params;
     const userId = req.userId;
 
-    console.log(`🔍 [${requestId}] Getting sync progress for:`, syncId, 'user:', userId);
+    if (!syncId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing syncId parameter',
+        requestId
+      });
+    }
 
-    // Get sync log and verify ownership through connection
-    const syncLog = await supabaseService.getSyncLog(syncId);
+    // Get sync log with connection info to verify ownership
+    console.log(`🔍 [${requestId}] Fetching sync log...`);
+    const syncLog = await supabaseService.getSyncLogWithConnection(syncId, userId);
     
     if (!syncLog) {
-      console.error(`❌ [${requestId}] Sync log not found: ${syncId}`);
+      console.error(`❌ [${requestId}] Sync log not found or access denied`);
       return res.status(404).json({
         success: false,
-        error: 'Sync operation not found',
+        error: 'Sync log not found or access denied',
         requestId
       });
     }
 
-    const connection = await supabaseService.getZoomConnection(syncLog.connection_id);
-    
-    if (!connection || connection.user_id !== userId) {
-      console.error(`❌ [${requestId}] Access denied to sync operation`);
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied to this sync operation',
-        requestId
-      });
-    }
+    console.log(`✅ [${requestId}] Found sync log:`, {
+      id: syncLog.id,
+      status: syncLog.sync_status,
+      started_at: syncLog.started_at,
+      total_items: syncLog.total_items,
+      processed_items: syncLog.processed_items
+    });
 
     // Calculate progress percentage
-    const totalItems = syncLog.total_items || 0;
-    const processedItems = syncLog.processed_items || 0;
-    const progress = totalItems > 0 ? Math.round((processedItems / totalItems) * 100) : 0;
+    let progress = 0;
+    if (syncLog.total_items > 0) {
+      progress = Math.round((syncLog.processed_items / syncLog.total_items) * 100);
+    } else if (syncLog.sync_status === 'completed') {
+      progress = 100;
+    } else if (syncLog.sync_status === 'running') {
+      // If running but no items yet, show at least 5%
+      progress = 5;
+    }
 
-    // Determine current operation message
+    // Get current operation from metadata or determine from status
     let currentOperation = 'Initializing...';
-    if (syncLog.sync_stage) {
-      switch (syncLog.sync_stage) {
-        case 'authenticating':
-          currentOperation = 'Authenticating with Zoom...';
-          break;
-        case 'fetching_webinars':
-          currentOperation = 'Fetching webinars from Zoom...';
-          break;
-        case 'processing_webinars':
-          currentOperation = `Processing webinars (${processedItems}/${totalItems})`;
-          break;
-        case 'completed':
-          currentOperation = 'Sync completed successfully';
-          break;
-        case 'failed':
-          currentOperation = 'Sync failed';
-          break;
-        default:
-          currentOperation = syncLog.sync_stage;
+    
+    if (syncLog.sync_status === 'completed') {
+      currentOperation = 'Sync completed successfully!';
+    } else if (syncLog.sync_status === 'failed') {
+      currentOperation = 'Sync failed';
+    } else if (syncLog.sync_status === 'cancelled') {
+      currentOperation = 'Sync was cancelled';
+    } else if (syncLog.sync_status === 'running') {
+      if (syncLog.total_items > 0) {
+        currentOperation = `Processing webinars (${syncLog.processed_items}/${syncLog.total_items})`;
+      } else {
+        currentOperation = 'Fetching webinar data...';
       }
     }
 
-    // Handle different sync statuses
-    let status = syncLog.sync_status;
-    if (status === 'pending') {
-      currentOperation = 'Sync queued, starting soon...';
-    } else if (status === 'running' || status === 'in_progress') {
-      status = 'running';
+    // Calculate duration
+    const startTime = new Date(syncLog.started_at);
+    const endTime = syncLog.completed_at ? new Date(syncLog.completed_at) : new Date();
+    const duration = Math.round((endTime - startTime) / 1000); // in seconds
+
+    const response = {
+      success: true,
+      syncId: syncLog.id,
+      status: syncLog.sync_status,
+      progress: progress,
+      currentOperation: currentOperation,
+      totalItems: syncLog.total_items || 0,
+      processedItems: syncLog.processed_items || 0,
+      startedAt: syncLog.started_at,
+      completedAt: syncLog.completed_at,
+      duration: duration,
+      error: syncLog.error_message || null,
+      metadata: syncLog.metadata || {},
+      connectionId: syncLog.connection_id,
+      requestId
+    };
+
+    console.log(`📊 [${requestId}] Returning sync progress:`, {
+      status: response.status,
+      progress: response.progress,
+      currentOperation: response.currentOperation
+    });
+
+    res.json(response);
+
+  } catch (error) {
+    console.error(`💥 [${requestId}] Get sync progress error:`, {
+      message: error.message,
+      stack: process.env.NODE_ENV === 'production' ? 'Hidden in production' : error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+      requestId
+    });
+  }
+});
+
+// Get recent sync logs for a connection
+router.get('/sync-logs/:connectionId', extractUser, async (req, res) => {
+  const requestId = req.requestId || Math.random().toString(36).substring(7);
+  const { connectionId } = req.params;
+  const { limit = 10 } = req.query;
+  
+  console.log(`📜 [${requestId}] GET /sync-logs/${connectionId}`);
+
+  try {
+    const userId = req.userId;
+
+    // Verify connection ownership
+    const connection = await supabaseService.getConnectionById(connectionId, userId);
+    
+    if (!connection) {
+      return res.status(404).json({
+        success: false,
+        error: 'Connection not found or access denied',
+        requestId
+      });
     }
 
-    console.log(`✅ [${requestId}] Returning sync progress: ${progress}% (${status})`);
+    // Get recent sync logs
+    const syncLogs = await supabaseService.getRecentSyncLogs(connectionId, parseInt(limit));
 
-    // Return detailed progress information
+    console.log(`✅ [${requestId}] Found ${syncLogs.length} sync logs`);
+
     res.json({
       success: true,
-      progress: Math.max(0, Math.min(100, syncLog.stage_progress_percentage || progress)),
-      status: status,
-      currentOperation: currentOperation,
-      sync_id: syncId,
-      total_items: totalItems,
-      processed_items: processedItems,
-      started_at: syncLog.started_at,
-      completed_at: syncLog.completed_at,
-      error_message: syncLog.error_message,
-      metadata: syncLog.metadata || {},
+      syncLogs: syncLogs,
+      connectionId: connectionId,
       requestId
     });
 
   } catch (error) {
-    console.error(`💥 [${requestId}] Sync progress error:`, error);
+    console.error(`💥 [${requestId}] Get sync logs error:`, {
+      message: error.message,
+      stack: process.env.NODE_ENV === 'production' ? 'Hidden in production' : error.stack
+    });
+
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to get sync progress',
+      error: error.message || 'Internal server error',
       requestId
     });
   }

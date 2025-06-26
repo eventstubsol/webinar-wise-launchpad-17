@@ -77,11 +77,11 @@ export function useZoomSync(connection: ZoomConnection | null) {
       
       const result = await RenderZoomService.startSync(connection.id, syncType);
       
-      if (result.success) {
+      if (result.success && result.syncId) {
         setSyncState(prev => ({
           ...prev,
           syncStatus: 'running',
-          syncId: result.syncId || null,
+          syncId: result.syncId,
           currentOperation: 'Sync started successfully...'
         }));
 
@@ -90,8 +90,8 @@ export function useZoomSync(connection: ZoomConnection | null) {
           description: result.message || "Webinar sync has been initiated.",
         });
 
-        // Start polling for progress
-        pollSyncProgress(result.syncId || '');
+        // Start polling for progress immediately
+        setTimeout(() => pollSyncProgress(result.syncId), 1000);
 
       } else {
         throw new Error(result.error || 'Failed to start sync');
@@ -185,7 +185,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
             variant: "destructive",
           });
 
-        } else if (result.status === 'running') {
+        } else if (result.status === 'running' || result.status === 'started') {
           // Continue polling
           setTimeout(() => pollSyncProgress(syncId), 2000);
         }

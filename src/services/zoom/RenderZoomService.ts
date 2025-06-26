@@ -138,7 +138,7 @@ class RenderZoomServiceClass {
         method,
         url: `${RENDER_API_BASE_URL}${endpoint}`,
         headers,
-        timeout: endpoint === '/health' ? 10000 : 30000,
+        timeout: endpoint === '/health' ? 10000 : 60000, // Increased timeout to 60 seconds
         ...(data && { data })
       };
 
