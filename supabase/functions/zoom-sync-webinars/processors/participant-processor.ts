@@ -5,7 +5,7 @@ import { transformParticipantForDatabase } from './participant-transformer.ts';
 import { saveParticipantsToDatabase } from './participant-database.ts';
 
 /**
- * Update webinar metrics after participant sync - ENHANCED VERSION
+ * Update webinar metrics after participant sync - ENHANCED VERSION WITH PROPER METRICS CALCULATION
  */
 async function updateWebinarMetricsAfterParticipantSync(supabase: any, webinarDbId: string): Promise<void> {
   try {
@@ -14,7 +14,7 @@ async function updateWebinarMetricsAfterParticipantSync(supabase: any, webinarDb
     // Get participant metrics
     const { data: participants, error: participantsError } = await supabase
       .from('zoom_participants')
-      .select('duration, join_time')
+      .select('duration, join_time, participant_id')
       .eq('webinar_id', webinarDbId);
 
     if (participantsError) {
@@ -37,7 +37,7 @@ async function updateWebinarMetricsAfterParticipantSync(supabase: any, webinarDb
 
     console.log(`📊 Found ${registrantCount || 0} registrants for metrics calculation`);
 
-    // Calculate metrics
+    // Calculate comprehensive metrics
     const totalAttendees = participants?.length || 0;
     const totalRegistrants = registrantCount || 0;
     const totalMinutes = participants?.reduce((sum, p) => sum + (p.duration || 0), 0) || 0;
@@ -52,18 +52,30 @@ async function updateWebinarMetricsAfterParticipantSync(supabase: any, webinarDb
       totalAbsentees
     });
 
-    // Update webinar with calculated metrics - ONLY use the primary columns
+    // Prepare update with all metrics
+    const updates: any = {
+      total_registrants: totalRegistrants,
+      total_attendees: totalAttendees,
+      total_absentees: totalAbsentees,
+      total_minutes: totalMinutes,
+      avg_attendance_duration: avgDuration,
+      updated_at: new Date().toISOString()
+    };
+
+    // Also update participant sync status to reflect completion
+    if (totalAttendees > 0) {
+      updates.participant_sync_status = 'completed';
+      updates.participant_sync_completed_at = new Date().toISOString();
+      updates.participant_sync_error = null;
+    } else if (totalRegistrants > 0 && totalAttendees === 0) {
+      updates.participant_sync_status = 'no_participants';
+      updates.participant_sync_error = 'No participants found for this webinar';
+    }
+
+    // Update webinar with calculated metrics
     const { error: updateError } = await supabase
       .from('zoom_webinars')
-      .update({
-        total_registrants: totalRegistrants,
-        total_attendees: totalAttendees,
-        total_absentees: totalAbsentees,
-        total_minutes: totalMinutes,
-        avg_attendance_duration: avgDuration,
-        // Remove duplicate columns - use only the primary ones
-        updated_at: new Date().toISOString()
-      })
+      .update(updates)
       .eq('id', webinarDbId);
 
     if (updateError) {
@@ -77,6 +89,7 @@ async function updateWebinarMetricsAfterParticipantSync(supabase: any, webinarDb
     console.log(`  ⏱️ Total Minutes: ${totalMinutes}`);
     console.log(`  📊 Avg Duration: ${avgDuration}m`);
     console.log(`  ❌ Total Absentees: ${totalAbsentees}`);
+    console.log(`  ✅ Sync Status: ${updates.participant_sync_status || 'unchanged'}`);
   } catch (error) {
     console.error('❌ Error updating webinar metrics after participant sync:', error);
     // Log the error but don't throw - metrics update failure shouldn't fail the sync
