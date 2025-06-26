@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -97,8 +96,8 @@ export const WebinarRepairDashboard: React.FC = () => {
   const runRepair = async () => {
     setIsRepairing(true);
     try {
-      // Run the metrics recovery process using the mutate function
-      recoverMetrics.mutate();
+      // Run the metrics recovery process using the function directly
+      recoverMetrics();
       
       toast({
         title: "Repair Started",
@@ -168,7 +167,7 @@ export const WebinarRepairDashboard: React.FC = () => {
             </Button>
             
             <Button
-              onClick={() => generateReport.mutate()}
+              onClick={() => generateReport()}
               disabled={isGeneratingReport}
               variant="outline"
               className="flex items-center gap-2"
