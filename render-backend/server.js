@@ -13,14 +13,27 @@ console.log('PORT:', PORT);
 console.log('SUPABASE_URL present:', !!process.env.SUPABASE_URL);
 console.log('SUPABASE_SERVICE_ROLE_KEY present:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
 console.log('SUPABASE_ANON_KEY present:', !!process.env.SUPABASE_ANON_KEY);
+console.log('API_KEY present:', !!process.env.API_KEY);
 
 // Validate required environment variables
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
   console.error('❌ Missing required environment variables:');
-  if (!process.env.SUPABASE_URL) console.error('- SUPABASE_URL');
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) console.error('- SUPABASE_SERVICE_ROLE_KEY');
+  missingVars.forEach(varName => console.error(`- ${varName}`));
   console.error('Please configure these in your Render dashboard under Environment Variables');
   process.exit(1);
+}
+
+// Log authentication configuration
+if (process.env.NODE_ENV === 'production') {
+  console.log('🔒 Production mode: Authentication required');
+  if (!process.env.SUPABASE_ANON_KEY) {
+    console.warn('⚠️ SUPABASE_ANON_KEY not set - JWT verification may fail');
+  }
+} else {
+  console.log('🔓 Development mode: Authentication bypassed');
 }
 
 // Trust proxy for accurate IP addresses
@@ -35,6 +48,10 @@ app.use(express.json({ limit: '10mb' }));
 // Add request logging
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Origin: ${req.get('Origin')}`);
+  console.log('Headers:', {
+    authorization: req.headers.authorization ? `Bearer ${req.headers.authorization.substring(7, 27)}...` : 'none',
+    'x-api-key': req.headers['x-api-key'] ? '[PRESENT]' : 'none'
+  });
   next();
 });
 
@@ -91,6 +108,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Render backend server running on port ${PORT}`);
   console.log(`🌐 CORS enabled for Lovable preview domain`);
   console.log(`📡 Health check available at /health`);
+  console.log(`🔐 Authentication mode: ${process.env.NODE_ENV === 'production' ? 'Production (Required)' : 'Development (Bypassed)'}`);
   
   // Test Supabase connection at startup
   if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
