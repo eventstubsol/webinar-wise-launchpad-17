@@ -1,11 +1,9 @@
-
 const express = require('express');
 const router = express.Router();
 const { supabaseService } = require('../services/supabaseService');
-const { zoomService } = require('../services/zoomService');
-const { authMiddleware, extractUser } = require('../middleware/auth');
+const { extractUser } = require('../middleware/auth');
 
-router.post('/', authMiddleware, extractUser, async (req, res) => {
+router.post('/start-sync', extractUser, async (req, res) => {
   const requestId = req.requestId || Math.random().toString(36).substring(7);
   const startTime = Date.now();
   
@@ -143,6 +141,7 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
     console.log(`🔍 [${requestId}] Testing Zoom API connection...`);
     
     try {
+      const { zoomService } = require('../services/zoomService');
       const isValidToken = await zoomService.validateAccessToken(connection.access_token);
       
       if (!isValidToken) {
@@ -226,6 +225,7 @@ async function refreshServerToServerToken(connection, userId) {
     console.log(`✅ Retrieved credentials for user ${userId}`);
 
     // Get new token using client credentials flow
+    const { zoomService } = require('../services/zoomService');
     const tokenData = await zoomService.getServerToServerToken(
       credentials.client_id,
       credentials.client_secret,
@@ -268,6 +268,7 @@ async function refreshOAuthToken(connection) {
       throw new Error('No refresh token available');
     }
 
+    const { zoomService } = require('../services/zoomService');
     const tokenData = await zoomService.refreshOAuthToken(connection.refresh_token);
     
     // Update connection in database using Service Role

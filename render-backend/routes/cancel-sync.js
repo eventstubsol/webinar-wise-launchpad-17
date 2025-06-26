@@ -2,9 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const { supabaseService } = require('../services/supabaseService');
-const { authMiddleware, extractUser } = require('../middleware/auth');
+const { extractUser } = require('../middleware/auth');
 
-router.post('/cancel-sync/:syncId', authMiddleware, extractUser, async (req, res) => {
+router.post('/cancel-sync/:syncId', extractUser, async (req, res) => {
   const requestId = req.requestId || Math.random().toString(36).substring(7);
   
   try {
