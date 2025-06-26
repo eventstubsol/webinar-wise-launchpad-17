@@ -5,7 +5,76 @@ import { transformParticipantForDatabase } from './participant-transformer.ts';
 import { saveParticipantsToDatabase } from './participant-database.ts';
 
 /**
+ * Update webinar metrics after participant sync
+ */
+async function updateWebinarMetricsAfterParticipantSync(supabase: any, webinarDbId: string): Promise<void> {
+  try {
+    console.log(`📊 UPDATING METRICS after participant sync for webinar: ${webinarDbId}`);
+    
+    // Get participant metrics
+    const { data: participants, error: participantsError } = await supabase
+      .from('zoom_participants')
+      .select('duration, join_time')
+      .eq('webinar_id', webinarDbId);
+
+    if (participantsError) {
+      console.error('❌ Failed to fetch participants for metrics:', participantsError);
+      return;
+    }
+
+    // Get registrant count
+    const { count: registrantCount, error: registrantsError } = await supabase
+      .from('zoom_registrants')
+      .select('*', { count: 'exact', head: true })
+      .eq('webinar_id', webinarDbId);
+
+    if (registrantsError) {
+      console.error('❌ Failed to fetch registrants count:', registrantsError);
+      return;
+    }
+
+    // Calculate metrics
+    const totalAttendees = participants?.length || 0;
+    const totalRegistrants = registrantCount || 0;
+    const totalMinutes = participants?.reduce((sum, p) => sum + (p.duration || 0), 0) || 0;
+    const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
+    const totalAbsentees = Math.max(0, totalRegistrants - totalAttendees);
+
+    // Update webinar with calculated metrics
+    const { error: updateError } = await supabase
+      .from('zoom_webinars')
+      .update({
+        total_registrants: totalRegistrants,
+        total_attendees: totalAttendees,
+        total_absentees: totalAbsentees,
+        total_minutes: totalMinutes,
+        avg_attendance_duration: avgDuration,
+        attendees_count: totalAttendees,
+        registrants_count: totalRegistrants,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', webinarDbId);
+
+    if (updateError) {
+      console.error('❌ Failed to update webinar metrics:', updateError);
+      throw updateError;
+    }
+
+    console.log(`✅ METRICS UPDATED after participant sync for webinar ${webinarDbId}:`);
+    console.log(`  👥 Attendees: ${totalAttendees}`);
+    console.log(`  📝 Registrants: ${totalRegistrants}`);
+    console.log(`  ⏱️ Total Minutes: ${totalMinutes}`);
+    console.log(`  📊 Avg Duration: ${avgDuration}m`);
+    console.log(`  ❌ Absentees: ${totalAbsentees}`);
+  } catch (error) {
+    console.error('❌ Error updating webinar metrics after participant sync:', error);
+    // Don't throw - metrics update failure shouldn't fail the sync
+  }
+}
+
+/**
  * Sync participants for a specific webinar with enhanced logging and eligibility checks
+ * UPDATED: Now triggers metrics update after successful participant sync
  */
 export async function syncWebinarParticipants(
   supabase: any,
@@ -42,6 +111,9 @@ export async function syncWebinarParticipants(
         // Update status to not_applicable for ineligible webinars
         await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'not_applicable', eligibility.reason);
         
+        // Still update metrics for ineligible webinars (they might have registrants)
+        await updateWebinarMetricsAfterParticipantSync(supabase, webinarDbId);
+        
         if (debugMode) {
           console.log(`DEBUG: Webinar eligibility check failed:`);
           console.log(`  - Reason: ${eligibility.reason}`);
@@ -72,6 +144,9 @@ export async function syncWebinarParticipants(
       
       // Update status to no_participants for webinars with no participants
       await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'no_participants', 'No participants found in API response');
+      
+      // Update metrics even if no participants (might have registrants)
+      await updateWebinarMetricsAfterParticipantSync(supabase, webinarDbId);
       
       if (debugMode) {
         console.log(`DEBUG: Participants result type: ${typeof participants}`);
@@ -135,6 +210,9 @@ export async function syncWebinarParticipants(
     // Update status to synced on successful completion
     await updateWebinarParticipantSyncStatus(supabase, webinarDbId, 'synced');
 
+    // CRITICAL FIX: Update metrics AFTER successful participant sync
+    await updateWebinarMetricsAfterParticipantSync(supabase, webinarDbId);
+
     // Enhanced success logging
     console.log(`ENHANCED: Participant sync completed successfully for webinar ${webinarId}:`);
     console.log(`  - Participants processed: ${participants.length}`);
@@ -143,6 +221,7 @@ export async function syncWebinarParticipants(
     console.log(`  - Transform time: ${transformTime}ms`);
     console.log(`  - Insert time: ${insertTime}ms`);
     console.log(`  - Total time: ${totalTime}ms`);
+    console.log(`  - Metrics updated: YES`);
 
     if (debugMode) {
       console.log(`DEBUG: Sync performance metrics:`);

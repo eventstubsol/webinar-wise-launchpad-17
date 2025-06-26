@@ -204,76 +204,8 @@ function extractEnhancedSettings(apiSettings: any, fullApiResponse: any): any {
 }
 
 /**
- * Update webinar metrics after syncing participants and registrants
- */
-async function updateWebinarMetrics(supabase: any, webinarDbId: string): Promise<void> {
-  try {
-    console.log(`📊 UPDATING METRICS for webinar: ${webinarDbId}`);
-    
-    // Get participant metrics
-    const { data: participants, error: participantsError } = await supabase
-      .from('zoom_participants')
-      .select('duration, join_time')
-      .eq('webinar_id', webinarDbId);
-
-    if (participantsError) {
-      console.error('❌ Failed to fetch participants for metrics:', participantsError);
-      return;
-    }
-
-    // Get registrant count
-    const { count: registrantCount, error: registrantsError } = await supabase
-      .from('zoom_registrants')
-      .select('*', { count: 'exact', head: true })
-      .eq('webinar_id', webinarDbId);
-
-    if (registrantsError) {
-      console.error('❌ Failed to fetch registrants count:', registrantsError);
-      return;
-    }
-
-    // Calculate metrics
-    const totalAttendees = participants?.length || 0;
-    const totalRegistrants = registrantCount || 0;
-    const totalMinutes = participants?.reduce((sum, p) => sum + (p.duration || 0), 0) || 0;
-    const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
-    const totalAbsentees = Math.max(0, totalRegistrants - totalAttendees);
-
-    // Update webinar with calculated metrics
-    const { error: updateError } = await supabase
-      .from('zoom_webinars')
-      .update({
-        total_registrants: totalRegistrants,
-        total_attendees: totalAttendees,
-        total_absentees: totalAbsentees,
-        total_minutes: totalMinutes,
-        avg_attendance_duration: avgDuration,
-        attendees_count: totalAttendees,
-        registrants_count: totalRegistrants,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', webinarDbId);
-
-    if (updateError) {
-      console.error('❌ Failed to update webinar metrics:', updateError);
-      throw updateError;
-    }
-
-    console.log(`✅ METRICS UPDATED for webinar ${webinarDbId}:`);
-    console.log(`  👥 Attendees: ${totalAttendees}`);
-    console.log(`  📝 Registrants: ${totalRegistrants}`);
-    console.log(`  ⏱️ Total Minutes: ${totalMinutes}`);
-    console.log(`  📊 Avg Duration: ${avgDuration}m`);
-    console.log(`  ❌ Absentees: ${totalAbsentees}`);
-  } catch (error) {
-    console.error('❌ Error updating webinar metrics:', error);
-    throw error;
-  }
-}
-
-/**
  * FIXED: Enhanced sync with comprehensive error handling and proper status management
- * Now includes automatic metrics update after successful sync
+ * REMOVED: Automatic metrics update - will be handled after participant/registrant sync
  */
 export async function syncBasicWebinarData(
   supabase: any,
@@ -340,14 +272,6 @@ export async function syncBasicWebinarData(
       throw new Error(`Database operation failed: ${dbError.message}`);
     }
 
-    // Step 5: Update metrics after successful webinar sync (NEW)
-    try {
-      await updateWebinarMetrics(supabase, webinarRecord.id);
-    } catch (metricsError) {
-      console.error(`⚠️ METRICS UPDATE FAILED for webinar ${webinarData.id}:`, metricsError);
-      // Don't fail the entire sync if metrics update fails
-    }
-
     const duration = Date.now() - startTime;
     const operationType = existingWebinar ? 'UPDATE' : 'INSERT';
     
@@ -357,7 +281,7 @@ export async function syncBasicWebinarData(
     console.log(`  🔄 Operation: ${operationType}`);
     console.log(`  ⏱️ Duration: ${duration}ms`);
     console.log(`  📊 Data integrity: ${existingWebinar ? 'PRESERVED calculated fields' : 'NEW record with complete field mapping'}`);
-    console.log(`  📈 Metrics: UPDATED automatically`);
+    console.log(`  📈 Metrics: Will be updated after participant/registrant sync`);
 
     return webinarRecord.id;
     
@@ -371,17 +295,18 @@ export async function syncBasicWebinarData(
 }
 
 /**
- * Batch update metrics for webinars after complete sync
+ * NEW: Batch update metrics for webinars that have completed participant/registrant sync
  */
-export async function batchUpdateWebinarMetrics(supabase: any, connectionId: string): Promise<void> {
+export async function batchUpdateWebinarMetricsAfterSync(supabase: any, connectionId: string): Promise<void> {
   try {
     console.log(`🔄 BATCH METRICS UPDATE: Starting for connection ${connectionId}`);
     
-    // Find webinars with zero or null attendee counts
+    // Find webinars that have completed sync but have zero/null metrics
     const { data: webinars, error } = await supabase
       .from('zoom_webinars')
-      .select('id')
+      .select('id, webinar_id, participant_sync_status')
       .eq('connection_id', connectionId)
+      .in('participant_sync_status', ['synced', 'no_participants', 'not_applicable'])
       .or('total_attendees.is.null,total_attendees.eq.0');
 
     if (error) {
@@ -411,5 +336,73 @@ export async function batchUpdateWebinarMetrics(supabase: any, connectionId: str
     console.log(`✅ BATCH METRICS UPDATE COMPLETED: ${updatedCount}/${webinars.length} webinars updated`);
   } catch (error) {
     console.error('❌ Error in batch metrics update:', error);
+  }
+}
+
+/**
+ * Update webinar metrics after syncing participants and registrants
+ */
+async function updateWebinarMetrics(supabase: any, webinarDbId: string): Promise<void> {
+  try {
+    console.log(`📊 UPDATING METRICS for webinar: ${webinarDbId}`);
+    
+    // Get participant metrics
+    const { data: participants, error: participantsError } = await supabase
+      .from('zoom_participants')
+      .select('duration, join_time')
+      .eq('webinar_id', webinarDbId);
+
+    if (participantsError) {
+      console.error('❌ Failed to fetch participants for metrics:', participantsError);
+      return;
+    }
+
+    // Get registrant count
+    const { count: registrantCount, error: registrantsError } = await supabase
+      .from('zoom_registrants')
+      .select('*', { count: 'exact', head: true })
+      .eq('webinar_id', webinarDbId);
+
+    if (registrantsError) {
+      console.error('❌ Failed to fetch registrants count:', registrantsError);
+      return;
+    }
+
+    // Calculate metrics
+    const totalAttendees = participants?.length || 0;
+    const totalRegistrants = registrantCount || 0;
+    const totalMinutes = participants?.reduce((sum, p) => sum + (p.duration || 0), 0) || 0;
+    const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
+    const totalAbsentees = Math.max(0, totalRegistrants - totalAttendees);
+
+    // Update webinar with calculated metrics
+    const { error: updateError } = await supabase
+      .from('zoom_webinars')
+      .update({
+        total_registrants: totalRegistrants,
+        total_attendees: totalAttendees,
+        total_absentees: totalAbsentees,
+        total_minutes: totalMinutes,
+        avg_attendance_duration: avgDuration,
+        attendees_count: totalAttendees,
+        registrants_count: totalRegistrants,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', webinarDbId);
+
+    if (updateError) {
+      console.error('❌ Failed to update webinar metrics:', updateError);
+      throw updateError;
+    }
+
+    console.log(`✅ METRICS UPDATED for webinar ${webinarDbId}:`);
+    console.log(`  👥 Attendees: ${totalAttendees}`);
+    console.log(`  📝 Registrants: ${totalRegistrants}`);
+    console.log(`  ⏱️ Total Minutes: ${totalMinutes}`);
+    console.log(`  📊 Avg Duration: ${avgDuration}m`);
+    console.log(`  ❌ Absentees: ${totalAbsentees}`);
+  } catch (error) {
+    console.error('❌ Error updating webinar metrics:', error);
+    throw error;
   }
 }

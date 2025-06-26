@@ -77,7 +77,15 @@ export default function SyncCenter() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { connection, isConnected } = useZoomConnection();
-  const { updateMetrics, isUpdating } = useWebinarMetricsUpdate();
+  const { 
+    updateMetrics, 
+    isUpdating,
+    recoverMetrics,
+    isRecovering,
+    generateReport,
+    isGeneratingReport,
+    recoveryReport
+  } = useWebinarMetricsUpdate();
   const [activeTab, setActiveTab] = useState('overview');
 
   // Fetch sync logs with enhanced details
@@ -240,6 +248,20 @@ export default function SyncCenter() {
     }
   };
 
+  // Handle metrics recovery
+  const handleRecoverMetrics = () => {
+    if (connection?.id) {
+      recoverMetrics(connection.id);
+    }
+  };
+
+  // Handle report generation
+  const handleGenerateReport = () => {
+    if (connection?.id) {
+      generateReport(connection.id);
+    }
+  };
+
   if (!isConnected) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -330,7 +352,7 @@ export default function SyncCenter() {
             </Card>
           </div>
 
-          {/* Metrics Update Section */}
+          {/* Enhanced Metrics Management Section */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -338,34 +360,112 @@ export default function SyncCenter() {
                 Webinar Metrics Management
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Update missing metrics for webinars (total attendees, registrants, duration, etc.)
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Standard Update */}
+                <div className="flex flex-col space-y-2">
+                  <h4 className="font-medium">Standard Update</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Update metrics for webinars with zero attendees
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    This will recalculate metrics for webinars that show zero attendees or missing data.
-                  </p>
+                  <Button 
+                    onClick={handleUpdateMetrics}
+                    disabled={isUpdating}
+                    size="sm"
+                  >
+                    {isUpdating ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <Calculator className="h-4 w-4 mr-2" />
+                        Update Metrics
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <Button 
-                  onClick={handleUpdateMetrics}
-                  disabled={isUpdating}
-                  className="flex items-center gap-2"
-                >
-                  {isUpdating ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Calculator className="h-4 w-4" />
-                      Update Metrics
-                    </>
-                  )}
-                </Button>
+
+                {/* Recovery Process */}
+                <div className="flex flex-col space-y-2">
+                  <h4 className="font-medium">Smart Recovery</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Fix webinars with participant data but zero metrics
+                  </p>
+                  <Button 
+                    onClick={handleRecoverMetrics}
+                    disabled={isRecovering}
+                    variant="outline"
+                    size="sm"
+                  >
+                    {isRecovering ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Recovering...
+                      </>
+                    ) : (
+                      <>
+                        <Settings className="h-4 w-4 mr-2" />
+                        Recover Metrics
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Diagnostics */}
+                <div className="flex flex-col space-y-2">
+                  <h4 className="font-medium">Diagnostics</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Generate detailed metrics analysis report
+                  </p>
+                  <Button 
+                    onClick={handleGenerateReport}
+                    disabled={isGeneratingReport}
+                    variant="outline"
+                    size="sm"
+                  >
+                    {isGeneratingReport ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <Activity className="h-4 w-4 mr-2" />
+                        Generate Report
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
+
+              {/* Recovery Report */}
+              {recoveryReport && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                  <h4 className="font-medium mb-2">Recovery Results</h4>
+                  <div className="text-sm space-y-1">
+                    <p>✅ Fixed: {recoveryReport.totalFixed} webinars</p>
+                    {recoveryReport.errors.length > 0 && (
+                      <p>❌ Errors: {recoveryReport.errors.length}</p>
+                    )}
+                  </div>
+                  {recoveryReport.errors.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-sm text-red-600">
+                        View Errors ({recoveryReport.errors.length})
+                      </summary>
+                      <div className="mt-2 max-h-40 overflow-y-auto">
+                        {recoveryReport.errors.map((error: string, index: number) => (
+                          <div key={index} className="text-xs text-red-600 py-1 border-b">
+                            {error}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
