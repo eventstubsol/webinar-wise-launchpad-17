@@ -335,6 +335,75 @@ class SupabaseService {
       throw error;
     }
   }
+
+  // NEW METHOD: Get sync log by ID
+  async getSyncLog(syncLogId) {
+    const queryId = Math.random().toString(36).substring(7);
+    console.log(`🔍 [${queryId}] Getting sync log ${syncLogId} with Service Role`);
+    
+    try {
+      const { data, error } = await this.serviceClient
+        .from('zoom_sync_logs')
+        .select('*')
+        .eq('id', syncLogId)
+        .single();
+
+      if (error) {
+        console.error(`❌ [${queryId}] Error fetching sync log:`, {
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        return null;
+      }
+
+      console.log(`✅ [${queryId}] Sync log found:`, {
+        id: data.id,
+        status: data.sync_status,
+        connection_id: data.connection_id
+      });
+
+      return data;
+    } catch (error) {
+      console.error(`💥 [${queryId}] Exception fetching sync log:`, error);
+      return null;
+    }
+  }
+
+  // NEW METHOD: Get zoom connection by ID (without user validation)
+  async getZoomConnection(connectionId) {
+    const queryId = Math.random().toString(36).substring(7);
+    console.log(`🔍 [${queryId}] Getting zoom connection ${connectionId} with Service Role`);
+    
+    try {
+      const { data, error } = await this.serviceClient
+        .from('zoom_connections')
+        .select('*')
+        .eq('id', connectionId)
+        .single();
+
+      if (error) {
+        console.error(`❌ [${queryId}] Error fetching zoom connection:`, {
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        return null;
+      }
+
+      console.log(`✅ [${queryId}] Zoom connection found:`, {
+        id: data.id,
+        user_id: data.user_id,
+        status: data.connection_status,
+        type: data.connection_type
+      });
+
+      return data;
+    } catch (error) {
+      console.error(`💥 [${queryId}] Exception fetching zoom connection:`, error);
+      return null;
+    }
+  }
 }
 
 // Create singleton instance with enhanced error handling and detailed logging
@@ -380,6 +449,13 @@ try {
       throw new Error(`Supabase service not initialized: ${initError.message}`);
     },
     updateSyncLog: async () => {
+      throw new Error(`Supabase service not initialized: ${initError.message}`);
+    },
+    // NEW METHODS: Add to fallback dummy service
+    getSyncLog: async () => {
+      throw new Error(`Supabase service not initialized: ${initError.message}`);
+    },
+    getZoomConnection: async () => {
       throw new Error(`Supabase service not initialized: ${initError.message}`);
     }
   };
