@@ -30,10 +30,18 @@ class SupabaseService {
           headers: {
             'X-Client-Info': 'webinar-wise-render-backend'
           }
+        },
+        // Explicitly configure Service Role to bypass RLS
+        db: {
+          schema: 'public'
         }
       });
 
-      console.log('✅ Supabase service initialized successfully');
+      // Set the client to use service role context explicitly
+      this.client.rest.headers['Authorization'] = `Bearer ${this.supabaseServiceKey}`;
+      this.client.rest.headers['apikey'] = this.supabaseServiceKey;
+
+      console.log('✅ Supabase service initialized successfully with Service Role bypass');
     } catch (initError) {
       console.error('❌ Failed to initialize Supabase client:', initError);
       throw new Error(`Failed to initialize Supabase client: ${initError.message}`);
@@ -42,7 +50,7 @@ class SupabaseService {
 
   async testConnection() {
     const testId = Math.random().toString(36).substring(7);
-    console.log(`🔍 [${testId}] Testing Supabase connection...`);
+    console.log(`🔍 [${testId}] Testing Supabase connection with Service Role...`);
     
     try {
       // Test with a simple query to zoom_connections table
@@ -74,6 +82,7 @@ class SupabaseService {
     console.log(`🔍 [${queryId}] Getting connection ${connectionId} for user ${userId}`);
     
     try {
+      // Use Service Role to bypass RLS - query without RLS restrictions
       const { data, error } = await this.client
         .from('zoom_connections')
         .select('*')
@@ -99,6 +108,69 @@ class SupabaseService {
       return data;
     } catch (error) {
       console.error(`💥 [${queryId}] Exception fetching connection:`, error);
+      return null;
+    }
+  }
+
+  // New method to get credentials with Service Role bypass
+  async getCredentialsByUserId(userId) {
+    const queryId = Math.random().toString(36).substring(7);
+    console.log(`🔍 [${queryId}] Getting credentials for user ${userId} with Service Role`);
+    
+    try {
+      const { data, error } = await this.client
+        .from('zoom_credentials')
+        .select('client_id, client_secret, account_id')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .single();
+
+      if (error) {
+        console.error(`❌ [${queryId}] Error fetching credentials:`, {
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        return null;
+      }
+
+      console.log(`✅ [${queryId}] Credentials found for user`);
+      return data;
+    } catch (error) {
+      console.error(`💥 [${queryId}] Exception fetching credentials:`, error);
+      return null;
+    }
+  }
+
+  // New method to update connection with Service Role bypass
+  async updateConnection(connectionId, updates) {
+    const updateId = Math.random().toString(36).substring(7);
+    console.log(`🔄 [${updateId}] Updating connection ${connectionId} with Service Role`);
+    
+    try {
+      const { data, error } = await this.client
+        .from('zoom_connections')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', connectionId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error(`❌ [${updateId}] Error updating connection:`, {
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        return null;
+      }
+
+      console.log(`✅ [${updateId}] Connection updated successfully`);
+      return data;
+    } catch (error) {
+      console.error(`💥 [${updateId}] Exception updating connection:`, error);
       return null;
     }
   }
@@ -185,6 +257,12 @@ try {
       return false;
     },
     getConnectionById: async () => {
+      throw new Error('Supabase service not initialized');
+    },
+    getCredentialsByUserId: async () => {
+      throw new Error('Supabase service not initialized');
+    },
+    updateConnection: async () => {
       throw new Error('Supabase service not initialized');
     },
     createSyncLog: async () => {

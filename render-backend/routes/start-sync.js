@@ -27,8 +27,8 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
 
     console.log(`🔄 [${requestId}] Starting sync for user ${userId}, connection ${connection_id}`);
 
-    // Get and verify connection ownership
-    console.log(`🔍 [${requestId}] Verifying connection ownership...`);
+    // Get and verify connection ownership using Service Role
+    console.log(`🔍 [${requestId}] Verifying connection ownership with Service Role...`);
     const connection = await supabaseService.getConnectionById(connection_id, userId);
     
     if (!connection) {
@@ -70,7 +70,7 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
         if (!refreshResult.success) {
           console.log(`❌ [${requestId}] Token refresh failed:`, refreshResult.error);
           
-          // Update connection status to expired
+          // Update connection status to expired using Service Role
           await updateConnectionStatus(connection_id, 'expired', refreshResult.error);
           
           return res.status(401).json({
@@ -104,8 +104,8 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
       }
     }
 
-    // Create sync log
-    console.log(`📝 [${requestId}] Creating sync log...`);
+    // Create sync log using Service Role
+    console.log(`📝 [${requestId}] Creating sync log with Service Role...`);
     const syncLog = await supabaseService.createSyncLog(connection_id, sync_type);
     console.log(`✅ [${requestId}] Created sync log:`, syncLog.id);
 
@@ -178,20 +178,19 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
   }
 });
 
-// Helper function to refresh server-to-server token
+// Helper function to refresh server-to-server token using Service Role
 async function refreshServerToServerToken(connection, userId) {
   try {
-    // Get user's Zoom credentials
-    const { data: credentials, error } = await supabaseService.client
-      .from('zoom_credentials')
-      .select('client_id, client_secret, account_id')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .single();
+    console.log(`🔄 Getting user credentials with Service Role for user: ${userId}`);
+    
+    // Use the new Service Role method to get credentials
+    const credentials = await supabaseService.getCredentialsByUserId(userId);
 
-    if (error || !credentials) {
+    if (!credentials) {
       throw new Error('No active Zoom credentials found for user');
     }
+
+    console.log(`✅ Retrieved credentials for user ${userId}`);
 
     // Get new token using client credentials flow
     const tokenData = await zoomService.getServerToServerToken(
@@ -200,22 +199,20 @@ async function refreshServerToServerToken(connection, userId) {
       credentials.account_id
     );
 
-    // Update connection in database
+    // Update connection in database using Service Role
     const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
     
-    const { error: updateError } = await supabaseService.client
-      .from('zoom_connections')
-      .update({
-        access_token: tokenData.access_token,
-        token_expires_at: newExpiresAt,
-        connection_status: 'active',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', connection.id);
+    const updatedConnection = await supabaseService.updateConnection(connection.id, {
+      access_token: tokenData.access_token,
+      token_expires_at: newExpiresAt,
+      connection_status: 'active'
+    });
 
-    if (updateError) {
-      throw new Error(`Failed to update connection: ${updateError.message}`);
+    if (!updatedConnection) {
+      throw new Error('Failed to update connection with new token');
     }
+
+    console.log(`✅ Connection updated with new token`);
 
     return {
       success: true,
@@ -232,7 +229,7 @@ async function refreshServerToServerToken(connection, userId) {
   }
 }
 
-// Helper function to refresh OAuth token
+// Helper function to refresh OAuth token using Service Role
 async function refreshOAuthToken(connection) {
   try {
     if (!connection.refresh_token) {
@@ -241,22 +238,18 @@ async function refreshOAuthToken(connection) {
 
     const tokenData = await zoomService.refreshOAuthToken(connection.refresh_token);
     
-    // Update connection in database
+    // Update connection in database using Service Role
     const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
     
-    const { error: updateError } = await supabaseService.client
-      .from('zoom_connections')
-      .update({
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token || connection.refresh_token,
-        token_expires_at: newExpiresAt,
-        connection_status: 'active',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', connection.id);
+    const updatedConnection = await supabaseService.updateConnection(connection.id, {
+      access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token || connection.refresh_token,
+      token_expires_at: newExpiresAt,
+      connection_status: 'active'
+    });
 
-    if (updateError) {
-      throw new Error(`Failed to update connection: ${updateError.message}`);
+    if (!updatedConnection) {
+      throw new Error('Failed to update connection with refreshed token');
     }
 
     return {
@@ -274,22 +267,19 @@ async function refreshOAuthToken(connection) {
   }
 }
 
-// Helper function to update connection status
+// Helper function to update connection status using Service Role
 async function updateConnectionStatus(connectionId, status, errorMessage = null) {
   try {
     const updateData = {
-      connection_status: status,
-      updated_at: new Date().toISOString()
+      connection_status: status
     };
 
     if (errorMessage) {
       updateData.error_message = errorMessage;
     }
 
-    await supabaseService.client
-      .from('zoom_connections')
-      .update(updateData)
-      .eq('id', connectionId);
+    await supabaseService.updateConnection(connectionId, updateData);
+    console.log(`✅ Updated connection ${connectionId} status to ${status}`);
 
   } catch (error) {
     console.error('Failed to update connection status:', error);
