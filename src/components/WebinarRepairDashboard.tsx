@@ -97,8 +97,8 @@ export const WebinarRepairDashboard: React.FC = () => {
   const runRepair = async () => {
     setIsRepairing(true);
     try {
-      // Run the metrics recovery process
-      recoverMetrics();
+      // Run the metrics recovery process using the mutate function
+      recoverMetrics.mutate();
       
       toast({
         title: "Repair Started",
@@ -168,7 +168,7 @@ export const WebinarRepairDashboard: React.FC = () => {
             </Button>
             
             <Button
-              onClick={() => generateReport()}
+              onClick={() => generateReport.mutate()}
               disabled={isGeneratingReport}
               variant="outline"
               className="flex items-center gap-2"
