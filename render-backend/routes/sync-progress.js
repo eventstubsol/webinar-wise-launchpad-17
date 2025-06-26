@@ -1,32 +1,38 @@
 
 const express = require('express');
 const router = express.Router();
-const supabaseService = require('../services/supabaseService');
-const { authMiddleware, extractUser } = require('../middleware/auth');
+const { supabaseService } = require('../services/supabaseService');
+const { extractUser } = require('../middleware/auth');
 
-router.get('/:syncId', authMiddleware, extractUser, async (req, res) => {
+router.get('/sync-progress/:syncId', extractUser, async (req, res) => {
+  const requestId = req.requestId || Math.random().toString(36).substring(7);
+  
   try {
     const { syncId } = req.params;
     const userId = req.userId;
 
-    console.log('Getting sync progress for:', syncId, 'user:', userId);
+    console.log(`🔍 [${requestId}] Getting sync progress for:`, syncId, 'user:', userId);
 
     // Get sync log and verify ownership through connection
     const syncLog = await supabaseService.getSyncLog(syncId);
     
     if (!syncLog) {
+      console.error(`❌ [${requestId}] Sync log not found: ${syncId}`);
       return res.status(404).json({
         success: false,
-        error: 'Sync operation not found'
+        error: 'Sync operation not found',
+        requestId
       });
     }
 
     const connection = await supabaseService.getZoomConnection(syncLog.connection_id);
     
-    if (connection.user_id !== userId) {
+    if (!connection || connection.user_id !== userId) {
+      console.error(`❌ [${requestId}] Access denied to sync operation`);
       return res.status(403).json({
         success: false,
-        error: 'Access denied to this sync operation'
+        error: 'Access denied to this sync operation',
+        requestId
       });
     }
 
@@ -67,6 +73,8 @@ router.get('/:syncId', authMiddleware, extractUser, async (req, res) => {
       status = 'running';
     }
 
+    console.log(`✅ [${requestId}] Returning sync progress: ${progress}% (${status})`);
+
     // Return detailed progress information
     res.json({
       success: true,
@@ -79,14 +87,16 @@ router.get('/:syncId', authMiddleware, extractUser, async (req, res) => {
       started_at: syncLog.started_at,
       completed_at: syncLog.completed_at,
       error_message: syncLog.error_message,
-      metadata: syncLog.metadata || {}
+      metadata: syncLog.metadata || {},
+      requestId
     });
 
   } catch (error) {
-    console.error('Sync progress error:', error);
+    console.error(`💥 [${requestId}] Sync progress error:`, error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to get sync progress'
+      error: error.message || 'Failed to get sync progress',
+      requestId
     });
   }
 });
