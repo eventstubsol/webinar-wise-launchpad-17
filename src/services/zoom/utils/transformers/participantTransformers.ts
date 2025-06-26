@@ -49,7 +49,7 @@ export class ParticipantTransformers {
     };
 
     // Group by participant email to analyze session patterns
-    const participantSessions = participants.reduce((acc, p) => {
+    const participantSessions: Record<string, any[]> = participants.reduce((acc, p) => {
       if (p.participant_email) {
         if (!acc[p.participant_email]) {
           acc[p.participant_email] = [];
@@ -60,11 +60,11 @@ export class ParticipantTransformers {
     }, {} as Record<string, any[]>);
 
     // Calculate session statistics
-    const sessionCounts = Object.values(participantSessions).map(sessions => sessions.length);
+    const sessionCounts: number[] = Object.values(participantSessions).map((sessions: any[]) => sessions.length);
     sessionAnalysis.avgSessionsPerParticipant = sessionCounts.length > 0 
       ? sessionCounts.reduce((sum, count) => sum + count, 0) / sessionCounts.length 
       : 0;
-    sessionAnalysis.maxSessionsPerParticipant = Math.max(...sessionCounts, 0);
+    sessionAnalysis.maxSessionsPerParticipant = sessionCounts.length > 0 ? Math.max(...sessionCounts) : 0;
 
     return sessionAnalysis;
   }
