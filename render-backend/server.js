@@ -1,7 +1,7 @@
 
 const express = require('express');
 const corsMiddleware = require('./middleware/corsMiddleware');
-const authMiddleware = require('./middleware/auth');
+const { authMiddleware } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
