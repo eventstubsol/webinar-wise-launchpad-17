@@ -1,3 +1,4 @@
+
 const { createClient } = require('@supabase/supabase-js');
 
 class SupabaseService {
@@ -148,12 +149,19 @@ class SupabaseService {
         // Ensure name is trimmed and valid
         participant.name = participant.name.trim();
         
-        // Log participant data for debugging
-        console.log(`🔍 Validating participant ${index + 1}: name="${participant.name}", id="${participant.participant_id}"`);
+        // Enhanced session tracking - generate participant_session_id if not present
+        if (!participant.participant_session_id && participant.participant_email && participant.join_time) {
+          participant.participant_session_id = `${participant.participant_email}_${new Date(participant.join_time).getTime() / 1000}`;
+        }
         
-        // Return validated participant with timestamps
+        // Log participant data for debugging
+        console.log(`🔍 Validating participant ${index + 1}: name="${participant.name}", id="${participant.participant_id}", session_id="${participant.participant_session_id}"`);
+        
+        // Return validated participant with timestamps and session defaults
         return {
           ...participant,
+          session_sequence: participant.session_sequence || 1,
+          is_rejoin_session: participant.is_rejoin_session || false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -166,13 +174,13 @@ class SupabaseService {
         throw new Error(`Data validation failed: ${invalidParticipants.length} participants have invalid names after validation`);
       }
 
-      console.log(`✅ All ${validatedParticipants.length} participants passed validation`);
+      console.log(`✅ All ${validatedParticipants.length} participants passed validation with session tracking`);
 
-      // Attempt database insertion with enhanced error handling
+      // Attempt database insertion with enhanced error handling and session tracking
       const { data, error } = await this.supabase
         .from('zoom_participants')
         .upsert(validatedParticipants, { 
-          onConflict: 'webinar_id,participant_id',
+          onConflict: 'webinar_id,participant_email,join_time',
           ignoreDuplicates: false 
         });
 
@@ -182,22 +190,23 @@ class SupabaseService {
         console.error('❌ Sample participant data causing error:');
         console.error(JSON.stringify(validatedParticipants.slice(0, 2), null, 2));
         
-        // Enhanced error message for debugging
-        if (error.message.includes('not-null constraint')) {
+        // Enhanced error message for debugging session tracking
+        if (error.message.includes('unique constraint')) {
+          console.error('❌ Unique constraint violation - this suggests duplicate participant sessions');
           const problematicFields = validatedParticipants.map((p, i) => ({
             index: i,
             name: p.name,
-            hasName: !!p.name,
-            nameType: typeof p.name,
-            nameLength: p.name ? p.name.length : 0
+            email: p.participant_email,
+            join_time: p.join_time,
+            session_id: p.participant_session_id
           }));
-          console.error('❌ Participant name analysis:', problematicFields);
+          console.error('❌ Participant session analysis:', problematicFields);
         }
         
         throw new Error(`Failed to store participants: ${error.message}`);
       }
 
-      console.log(`✅ Successfully stored ${participantData.length} participants in database`);
+      console.log(`✅ Successfully stored ${participantData.length} participants with session tracking in database`);
       return data;
     } catch (error) {
       console.error('❌ Failed to store participants - Full error details:', error);
@@ -285,14 +294,18 @@ class SupabaseService {
 
   async getParticipantMetrics(webinarId) {
     try {
-      const { data, error } = await this.supabase.rpc('get_participant_metrics', {
-        p_webinar_id: webinarId
-      });
+      // Enhanced query to include session analysis
+      const { data: participants, error } = await this.supabase
+        .from('zoom_participants')
+        .select('*')
+        .eq('webinar_id', webinarId);
 
       if (error) {
-        console.error('Error fetching participant metrics:', error);
+        console.error('Error fetching participants for metrics:', error);
         return {
           totalAttendees: 0,
+          uniqueAttendees: 0,
+          rejoinSessions: 0,
           totalMinutes: 0,
           avgDuration: 0,
           avgAttentiveness: 0,
@@ -301,18 +314,40 @@ class SupabaseService {
         };
       }
 
+      const participantsList = participants || [];
+      
+      // Calculate enhanced metrics with session analysis
+      const uniqueEmails = new Set(participantsList.map(p => p.participant_email).filter(Boolean));
+      const rejoinSessions = participantsList.filter(p => p.is_rejoin_session).length;
+      const totalMinutes = participantsList.reduce((sum, p) => sum + (p.duration || 0), 0);
+      const avgDuration = participantsList.length > 0 ? totalMinutes / participantsList.length : 0;
+      
+      const totalAttentiveness = participantsList.reduce((sum, p) => sum + (p.attentiveness_score || 0), 0);
+      const avgAttentiveness = participantsList.length > 0 ? totalAttentiveness / participantsList.length : 0;
+      
+      const totalCameraUsage = participantsList.reduce((sum, p) => sum + (p.camera_on_duration || 0), 0);
+      const avgCameraUsage = participantsList.length > 0 ? totalCameraUsage / participantsList.length : 0;
+      
+      const totalInteractions = participantsList.reduce((sum, p) => 
+        sum + (p.posted_chat ? 1 : 0) + (p.answered_polling ? 1 : 0) + (p.asked_question ? 1 : 0), 0
+      );
+
       return {
-        totalAttendees: data?.total_attendees || 0,
-        totalMinutes: data?.total_minutes || 0,
-        avgDuration: data?.avg_duration || 0,
-        avgAttentiveness: data?.avg_attentiveness || 0,
-        avgCameraUsage: data?.avg_camera_usage || 0,
-        totalInteractions: data?.total_interactions || 0
+        totalAttendees: participantsList.length,
+        uniqueAttendees: uniqueEmails.size,
+        rejoinSessions: rejoinSessions,
+        totalMinutes: Math.round(totalMinutes / 60), // Convert to minutes
+        avgDuration: Math.round(avgDuration / 60), // Convert to minutes
+        avgAttentiveness: Math.round(avgAttentiveness * 100) / 100,
+        avgCameraUsage: Math.round(avgCameraUsage / 60), // Convert to minutes
+        totalInteractions: totalInteractions
       };
     } catch (error) {
       console.error('Failed to get participant metrics:', error);
       return {
         totalAttendees: 0,
+        uniqueAttendees: 0,
+        rejoinSessions: 0,
         totalMinutes: 0,
         avgDuration: 0,
         avgAttentiveness: 0,

@@ -31,4 +31,9 @@ export interface ZoomParticipant {
   customer_key: string | null;
   created_at: string | null;
   updated_at: string | null;
+
+  // New session tracking fields
+  session_sequence: number;
+  is_rejoin_session: boolean;
+  participant_session_id: string;
 }

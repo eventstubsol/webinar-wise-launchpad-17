@@ -953,6 +953,7 @@ export type Database = {
           failover: boolean | null
           id: string
           ip_address: string | null
+          is_rejoin_session: boolean | null
           join_time: string | null
           leave_time: string | null
           location: string | null
@@ -961,12 +962,14 @@ export type Database = {
           participant_email: string | null
           participant_id: string | null
           participant_name: string | null
+          participant_session_id: string | null
           participant_status: string | null
           participant_user_id: string | null
           participant_uuid: string | null
           posted_chat: boolean | null
           raised_hand: boolean | null
           registrant_id: string | null
+          session_sequence: number | null
           share_application_duration: number | null
           share_desktop_duration: number | null
           share_whiteboard_duration: number | null
@@ -989,6 +992,7 @@ export type Database = {
           failover?: boolean | null
           id?: string
           ip_address?: string | null
+          is_rejoin_session?: boolean | null
           join_time?: string | null
           leave_time?: string | null
           location?: string | null
@@ -997,12 +1001,14 @@ export type Database = {
           participant_email?: string | null
           participant_id?: string | null
           participant_name?: string | null
+          participant_session_id?: string | null
           participant_status?: string | null
           participant_user_id?: string | null
           participant_uuid?: string | null
           posted_chat?: boolean | null
           raised_hand?: boolean | null
           registrant_id?: string | null
+          session_sequence?: number | null
           share_application_duration?: number | null
           share_desktop_duration?: number | null
           share_whiteboard_duration?: number | null
@@ -1025,6 +1031,7 @@ export type Database = {
           failover?: boolean | null
           id?: string
           ip_address?: string | null
+          is_rejoin_session?: boolean | null
           join_time?: string | null
           leave_time?: string | null
           location?: string | null
@@ -1033,12 +1040,14 @@ export type Database = {
           participant_email?: string | null
           participant_id?: string | null
           participant_name?: string | null
+          participant_session_id?: string | null
           participant_status?: string | null
           participant_user_id?: string | null
           participant_uuid?: string | null
           posted_chat?: boolean | null
           raised_hand?: boolean | null
           registrant_id?: string | null
+          session_sequence?: number | null
           share_application_duration?: number | null
           share_desktop_duration?: number | null
           share_whiteboard_duration?: number | null

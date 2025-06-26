@@ -12,12 +12,17 @@ export class ParticipantTransformers {
       join_time: apiParticipant.join_time,
       leave_time: apiParticipant.leave_time,
       duration: apiParticipant.duration,
+      // Session tracking fields will be handled by database triggers/functions
+      session_sequence: 1, // Default to first session
+      is_rejoin_session: false, // Will be calculated by database
+      participant_session_id: apiParticipant.email && apiParticipant.join_time 
+        ? `${apiParticipant.email}_${new Date(apiParticipant.join_time).getTime()}`
+        : null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
   }
 
-  // FIXED: Added missing normalizeEngagementData method
   static normalizeEngagementData(participant: any) {
     return {
       engagement_score: participant.attentiveness_score || 0,
@@ -29,5 +34,38 @@ export class ParticipantTransformers {
       screen_share_usage: (participant.share_application_duration || 0) + 
                           (participant.share_desktop_duration || 0)
     };
+  }
+
+  /**
+   * Analyze participant session patterns
+   */
+  static analyzeSessionPatterns(participants: any[]) {
+    const sessionAnalysis = {
+      totalParticipants: participants.length,
+      uniqueParticipants: new Set(participants.map(p => p.participant_email)).size,
+      rejoinSessions: participants.filter(p => p.is_rejoin_session).length,
+      avgSessionsPerParticipant: 0,
+      maxSessionsPerParticipant: 0
+    };
+
+    // Group by participant email to analyze session patterns
+    const participantSessions = participants.reduce((acc, p) => {
+      if (p.participant_email) {
+        if (!acc[p.participant_email]) {
+          acc[p.participant_email] = [];
+        }
+        acc[p.participant_email].push(p);
+      }
+      return acc;
+    }, {} as Record<string, any[]>);
+
+    // Calculate session statistics
+    const sessionCounts = Object.values(participantSessions).map(sessions => sessions.length);
+    sessionAnalysis.avgSessionsPerParticipant = sessionCounts.length > 0 
+      ? sessionCounts.reduce((sum, count) => sum + count, 0) / sessionCounts.length 
+      : 0;
+    sessionAnalysis.maxSessionsPerParticipant = Math.max(...sessionCounts, 0);
+
+    return sessionAnalysis;
   }
 }
