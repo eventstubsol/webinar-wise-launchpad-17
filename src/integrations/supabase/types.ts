@@ -496,13 +496,6 @@ export type Database = {
             referencedRelation: "zoom_webinars"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "processing_queue_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars_with_calculated_status"
-            referencedColumns: ["id"]
-          },
         ]
       }
       profiles: {
@@ -767,13 +760,6 @@ export type Database = {
             columns: ["webinar_id"]
             isOneToOne: false
             referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sync_queue_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars_with_calculated_status"
             referencedColumns: ["id"]
           },
         ]
@@ -1065,13 +1051,6 @@ export type Database = {
             referencedRelation: "zoom_webinars"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "zoom_participants_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars_with_calculated_status"
-            referencedColumns: ["id"]
-          },
         ]
       }
       zoom_poll_responses: {
@@ -1160,13 +1139,6 @@ export type Database = {
             referencedRelation: "zoom_webinars"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "zoom_polls_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars_with_calculated_status"
-            referencedColumns: ["id"]
-          },
         ]
       }
       zoom_qna: {
@@ -1200,13 +1172,6 @@ export type Database = {
             columns: ["webinar_id"]
             isOneToOne: false
             referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "zoom_qna_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars_with_calculated_status"
             referencedColumns: ["id"]
           },
         ]
@@ -1266,13 +1231,6 @@ export type Database = {
             columns: ["webinar_id"]
             isOneToOne: false
             referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "zoom_recordings_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars_with_calculated_status"
             referencedColumns: ["id"]
           },
         ]
@@ -1392,13 +1350,6 @@ export type Database = {
             columns: ["webinar_id"]
             isOneToOne: false
             referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "zoom_registrants_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars_with_calculated_status"
             referencedColumns: ["id"]
           },
         ]
@@ -1634,167 +1585,7 @@ export type Database = {
       }
     }
     Views: {
-      zoom_webinars_with_calculated_status: {
-        Row: {
-          agenda: string | null
-          approval_type: number | null
-          avg_attendance_duration: number | null
-          calculated_status: string | null
-          connection_id: string | null
-          created_at: string | null
-          creation_source: string | null
-          duration: number | null
-          encrypted_passcode: string | null
-          h323_passcode: string | null
-          host_email: string | null
-          host_id: string | null
-          id: string | null
-          is_simulive: boolean | null
-          join_url: string | null
-          last_synced_at: string | null
-          occurrence_id: string | null
-          occurrences: Json | null
-          participant_sync_attempted_at: string | null
-          participant_sync_completed_at: string | null
-          participant_sync_error: string | null
-          participant_sync_status: string | null
-          password: string | null
-          record_file_id: string | null
-          recurrence: Json | null
-          registrants_restrict_number: number | null
-          registration_type: number | null
-          registration_url: string | null
-          settings: Json | null
-          start_time: string | null
-          start_url: string | null
-          status: string | null
-          synced_at: string | null
-          timezone: string | null
-          topic: string | null
-          total_absentees: number | null
-          total_attendees: number | null
-          total_minutes: number | null
-          total_registrants: number | null
-          tracking_fields: Json | null
-          transition_to_live: boolean | null
-          updated_at: string | null
-          uuid: string | null
-          webinar_created_at: string | null
-          webinar_id: string | null
-          webinar_type: number | null
-          zoom_uuid: string | null
-          zoom_webinar_id: string | null
-        }
-        Insert: {
-          agenda?: string | null
-          approval_type?: number | null
-          avg_attendance_duration?: number | null
-          calculated_status?: never
-          connection_id?: string | null
-          created_at?: string | null
-          creation_source?: string | null
-          duration?: number | null
-          encrypted_passcode?: string | null
-          h323_passcode?: string | null
-          host_email?: string | null
-          host_id?: string | null
-          id?: string | null
-          is_simulive?: boolean | null
-          join_url?: string | null
-          last_synced_at?: string | null
-          occurrence_id?: string | null
-          occurrences?: Json | null
-          participant_sync_attempted_at?: string | null
-          participant_sync_completed_at?: string | null
-          participant_sync_error?: string | null
-          participant_sync_status?: string | null
-          password?: string | null
-          record_file_id?: string | null
-          recurrence?: Json | null
-          registrants_restrict_number?: number | null
-          registration_type?: number | null
-          registration_url?: string | null
-          settings?: Json | null
-          start_time?: string | null
-          start_url?: string | null
-          status?: string | null
-          synced_at?: string | null
-          timezone?: string | null
-          topic?: string | null
-          total_absentees?: number | null
-          total_attendees?: number | null
-          total_minutes?: number | null
-          total_registrants?: number | null
-          tracking_fields?: Json | null
-          transition_to_live?: boolean | null
-          updated_at?: string | null
-          uuid?: string | null
-          webinar_created_at?: string | null
-          webinar_id?: string | null
-          webinar_type?: number | null
-          zoom_uuid?: string | null
-          zoom_webinar_id?: string | null
-        }
-        Update: {
-          agenda?: string | null
-          approval_type?: number | null
-          avg_attendance_duration?: number | null
-          calculated_status?: never
-          connection_id?: string | null
-          created_at?: string | null
-          creation_source?: string | null
-          duration?: number | null
-          encrypted_passcode?: string | null
-          h323_passcode?: string | null
-          host_email?: string | null
-          host_id?: string | null
-          id?: string | null
-          is_simulive?: boolean | null
-          join_url?: string | null
-          last_synced_at?: string | null
-          occurrence_id?: string | null
-          occurrences?: Json | null
-          participant_sync_attempted_at?: string | null
-          participant_sync_completed_at?: string | null
-          participant_sync_error?: string | null
-          participant_sync_status?: string | null
-          password?: string | null
-          record_file_id?: string | null
-          recurrence?: Json | null
-          registrants_restrict_number?: number | null
-          registration_type?: number | null
-          registration_url?: string | null
-          settings?: Json | null
-          start_time?: string | null
-          start_url?: string | null
-          status?: string | null
-          synced_at?: string | null
-          timezone?: string | null
-          topic?: string | null
-          total_absentees?: number | null
-          total_attendees?: number | null
-          total_minutes?: number | null
-          total_registrants?: number | null
-          tracking_fields?: Json | null
-          transition_to_live?: boolean | null
-          updated_at?: string | null
-          uuid?: string | null
-          webinar_created_at?: string | null
-          webinar_id?: string | null
-          webinar_type?: number | null
-          zoom_uuid?: string | null
-          zoom_webinar_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_webinars_connection_id_fkey"
-            columns: ["connection_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_connections"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       batch_update_webinar_statuses: {
@@ -1835,6 +1626,10 @@ export type Database = {
           changed_by: string
           changed_at: string
         }[]
+      }
+      get_webinar_status: {
+        Args: { webinar_start_time: string; webinar_duration: number }
+        Returns: string
       }
       invalidate_cache_dependencies: {
         Args: { dep_pattern: string }

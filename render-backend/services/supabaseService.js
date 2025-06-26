@@ -1,15 +1,16 @@
-
 const { createClient } = require('@supabase/supabase-js');
 
 class SupabaseService {
   constructor() {
-    // Enhanced initialization with validation
+    // Enhanced initialization with proper key separation
     this.supabaseUrl = process.env.SUPABASE_URL;
     this.supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    this.supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
     
     console.log('=== SUPABASE SERVICE INITIALIZATION ===');
     console.log('SUPABASE_URL present:', !!this.supabaseUrl);
     console.log('SUPABASE_SERVICE_ROLE_KEY present:', !!this.supabaseServiceKey);
+    console.log('SUPABASE_ANON_KEY present:', !!this.supabaseAnonKey);
     
     if (!this.supabaseUrl || !this.supabaseServiceKey) {
       const missing = [];
@@ -21,7 +22,7 @@ class SupabaseService {
     }
 
     try {
-      // Create Service Role client with proper configuration
+      // Create Service Role client for database operations (bypasses RLS)
       this.client = createClient(this.supabaseUrl, this.supabaseServiceKey, {
         auth: {
           autoRefreshToken: false,
@@ -29,12 +30,28 @@ class SupabaseService {
         },
         global: {
           headers: {
-            'X-Client-Info': 'webinar-wise-render-backend',
+            'X-Client-Info': 'webinar-wise-render-backend-service',
             'Authorization': `Bearer ${this.supabaseServiceKey}`,
             'apikey': this.supabaseServiceKey
           }
         }
       });
+
+      // Create User client for user-context operations (respects RLS)
+      if (this.supabaseAnonKey) {
+        this.userClient = createClient(this.supabaseUrl, this.supabaseAnonKey, {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false
+          },
+          global: {
+            headers: {
+              'X-Client-Info': 'webinar-wise-render-backend-user'
+            }
+          }
+        });
+        console.log('✅ User client initialized with anon key');
+      }
 
       console.log('✅ Supabase service initialized successfully with Service Role');
     } catch (initError) {
@@ -244,6 +261,7 @@ try {
   // Create a dummy service that will fail gracefully
   supabaseServiceInstance = {
     client: null,
+    userClient: null,
     testConnection: async () => {
       console.error('❌ Supabase service not initialized');
       return false;
