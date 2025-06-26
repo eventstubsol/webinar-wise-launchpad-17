@@ -2,10 +2,9 @@
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { User, Video, Database, Bell, Shield, Wrench } from 'lucide-react';
+import { User, Video, Database, Bell, Shield } from 'lucide-react';
 import { ProfileSettings } from '@/components/settings/ProfileSettings';
 import { EnhancedZoomSettings } from '@/components/settings/zoom/EnhancedZoomSettings';
-import { MetricsRepairDashboard } from '@/components/metrics/MetricsRepairDashboard';
 
 export default function Settings() {
   return (
@@ -18,7 +17,7 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="profile" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             Profile
@@ -30,10 +29,6 @@ export default function Settings() {
           <TabsTrigger value="data" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
             Data Management
-          </TabsTrigger>
-          <TabsTrigger value="repair" className="flex items-center gap-2">
-            <Wrench className="h-4 w-4" />
-            Metrics Repair
           </TabsTrigger>
           <TabsTrigger value="notifications" className="flex items-center gap-2">
             <Bell className="h-4 w-4" />
@@ -62,10 +57,6 @@ export default function Settings() {
               <p className="text-muted-foreground">Data management settings will be available soon.</p>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="repair">
-          <MetricsRepairDashboard />
         </TabsContent>
 
         <TabsContent value="notifications">

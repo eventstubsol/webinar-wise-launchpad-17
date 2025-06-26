@@ -1478,6 +1478,7 @@ export type Database = {
         Row: {
           agenda: string | null
           approval_type: number | null
+          attendees_count: number | null
           avg_attendance_duration: number | null
           connection_id: string
           created_at: string
@@ -1500,6 +1501,7 @@ export type Database = {
           password: string | null
           record_file_id: string | null
           recurrence: Json | null
+          registrants_count: number | null
           registrants_restrict_number: number | null
           registration_type: number | null
           registration_url: string | null
@@ -1527,6 +1529,7 @@ export type Database = {
         Insert: {
           agenda?: string | null
           approval_type?: number | null
+          attendees_count?: number | null
           avg_attendance_duration?: number | null
           connection_id: string
           created_at?: string
@@ -1549,6 +1552,7 @@ export type Database = {
           password?: string | null
           record_file_id?: string | null
           recurrence?: Json | null
+          registrants_count?: number | null
           registrants_restrict_number?: number | null
           registration_type?: number | null
           registration_url?: string | null
@@ -1576,6 +1580,7 @@ export type Database = {
         Update: {
           agenda?: string | null
           approval_type?: number | null
+          attendees_count?: number | null
           avg_attendance_duration?: number | null
           connection_id?: string
           created_at?: string
@@ -1598,6 +1603,7 @@ export type Database = {
           password?: string | null
           record_file_id?: string | null
           recurrence?: Json | null
+          registrants_count?: number | null
           registrants_restrict_number?: number | null
           registration_type?: number | null
           registration_url?: string | null
@@ -1638,6 +1644,7 @@ export type Database = {
         Row: {
           agenda: string | null
           approval_type: number | null
+          attendees_count: number | null
           avg_attendance_duration: number | null
           calculated_status: string | null
           connection_id: string | null
@@ -1661,6 +1668,7 @@ export type Database = {
           password: string | null
           record_file_id: string | null
           recurrence: Json | null
+          registrants_count: number | null
           registrants_restrict_number: number | null
           registration_type: number | null
           registration_url: string | null
@@ -1688,6 +1696,7 @@ export type Database = {
         Insert: {
           agenda?: string | null
           approval_type?: number | null
+          attendees_count?: number | null
           avg_attendance_duration?: number | null
           calculated_status?: never
           connection_id?: string | null
@@ -1711,6 +1720,7 @@ export type Database = {
           password?: string | null
           record_file_id?: string | null
           recurrence?: Json | null
+          registrants_count?: number | null
           registrants_restrict_number?: number | null
           registration_type?: number | null
           registration_url?: string | null
@@ -1738,6 +1748,7 @@ export type Database = {
         Update: {
           agenda?: string | null
           approval_type?: number | null
+          attendees_count?: number | null
           avg_attendance_duration?: number | null
           calculated_status?: never
           connection_id?: string | null
@@ -1761,6 +1772,7 @@ export type Database = {
           password?: string | null
           record_file_id?: string | null
           recurrence?: Json | null
+          registrants_count?: number | null
           registrants_restrict_number?: number | null
           registration_type?: number | null
           registration_url?: string | null
