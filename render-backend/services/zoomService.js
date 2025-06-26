@@ -4,69 +4,178 @@ const axios = require('axios');
 class ZoomService {
   constructor() {
     this.baseURL = 'https://api.zoom.us/v2';
+    this.oauthURL = 'https://zoom.us/oauth';
   }
 
-  async getWebinars(accessToken, options = {}) {
-    console.log('Fetching webinars from Zoom API...');
-    
+  /**
+   * Validate access token by making a test API call
+   */
+  async validateAccessToken(accessToken) {
     try {
-      const response = await axios.get(`${this.baseURL}/webinars`, {
+      console.log('Validating Zoom access token...');
+      
+      const response = await axios.get(`${this.baseURL}/users/me`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         },
-        params: {
-          page_size: options.pageSize || 30,
-          page_number: options.pageNumber || 1,
-          from: options.from,
-          to: options.to
-        },
-        timeout: 30000
-      });
-
-      console.log(`Zoom API response: ${response.data.webinars?.length || 0} webinars`);
-      
-      return response.data.webinars || [];
-    } catch (error) {
-      console.error('Zoom API error:', error.response?.data || error.message);
-      
-      if (error.response?.status === 401) {
-        throw new Error('Zoom access token is invalid or expired. Please reconnect your account.');
-      } else if (error.response?.status === 429) {
-        throw new Error('Zoom API rate limit exceeded. Please try again later.');
-      } else if (error.response?.status >= 500) {
-        throw new Error('Zoom API is temporarily unavailable. Please try again later.');
-      } else {
-        throw new Error(`Zoom API error: ${error.response?.data?.message || error.message}`);
-      }
-    }
-  }
-
-  async refreshToken(refreshToken) {
-    console.log('Refreshing Zoom access token...');
-    
-    try {
-      const response = await axios.post('https://zoom.us/oauth/token', null, {
-        params: {
-          grant_type: 'refresh_token',
-          refresh_token: refreshToken
-        },
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
         timeout: 10000
       });
 
-      return response.data;
+      console.log('Token validation successful:', {
+        status: response.status,
+        userId: response.data?.id
+      });
+      
+      return true;
     } catch (error) {
-      console.error('Token refresh error:', error.response?.data || error.message);
-      throw new Error('Failed to refresh Zoom access token');
+      if (error.response?.data) {
+        console.log('Token validation error:', error.response.data);
+      } else {
+        console.log('Token validation network error:', error.message);
+      }
+      return false;
     }
   }
 
-  async validateToken(accessToken) {
-    console.log('Validating Zoom access token...');
-    
+  /**
+   * Get server-to-server access token using client credentials
+   */
+  async getServerToServerToken(clientId, clientSecret, accountId) {
+    try {
+      console.log('Getting server-to-server token for account:', accountId);
+      
+      const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      
+      const response = await axios.post(`${this.oauthURL}/token`, 
+        new URLSearchParams({
+          grant_type: 'account_credentials',
+          account_id: accountId
+        }), {
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          timeout: 15000
+        }
+      );
+
+      console.log('Server-to-server token obtained successfully');
+      
+      return {
+        access_token: response.data.access_token,
+        expires_in: response.data.expires_in,
+        token_type: response.data.token_type
+      };
+      
+    } catch (error) {
+      console.error('Server-to-server token request failed:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      
+      throw new Error(
+        error.response?.data?.error_description || 
+        error.response?.data?.error || 
+        'Failed to get server-to-server token'
+      );
+    }
+  }
+
+  /**
+   * Refresh OAuth access token using refresh token
+   */
+  async refreshOAuthToken(refreshToken) {
+    try {
+      console.log('Refreshing OAuth token...');
+      
+      const response = await axios.post(`${this.oauthURL}/token`, 
+        new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken
+        }), {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          timeout: 15000
+        }
+      );
+
+      console.log('OAuth token refreshed successfully');
+      
+      return {
+        access_token: response.data.access_token,
+        refresh_token: response.data.refresh_token,
+        expires_in: response.data.expires_in,
+        token_type: response.data.token_type
+      };
+      
+    } catch (error) {
+      console.error('OAuth token refresh failed:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      
+      throw new Error(
+        error.response?.data?.error_description || 
+        error.response?.data?.error || 
+        'Failed to refresh OAuth token'
+      );
+    }
+  }
+
+  /**
+   * Refresh token with user-specific credentials (for backward compatibility)
+   */
+  async refreshTokenWithCredentials(refreshToken, clientId, clientSecret) {
+    try {
+      console.log('Refreshing token with user credentials...');
+      
+      const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      
+      const response = await axios.post(`${this.oauthURL}/token`, 
+        new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken
+        }), {
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          timeout: 15000
+        }
+      );
+
+      console.log('Token refreshed with user credentials successfully');
+      
+      return {
+        access_token: response.data.access_token,
+        refresh_token: response.data.refresh_token,
+        expires_in: response.data.expires_in,
+        token_type: response.data.token_type
+      };
+      
+    } catch (error) {
+      console.error('Token refresh with credentials failed:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      
+      throw new Error(
+        error.response?.data?.error_description || 
+        error.response?.data?.error || 
+        'Failed to refresh token with credentials'
+      );
+    }
+  }
+
+  /**
+   * Test Zoom API connection
+   */
+  async testConnection(accessToken) {
     try {
       const response = await axios.get(`${this.baseURL}/users/me`, {
         headers: {
@@ -76,19 +185,58 @@ class ZoomService {
         timeout: 10000
       });
 
-      return response.data;
+      return {
+        success: true,
+        user: response.data,
+        message: 'Connection test successful'
+      };
+      
     } catch (error) {
-      console.error('Token validation error:', error.response?.data || error.message);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        status: error.response?.status
+      };
+    }
+  }
+
+  /**
+   * Get user's webinars
+   */
+  async getWebinars(accessToken, userId = 'me', options = {}) {
+    try {
+      const params = new URLSearchParams({
+        page_size: options.pageSize || 30,
+        page_number: options.pageNumber || 1,
+        type: options.type || 'scheduled'
+      });
+
+      const response = await axios.get(`${this.baseURL}/users/${userId}/webinars?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
+
+      return {
+        success: true,
+        webinars: response.data.webinars || [],
+        totalRecords: response.data.total_records || 0,
+        pageCount: response.data.page_count || 1
+      };
       
-      if (error.response?.status === 401) {
-        return null; // Token is invalid
-      }
-      
-      throw new Error('Failed to validate Zoom access token');
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        status: error.response?.status
+      };
     }
   }
 }
 
+// Create singleton instance
 const zoomService = new ZoomService();
 
 module.exports = { zoomService };

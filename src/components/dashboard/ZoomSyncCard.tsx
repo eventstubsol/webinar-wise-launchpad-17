@@ -21,6 +21,8 @@ export function ZoomSyncCard() {
     syncProgress, 
     syncStatus, 
     currentOperation,
+    error,
+    requiresReconnection,
     healthCheck,
     forceHealthCheck
   } = useZoomSync(connection);
@@ -122,7 +124,7 @@ export function ZoomSyncCard() {
     currentSyncStatus = 'completed';
   } else if (syncStatus === 'failed') {
     currentSyncStatus = 'failed';
-    statusMessage = 'Sync failed';
+    statusMessage = error || 'Sync failed';
   } else if (syncStats?.lastSyncStatus === 'completed') {
     currentSyncStatus = syncStats.processedItems === 0 ? 'idle' : 'completed';
   } else if (syncStats?.lastSyncStatus === 'failed') {
@@ -130,13 +132,16 @@ export function ZoomSyncCard() {
     statusMessage = syncStats.lastSyncError || 'Unknown error';
   }
 
+  const isServiceHealthy = healthCheck?.success !== false;
+  const canSync = !isSyncing && !isExpired && isServiceHealthy && !requiresReconnection;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Database className="h-5 w-5" />
           Webinar Data Sync (Render API)
-          {healthCheck && !healthCheck.success && (
+          {(!isServiceHealthy || requiresReconnection) && (
             <AlertCircle className="h-4 w-4 text-red-500" />
           )}
         </CardTitle>
@@ -145,6 +150,7 @@ export function ZoomSyncCard() {
         <ServiceStatusAlert 
           healthCheck={healthCheck}
           onRefresh={forceHealthCheck}
+          syncState={{ error, requiresReconnection }}
         />
 
         <SyncStatusMessage 
@@ -177,7 +183,7 @@ export function ZoomSyncCard() {
         <div className="flex gap-2">
           <Button 
             onClick={handleSyncClick}
-            disabled={isSyncing || isExpired || (healthCheck && !healthCheck.success)}
+            disabled={!canSync}
             size="sm"
             className="flex-1"
           >
@@ -189,7 +195,7 @@ export function ZoomSyncCard() {
             onClick={handleConnectionTest}
             variant="outline"
             size="sm"
-            disabled={isSyncing || (healthCheck && !healthCheck.success)}
+            disabled={isSyncing || !isServiceHealthy}
           >
             Test Connection
           </Button>
@@ -208,10 +214,15 @@ export function ZoomSyncCard() {
           )}
           <div className="flex items-center gap-1 mt-1">
             Render API status: 
-            <span className={healthCheck?.success ? 'text-green-600' : 'text-red-600'}>
-              {healthCheck?.success ? 'Online' : 'Offline'}
+            <span className={isServiceHealthy ? 'text-green-600' : 'text-red-600'}>
+              {isServiceHealthy ? 'Online' : 'Offline'}
             </span>
           </div>
+          {requiresReconnection && (
+            <div className="text-red-600 mt-1">
+              Connection expired - reconnection required
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
