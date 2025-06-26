@@ -1,7 +1,15 @@
+
 const express = require('express');
 const router = express.Router();
 const { supabaseService } = require('../services/supabaseService');
 const { extractUser } = require('../middleware/auth');
+const { createClient } = require('@supabase/supabase-js');
+
+// Create Supabase client for calling edge functions
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 router.post('/start-sync', extractUser, async (req, res) => {
   const requestId = req.requestId || Math.random().toString(36).substring(7);
@@ -174,11 +182,54 @@ router.post('/start-sync', extractUser, async (req, res) => {
       started_at: new Date().toISOString()
     });
 
-    // Start the actual sync process (this would typically be done async)
-    console.log(`🔄 [${requestId}] Starting webinar data sync...`);
+    // Call the zoom-sync-webinars edge function to start the actual sync
+    console.log(`🔄 [${requestId}] Calling zoom-sync-webinars edge function...`);
     
-    // For now, we'll simulate a successful sync start
-    // In a real implementation, this would trigger the actual sync process
+    try {
+      const { data: edgeFunctionResult, error: edgeFunctionError } = await supabase.functions.invoke('zoom-sync-webinars', {
+        body: {
+          connectionId: connection_id,
+          syncLogId: syncLog.id,
+          syncType: sync_type,
+          requestId: requestId
+        },
+        headers: {
+          'zoom_connection_id': connection_id,
+          'sync_type': 'webinars'
+        }
+      });
+
+      if (edgeFunctionError) {
+        console.error(`❌ [${requestId}] Edge function error:`, edgeFunctionError);
+        
+        // Update sync log with error
+        await supabaseService.updateSyncLog(syncLog.id, {
+          sync_status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: `Edge function error: ${edgeFunctionError.message}`
+        });
+        
+        throw new Error(`Edge function failed: ${edgeFunctionError.message}`);
+      }
+
+      console.log(`✅ [${requestId}] Edge function called successfully:`, edgeFunctionResult);
+      
+    } catch (edgeError) {
+      console.error(`💥 [${requestId}] Failed to call edge function:`, {
+        message: edgeError.message,
+        stack: edgeError.stack,
+        name: edgeError.name
+      });
+      
+      // Update sync log with error
+      await supabaseService.updateSyncLog(syncLog.id, {
+        sync_status: 'failed',
+        completed_at: new Date().toISOString(),
+        error_message: `Failed to start sync process: ${edgeError.message}`
+      });
+      
+      throw new Error(`Failed to start sync process: ${edgeError.message}`);
+    }
     
     const duration = Date.now() - startTime;
     console.log(`✅ [${requestId}] Sync started successfully (${duration}ms)`);
