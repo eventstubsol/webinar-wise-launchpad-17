@@ -2,15 +2,20 @@ const { createClient } = require('@supabase/supabase-js');
 
 class SupabaseService {
   constructor() {
-    // Enhanced initialization with proper key separation
+    console.log('=== SUPABASE SERVICE INITIALIZATION START ===');
+    
+    // Enhanced initialization with detailed logging
     this.supabaseUrl = process.env.SUPABASE_URL;
     this.supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     this.supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
     
-    console.log('=== SUPABASE SERVICE INITIALIZATION ===');
+    console.log('Environment Variables Check:');
     console.log('SUPABASE_URL present:', !!this.supabaseUrl);
+    console.log('SUPABASE_URL value:', this.supabaseUrl ? `${this.supabaseUrl.substring(0, 30)}...` : 'MISSING');
     console.log('SUPABASE_SERVICE_ROLE_KEY present:', !!this.supabaseServiceKey);
+    console.log('SUPABASE_SERVICE_ROLE_KEY length:', this.supabaseServiceKey ? this.supabaseServiceKey.length : 0);
     console.log('SUPABASE_ANON_KEY present:', !!this.supabaseAnonKey);
+    console.log('SUPABASE_ANON_KEY length:', this.supabaseAnonKey ? this.supabaseAnonKey.length : 0);
     
     if (!this.supabaseUrl || !this.supabaseServiceKey || !this.supabaseAnonKey) {
       const missing = [];
@@ -18,12 +23,16 @@ class SupabaseService {
       if (!this.supabaseServiceKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
       if (!this.supabaseAnonKey) missing.push('SUPABASE_ANON_KEY');
       
-      console.error('❌ Missing required Supabase environment variables:', missing);
-      throw new Error(`Missing required Supabase environment variables: ${missing.join(', ')}`);
+      const errorMessage = `Missing required Supabase environment variables: ${missing.join(', ')}`;
+      console.error('❌ CRITICAL INITIALIZATION ERROR:', errorMessage);
+      throw new Error(errorMessage);
     }
 
     try {
+      console.log('Creating Supabase clients...');
+      
       // Create Service Role client for database operations (bypasses RLS)
+      console.log('Initializing Service Role client...');
       this.serviceClient = createClient(this.supabaseUrl, this.supabaseServiceKey, {
         auth: {
           autoRefreshToken: false,
@@ -37,8 +46,10 @@ class SupabaseService {
           }
         }
       });
+      console.log('✅ Service Role client created successfully');
 
       // Create Auth client for authentication verification (uses anon key)
+      console.log('Initializing Auth client...');
       this.authClient = createClient(this.supabaseUrl, this.supabaseAnonKey, {
         auth: {
           autoRefreshToken: false,
@@ -50,36 +61,45 @@ class SupabaseService {
           }
         }
       });
+      console.log('✅ Auth client created successfully');
 
       // Keep backward compatibility
       this.client = this.serviceClient;
       this.userClient = this.authClient;
 
       console.log('✅ Supabase service initialized successfully');
-      console.log('✅ Service client initialized with Service Role key');
-      console.log('✅ Auth client initialized with Anon key');
+      console.log('=== SUPABASE SERVICE INITIALIZATION COMPLETE ===');
+      
     } catch (initError) {
-      console.error('❌ Failed to initialize Supabase clients:', initError);
+      console.error('❌ CRITICAL: Failed to initialize Supabase clients:', {
+        message: initError.message,
+        stack: initError.stack,
+        name: initError.name
+      });
       throw new Error(`Failed to initialize Supabase clients: ${initError.message}`);
     }
   }
 
   /**
    * Verify authentication token using Supabase's built-in methods
-   * This replaces manual JWT verification
    */
   async verifyAuthToken(token) {
     const verifyId = Math.random().toString(36).substring(7);
-    console.log(`🔍 [${verifyId}] Verifying auth token with Supabase...`);
+    console.log(`🔍 [${verifyId}] Starting token verification...`);
     
     try {
-      // Use auth client to verify the token
+      if (!this.authClient) {
+        throw new Error('Auth client not initialized');
+      }
+
+      console.log(`🔍 [${verifyId}] Using auth client to verify token...`);
       const { data: { user }, error } = await this.authClient.auth.getUser(token);
       
       if (error) {
         console.error(`❌ [${verifyId}] Token verification failed:`, {
           message: error.message,
-          status: error.status
+          status: error.status,
+          code: error.code
         });
         return {
           success: false,
@@ -105,7 +125,11 @@ class SupabaseService {
       };
 
     } catch (error) {
-      console.error(`💥 [${verifyId}] Token verification exception:`, error);
+      console.error(`💥 [${verifyId}] Token verification exception:`, {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       return {
         success: false,
         error: error.message || 'Token verification failed',
@@ -119,7 +143,11 @@ class SupabaseService {
     console.log(`🔍 [${testId}] Testing Supabase connection with Service Role...`);
     
     try {
-      // Test with a simple query to zoom_connections table
+      if (!this.serviceClient) {
+        throw new Error('Service client not initialized');
+      }
+
+      console.log(`🔍 [${testId}] Performing connection test query...`);
       const { data, error, count } = await this.serviceClient
         .from('zoom_connections')
         .select('id', { count: 'exact', head: true })
@@ -138,7 +166,11 @@ class SupabaseService {
       console.log(`✅ [${testId}] Supabase connection test successful (found ${count || 0} connections)`);
       return true;
     } catch (error) {
-      console.error(`💥 [${testId}] Supabase connection test error:`, error);
+      console.error(`💥 [${testId}] Supabase connection test error:`, {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       return false;
     }
   }
@@ -305,42 +337,50 @@ class SupabaseService {
   }
 }
 
-// Create singleton instance with enhanced error handling
+// Create singleton instance with enhanced error handling and detailed logging
 let supabaseServiceInstance = null;
 
+console.log('=== ATTEMPTING TO CREATE SUPABASE SERVICE INSTANCE ===');
 try {
   supabaseServiceInstance = new SupabaseService();
+  console.log('✅ SupabaseService instance created successfully');
 } catch (initError) {
-  console.error('💥 Failed to create SupabaseService instance:', initError.message);
-  // Create a dummy service that will fail gracefully
+  console.error('💥 CRITICAL: Failed to create SupabaseService instance:', {
+    message: initError.message,
+    stack: initError.stack,
+    name: initError.name
+  });
+  
+  // Create a dummy service that will fail gracefully with detailed error messages
   supabaseServiceInstance = {
     serviceClient: null,
     authClient: null,
     client: null,
     userClient: null,
+    initializationError: initError.message,
     verifyAuthToken: async () => ({
       success: false,
-      error: 'Supabase service not initialized',
+      error: `Supabase service not initialized: ${initError.message}`,
       user: null
     }),
     testConnection: async () => {
-      console.error('❌ Supabase service not initialized');
+      console.error(`❌ Supabase service not initialized: ${initError.message}`);
       return false;
     },
     getConnectionById: async () => {
-      throw new Error('Supabase service not initialized');
+      throw new Error(`Supabase service not initialized: ${initError.message}`);
     },
     getCredentialsByUserId: async () => {
-      throw new Error('Supabase service not initialized');
+      throw new Error(`Supabase service not initialized: ${initError.message}`);
     },
     updateConnection: async () => {
-      throw new Error('Supabase service not initialized');
+      throw new Error(`Supabase service not initialized: ${initError.message}`);
     },
     createSyncLog: async () => {
-      throw new Error('Supabase service not initialized');
+      throw new Error(`Supabase service not initialized: ${initError.message}`);
     },
     updateSyncLog: async () => {
-      throw new Error('Supabase service not initialized');
+      throw new Error(`Supabase service not initialized: ${initError.message}`);
     }
   };
 }

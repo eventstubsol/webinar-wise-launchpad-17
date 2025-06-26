@@ -2,16 +2,25 @@
 const { supabaseService } = require('../services/supabaseService');
 
 /**
- * Enhanced authentication middleware using Supabase's built-in auth verification
- * This replaces manual JWT verification with proper Supabase client methods
+ * Enhanced authentication middleware with detailed error logging
  */
-
 const authMiddleware = async (req, res, next) => {
   const requestId = req.requestId || Math.random().toString(36).substring(7);
   
-  console.log(`🔐 [${requestId}] Auth middleware - validating request`);
+  console.log(`🔐 [${requestId}] Auth middleware - starting validation`);
   
   try {
+    // Check if Supabase service is properly initialized
+    if (supabaseService.initializationError) {
+      console.error(`❌ [${requestId}] Supabase service initialization failed:`, supabaseService.initializationError);
+      return res.status(503).json({
+        success: false,
+        error: 'Database service is not available',
+        details: supabaseService.initializationError,
+        requestId
+      });
+    }
+
     const authHeader = req.headers.authorization;
     
     if (!authHeader) {
@@ -43,7 +52,6 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    // Use Supabase's built-in authentication verification
     console.log(`🔍 [${requestId}] Verifying token with Supabase auth client...`);
     
     try {
@@ -59,7 +67,6 @@ const authMiddleware = async (req, res, next) => {
         });
       }
 
-      // Extract user information from the verified result
       const { user } = authResult;
       
       if (!user || !user.id) {
@@ -80,7 +87,11 @@ const authMiddleware = async (req, res, next) => {
       next();
 
     } catch (authError) {
-      console.error(`❌ [${requestId}] Supabase auth error:`, authError);
+      console.error(`❌ [${requestId}] Supabase auth error:`, {
+        message: authError.message,
+        stack: authError.stack,
+        name: authError.name
+      });
       
       return res.status(401).json({
         success: false,
@@ -91,7 +102,11 @@ const authMiddleware = async (req, res, next) => {
     }
 
   } catch (error) {
-    console.error(`💥 [${requestId}] Auth middleware error:`, error);
+    console.error(`💥 [${requestId}] Auth middleware error:`, {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     
     res.status(500).json({
       success: false,
@@ -103,8 +118,7 @@ const authMiddleware = async (req, res, next) => {
 };
 
 /**
- * Simplified user extraction middleware
- * Ensures user information is properly set on the request
+ * User extraction middleware with enhanced error handling
  */
 const extractUser = (req, res, next) => {
   const requestId = req.requestId || Math.random().toString(36).substring(7);

@@ -6,33 +6,43 @@ const { authMiddleware } = require('./middleware/auth');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Enhanced startup validation
+// Enhanced startup validation with detailed logging
 console.log('=== WEBINAR WISE BACKEND STARTUP ===');
 console.log(`Timestamp: ${new Date().toISOString()}`);
 console.log(`Node Version: ${process.version}`);
 console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 console.log(`Port: ${PORT}`);
 
-// Environment validation
+// Comprehensive environment validation
 const validateEnvironment = () => {
-  const envChecks = {
+  console.log('=== ENVIRONMENT VALIDATION ===');
+  
+  const envVars = {
     'NODE_ENV': process.env.NODE_ENV || 'development',
     'PORT': PORT,
-    'SUPABASE_URL': !!process.env.SUPABASE_URL,
-    'SUPABASE_SERVICE_ROLE_KEY': !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-    'SUPABASE_ANON_KEY': !!process.env.SUPABASE_ANON_KEY,
-    'API_KEY': !!process.env.API_KEY
+    'SUPABASE_URL': process.env.SUPABASE_URL,
+    'SUPABASE_SERVICE_ROLE_KEY': process.env.SUPABASE_SERVICE_ROLE_KEY,
+    'SUPABASE_ANON_KEY': process.env.SUPABASE_ANON_KEY,
+    'API_KEY': process.env.API_KEY
   };
 
-  console.log('=== ENVIRONMENT VALIDATION ===');
-  Object.entries(envChecks).forEach(([key, value]) => {
-    const status = typeof value === 'boolean' ? (value ? '✅' : '❌') : '📝';
-    console.log(`${status} ${key}: ${typeof value === 'boolean' ? (value ? 'present' : 'missing') : value}`);
+  // Log environment variable status
+  Object.entries(envVars).forEach(([key, value]) => {
+    if (key === 'NODE_ENV' || key === 'PORT') {
+      console.log(`📝 ${key}: ${value}`);
+    } else {
+      const present = !!value;
+      const status = present ? '✅' : '❌';
+      const displayValue = present ? 
+        (value.length > 20 ? `${value.substring(0, 20)}...` : value) : 
+        'MISSING';
+      console.log(`${status} ${key}: ${present ? 'present' : 'missing'} ${present ? `(${displayValue})` : ''}`);
+    }
   });
 
   // Critical environment variables for production
   if (process.env.NODE_ENV === 'production') {
-    const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
+    const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ANON_KEY'];
     const missing = required.filter(varName => !process.env[varName]);
 
     if (missing.length > 0) {
@@ -42,6 +52,19 @@ const validateEnvironment = () => {
       process.exit(1);
     }
     console.log('✅ All required production environment variables present');
+  }
+  
+  // Check for common environment variable issues
+  if (process.env.SUPABASE_URL && !process.env.SUPABASE_URL.startsWith('https://')) {
+    console.warn('⚠️  SUPABASE_URL should start with https://');
+  }
+  
+  if (process.env.SUPABASE_ANON_KEY && process.env.SUPABASE_ANON_KEY.length < 100) {
+    console.warn('⚠️  SUPABASE_ANON_KEY seems too short - please verify it\'s the correct key');
+  }
+  
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY.length < 100) {
+    console.warn('⚠️  SUPABASE_SERVICE_ROLE_KEY seems too short - please verify it\'s the correct key');
   }
 };
 
@@ -155,7 +178,6 @@ app.use('*', (req, res) => {
   });
 });
 
-// Enhanced global error handler
 app.use((err, req, res, next) => {
   const requestId = req.requestId || 'unknown';
   const duration = req.startTime ? Date.now() - req.startTime : 0;
@@ -223,15 +245,24 @@ const startServer = async () => {
       console.log('=== TESTING SUPABASE CONNECTION ===');
       try {
         const { supabaseService } = require('./services/supabaseService');
-        const connectionTest = await supabaseService.testConnection();
         
-        if (connectionTest) {
-          console.log('✅ Supabase connection verified successfully');
+        if (supabaseService.initializationError) {
+          console.log('⚠️ Supabase service initialization failed:', supabaseService.initializationError);
+          console.log('📍 Server will continue but Supabase features may not work');
         } else {
-          console.log('⚠️ Supabase connection test failed - service may be degraded');
+          const connectionTest = await supabaseService.testConnection();
+          
+          if (connectionTest) {
+            console.log('✅ Supabase connection verified successfully');
+          } else {
+            console.log('⚠️ Supabase connection test failed - service may be degraded');
+          }
         }
       } catch (supabaseError) {
-        console.log('⚠️ Supabase connection error:', supabaseError.message);
+        console.log('⚠️ Supabase connection error:', {
+          message: supabaseError.message,
+          stack: supabaseError.stack?.substring(0, 200)
+        });
         console.log('📍 Server will continue but Supabase features may not work');
       }
     } else {

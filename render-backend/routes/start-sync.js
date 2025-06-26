@@ -14,6 +14,17 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
   console.log('User from auth:', { id: req.userId, email: req.user?.email });
 
   try {
+    // Check if Supabase service is properly initialized
+    if (supabaseService.initializationError) {
+      console.error(`❌ [${requestId}] Supabase service not initialized:`, supabaseService.initializationError);
+      return res.status(503).json({
+        success: false,
+        error: 'Database service is not available',
+        details: supabaseService.initializationError,
+        requestId
+      });
+    }
+
     const { connection_id, sync_type = 'incremental' } = req.body;
     const userId = req.userId;
 
@@ -104,7 +115,11 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
         connection.connection_status = 'active';
         
       } catch (refreshError) {
-        console.error(`💥 [${requestId}] Token refresh error:`, refreshError);
+        console.error(`💥 [${requestId}] Token refresh error:`, {
+          message: refreshError.message,
+          stack: refreshError.stack,
+          name: refreshError.name
+        });
         
         await updateConnectionStatus(connection_id, 'expired', refreshError.message);
         
@@ -137,7 +152,11 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
       console.log(`✅ [${requestId}] Zoom API connection test successful`);
       
     } catch (testError) {
-      console.log(`💥 [${requestId}] Zoom API connection test failed:`, testError.message);
+      console.log(`💥 [${requestId}] Zoom API connection test failed:`, {
+        message: testError.message,
+        stack: testError.stack,
+        name: testError.name
+      });
       
       await supabaseService.updateSyncLog(syncLog.id, {
         sync_status: 'failed',
@@ -179,7 +198,8 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
     const duration = Date.now() - startTime;
     console.log(`💥 [${requestId}] Start sync error (${duration}ms):`, {
       message: error.message,
-      stack: process.env.NODE_ENV === 'production' ? 'Hidden in production' : error.stack
+      stack: process.env.NODE_ENV === 'production' ? 'Hidden in production' : error.stack,
+      name: error.name
     });
 
     res.status(500).json({
@@ -242,7 +262,6 @@ async function refreshServerToServerToken(connection, userId) {
   }
 }
 
-// Helper function to refresh OAuth token using Service Role
 async function refreshOAuthToken(connection) {
   try {
     if (!connection.refresh_token) {
@@ -280,7 +299,6 @@ async function refreshOAuthToken(connection) {
   }
 }
 
-// Helper function to update connection status using Service Role
 async function updateConnectionStatus(connectionId, status, errorMessage = null) {
   try {
     const updateData = {
