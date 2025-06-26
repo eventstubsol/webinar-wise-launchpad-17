@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "../_shared/cors.ts";
 import { validateEnhancedRequest } from "./enhanced-validation.ts";
+import { processEnhancedWebinarSync } from "./enhanced-sync-processor-fixed.ts";
 
 serve(async (req: Request): Promise<Response> => {
   console.log('=== ENHANCED SYNC FUNCTION START ===');
@@ -57,32 +58,45 @@ serve(async (req: Request): Promise<Response> => {
       }
     }
 
-    // For now, simulate the sync process
-    console.log('🚀 Starting simulated sync process...');
+    // Use the real sync processor instead of simulation
+    console.log('🚀 Starting real webinar sync process...');
     
-    // Simulate some processing time
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Update sync log with completion
-    if (requestBody.syncLogId) {
-      console.log(`✅ Updating sync log ${requestBody.syncLogId} to completed status`);
-      
-      const { error: completionError } = await supabase
-        .from('zoom_sync_logs')
-        .update({
-          sync_status: 'completed',
-          completed_at: new Date().toISOString(),
-          processed_items: 5, // Simulated count
-          total_items: 5,
-          stage_progress_percentage: 100
-        })
-        .eq('id', requestBody.syncLogId);
+    try {
+      // Create sync operation object for the processor
+      const syncOperation = {
+        id: requestBody.syncLogId || 'unknown',
+        connection_id: connection.id,
+        sync_type: requestBody.syncType,
+        status: 'running',
+        options: requestBody.options || {}
+      };
 
-      if (completionError) {
-        console.error('Failed to update sync log completion:', completionError);
-      } else {
-        console.log('✅ Sync log marked as completed');
+      // Call the real sync processor
+      await processEnhancedWebinarSync(
+        supabase,
+        syncOperation,
+        connection,
+        requestBody.syncLogId!
+      );
+
+      console.log('🎉 Real sync process completed successfully');
+
+    } catch (syncError) {
+      console.error('❌ Sync processor error:', syncError);
+      
+      // Update sync log with failure
+      if (requestBody.syncLogId) {
+        await supabase
+          .from('zoom_sync_logs')
+          .update({
+            sync_status: 'failed',
+            completed_at: new Date().toISOString(),
+            error_message: syncError.message || 'Sync processing failed'
+          })
+          .eq('id', requestBody.syncLogId);
       }
+      
+      throw syncError;
     }
 
     // Update connection last sync time
@@ -91,16 +105,14 @@ serve(async (req: Request): Promise<Response> => {
       .update({ last_sync_at: new Date().toISOString() })
       .eq('id', connection.id);
 
-    console.log('🎉 Sync process completed successfully');
-
     return new Response(
       JSON.stringify({
         success: true,
         message: 'Sync completed successfully',
         syncType: requestBody.syncType,
         connectionId: connection.id,
-        processedItems: 5,
-        totalItems: 5
+        processedItems: 'See sync log for details',
+        totalItems: 'See sync log for details'
       }),
       { 
         status: 200, 
