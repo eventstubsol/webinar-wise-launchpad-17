@@ -1,19 +1,19 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { MetricsTransformers } from '../../utils/transformers/metricsTransformers';
+import { MetricsOperations } from '../operations/crud/MetricsOperations';
 
 /**
- * Database operations for metrics calculations
+ * Service for updating webinar metrics comprehensively
  */
-export class MetricsOperations {
+export class WebinarMetricsUpdateService {
   /**
-   * Update webinar metrics after syncing all data
+   * Update metrics for a single webinar after sync
    */
   static async updateWebinarMetrics(webinarDbId: string): Promise<void> {
     try {
       console.log(`Updating metrics for webinar: ${webinarDbId}`);
       
-      // Calculate metrics from participants
+      // Get participant metrics
       const { data: participants, error: participantsError } = await supabase
         .from('zoom_participants')
         .select('duration, join_time')
@@ -24,25 +24,25 @@ export class MetricsOperations {
         return;
       }
 
-      // Calculate metrics from registrants
+      // Get registrant count
       const { count: registrantCount, error: registrantsError } = await supabase
         .from('zoom_registrants')
         .select('*', { count: 'exact', head: true })
         .eq('webinar_id', webinarDbId);
 
       if (registrantsError) {
-        console.error('Failed to fetch registrants for metrics:', registrantsError);
+        console.error('Failed to fetch registrants count:', registrantsError);
         return;
       }
 
-      // Calculate comprehensive metrics
+      // Calculate metrics
       const totalAttendees = participants?.length || 0;
       const totalRegistrants = registrantCount || 0;
       const totalMinutes = participants?.reduce((sum, p) => sum + (p.duration || 0), 0) || 0;
       const avgDuration = totalAttendees > 0 ? Math.round(totalMinutes / totalAttendees) : 0;
       const totalAbsentees = Math.max(0, totalRegistrants - totalAttendees);
 
-      // Update webinar with calculated metrics using correct field names
+      // Update webinar with calculated metrics
       const { error: updateError } = await supabase
         .from('zoom_webinars')
         .update({
@@ -70,7 +70,7 @@ export class MetricsOperations {
   }
 
   /**
-   * Batch update metrics for all webinars with missing data
+   * Batch update metrics for all webinars with missing or zero metrics
    */
   static async batchUpdateMissingMetrics(connectionId?: string): Promise<number> {
     try {
@@ -116,6 +116,19 @@ export class MetricsOperations {
       return updatedCount;
     } catch (error) {
       console.error('Error in batch metrics update:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update metrics for all webinars in a connection
+   */
+  static async updateConnectionMetrics(connectionId: string): Promise<void> {
+    try {
+      console.log(`Updating all metrics for connection: ${connectionId}`);
+      await this.batchUpdateMissingMetrics(connectionId);
+    } catch (error) {
+      console.error('Error updating connection metrics:', error);
       throw error;
     }
   }

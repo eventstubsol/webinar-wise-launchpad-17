@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,7 +17,8 @@ import {
   AlertTriangle,
   Play,
   Pause,
-  Settings
+  Settings,
+  Calculator
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -26,6 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
+import { useWebinarMetricsUpdate } from '@/hooks/useWebinarMetricsUpdate';
 import { SyncType, SyncStatus } from '@/types/zoom';
 import { RealTimeSyncProgress } from '@/components/sync/RealTimeSyncProgress';
 import { PerformanceMetricsDashboard } from '@/components/sync/PerformanceMetricsDashboard';
@@ -76,6 +77,7 @@ export default function SyncCenter() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { connection, isConnected } = useZoomConnection();
+  const { updateMetrics, isUpdating } = useWebinarMetricsUpdate();
   const [activeTab, setActiveTab] = useState('overview');
 
   // Fetch sync logs with enhanced details
@@ -231,6 +233,13 @@ export default function SyncCenter() {
     };
   };
 
+  // Handle metrics update
+  const handleUpdateMetrics = () => {
+    if (connection?.id) {
+      updateMetrics(connection.id);
+    }
+  };
+
   if (!isConnected) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -320,6 +329,45 @@ export default function SyncCenter() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Metrics Update Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calculator className="h-5 w-5" />
+                Webinar Metrics Management
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Update missing metrics for webinars (total attendees, registrants, duration, etc.)
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    This will recalculate metrics for webinars that show zero attendees or missing data.
+                  </p>
+                </div>
+                <Button 
+                  onClick={handleUpdateMetrics}
+                  disabled={isUpdating}
+                  className="flex items-center gap-2"
+                >
+                  {isUpdating ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Calculator className="h-4 w-4" />
+                      Update Metrics
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Recent Sync Activity */}
           <Card>
