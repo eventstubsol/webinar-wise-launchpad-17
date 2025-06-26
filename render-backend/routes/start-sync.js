@@ -1,744 +1,267 @@
-const express = require('express');
-const { v4: uuidv4 } = require('uuid');
-const router = express.Router();
-const supabaseService = require('../services/supabaseService');
-const zoomService = require('../services/zoomService');
-const { authMiddleware, extractUser } = require('../middleware/auth');
 
-router.post('/', authMiddleware, extractUser, async (req, res) => {
+const express = require('express');
+const router = express.Router();
+const { supabaseService } = require('../services/supabaseService');
+const { zoomService } = require('../services/zoomService');
+
+router.post('/start-sync', async (req, res) => {
+  console.log('=== START SYNC ENDPOINT ===');
+  console.log('Request body:', req.body);
+  console.log('User ID from auth:', req.user?.id);
+
+  let syncLogId = null;
+
   try {
     const { connection_id, sync_type = 'manual' } = req.body;
-    const userId = req.userId;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      console.error('No user ID found in request');
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
 
     if (!connection_id) {
+      console.error('No connection_id provided');
       return res.status(400).json({
         success: false,
-        error: 'Missing connection_id'
+        error: 'connection_id is required'
       });
     }
 
-    console.log('Starting sync for connection:', connection_id, 'type:', sync_type, 'user:', userId);
+    console.log(`Starting sync for user ${userId}, connection ${connection_id}`);
 
-    // Get connection and verify ownership
-    const connection = await supabaseService.getZoomConnection(connection_id);
+    // Verify connection exists and belongs to user
+    const { data: connection, error: connError } = await supabaseService.client
+      .from('zoom_connections')
+      .select('*')
+      .eq('id', connection_id)
+      .eq('user_id', userId)
+      .single();
+
+    if (connError) {
+      console.error('Connection query error:', connError);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to verify connection',
+        details: connError.message
+      });
+    }
+
+    if (!connection) {
+      console.error('Connection not found or not owned by user');
+      return res.status(404).json({
+        success: false,
+        error: 'Connection not found'
+      });
+    }
+
+    console.log('Connection verified:', connection.id);
+
+    // Check if connection has valid credentials
+    if (!connection.access_token) {
+      console.error('Connection missing access token');
+      return res.status(400).json({
+        success: false,
+        error: 'Connection is missing access token. Please reconnect your Zoom account.'
+      });
+    }
+
+    // Create sync log
+    const { data: syncLog, error: syncLogError } = await supabaseService.client
+      .from('zoom_sync_logs')
+      .insert({
+        connection_id: connection_id,
+        sync_type: sync_type,
+        sync_status: 'started',
+        started_at: new Date().toISOString(),
+        total_items: 0,
+        processed_items: 0
+      })
+      .select()
+      .single();
+
+    if (syncLogError) {
+      console.error('Failed to create sync log:', syncLogError);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to create sync log',
+        details: syncLogError.message
+      });
+    }
+
+    syncLogId = syncLog.id;
+    console.log('Created sync log:', syncLogId);
+
+    // Update sync log to in_progress
+    await supabaseService.client
+      .from('zoom_sync_logs')
+      .update({
+        sync_status: 'in_progress',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', syncLogId);
+
+    // Start the actual sync process
+    console.log('Starting webinar sync...');
     
-    if (connection.user_id !== userId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied to this connection'
-      });
-    }
+    try {
+      // Get webinars from Zoom API
+      const webinars = await zoomService.getWebinars(connection.access_token);
+      console.log(`Fetched ${webinars.length} webinars from Zoom`);
 
-    // Get user credentials
-    const credentials = await supabaseService.getUserCredentials(userId);
-    if (!credentials) {
-      return res.status(400).json({
-        success: false,
-        error: 'No Zoom credentials found. Please configure your credentials first.'
-      });
-    }
+      // Update sync log with total count
+      await supabaseService.client
+        .from('zoom_sync_logs')
+        .update({
+          total_items: webinars.length,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', syncLogId);
 
-    // Create sync log entry
-    const syncId = uuidv4();
-    const syncLogData = {
-      id: syncId,
-      connection_id,
-      sync_type,
-      sync_status: 'pending',
-      status: 'pending',
-      started_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      total_items: 0,
-      processed_items: 0,
-      metadata: {
-        requested_at: new Date().toISOString(),
-        sync_id: syncId,
-        user_id: userId,
-        date_range: '90 days past to 90 days future',
-        enhanced_sync: true,
-        error_details: []
+      let processedCount = 0;
+      const errors = [];
+
+      // Process each webinar
+      for (const webinar of webinars) {
+        try {
+          console.log(`Processing webinar: ${webinar.topic}`);
+          
+          // Transform webinar data for database
+          const webinarData = {
+            connection_id: connection_id,
+            zoom_webinar_id: webinar.id.toString(),
+            zoom_uuid: webinar.uuid,
+            topic: webinar.topic,
+            agenda: webinar.agenda || null,
+            start_time: webinar.start_time,
+            duration: webinar.duration,
+            timezone: webinar.timezone,
+            status: webinar.status || 'scheduled',
+            host_id: webinar.host_id,
+            host_email: webinar.host_email,
+            webinar_type: webinar.type,
+            join_url: webinar.join_url,
+            registration_url: webinar.registration_url || null,
+            password: webinar.password || null,
+            settings: webinar.settings || {},
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            synced_at: new Date().toISOString()
+          };
+
+          // Upsert webinar
+          const { error: upsertError } = await supabaseService.client
+            .from('zoom_webinars')
+            .upsert(webinarData, {
+              onConflict: 'connection_id,zoom_webinar_id'
+            });
+
+          if (upsertError) {
+            console.error(`Failed to upsert webinar ${webinar.id}:`, upsertError);
+            errors.push(`Webinar ${webinar.id}: ${upsertError.message}`);
+          } else {
+            processedCount++;
+            console.log(`Successfully processed webinar: ${webinar.topic}`);
+          }
+
+          // Update progress
+          await supabaseService.client
+            .from('zoom_sync_logs')
+            .update({
+              processed_items: processedCount,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', syncLogId);
+
+        } catch (webinarError) {
+          console.error(`Error processing webinar ${webinar.id}:`, webinarError);
+          errors.push(`Webinar ${webinar.id}: ${webinarError.message}`);
+        }
       }
-    };
 
-    await supabaseService.createSyncLog(syncLogData);
+      // Complete sync log
+      await supabaseService.client
+        .from('zoom_sync_logs')
+        .update({
+          sync_status: 'completed',
+          completed_at: new Date().toISOString(),
+          processed_items: processedCount,
+          error_message: errors.length > 0 ? `${errors.length} errors occurred` : null,
+          error_details: errors.length > 0 ? { errors } : null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', syncLogId);
 
-    // Start the sync process asynchronously
-    performEnhancedWebinarSync(syncId, connection, credentials, sync_type)
-      .catch(error => {
-        console.error('Sync process failed:', error);
-        // Update sync log with error
-        supabaseService.updateSyncLog(syncId, {
-          sync_status: 'failed',
-          status: 'failed',
-          error_message: error.message,
-          completed_at: new Date().toISOString()
-        }).catch(logError => {
-          console.error('Failed to update sync log with error:', logError);
-        });
+      // Update connection last sync time
+      await supabaseService.client
+        .from('zoom_connections')
+        .update({
+          last_sync_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', connection_id);
+
+      console.log(`Sync completed successfully. Processed: ${processedCount}, Errors: ${errors.length}`);
+
+      res.json({
+        success: true,
+        syncId: syncLogId,
+        message: `Sync completed successfully. Processed ${processedCount} webinars.`,
+        processedCount,
+        totalCount: webinars.length,
+        errorCount: errors.length,
+        errors: errors.length > 0 ? errors : undefined
       });
 
-    res.json({
-      success: true,
-      message: 'Enhanced sync operation started',
-      syncId,
-      sync_type,
-      status: 'pending'
-    });
+    } catch (syncError) {
+      console.error('Sync process error:', syncError);
+      
+      // Update sync log with error
+      if (syncLogId) {
+        await supabaseService.client
+          .from('zoom_sync_logs')
+          .update({
+            sync_status: 'failed',
+            completed_at: new Date().toISOString(),
+            error_message: syncError.message,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', syncLogId);
+      }
+
+      throw syncError;
+    }
 
   } catch (error) {
     console.error('Start sync error:', error);
+    
+    // Update sync log if we have one
+    if (syncLogId) {
+      try {
+        await supabaseService.client
+          .from('zoom_sync_logs')
+          .update({
+            sync_status: 'failed',
+            completed_at: new Date().toISOString(),
+            error_message: error.message,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', syncLogId);
+      } catch (logError) {
+        console.error('Failed to update sync log with error:', logError);
+      }
+    }
+
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to start sync'
+      error: error.message || 'Internal server error',
+      syncId: syncLogId,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
-
-// Enhanced async function to perform comprehensive webinar sync with detailed error tracking
-async function performEnhancedWebinarSync(syncId, connection, credentials, syncType) {
-  console.log(`🚀 Starting ENHANCED comprehensive webinar sync process for sync ID: ${syncId}`);
-  
-  const errorDetails = [];
-  
-  try {
-    // Update status to running
-    await supabaseService.updateSyncLog(syncId, {
-      sync_status: 'running',
-      status: 'running',
-      sync_stage: 'authenticating',
-      stage_progress_percentage: 5
-    });
-
-    // Get access token
-    console.log('Getting Zoom access token...');
-    const accessToken = await zoomService.getAccessToken(credentials);
-    
-    // Update progress
-    await supabaseService.updateSyncLog(syncId, {
-      sync_stage: 'calculating_date_range',
-      stage_progress_percentage: 10
-    });
-
-    // Calculate date range (90 days past to 90 days future)
-    const now = new Date();
-    const fromDate = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
-    const toDate = new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000));
-    
-    console.log(`📅 Enhanced sync date range: ${fromDate.toISOString().split('T')[0]} to ${toDate.toISOString().split('T')[0]}`);
-
-    // Update progress
-    await supabaseService.updateSyncLog(syncId, {
-      sync_stage: 'fetching_webinars',
-      stage_progress_percentage: 15,
-      metadata: {
-        date_range_from: fromDate.toISOString(),
-        date_range_to: toDate.toISOString(),
-        sync_type: syncType,
-        enhanced_sync: true,
-        error_details: errorDetails
-      }
-    });
-
-    // Fetch all webinars with date range
-    console.log('Fetching webinars from Zoom API with enhanced 90-day range...');
-    const webinars = await zoomService.getAllWebinars(accessToken, {
-      from: fromDate,
-      to: toDate
-    });
-
-    console.log(`📊 Found ${webinars.length} webinars to sync with enhanced processing`);
-
-    // Update total items
-    await supabaseService.updateSyncLog(syncId, {
-      total_items: webinars.length,
-      sync_stage: 'processing_webinars_enhanced',
-      stage_progress_percentage: 25
-    });
-
-    let processedCount = 0;
-    let errorCount = 0;
-    let registrantsProcessed = 0;
-    let participantsProcessed = 0;
-
-    // Process webinars in batches with enhanced data processing
-    const batchSize = 3; // Reduced batch size for more thorough processing
-    for (let i = 0; i < webinars.length; i += batchSize) {
-      const batch = webinars.slice(i, Math.min(i + batchSize, webinars.length));
-      
-      console.log(`🔄 Processing ENHANCED batch ${Math.floor(i/batchSize) + 1}, webinars ${i + 1}-${Math.min(i + batchSize, webinars.length)}`);
-
-      // Process batch with enhanced data collection and error tracking
-      for (const webinar of batch) {
-        let webinarErrors = [];
-        
-        try {
-          console.log(`🎯 ENHANCED processing webinar: ${webinar.id} - ${webinar.topic} (status: ${webinar.status})`);
-          
-          // Store webinar in database with comprehensive field extraction
-          const webinarDbId = await storeWebinarWithAllFields(webinar, connection.id, accessToken);
-          
-          // Phase 1: Enhanced registrant processing for ALL webinars
-          console.log(`📋 ENHANCED: Fetching registrants for webinar ${webinar.id} (status: ${webinar.status})`);
-          
-          try {
-            // Check if webinar is eligible for registrants
-            const isEligibleForRegistrants = zoomService.isWebinarEligibleForRegistrants(webinar);
-            
-            if (isEligibleForRegistrants) {
-              const registrants = await zoomService.getWebinarRegistrants(accessToken, webinar.id);
-              if (registrants && registrants.length > 0) {
-                await storeEnhancedRegistrants(registrants, webinar.id, connection.id, webinarDbId);
-                registrantsProcessed += registrants.length;
-                console.log(`✅ ENHANCED: Stored ${registrants.length} registrants for webinar ${webinar.id}`);
-              } else {
-                console.log(`📭 No registrants found for webinar ${webinar.id} (may not have registration enabled)`);
-              }
-            } else {
-              console.log(`⏭️ Skipping registrants for webinar ${webinar.id} - not eligible`);
-            }
-          } catch (registrantError) {
-            const errorMsg = `Failed to fetch registrants for webinar ${webinar.id}: ${registrantError.message}`;
-            console.error(`❌ ${errorMsg}`);
-            console.error(`❌ Registrant error details:`, registrantError.response?.data || registrantError);
-            webinarErrors.push({
-              type: 'registrants',
-              error: errorMsg,
-              details: registrantError.response?.data || registrantError.message
-            });
-          }
-          
-          // Phase 2: Enhanced participant processing for ended webinars ONLY
-          console.log(`👥 ENHANCED: Checking participant eligibility for webinar ${webinar.id} (status: ${webinar.status})`);
-          
-          try {
-            const isEligibleForParticipants = zoomService.isWebinarEligibleForParticipants(webinar);
-            
-            if (isEligibleForParticipants) {
-              console.log(`👥 ENHANCED: Fetching participants for ended webinar ${webinar.id}`);
-              const participants = await zoomService.getWebinarParticipants(accessToken, webinar.id);
-              
-              if (participants && participants.length > 0) {
-                await storeEnhancedParticipants(participants, webinar.id, connection.id, webinarDbId);
-                participantsProcessed += participants.length;
-                
-                // Phase 3: Update registrant attendance based on participant data
-                await updateRegistrantAttendanceData(webinarDbId, participants);
-                
-                console.log(`✅ ENHANCED: Stored ${participants.length} participants with engagement data for webinar ${webinar.id}`);
-              } else {
-                console.log(`👥 No participants found for ended webinar ${webinar.id}`);
-              }
-            } else {
-              console.log(`⏭️ Skipping participants for webinar ${webinar.id} (status: ${webinar.status}) - only 'ended' webinars have participant data`);
-            }
-          } catch (participantError) {
-            const errorMsg = `Failed to fetch participants for webinar ${webinar.id}: ${participantError.message}`;
-            console.error(`❌ ${errorMsg}`);
-            console.error(`❌ Participant error details:`, participantError.response?.data || participantError);
-            webinarErrors.push({
-              type: 'participants',
-              error: errorMsg,
-              details: participantError.response?.data || participantError.message
-            });
-          }
-
-          // Phase 4: Enhanced metrics calculation and update
-          await calculateAndUpdateEnhancedMetrics(webinarDbId, connection.id);
-
-          processedCount++;
-          
-          // Log webinar processing results
-          if (webinarErrors.length > 0) {
-            console.log(`⚠️ Webinar ${webinar.id} processed with ${webinarErrors.length} errors:`, webinarErrors);
-            errorDetails.push({
-              webinar_id: webinar.id,
-              webinar_topic: webinar.topic,
-              errors: webinarErrors
-            });
-          } else {
-            console.log(`✅ Webinar ${webinar.id} processed successfully`);
-          }
-          
-        } catch (webinarError) {
-          const errorMsg = `Failed to process webinar ${webinar.id}: ${webinarError.message}`;
-          console.error(`❌ ${errorMsg}`);
-          console.error(`❌ Webinar processing error details:`, webinarError.response?.data || webinarError);
-          
-          errorDetails.push({
-            webinar_id: webinar.id,
-            webinar_topic: webinar.topic,
-            errors: [{
-              type: 'webinar_processing',
-              error: errorMsg,
-              details: webinarError.response?.data || webinarError.message
-            }]
-          });
-          
-          errorCount++;
-        }
-      }
-
-      // Update progress with enhanced metrics and error details
-      const progressPercentage = 25 + Math.round((processedCount / webinars.length) * 70);
-      await supabaseService.updateSyncLog(syncId, {
-        processed_items: processedCount,
-        stage_progress_percentage: progressPercentage,
-        metadata: {
-          registrants_processed: registrantsProcessed,
-          participants_processed: participantsProcessed,
-          enhanced_sync: true,
-          error_details: errorDetails,
-          total_errors: errorCount
-        }
-      });
-
-      // Small delay to avoid overwhelming the API
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-
-    // Determine final sync status
-    const finalStatus = errorCount === webinars.length ? 'failed' : 
-                       errorCount > 0 ? 'completed_with_errors' : 'completed';
-
-    // Complete the enhanced sync
-    await supabaseService.updateSyncLog(syncId, {
-      sync_status: finalStatus,
-      status: finalStatus,
-      completed_at: new Date().toISOString(),
-      sync_stage: 'completed_enhanced',
-      stage_progress_percentage: 100,
-      processed_items: processedCount,
-      error_message: errorCount > 0 ? `${errorCount} webinars failed to process` : null,
-      metadata: {
-        total_webinars: webinars.length,
-        processed_count: processedCount,
-        error_count: errorCount,
-        registrants_processed: registrantsProcessed,
-        participants_processed: participantsProcessed,
-        date_range_from: fromDate.toISOString(),
-        date_range_to: toDate.toISOString(),
-        completed_at: new Date().toISOString(),
-        sync_duration_days: 180,
-        enhanced_metrics_enabled: true,
-        engagement_data_captured: true,
-        error_details: errorDetails
-      }
-    });
-
-    // Update connection last sync time
-    await supabaseService.updateZoomConnection(connection.id, {
-      last_sync_at: new Date().toISOString()
-    });
-
-    console.log(`✅ ENHANCED sync completed with status: ${finalStatus}`);
-    console.log(`📊 Results: ${processedCount}/${webinars.length} webinars processed`);
-    console.log(`📊 Data captured: ${registrantsProcessed} registrants, ${participantsProcessed} participants`);
-    console.log(`📊 Errors: ${errorCount} webinars had processing errors`);
-
-  } catch (error) {
-    console.error('Enhanced sync process failed:', error);
-    
-    await supabaseService.updateSyncLog(syncId, {
-      sync_status: 'failed',
-      status: 'failed',
-      error_message: error.message,
-      completed_at: new Date().toISOString(),
-      sync_stage: 'failed',
-      stage_progress_percentage: 0,
-      metadata: {
-        error_details: errorDetails,
-        fatal_error: {
-          message: error.message,
-          details: error.response?.data || error.stack
-        }
-      }
-    });
-
-    throw error;
-  }
-}
-
-// Enhanced helper function to store webinar data with status correction
-async function storeWebinarWithAllFields(webinar, connectionId, accessToken) {
-  console.log(`📝 Storing comprehensive webinar data: ${webinar.id} - ${webinar.topic}`);
-  
-  try {
-    // Fetch detailed webinar information to get ALL available fields
-    const webinarDetails = await zoomService.getWebinarDetails(accessToken, webinar.id);
-    
-    // Merge data from list response and detailed response
-    const completeWebinar = { ...webinar };
-    
-    if (webinarDetails) {
-      console.log(`🔗 Merging comprehensive details for webinar: ${webinar.id}`);
-      
-      // Merge all fields from detailed response
-      Object.keys(webinarDetails).forEach(key => {
-        if (webinarDetails[key] !== null && webinarDetails[key] !== undefined) {
-          completeWebinar[key] = webinarDetails[key];
-        }
-      });
-      
-      console.log(`✅ Comprehensive data merge completed for webinar: ${webinar.id}`);
-    }
-    
-    // Calculate correct status using time-based logic
-    const calculatedStatus = zoomService.calculateWebinarStatus(completeWebinar);
-    const originalStatus = completeWebinar.status;
-    
-    // Log status correction if different
-    if (originalStatus !== calculatedStatus) {
-      console.log(`🔄 Status correction for webinar ${completeWebinar.id}:`);
-      console.log(`  - Original: ${originalStatus} → Corrected: ${calculatedStatus}`);
-      console.log(`  - Start time: ${completeWebinar.start_time}`);
-      console.log(`  - Duration: ${completeWebinar.duration} minutes`);
-    }
-    
-    // Transform complete webinar data to database format with corrected status
-    const webinarData = {
-      connection_id: connectionId,
-      zoom_webinar_id: completeWebinar.id?.toString() || completeWebinar.webinar_id?.toString(),
-      webinar_id: completeWebinar.id?.toString() || completeWebinar.webinar_id?.toString(),
-      
-      // Core identification fields
-      uuid: completeWebinar.uuid || null,
-      occurrence_id: completeWebinar.occurrence_id || null,
-      
-      // Basic webinar information with corrected status
-      host_id: completeWebinar.host_id || '',
-      host_email: completeWebinar.host_email || '',
-      topic: completeWebinar.topic || 'Untitled Webinar',
-      agenda: completeWebinar.agenda || null,
-      webinar_type: completeWebinar.type || 5,
-      status: calculatedStatus, // Use calculated status instead of stored status
-      start_time: completeWebinar.start_time || new Date().toISOString(),
-      duration: completeWebinar.duration || 60,
-      timezone: completeWebinar.timezone || 'UTC',
-      
-      // Creation and timing fields
-      webinar_created_at: completeWebinar.created_at || null,
-      
-      // Access and security fields
-      password: completeWebinar.password || null,
-      encrypted_passcode: completeWebinar.encrypted_passcode || null,
-      h323_passcode: completeWebinar.h323_passcode || null,
-      start_url: completeWebinar.start_url || null,
-      join_url: completeWebinar.join_url || '',
-      
-      // Registration and approval fields
-      registration_url: completeWebinar.registration_url || null,
-      approval_type: completeWebinar.settings?.approval_type !== undefined ? completeWebinar.settings.approval_type : 2,
-      registration_type: completeWebinar.settings?.registration_type !== undefined ? completeWebinar.settings.registration_type : 1,
-      registrants_restrict_number: completeWebinar.settings?.registrants_restrict_number || 0,
-      
-      // Simulive and special features
-      is_simulive: completeWebinar.is_simulive || false,
-      record_file_id: completeWebinar.record_file_id || null,
-      transition_to_live: completeWebinar.transition_to_live || false,
-      creation_source: completeWebinar.creation_source || null,
-      
-      // JSONB fields for complex objects
-      settings: completeWebinar.settings || {},
-      recurrence: completeWebinar.recurrence || null,
-      occurrences: completeWebinar.occurrences || null,
-      tracking_fields: completeWebinar.tracking_fields || [],
-      
-      // Initialize computed fields to 0 (will be updated by calculateAndUpdateMetrics)
-      total_registrants: 0,
-      total_attendees: 0,
-      total_absentees: 0,
-      total_minutes: 0,
-      avg_attendance_duration: 0,
-      attendees_count: 0,
-      registrants_count: 0,
-      
-      // Sync tracking with status correction note
-      synced_at: new Date().toISOString(),
-      last_synced_at: new Date().toISOString(),
-      participant_sync_status: calculatedStatus === 'ended' ? 'pending' : 'not_applicable'
-    };
-
-    // Log key fields that were extracted and status correction
-    console.log(`📊 Key fields extracted for webinar ${completeWebinar.id}:`);
-    console.log(`  - Status corrected: ${originalStatus} → ${calculatedStatus}`);
-    console.log(`  - Participant sync status: ${webinarData.participant_sync_status}`);
-    console.log(`  - uuid: ${webinarData.uuid || 'not available'}`);
-    console.log(`  - registration_url: ${webinarData.registration_url || 'not available'}`);
-
-    const webinarDbId = await supabaseService.storeWebinar(webinarData);
-    console.log(`✅ Successfully stored comprehensive webinar data with corrected status: ${completeWebinar.id} → DB ID: ${webinarDbId}`);
-    
-    return webinarDbId;
-  } catch (error) {
-    console.error(`❌ Failed to store comprehensive webinar ${webinar.id}:`, error);
-    throw error;
-  }
-}
-
-// Enhanced helper function to store registrant data with comprehensive fields
-async function storeEnhancedRegistrants(registrants, webinarId, connectionId, webinarDbId) {
-  if (!registrants || registrants.length === 0) {
-    console.log(`No registrants to store for webinar ${webinarId}`);
-    return;
-  }
-
-  console.log(`💾 Storing ${registrants.length} ENHANCED registrants for webinar ${webinarId}`);
-  
-  try {
-    const registrantData = registrants.map(registrant => ({
-      webinar_id: webinarDbId,
-      registrant_id: registrant.registrant_id,
-      registrant_uuid: registrant.registrant_uuid,
-      email: registrant.email,
-      first_name: registrant.first_name,
-      last_name: registrant.last_name,
-      address: registrant.address,
-      city: registrant.city,
-      country: registrant.country,
-      zip: registrant.zip,
-      state: registrant.state,
-      phone: registrant.phone,
-      industry: registrant.industry,
-      org: registrant.org,
-      job_title: registrant.job_title,
-      purchasing_time_frame: registrant.purchasing_time_frame,
-      role_in_purchase_process: registrant.role_in_purchase_process,
-      no_of_employees: registrant.no_of_employees,
-      comments: registrant.comments,
-      status: registrant.status,
-      create_time: registrant.create_time,
-      registration_time: registrant.registration_time,
-      join_url: registrant.join_url,
-      source_id: registrant.source_id,
-      tracking_source: registrant.tracking_source,
-      language: registrant.language,
-      custom_questions: registrant.custom_questions,
-      attended: registrant.attended,
-      join_time: registrant.join_time,
-      leave_time: registrant.leave_time,
-      duration: registrant.duration
-    }));
-
-    await supabaseService.storeRegistrants(registrantData);
-    console.log(`✅ Successfully stored ${registrants.length} ENHANCED registrants`);
-  } catch (error) {
-    console.error(`❌ Failed to store registrants for webinar ${webinarId}:`, error);
-    throw error;
-  }
-}
-
-// Enhanced helper function to store participant data with comprehensive engagement fields
-async function storeEnhancedParticipants(participants, webinarId, connectionId, webinarDbId) {
-  if (!participants || participants.length === 0) {
-    console.log(`No participants to store for webinar ${webinarId}`);
-    return;
-  }
-
-  console.log(`💾 Storing ${participants.length} ENHANCED participants for webinar ${webinarId}`);
-  
-  try {
-    const participantData = participants.map(participant => ({
-      webinar_id: webinarDbId,
-      participant_id: participant.participant_id,
-      participant_uuid: participant.participant_uuid,
-      participant_name: participant.participant_name,
-      participant_email: participant.participant_email,
-      participant_user_id: participant.participant_user_id,
-      registrant_id: participant.registrant_id,
-      join_time: participant.join_time,
-      leave_time: participant.leave_time,
-      duration: participant.duration,
-      // Enhanced engagement metrics
-      attentiveness_score: participant.attentiveness_score,
-      camera_on_duration: participant.camera_on_duration,
-      share_application_duration: participant.share_application_duration,
-      share_desktop_duration: participant.share_desktop_duration,
-      share_whiteboard_duration: participant.share_whiteboard_duration,
-      // Interaction flags
-      posted_chat: participant.posted_chat,
-      raised_hand: participant.raised_hand,
-      answered_polling: participant.answered_polling,
-      asked_question: participant.asked_question,
-      // Technical information
-      device: participant.device,
-      ip_address: participant.ip_address,
-      location: participant.location,
-      network_type: participant.network_type,
-      version: participant.version,
-      customer_key: participant.customer_key,
-      // Status and other
-      participant_status: participant.participant_status,
-      status: participant.participant_status || 'joined',
-      failover: participant.failover
-    }));
-
-    await supabaseService.storeParticipants(participantData);
-    console.log(`✅ Successfully stored ${participants.length} ENHANCED participants with engagement data`);
-  } catch (error) {
-    console.error(`❌ Failed to store participants for webinar ${webinarId}:`, error);
-    throw error;
-  }
-}
-
-// Enhanced helper function to update registrant attendance based on participant data
-async function updateRegistrantAttendanceData(webinarDbId, participants) {
-  try {
-    console.log(`🔄 Updating registrant attendance data for ${participants.length} participants`);
-    
-    const attendanceData = participants
-      .filter(p => p.registrant_id) // Only participants with registrant_id
-      .map(participant => ({
-        registrant_id: participant.registrant_id,
-        attended: true,
-        join_time: participant.join_time,
-        leave_time: participant.leave_time,
-        duration: participant.duration
-      }));
-
-    if (attendanceData.length > 0) {
-      await supabaseService.updateRegistrantAttendance(webinarDbId, attendanceData);
-      console.log(`✅ Updated attendance for ${attendanceData.length} registrants`);
-    } else {
-      console.log(`📭 No registrant attendance data to update`);
-    }
-  } catch (error) {
-    console.error(`❌ Failed to update registrant attendance:`, error);
-  }
-}
-
-// Enhanced helper function to calculate and update comprehensive metrics
-async function calculateAndUpdateEnhancedMetrics(webinarDbId, connectionId) {
-  console.log(`🧮 Calculating ENHANCED metrics for webinar DB ID: ${webinarDbId}`);
-  
-  try {
-    // Get registrant count
-    const registrantCount = await supabaseService.getRegistrantCount(webinarDbId);
-    
-    // Get enhanced participant metrics
-    const participantMetrics = await supabaseService.getParticipantMetrics(webinarDbId);
-    
-    // Calculate additional metrics
-    const totalAbsentees = Math.max(0, registrantCount - participantMetrics.totalAttendees);
-    
-    // Update webinar with enhanced calculated metrics
-    const updateData = {
-      total_registrants: registrantCount,
-      registrants_count: registrantCount,
-      total_attendees: participantMetrics.totalAttendees,
-      attendees_count: participantMetrics.totalAttendees,
-      total_absentees: totalAbsentees,
-      total_minutes: participantMetrics.totalMinutes,
-      avg_attendance_duration: participantMetrics.avgDuration,
-      updated_at: new Date().toISOString()
-    };
-    
-    await supabaseService.updateWebinarMetrics(webinarDbId, updateData);
-    
-    console.log(`✅ Updated ENHANCED metrics for webinar ${webinarDbId}:`);
-    console.log(`  - Registrants: ${registrantCount}`);
-    console.log(`  - Attendees: ${participantMetrics.totalAttendees}`);
-    console.log(`  - Absentees: ${totalAbsentees}`);
-    console.log(`  - Total minutes: ${participantMetrics.totalMinutes}`);
-    console.log(`  - Avg duration: ${participantMetrics.avgDuration}min`);
-    console.log(`  - Avg attentiveness: ${participantMetrics.avgAttentiveness}%`);
-    console.log(`  - Avg camera usage: ${participantMetrics.avgCameraUsage}min`);
-    console.log(`  - Total interactions: ${participantMetrics.totalInteractions}`);
-    
-  } catch (error) {
-    console.error(`❌ Failed to calculate enhanced metrics for webinar ${webinarDbId}:`, error);
-    // Don't throw - metrics calculation failure shouldn't stop the sync
-  }
-}
-
-// Helper function to store participants
-async function storeParticipants(participants, webinarId, connectionId) {
-  if (!participants || participants.length === 0) {
-    console.log(`No participants to store for webinar ${webinarId}`);
-    return;
-  }
-
-  console.log(`📝 Storing ${participants.length} participants for webinar ${webinarId}`);
-  
-  try {
-    // Get the internal webinar UUID from our database
-    const webinarRecord = await supabaseService.getWebinarByZoomId(webinarId, connectionId);
-    if (!webinarRecord) {
-      console.warn(`Webinar record not found for Zoom ID ${webinarId}`);
-      return;
-    }
-
-    const participantData = participants.map(participant => ({
-      webinar_id: webinarRecord.id,
-      participant_uuid: participant.id || participant.participant_uuid,
-      name: participant.name || 'Unknown',
-      email: participant.email || null,
-      user_id: participant.user_id || null,
-      registrant_id: participant.registrant_id || null,
-      join_time: participant.join_time || null,
-      leave_time: participant.leave_time || null,
-      duration: participant.duration || 0,
-      status: participant.status || 'joined',
-      failover: participant.failover || false
-    }));
-
-    await supabaseService.storeParticipants(participantData);
-    console.log(`✅ Successfully stored ${participants.length} participants`);
-  } catch (error) {
-    console.error(`❌ Failed to store participants for webinar ${webinarId}:`, error);
-    throw error;
-  }
-}
-
-// Helper function to store registrants
-async function storeRegistrants(registrants, webinarId, connectionId) {
-  if (!registrants || registrants.length === 0) {
-    console.log(`No registrants to store for webinar ${webinarId}`);
-    return;
-  }
-
-  console.log(`📝 Storing ${registrants.length} registrants for webinar ${webinarId}`);
-  
-  try {
-    // Get the internal webinar UUID from our database
-    const webinarRecord = await supabaseService.getWebinarByZoomId(webinarId, connectionId);
-    if (!webinarRecord) {
-      console.warn(`Webinar record not found for Zoom ID ${webinarId}`);
-      return;
-    }
-
-    const registrantData = registrants.map(registrant => ({
-      webinar_id: webinarRecord.id,
-      registrant_id: registrant.id || registrant.registrant_id,
-      registrant_uuid: registrant.registrant_uuid || null,
-      email: registrant.email || '',
-      first_name: registrant.first_name || null,
-      last_name: registrant.last_name || null,
-      address: registrant.address || null,
-      city: registrant.city || null,
-      country: registrant.country || null,
-      zip: registrant.zip || null,
-      state: registrant.state || null,
-      phone: registrant.phone || null,
-      industry: registrant.industry || null,
-      org: registrant.org || null,
-      job_title: registrant.job_title || null,
-      purchasing_time_frame: registrant.purchasing_time_frame || null,
-      role_in_purchase_process: registrant.role_in_purchase_process || null,
-      no_of_employees: registrant.no_of_employees || null,
-      comments: registrant.comments || null,
-      status: registrant.status || 'approved',
-      create_time: registrant.create_time || null,
-      join_url: registrant.join_url || null,
-      custom_questions: registrant.custom_questions || []
-    }));
-
-    await supabaseService.storeRegistrants(registrantData);
-    console.log(`✅ Successfully stored ${registrants.length} registrants`);
-  } catch (error) {
-    console.error(`❌ Failed to store registrants for webinar ${webinarId}:`, error);
-    throw error;
-  }
-}
 
 module.exports = router;

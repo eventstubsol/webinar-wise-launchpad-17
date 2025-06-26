@@ -1,3 +1,4 @@
+
 const axios = require('axios');
 
 class ZoomService {
@@ -5,594 +6,89 @@ class ZoomService {
     this.baseURL = 'https://api.zoom.us/v2';
   }
 
-  // Get access token using credentials
-  async getAccessToken(credentials) {
+  async getWebinars(accessToken, options = {}) {
+    console.log('Fetching webinars from Zoom API...');
+    
+    try {
+      const response = await axios.get(`${this.baseURL}/webinars`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        params: {
+          page_size: options.pageSize || 30,
+          page_number: options.pageNumber || 1,
+          from: options.from,
+          to: options.to
+        },
+        timeout: 30000
+      });
+
+      console.log(`Zoom API response: ${response.data.webinars?.length || 0} webinars`);
+      
+      return response.data.webinars || [];
+    } catch (error) {
+      console.error('Zoom API error:', error.response?.data || error.message);
+      
+      if (error.response?.status === 401) {
+        throw new Error('Zoom access token is invalid or expired. Please reconnect your account.');
+      } else if (error.response?.status === 429) {
+        throw new Error('Zoom API rate limit exceeded. Please try again later.');
+      } else if (error.response?.status >= 500) {
+        throw new Error('Zoom API is temporarily unavailable. Please try again later.');
+      } else {
+        throw new Error(`Zoom API error: ${error.response?.data?.message || error.message}`);
+      }
+    }
+  }
+
+  async refreshToken(refreshToken) {
+    console.log('Refreshing Zoom access token...');
+    
     try {
       const response = await axios.post('https://zoom.us/oauth/token', null, {
         params: {
-          grant_type: 'account_credentials',
-          account_id: credentials.account_id
-        },
-        auth: {
-          username: credentials.client_id,
-          password: credentials.client_secret
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken
         },
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-
-      return response.data.access_token;
-    } catch (error) {
-      console.error('Failed to get access token:', error.response?.data || error.message);
-      throw new Error('Failed to authenticate with Zoom API');
-    }
-  }
-
-  // Validate credentials by attempting authentication and fetching user info
-  async validateCredentials(account_id, client_id, client_secret) {
-    try {
-      console.log('Validating Zoom credentials...');
-      
-      // Create credentials object
-      const credentials = {
-        account_id,
-        client_id,
-        client_secret
-      };
-
-      // Step 1: Try to get access token
-      const accessToken = await this.getAccessToken(credentials);
-      
-      if (!accessToken) {
-        return {
-          valid: false,
-          error: 'Failed to obtain access token'
-        };
-      }
-
-      // Step 2: Get user info to verify the token works
-      const userInfo = await this.getUserInfo(accessToken);
-      
-      if (!userInfo) {
-        return {
-          valid: false,
-          error: 'Failed to retrieve user information'
-        };
-      }
-
-      console.log('Zoom credentials validated successfully');
-      
-      return {
-        valid: true,
-        userInfo: {
-          id: userInfo.id,
-          email: userInfo.email,
-          type: userInfo.type,
-          account_id: userInfo.account_id,
-          first_name: userInfo.first_name,
-          last_name: userInfo.last_name,
-          display_name: userInfo.display_name,
-          timezone: userInfo.timezone,
-          language: userInfo.language,
-          status: userInfo.status
         },
-        tokenData: {
-          access_token: accessToken,
-          expires_in: 3600, // Zoom S2S tokens typically expire in 1 hour
-          scope: 'webinar:read webinar:write meeting:read meeting:write user:read'
-        }
-      };
-
-    } catch (error) {
-      console.error('Credential validation failed:', error.message);
-      
-      // Provide more specific error messages based on error type
-      let errorMessage = 'Invalid credentials';
-      
-      if (error.message.includes('authenticate')) {
-        errorMessage = 'Invalid Account ID, Client ID, or Client Secret';
-      } else if (error.message.includes('user information')) {
-        errorMessage = 'Authentication succeeded but failed to retrieve user information';
-      } else if (error.response?.status === 401) {
-        errorMessage = 'Invalid Account ID, Client ID, or Client Secret';
-      } else if (error.response?.status === 403) {
-        errorMessage = 'Access denied. Check your app permissions and scopes';
-      }
-      
-      return {
-        valid: false,
-        error: errorMessage
-      };
-    }
-  }
-
-  // Make authenticated request to Zoom API
-  async makeAuthenticatedRequest(endpoint, accessToken, options = {}) {
-    try {
-      const response = await axios({
-        method: options.method || 'GET',
-        url: `${this.baseURL}${endpoint}`,
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          ...options.headers
-        },
-        params: options.params,
-        data: options.data,
-        timeout: 30000
+        timeout: 10000
       });
 
       return response.data;
     } catch (error) {
-      console.error(`Zoom API request failed for ${endpoint}:`, error.response?.data || error.message);
-      throw error;
+      console.error('Token refresh error:', error.response?.data || error.message);
+      throw new Error('Failed to refresh Zoom access token');
     }
   }
 
-  // Get user info
-  async getUserInfo(accessToken) {
-    return this.makeAuthenticatedRequest('/users/me', accessToken);
-  }
-
-  // Get webinars with pagination and date range support
-  async getWebinars(accessToken, options = {}) {
-    const params = {
-      type: options.type || 'scheduled',
-      page_size: options.page_size || 30,
-      page_number: options.page_number || 1,
-      ...options.params
-    };
-
-    // Add date range parameters if provided
-    if (options.from) {
-      params.from = this.formatDateForZoomAPI(options.from);
-    }
-    if (options.to) {
-      params.to = this.formatDateForZoomAPI(options.to);
-    }
-
-    return this.makeAuthenticatedRequest('/users/me/webinars', accessToken, { params });
-  }
-
-  // Enhanced webinar eligibility check with time-based status calculation
-  isWebinarEligibleForParticipants(webinar) {
-    console.log(`🕐 Checking participant eligibility for webinar ${webinar.id || webinar.webinar_id} (${webinar.topic})`);
+  async validateToken(accessToken) {
+    console.log('Validating Zoom access token...');
     
-    // Use the database-calculated status if available, otherwise calculate locally
-    const calculatedStatus = webinar.calculated_status || this.calculateWebinarStatus(webinar);
-    const storedStatus = webinar.status;
-    
-    console.log(`📊 Webinar ${webinar.id || webinar.webinar_id} status analysis:`);
-    console.log(`  - Stored status: ${storedStatus}`);
-    console.log(`  - Calculated status: ${calculatedStatus}`);
-    console.log(`  - Start time: ${webinar.start_time}`);
-    console.log(`  - Duration: ${webinar.duration} minutes`);
-    
-    // Use time-based calculation - webinar must be ended to have participant data
-    const isEligible = calculatedStatus === 'ended';
-    
-    console.log(`📊 Webinar ${webinar.id || webinar.webinar_id} participant eligibility: ${isEligible ? 'ELIGIBLE' : 'NOT ELIGIBLE'}`);
-    console.log(`  - Reason: ${isEligible ? 'Webinar has ended based on timing' : `Webinar is ${calculatedStatus}`}`);
-    
-    return isEligible;
-  }
-
-  // Calculate webinar status based on timing (matches database function)
-  calculateWebinarStatus(webinar, currentTime = new Date()) {
-    if (!webinar.start_time || !webinar.duration) {
-      console.warn(`⚠️ Missing timing data for webinar ${webinar.id || webinar.webinar_id}: start_time=${webinar.start_time}, duration=${webinar.duration}`);
-      return 'unknown';
-    }
-    
-    const startTime = new Date(webinar.start_time);
-    const durationMs = webinar.duration * 60 * 1000; // Convert minutes to milliseconds
-    const bufferMs = 5 * 60 * 1000; // 5 minute buffer
-    const estimatedEndTime = new Date(startTime.getTime() + durationMs + bufferMs);
-    
-    if (currentTime < startTime) {
-      return 'upcoming';
-    } else if (currentTime >= startTime && currentTime <= estimatedEndTime) {
-      return 'live';
-    } else {
-      return 'ended';
-    }
-  }
-
-  // Enhanced webinar registrant eligibility check
-  isWebinarEligibleForRegistrants(webinar) {
-    console.log(`📋 Checking registrant eligibility for webinar ${webinar.id || webinar.webinar_id} (${webinar.topic})`);
-    
-    // Calculate actual status
-    const calculatedStatus = webinar.calculated_status || this.calculateWebinarStatus(webinar);
-    
-    console.log(`📊 Webinar ${webinar.id || webinar.webinar_id} registrant analysis:`);
-    console.log(`  - Calculated status: ${calculatedStatus}`);
-    console.log(`  - Registration URL: ${webinar.registration_url || 'not set'}`);
-    console.log(`  - Registration type: ${webinar.settings?.registration_type || 'not set'}`);
-    
-    // All webinars can have registrants regardless of status, but log the status for tracking
-    const hasRegistration = webinar.registration_url || 
-                           (webinar.settings && webinar.settings.registration_type !== undefined);
-    
-    console.log(`📋 Webinar ${webinar.id || webinar.webinar_id} registrant eligibility: ALWAYS ELIGIBLE (will check API)`);
-    console.log(`  - Has registration setup: ${hasRegistration}`);
-    
-    return true; // Try to fetch registrants for all webinars, let API determine eligibility
-  }
-
-  // Get detailed webinar information with comprehensive field extraction
-  async getWebinarDetails(accessToken, webinarId) {
     try {
-      console.log(`🔍 Fetching comprehensive webinar details for: ${webinarId}`);
-      const webinarDetails = await this.makeAuthenticatedRequest(`/webinars/${webinarId}`, accessToken);
-      
-      // Calculate and log status information
-      const calculatedStatus = this.calculateWebinarStatus(webinarDetails);
-      const storedStatus = webinarDetails.status;
-      
-      console.log(`✅ Successfully fetched comprehensive details for webinar: ${webinarId}`);
-      console.log(`📊 Status Analysis - Stored: ${storedStatus}, Calculated: ${calculatedStatus}`);
-      
-      // Add calculated status to the response for use in sync process
-      webinarDetails.calculated_status = calculatedStatus;
-      
-      console.log('📊 Available fields in webinar details:', Object.keys(webinarDetails));
-      
-      // Log key fields we're particularly interested in
-      if (webinarDetails.registration_url || (webinarDetails.settings && webinarDetails.settings.registration_type)) {
-        console.log(`🔗 Registration info found:`);
-        console.log(`  - registration_url: ${webinarDetails.registration_url || 'not set'}`);
-        console.log(`  - registration_type: ${webinarDetails.settings?.registration_type || 'not set'}`);
-        console.log(`  - approval_type: ${webinarDetails.settings?.approval_type || 'not set'}`);
-      }
-      
-      // Log settings object structure for debugging
-      if (webinarDetails.settings) {
-        console.log(`⚙️ Settings object keys:`, Object.keys(webinarDetails.settings));
-      }
-      
-      return webinarDetails;
-    } catch (error) {
-      console.error(`❌ Failed to fetch details for webinar ${webinarId}:`, error.message);
-      console.error(`❌ Error details:`, error.response?.data || error);
-      throw error; // Re-throw to capture in sync logs
-    }
-  }
-
-  // Get all webinars with enhanced date range support (handles pagination)
-  async getAllWebinars(accessToken, options = {}) {
-    let allWebinars = [];
-    
-    // Calculate 90-day range if no dates provided
-    const dateRange = this.calculateDateRange(options.from, options.to);
-    
-    console.log(`📅 Fetching webinars from ${dateRange.from} to ${dateRange.to}`);
-
-    // Get different types of webinars to ensure comprehensive coverage
-    const webinarTypes = ['scheduled', 'live', 'ended'];
-    
-    for (const type of webinarTypes) {
-      console.log(`🔍 Fetching ${type} webinars...`);
-      
-      let pageNumber = 1;
-      let hasMore = true;
-
-      while (hasMore) {
-        try {
-          const response = await this.getWebinars(accessToken, {
-            type: type,
-            page_number: pageNumber,
-            page_size: options.page_size || 30,
-            from: dateRange.from,
-            to: dateRange.to,
-            ...options
-          });
-
-          const webinars = response.webinars || [];
-          console.log(`📊 Found ${webinars.length} ${type} webinars on page ${pageNumber}`);
-          
-          allWebinars = allWebinars.concat(webinars);
-          
-          hasMore = webinars.length === (options.page_size || 30);
-          pageNumber++;
-
-          // Safety limit to prevent infinite loops
-          if (pageNumber > 100) {
-            console.warn(`⚠️ Reached pagination limit of 100 pages for ${type} webinars`);
-            break;
-          }
-        } catch (error) {
-          console.error(`❌ Failed to fetch ${type} webinars page ${pageNumber}:`, error.message);
-          break;
-        }
-      }
-    }
-
-    // Remove duplicates based on webinar ID
-    const uniqueWebinars = this.removeDuplicateWebinars(allWebinars);
-    console.log(`✅ Total unique webinars found: ${uniqueWebinars.length}`);
-
-    return uniqueWebinars;
-  }
-
-  // Format date for Zoom API (YYYY-MM-DD format)
-  formatDateForZoomAPI(date) {
-    if (!date) return null;
-    
-    const dateObj = date instanceof Date ? date : new Date(date);
-    return dateObj.toISOString().split('T')[0];
-  }
-
-  // Calculate 90-day date range
-  calculateDateRange(fromDate, toDate) {
-    const now = new Date();
-    
-    // Default: 90 days in the past to 90 days in the future
-    const from = fromDate ? new Date(fromDate) : new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
-    const to = toDate ? new Date(toDate) : new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000));
-    
-    return {
-      from: from,
-      to: to
-    };
-  }
-
-  // Remove duplicate webinars based on ID
-  removeDuplicateWebinars(webinars) {
-    const seen = new Set();
-    return webinars.filter(webinar => {
-      const id = webinar.id || webinar.webinar_id;
-      if (seen.has(id)) {
-        return false;
-      }
-      seen.add(id);
-      return true;
-    });
-  }
-
-  // ENHANCED: Fixed webinar participants with comprehensive field mapping and validation
-  async getWebinarParticipants(accessToken, webinarId) {
-    try {
-      console.log(`👥 Fetching comprehensive participant data for webinar ${webinarId}`);
-      
-      const response = await this.makeAuthenticatedRequest(
-        `/past_webinars/${webinarId}/participants`,
-        accessToken,
-        {
-          params: {
-            page_size: 300,  // Maximum allowed
-            include_fields: 'registrant_id,customer_key,join_time,leave_time,duration,attentiveness_score'
-          }
-        }
-      );
-
-      const participants = response.participants || [];
-      console.log(`📊 Found ${participants.length} participants for webinar ${webinarId}`);
-      
-      // CRITICAL FIX: Enhanced participant data with comprehensive validation and proper field mapping
-      const enhancedParticipants = participants.map((participant, index) => {
-        console.log(`🔍 Processing participant ${index + 1}/${participants.length}`);
-        console.log(`📋 Raw participant data:`, JSON.stringify(participant, null, 2));
-        
-        // CRITICAL: Ensure 'name' field is NEVER null (database constraint)
-        let participantName = participant.name || 
-                             participant.user_name || 
-                             participant.participant_name || 
-                             participant.email || 
-                             participant.user_email || 
-                             participant.participant_email ||
-                             `Participant ${index + 1}`;
-        
-        // Additional validation - ensure name is a string and not empty
-        if (!participantName || typeof participantName !== 'string' || participantName.trim() === '') {
-          participantName = `Unknown Participant ${index + 1}`;
-          console.warn(`⚠️ Participant ${index + 1} had no valid name, using fallback: "${participantName}"`);
-        }
-        
-        const mappedParticipant = {
-          // CRITICAL: Database 'name' field (NOT NULL constraint) - ALWAYS guaranteed to be set
-          name: participantName.trim(),
-          
-          // Core identification with validation
-          participant_id: participant.id || participant.participant_uuid || `temp_${Date.now()}_${index}`,
-          participant_uuid: participant.participant_uuid || participant.id || null,
-          participant_name: participantName.trim(), // Keep for compatibility
-          participant_email: participant.email || participant.user_email || null,
-          participant_user_id: participant.user_id || null,
-          email: participant.email || participant.user_email || null, // Map to database email field
-          user_id: participant.user_id || null, // Map to database user_id field
-          registrant_id: participant.registrant_id || null,
-          
-          // Timing information with validation
-          join_time: participant.join_time ? new Date(participant.join_time).toISOString() : null,
-          leave_time: participant.leave_time ? new Date(participant.leave_time).toISOString() : null,
-          duration: parseInt(participant.duration) || 0,
-          
-          // Engagement metrics (from Zoom Dashboard API) with validation
-          attentiveness_score: participant.attentiveness_score ? parseInt(participant.attentiveness_score) : null,
-          camera_on_duration: parseInt(participant.camera_on_duration) || 0,
-          share_application_duration: parseInt(participant.share_application_duration) || 0,
-          share_desktop_duration: parseInt(participant.share_desktop_duration) || 0,
-          share_whiteboard_duration: parseInt(participant.share_whiteboard_duration) || 0,
-          
-          // Interaction flags with boolean validation
-          posted_chat: Boolean(participant.posted_chat),
-          raised_hand: Boolean(participant.raised_hand),
-          answered_polling: Boolean(participant.answered_polling),
-          asked_question: Boolean(participant.asked_question),
-          
-          // Technical information with string validation
-          device: participant.device ? String(participant.device) : null,
-          ip_address: participant.ip_address ? String(participant.ip_address) : null,
-          location: participant.location ? String(participant.location) : null,
-          network_type: participant.network_type ? String(participant.network_type) : null,
-          version: participant.version ? String(participant.version) : null,
-          customer_key: participant.customer_key ? String(participant.customer_key) : null,
-          
-          // Status and other - map to database fields with validation
-          status: participant.status ? String(participant.status) : 'joined', // Map to database status field
-          participant_status: participant.status ? String(participant.status) : 'in_meeting',
-          failover: Boolean(participant.failover)
-        };
-        
-        // Final validation - ensure name is still valid
-        if (!mappedParticipant.name || mappedParticipant.name.trim() === '') {
-          mappedParticipant.name = `Validated Participant ${index + 1}`;
-          console.error(`❌ CRITICAL: Participant ${index + 1} name validation failed, using emergency fallback`);
-        }
-        
-        console.log(`✅ Mapped participant ${index + 1}: name="${mappedParticipant.name}", id="${mappedParticipant.participant_id}"`);
-        return mappedParticipant;
+      const response = await axios.get(`${this.baseURL}/users/me`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
       });
 
-      console.log(`✅ Enhanced ${enhancedParticipants.length} participants with comprehensive data and validation`);
+      return response.data;
+    } catch (error) {
+      console.error('Token validation error:', error.response?.data || error.message);
       
-      // Final safety check - ensure no participant has null name
-      const invalidParticipants = enhancedParticipants.filter(p => !p.name || p.name.trim() === '');
-      if (invalidParticipants.length > 0) {
-        console.error(`❌ CRITICAL ERROR: ${invalidParticipants.length} participants still have invalid names after validation!`);
-        throw new Error(`Data validation failed: ${invalidParticipants.length} participants have invalid names`);
+      if (error.response?.status === 401) {
+        return null; // Token is invalid
       }
       
-      return enhancedParticipants;
-      
-    } catch (error) {
-      console.error(`❌ Failed to fetch participants for webinar ${webinarId}:`, error.message);
-      console.error(`❌ Error details:`, error.response?.data || error);
-      
-      // If it's a 404, the webinar might not have participant data available
-      if (error.response?.status === 404) {
-        console.log(`ℹ️ No participant data available for webinar ${webinarId} (404 - webinar may be too recent or no participants)`);
-        return [];
-      }
-      
-      throw error; // Re-throw to capture in sync logs
-    }
-  }
-
-  // Enhanced webinar registrants with comprehensive data mapping
-  async getWebinarRegistrants(accessToken, webinarId) {
-    try {
-      console.log(`📋 Fetching comprehensive registrant data for webinar ${webinarId}`);
-      
-      let allRegistrants = [];
-      let pageNumber = 1;
-      let hasMore = true;
-
-      while (hasMore) {
-        try {
-          const response = await this.makeAuthenticatedRequest(
-            `/webinars/${webinarId}/registrants`,
-            accessToken,
-            {
-              params: {
-                page_size: 300,  // Maximum allowed
-                page_number: pageNumber,
-                status: 'approved'  // Get approved registrants
-              }
-            }
-          );
-
-          const registrants = response.registrants || [];
-          console.log(`📊 Found ${registrants.length} registrants on page ${pageNumber} for webinar ${webinarId}`);
-          
-          allRegistrants = allRegistrants.concat(registrants);
-          
-          hasMore = registrants.length === 300;
-          pageNumber++;
-
-          // Safety limit
-          if (pageNumber > 50) {
-            console.warn(`⚠️ Reached pagination limit for registrants in webinar ${webinarId}`);
-            break;
-          }
-        } catch (pageError) {
-          console.error(`❌ Failed to fetch registrants page ${pageNumber}:`, pageError.message);
-          console.error(`❌ Error details:`, pageError.response?.data || pageError);
-          break;
-        }
-      }
-
-      // Enhanced registrant data with comprehensive field mapping
-      const enhancedRegistrants = allRegistrants.map(registrant => {
-        console.log(`🔍 Processing registrant: ${registrant.email}`);
-        console.log(`📋 Available registrant fields:`, Object.keys(registrant));
-        
-        return {
-          // Core identification
-          registrant_id: registrant.id || registrant.registrant_id,
-          registrant_uuid: registrant.registrant_uuid || null,
-          email: registrant.email,
-          
-          // Personal information
-          first_name: registrant.first_name || null,
-          last_name: registrant.last_name || null,
-          
-          // Contact information
-          address: registrant.address || null,
-          city: registrant.city || null,
-          country: registrant.country || null,
-          zip: registrant.zip || null,
-          state: registrant.state || null,
-          phone: registrant.phone || null,
-          
-          // Professional information
-          industry: registrant.industry || null,
-          org: registrant.org || registrant.organization || null,
-          job_title: registrant.job_title || null,
-          purchasing_time_frame: registrant.purchasing_time_frame || null,
-          role_in_purchase_process: registrant.role_in_purchase_process || null,
-          no_of_employees: registrant.no_of_employees || null,
-          
-          // Registration details
-          comments: registrant.comments || null,
-          status: registrant.status || 'approved',
-          create_time: registrant.create_time || null,
-          registration_time: registrant.registration_time || registrant.create_time || null,
-          join_url: registrant.join_url || null,
-          
-          // Additional tracking
-          source_id: registrant.source_id || null,
-          tracking_source: registrant.tracking_source || null,
-          language: registrant.language || null,
-          
-          // Custom questions (JSONB)
-          custom_questions: registrant.custom_questions || [],
-          
-          // Attendance tracking (will be populated during sync)
-          attended: false,
-          join_time: null,
-          leave_time: null,
-          duration: null
-        };
-      });
-
-      console.log(`✅ Enhanced ${enhancedRegistrants.length} registrants with comprehensive data`);
-      return enhancedRegistrants;
-      
-    } catch (error) {
-      console.error(`❌ Failed to fetch registrants for webinar ${webinarId}:`, error.message);
-      console.error(`❌ Error details:`, error.response?.data || error);
-      throw error; // Re-throw to capture in sync logs
-    }
-  }
-
-  // Helper method to get registrant details by ID
-  async getRegistrantDetails(accessToken, webinarId, registrantId) {
-    try {
-      const response = await this.makeAuthenticatedRequest(
-        `/webinars/${webinarId}/registrants/${registrantId}`,
-        accessToken
-      );
-      
-      return response;
-    } catch (error) {
-      console.error(`❌ Failed to fetch registrant details for ${registrantId}:`, error.message);
-      console.error(`❌ Error details:`, error.response?.data || error);
-      throw error; // Re-throw to capture in sync logs
+      throw new Error('Failed to validate Zoom access token');
     }
   }
 }
 
-module.exports = new ZoomService();
+const zoomService = new ZoomService();
+
+module.exports = { zoomService };

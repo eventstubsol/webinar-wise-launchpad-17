@@ -6,6 +6,23 @@ const { authMiddleware } = require('./middleware/auth');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Check environment variables at startup
+console.log('=== ENVIRONMENT VARIABLES CHECK ===');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT:', PORT);
+console.log('SUPABASE_URL present:', !!process.env.SUPABASE_URL);
+console.log('SUPABASE_SERVICE_ROLE_KEY present:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+console.log('SUPABASE_ANON_KEY present:', !!process.env.SUPABASE_ANON_KEY);
+
+// Validate required environment variables
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('❌ Missing required environment variables:');
+  if (!process.env.SUPABASE_URL) console.error('- SUPABASE_URL');
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) console.error('- SUPABASE_SERVICE_ROLE_KEY');
+  console.error('Please configure these in your Render dashboard under Environment Variables');
+  process.exit(1);
+}
+
 // Trust proxy for accurate IP addresses
 app.set('trust proxy', 1);
 
@@ -74,4 +91,20 @@ app.listen(PORT, () => {
   console.log(`🚀 Render backend server running on port ${PORT}`);
   console.log(`🌐 CORS enabled for Lovable preview domain`);
   console.log(`📡 Health check available at /health`);
+  
+  // Test Supabase connection at startup
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const { supabaseService } = require('./services/supabaseService');
+    supabaseService.testConnection()
+      .then(success => {
+        if (success) {
+          console.log('✅ Supabase connection verified');
+        } else {
+          console.log('⚠️ Supabase connection test failed');
+        }
+      })
+      .catch(error => {
+        console.log('⚠️ Supabase connection error:', error.message);
+      });
+  }
 });
