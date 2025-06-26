@@ -1,6 +1,25 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
+interface RepairPhaseResult {
+  completed: boolean;
+  issuesFixed?: number;
+  message?: string;
+  webinarsAnalyzed?: number;
+  webinarsNeedingRepair?: number;
+  totalWebinars?: number;
+  errors?: string[];
+}
+
+interface ValidationResult {
+  webinar_id: string;
+  zoom_webinar_id: string;
+  participants_in_table: number;
+  total_attendees_field: number;
+  sync_status: string;
+  needs_repair: boolean;
+}
+
 /**
  * Service for comprehensive webinar data repair and recovery
  * Implements all phases of the repair plan
@@ -12,15 +31,15 @@ export class DataRepairService {
    */
   static async runComprehensiveRepair(connectionId?: string): Promise<{
     success: boolean;
-    phases: Record<string, any>;
+    phases: Record<string, RepairPhaseResult>;
     totalIssuesFixed: number;
     errors: string[];
   }> {
     const results = {
       success: true,
-      phases: {},
+      phases: {} as Record<string, RepairPhaseResult>,
       totalIssuesFixed: 0,
-      errors: []
+      errors: [] as string[]
     };
 
     try {
@@ -34,7 +53,7 @@ export class DataRepairService {
         const validationResult = await this.validateAndCleanupData(connectionId);
         results.phases.dataValidation = validationResult;
         results.totalIssuesFixed += validationResult.issuesFixed || 0;
-      } catch (error) {
+      } catch (error: any) {
         results.errors.push(`Data validation phase failed: ${error.message}`);
         results.success = false;
       }
@@ -44,7 +63,7 @@ export class DataRepairService {
         const syncRepairResult = await this.repairSyncStatuses(connectionId);
         results.phases.syncRepair = syncRepairResult;
         results.totalIssuesFixed += syncRepairResult.issuesFixed || 0;
-      } catch (error) {
+      } catch (error: any) {
         results.errors.push(`Sync status repair phase failed: ${error.message}`);
         results.success = false;
       }
@@ -54,7 +73,7 @@ export class DataRepairService {
         const metricsResult = await this.recalculateAllMetrics(connectionId);
         results.phases.metricsRecalculation = metricsResult;
         results.totalIssuesFixed += metricsResult.issuesFixed || 0;
-      } catch (error) {
+      } catch (error: any) {
         results.errors.push(`Metrics recalculation phase failed: ${error.message}`);
         results.success = false;
       }
@@ -62,7 +81,7 @@ export class DataRepairService {
       console.log(`✅ Comprehensive repair completed. Fixed ${results.totalIssuesFixed} issues.`);
       return results;
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Comprehensive repair failed:', error);
       results.success = false;
       results.errors.push(`Overall process failed: ${error.message}`);
@@ -73,29 +92,61 @@ export class DataRepairService {
   /**
    * Phase 2: Validate and cleanup data inconsistencies
    */
-  private static async validateAndCleanupData(connectionId?: string): Promise<any> {
+  private static async validateAndCleanupData(connectionId?: string): Promise<RepairPhaseResult> {
     console.log('🔍 Phase 2: Validating and cleaning up data...');
 
     try {
-      // Get validation results
-      const { data: validationData, error: validationError } = await supabase
-        .rpc('validate_participant_webinar_relationship');
+      // Get validation results using direct queries instead of RPC
+      let webinarsQuery = supabase
+        .from('zoom_webinars')
+        .select('id, zoom_webinar_id, total_attendees, participant_sync_status');
 
-      if (validationError) {
-        throw validationError;
+      if (connectionId) {
+        webinarsQuery = webinarsQuery.eq('connection_id', connectionId);
       }
 
-      const webinarsNeedingRepair = validationData?.filter((w: any) => w.needs_repair) || [];
+      const { data: webinars, error: webinarsError } = await webinarsQuery;
+
+      if (webinarsError) {
+        throw webinarsError;
+      }
+
+      const validationData: ValidationResult[] = [];
+      
+      if (webinars) {
+        for (const webinar of webinars) {
+          const { count: participantCount } = await supabase
+            .from('zoom_participants')
+            .select('*', { count: 'exact', head: true })
+            .eq('webinar_id', webinar.id);
+
+          const participantsInTable = participantCount || 0;
+          const totalAttendeesField = webinar.total_attendees || 0;
+          const needsRepair = participantsInTable !== totalAttendeesField || 
+                             webinar.participant_sync_status === 'pending';
+
+          validationData.push({
+            webinar_id: webinar.id,
+            zoom_webinar_id: webinar.zoom_webinar_id,
+            participants_in_table: participantsInTable,
+            total_attendees_field: totalAttendeesField,
+            sync_status: webinar.participant_sync_status || 'unknown',
+            needs_repair: needsRepair
+          });
+        }
+      }
+
+      const webinarsNeedingRepair = validationData.filter(w => w.needs_repair);
       
       console.log(`Found ${webinarsNeedingRepair.length} webinars needing data repair`);
 
       return {
         completed: true,
-        webinarsAnalyzed: validationData?.length || 0,
+        webinarsAnalyzed: validationData.length,
         webinarsNeedingRepair: webinarsNeedingRepair.length,
         issuesFixed: 0 // Will be fixed in subsequent phases
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Data validation failed:', error);
       throw error;
     }
@@ -104,7 +155,7 @@ export class DataRepairService {
   /**
    * Phase 3: Repair sync statuses for webinars stuck in incorrect states
    */
-  private static async repairSyncStatuses(connectionId?: string): Promise<any> {
+  private static async repairSyncStatuses(connectionId?: string): Promise<RepairPhaseResult> {
     console.log('🔄 Phase 3: Repairing sync statuses...');
 
     try {
@@ -149,7 +200,7 @@ export class DataRepairService {
         issuesFixed: webinarsToRepair.length,
         message: `Reset sync status for ${webinarsToRepair.length} webinars`
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Sync status repair failed:', error);
       throw error;
     }
@@ -158,7 +209,7 @@ export class DataRepairService {
   /**
    * Phase 4: Recalculate metrics for all webinars with participant/registrant data
    */
-  private static async recalculateAllMetrics(connectionId?: string): Promise<any> {
+  private static async recalculateAllMetrics(connectionId?: string): Promise<RepairPhaseResult> {
     console.log('📊 Phase 4: Recalculating all metrics...');
 
     try {
@@ -189,7 +240,7 @@ export class DataRepairService {
         try {
           await this.recalculateWebinarMetrics(webinar.id);
           metricsFixed++;
-        } catch (error) {
+        } catch (error: any) {
           errors.push(`Failed to recalculate metrics for ${webinar.zoom_webinar_id}: ${error.message}`);
         }
       }
@@ -203,7 +254,7 @@ export class DataRepairService {
         errors: errors,
         message: `Recalculated metrics for ${metricsFixed} webinars`
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Metrics recalculation failed:', error);
       throw error;
     }
@@ -263,18 +314,51 @@ export class DataRepairService {
    */
   static async getRepairStatus(connectionId?: string): Promise<{
     needsRepair: boolean;
-    issues: any[];
+    issues: ValidationResult[];
     recommendations: string[];
   }> {
     try {
-      const { data: validationData, error } = await supabase
-        .rpc('validate_participant_webinar_relationship');
+      // Use direct queries instead of RPC
+      let webinarsQuery = supabase
+        .from('zoom_webinars')
+        .select('id, zoom_webinar_id, total_attendees, participant_sync_status');
+
+      if (connectionId) {
+        webinarsQuery = webinarsQuery.eq('connection_id', connectionId);
+      }
+
+      const { data: webinars, error } = await webinarsQuery;
 
       if (error) {
         throw error;
       }
 
-      const issues = validationData?.filter((w: any) => w.needs_repair) || [];
+      const validationData: ValidationResult[] = [];
+      
+      if (webinars) {
+        for (const webinar of webinars) {
+          const { count: participantCount } = await supabase
+            .from('zoom_participants')
+            .select('*', { count: 'exact', head: true })
+            .eq('webinar_id', webinar.id);
+
+          const participantsInTable = participantCount || 0;
+          const totalAttendeesField = webinar.total_attendees || 0;
+          const needsRepair = participantsInTable !== totalAttendeesField || 
+                             webinar.participant_sync_status === 'pending';
+
+          validationData.push({
+            webinar_id: webinar.id,
+            zoom_webinar_id: webinar.zoom_webinar_id,
+            participants_in_table: participantsInTable,
+            total_attendees_field: totalAttendeesField,
+            sync_status: webinar.participant_sync_status || 'unknown',
+            needs_repair: needsRepair
+          });
+        }
+      }
+
+      const issues = validationData.filter(w => w.needs_repair);
       const needsRepair = issues.length > 0;
 
       const recommendations = [];
@@ -289,7 +373,7 @@ export class DataRepairService {
         issues,
         recommendations
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting repair status:', error);
       throw error;
     }

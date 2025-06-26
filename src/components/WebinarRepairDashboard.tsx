@@ -8,12 +8,21 @@ import { useWebinarMetricsUpdate } from '@/hooks/useWebinarMetricsUpdate';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
+interface ValidationResult {
+  webinar_id: string;
+  zoom_webinar_id: string;
+  participants_in_table: number;
+  total_attendees_field: number;
+  sync_status: string;
+  needs_repair: boolean;
+}
+
 /**
  * Dashboard for diagnosing and repairing webinar data issues
  * Provides tools to validate and fix participant-webinar relationships
  */
 export const WebinarRepairDashboard: React.FC = () => {
-  const [validationResults, setValidationResults] = useState<any>(null);
+  const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
   const [isValidating, setIsValidating] = useState(false);
   const [isRepairing, setIsRepairing] = useState(false);
   
@@ -30,25 +39,54 @@ export const WebinarRepairDashboard: React.FC = () => {
   const runValidation = async () => {
     setIsValidating(true);
     try {
-      const { data, error } = await supabase.rpc('validate_participant_webinar_relationship');
+      // Use a direct query instead of RPC call since the function might not be in types
+      const { data: webinars, error: webinarsError } = await supabase
+        .from('zoom_webinars')
+        .select('id, zoom_webinar_id, total_attendees, participant_sync_status');
       
-      if (error) {
-        throw error;
+      if (webinarsError) {
+        throw webinarsError;
+      }
+
+      // Get participant counts for each webinar
+      const validationResults: ValidationResult[] = [];
+      
+      if (webinars) {
+        for (const webinar of webinars) {
+          const { count: participantCount } = await supabase
+            .from('zoom_participants')
+            .select('*', { count: 'exact', head: true })
+            .eq('webinar_id', webinar.id);
+
+          const participantsInTable = participantCount || 0;
+          const totalAttendeesField = webinar.total_attendees || 0;
+          const needsRepair = participantsInTable !== totalAttendeesField || 
+                             webinar.participant_sync_status === 'pending';
+
+          validationResults.push({
+            webinar_id: webinar.id,
+            zoom_webinar_id: webinar.zoom_webinar_id,
+            participants_in_table: participantsInTable,
+            total_attendees_field: totalAttendeesField,
+            sync_status: webinar.participant_sync_status || 'unknown',
+            needs_repair: needsRepair
+          });
+        }
       }
       
-      setValidationResults(data);
+      setValidationResults(validationResults);
       
-      const needsRepair = data?.filter((w: any) => w.needs_repair).length || 0;
+      const needsRepair = validationResults.filter(w => w.needs_repair).length;
       toast({
         title: "Validation Complete",
-        description: `Found ${needsRepair} webinars needing repair out of ${data?.length || 0} total webinars.`,
+        description: `Found ${needsRepair} webinars needing repair out of ${validationResults.length} total webinars.`,
         variant: needsRepair > 0 ? "destructive" : "default"
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Validation error:', error);
       toast({
         title: "Validation Failed",
-        description: error.message,
+        description: error?.message || 'Unknown error occurred',
         variant: "destructive"
       });
     } finally {
@@ -66,11 +104,11 @@ export const WebinarRepairDashboard: React.FC = () => {
         title: "Repair Started",
         description: "Running comprehensive repair process...",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Repair error:', error);
       toast({
         title: "Repair Failed",
-        description: error.message,
+        description: error?.message || 'Unknown error occurred',
         variant: "destructive"
       });
     } finally {
@@ -79,7 +117,7 @@ export const WebinarRepairDashboard: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusConfig = {
+    const statusConfig: Record<string, { color: string; label: string }> = {
       pending: { color: 'bg-yellow-500', label: 'Pending' },
       processing: { color: 'bg-blue-500', label: 'Processing' },
       completed: { color: 'bg-green-500', label: 'Completed' },
@@ -146,7 +184,7 @@ export const WebinarRepairDashboard: React.FC = () => {
         </CardContent>
       </Card>
 
-      {validationResults && (
+      {validationResults.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Validation Results</CardTitle>
@@ -162,32 +200,32 @@ export const WebinarRepairDashboard: React.FC = () => {
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-red-600">
-                    {validationResults.filter((w: any) => w.needs_repair).length}
+                    {validationResults.filter(w => w.needs_repair).length}
                   </div>
                   <div className="text-gray-600">Need Repair</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-green-600">
-                    {validationResults.filter((w: any) => !w.needs_repair).length}
+                    {validationResults.filter(w => !w.needs_repair).length}
                   </div>
                   <div className="text-gray-600">Healthy</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-yellow-600">
-                    {validationResults.filter((w: any) => w.sync_status === 'pending').length}
+                    {validationResults.filter(w => w.sync_status === 'pending').length}
                   </div>
                   <div className="text-gray-600">Pending Sync</div>
                 </div>
               </div>
               
-              {validationResults.filter((w: any) => w.needs_repair).length > 0 && (
+              {validationResults.filter(w => w.needs_repair).length > 0 && (
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold mb-3">Webinars Needing Repair</h3>
                   <div className="space-y-2 max-h-96 overflow-y-auto">
                     {validationResults
-                      .filter((w: any) => w.needs_repair)
+                      .filter(w => w.needs_repair)
                       .slice(0, 20)
-                      .map((webinar: any, index: number) => (
+                      .map((webinar, index) => (
                       <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex-1">
                           <div className="font-medium">{webinar.zoom_webinar_id}</div>
@@ -222,7 +260,7 @@ export const WebinarRepairDashboard: React.FC = () => {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-green-600">
-                    {recoveryReport.totalFixed}
+                    {recoveryReport.totalFixed || 0}
                   </div>
                   <div className="text-gray-600">Webinars Fixed</div>
                 </div>
