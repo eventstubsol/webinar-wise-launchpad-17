@@ -32,7 +32,7 @@ export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
     syncProgress, 
     syncStatus, 
     currentOperation,
-    activeSyncId,
+    syncId,
     healthCheck 
   } = useZoomSync(connection);
 
@@ -133,9 +133,9 @@ export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
                 </div>
               )}
 
-              {activeSyncId && (
+              {syncId && (
                 <div className="text-xs text-muted-foreground">
-                  Sync ID: {activeSyncId}
+                  Sync ID: {syncId}
                 </div>
               )}
             </div>
