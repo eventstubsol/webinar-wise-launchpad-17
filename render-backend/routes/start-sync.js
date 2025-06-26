@@ -27,11 +27,25 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
 
     console.log(`🔄 [${requestId}] Starting sync for user ${userId}, connection ${connection_id}`);
 
+    // Test Supabase connection first
+    console.log(`🔍 [${requestId}] Testing Supabase Service Role access...`);
+    const isServiceHealthy = await supabaseService.testConnection();
+    
+    if (!isServiceHealthy) {
+      console.error(`❌ [${requestId}] Supabase service is not accessible`);
+      return res.status(503).json({
+        success: false,
+        error: 'Database service is currently unavailable',
+        requestId
+      });
+    }
+
     // Get and verify connection ownership using Service Role
-    console.log(`🔍 [${requestId}] Verifying connection ownership with Service Role...`);
+    console.log(`🔍 [${requestId}] Verifying connection ownership...`);
     const connection = await supabaseService.getConnectionById(connection_id, userId);
     
     if (!connection) {
+      console.error(`❌ [${requestId}] Connection not found or access denied`);
       return res.status(404).json({
         success: false,
         error: 'Connection not found or access denied',
@@ -70,7 +84,7 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
         if (!refreshResult.success) {
           console.log(`❌ [${requestId}] Token refresh failed:`, refreshResult.error);
           
-          // Update connection status to expired using Service Role
+          // Update connection status to expired
           await updateConnectionStatus(connection_id, 'expired', refreshResult.error);
           
           return res.status(401).json({
@@ -105,7 +119,7 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
     }
 
     // Create sync log using Service Role
-    console.log(`📝 [${requestId}] Creating sync log with Service Role...`);
+    console.log(`📝 [${requestId}] Creating sync log...`);
     const syncLog = await supabaseService.createSyncLog(connection_id, sync_type);
     console.log(`✅ [${requestId}] Created sync log:`, syncLog.id);
 
@@ -181,9 +195,8 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
 // Helper function to refresh server-to-server token using Service Role
 async function refreshServerToServerToken(connection, userId) {
   try {
-    console.log(`🔄 Getting user credentials with Service Role for user: ${userId}`);
+    console.log(`🔄 Getting user credentials for user: ${userId}`);
     
-    // Use the new Service Role method to get credentials
     const credentials = await supabaseService.getCredentialsByUserId(userId);
 
     if (!credentials) {

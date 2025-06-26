@@ -21,6 +21,7 @@ class SupabaseService {
     }
 
     try {
+      // Create Service Role client with proper configuration
       this.client = createClient(this.supabaseUrl, this.supabaseServiceKey, {
         auth: {
           autoRefreshToken: false,
@@ -28,20 +29,14 @@ class SupabaseService {
         },
         global: {
           headers: {
-            'X-Client-Info': 'webinar-wise-render-backend'
+            'X-Client-Info': 'webinar-wise-render-backend',
+            'Authorization': `Bearer ${this.supabaseServiceKey}`,
+            'apikey': this.supabaseServiceKey
           }
-        },
-        // Explicitly configure Service Role to bypass RLS
-        db: {
-          schema: 'public'
         }
       });
 
-      // Set the client to use service role context explicitly
-      this.client.rest.headers['Authorization'] = `Bearer ${this.supabaseServiceKey}`;
-      this.client.rest.headers['apikey'] = this.supabaseServiceKey;
-
-      console.log('✅ Supabase service initialized successfully with Service Role bypass');
+      console.log('✅ Supabase service initialized successfully with Service Role');
     } catch (initError) {
       console.error('❌ Failed to initialize Supabase client:', initError);
       throw new Error(`Failed to initialize Supabase client: ${initError.message}`);
@@ -82,7 +77,6 @@ class SupabaseService {
     console.log(`🔍 [${queryId}] Getting connection ${connectionId} for user ${userId}`);
     
     try {
-      // Use Service Role to bypass RLS - query without RLS restrictions
       const { data, error } = await this.client
         .from('zoom_connections')
         .select('*')
@@ -112,7 +106,6 @@ class SupabaseService {
     }
   }
 
-  // New method to get credentials with Service Role bypass
   async getCredentialsByUserId(userId) {
     const queryId = Math.random().toString(36).substring(7);
     console.log(`🔍 [${queryId}] Getting credentials for user ${userId} with Service Role`);
@@ -142,7 +135,6 @@ class SupabaseService {
     }
   }
 
-  // New method to update connection with Service Role bypass
   async updateConnection(connectionId, updates) {
     const updateId = Math.random().toString(36).substring(7);
     console.log(`🔄 [${updateId}] Updating connection ${connectionId} with Service Role`);
@@ -242,7 +234,7 @@ class SupabaseService {
   }
 }
 
-// Create singleton instance with error handling
+// Create singleton instance with enhanced error handling
 let supabaseServiceInstance = null;
 
 try {
