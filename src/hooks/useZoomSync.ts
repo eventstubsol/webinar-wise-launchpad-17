@@ -1,9 +1,9 @@
-
 import { useState, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { RenderZoomService } from '@/services/zoom/RenderZoomService';
 import { ZoomConnection, SyncType } from '@/types/zoom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
 
 interface SyncState {
   isSyncing: boolean;
@@ -122,13 +122,17 @@ export function useZoomSync(connection: ZoomConnection | null) {
           title: "Connection Issue",
           description: "Your Zoom connection has expired. Please reconnect your account.",
           variant: "destructive",
-          action: {
-            altText: "Reconnect",
-            onClick: () => {
-              // Redirect to settings page for reconnection
-              window.location.href = '/settings';
-            }
-          }
+          action: (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                window.location.href = '/settings';
+              }}
+            >
+              Reconnect
+            </Button>
+          )
         });
       } else if (errorMessage.includes('unavailable') || errorMessage.includes('starting up')) {
         toast({
