@@ -233,10 +233,10 @@ async function fetchWebinarList(
 function determineWebinarStatus(webinarDetails: any, webinarType: 'past' | 'upcoming'): string {
   console.log(`[SYNC] Determining status for webinar ${webinarDetails.id}, type: ${webinarType}, API status: ${webinarDetails.status}`);
   
-  // If it's a past webinar, it should always be finished
+  // If it's a past webinar, it should always be 'ended'
   if (webinarType === 'past') {
-    console.log(`[SYNC] Setting status to 'finished' because webinar type is 'past'`);
-    return 'finished';
+    console.log(`[SYNC] Setting status to 'ended' because webinar type is 'past'`);
+    return 'ended';
   }
   
   // Check if start_time is in the past
@@ -245,23 +245,27 @@ function determineWebinarStatus(webinarDetails: any, webinarType: 'past' | 'upco
     const now = new Date();
     
     if (startTime < now) {
-      console.log(`[SYNC] Setting status to 'finished' because start_time (${startTime}) is in the past`);
-      return 'finished';
+      console.log(`[SYNC] Setting status to 'ended' because start_time (${startTime}) is in the past`);
+      return 'ended';
     }
   }
   
-  // Use API status if provided and valid
+  // Use API status if provided and valid, but map 'finished' to 'ended'
   if (webinarDetails.status) {
-    const validStatuses = ['waiting', 'started', 'finished', 'scheduled'];
+    if (webinarDetails.status === 'finished') {
+      console.log(`[SYNC] Mapping API status 'finished' to 'ended'`);
+      return 'ended';
+    }
+    const validStatuses = ['waiting', 'started', 'scheduled', 'upcoming'];
     if (validStatuses.includes(webinarDetails.status)) {
       console.log(`[SYNC] Using API status: ${webinarDetails.status}`);
       return webinarDetails.status;
     }
   }
   
-  // Default to scheduled for upcoming webinars
-  console.log(`[SYNC] Defaulting to 'scheduled' status`);
-  return 'scheduled';
+  // Default to 'upcoming' for upcoming webinars
+  console.log(`[SYNC] Defaulting to 'upcoming' status`);
+  return 'upcoming';
 }
 
 // Fetch complete webinar details
@@ -517,6 +521,7 @@ async function processWebinar(
 
     // Prepare data for upsert - Enhanced with additional data
     const webinarData = {
+      zoom_webinar_id: webinarDetails.id || webinarDetails.uuid,
       webinar_id: webinarDetails.id || webinarDetails.uuid,
       webinar_uuid: webinarDetails.uuid || webinarDetails.id || `webinar-${webinarDetails.id}`,
       connection_id: connectionId,
@@ -546,6 +551,7 @@ async function processWebinar(
       // Use fetched data for counts
       total_registrants: additionalData.registrantCount || webinarDetails.registrants_count || 0,
       total_attendees: additionalData.participantCount || webinarDetails.participants_count || 0,
+      total_absentees: 0, // Will be calculated below
       total_minutes: webinarDetails.total_minutes || 0,
       avg_attendance_duration: additionalData.avgAttendanceDuration || webinarDetails.avg_attendance_duration || 0,
       
@@ -630,11 +636,15 @@ async function processWebinar(
       participant_sync_status: queueItem.webinar_type === 'past' ? 'pending' : 'not_applicable'
     };
 
+    // Calculate absentees
+    webinarData.total_absentees = Math.max(0, webinarData.total_registrants - webinarData.total_attendees);
+    
     // Log populated vs missing fields
     const populatedFields = Object.keys(webinarData).filter(key => webinarData[key] !== null && webinarData[key] !== undefined);
     const nullFields = Object.keys(webinarData).filter(key => webinarData[key] === null || webinarData[key] === undefined);
     
     console.log(`[SYNC] Populated ${populatedFields.length} fields for webinar ${queueItem.webinar_id}`);
+    console.log(`[SYNC] Webinar metrics - Registrants: ${webinarData.total_registrants}, Attendees: ${webinarData.total_attendees}, Absentees: ${webinarData.total_absentees}`);
     if (nullFields.length > 0) {
       console.log(`[SYNC] Fields with null/undefined values: ${nullFields.join(', ')}`);
     }
@@ -643,7 +653,7 @@ async function processWebinar(
     const { error: upsertError } = await supabase
       .from('zoom_webinars')
       .upsert(webinarData, {
-        onConflict: 'webinar_id,connection_id'
+        onConflict: 'connection_id,zoom_webinar_id'
       });
 
     if (upsertError) {
