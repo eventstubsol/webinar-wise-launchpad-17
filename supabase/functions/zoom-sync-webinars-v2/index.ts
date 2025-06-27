@@ -19,6 +19,7 @@ interface SyncRequest {
 
 interface WebinarQueueItem {
   webinar_id: string;
+  webinar_uuid?: string;
   webinar_type: 'past' | 'upcoming';
   priority?: number;
 }
@@ -275,13 +276,22 @@ function determineWebinarStatus(webinarDetails: any, webinarType: 'past' | 'upco
 async function fetchWebinarDetails(
   accessToken: string,
   webinarId: string,
+  webinarUuid: string | undefined,
   type: 'past' | 'upcoming'
 ): Promise<any> {
-  const endpoint = type === 'past' 
-    ? `https://api.zoom.us/v2/past_webinars/${webinarId}`
-    : `https://api.zoom.us/v2/webinars/${webinarId}`;
-
-  console.log(`[SYNC] Fetching details for ${type} webinar ${webinarId}`);
+  let endpoint: string;
+  
+  // For past webinars, we need to use the UUID if available, otherwise fall back to regular endpoint
+  if (type === 'past' && webinarUuid) {
+    // URL encode the UUID to handle special characters like = and /
+    const encodedUuid = encodeURIComponent(webinarUuid);
+    endpoint = `https://api.zoom.us/v2/past_webinars/${encodedUuid}`;
+    console.log(`[SYNC] Fetching past webinar details using UUID: ${webinarUuid} (encoded: ${encodedUuid})`);
+  } else {
+    // For upcoming webinars or if UUID is not available, use the regular endpoint
+    endpoint = `https://api.zoom.us/v2/webinars/${webinarId}`;
+    console.log(`[SYNC] Fetching ${type} webinar details using ID: ${webinarId}`);
+  }
 
   const response = await fetch(endpoint, {
     headers: {
@@ -293,6 +303,25 @@ async function fetchWebinarDetails(
   if (!response.ok) {
     const error = await response.text();
     console.error(`[SYNC] Failed to fetch webinar details for ${webinarId}: ${error}`);
+    
+    // If past webinar endpoint fails with UUID, try with ID
+    if (type === 'past' && webinarUuid && response.status === 404) {
+      console.log(`[SYNC] Past webinar not found with UUID, trying with ID...`);
+      const idEndpoint = `https://api.zoom.us/v2/webinars/${webinarId}`;
+      const idResponse = await fetch(idEndpoint, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (idResponse.ok) {
+        const data = await idResponse.json();
+        console.log(`[SYNC] Successfully fetched webinar details using ID fallback`);
+        return data;
+      }
+    }
+    
     throw new Error(`Failed to fetch webinar details: ${error}`);
   }
 
@@ -350,13 +379,26 @@ async function fetchRegistrantCount(
 async function fetchParticipantData(
   accessToken: string,
   webinarId: string,
+  webinarUuid: string | undefined,
   rateLimiter: RateLimitManager
 ): Promise<{ count: number; avgDuration: number }> {
   try {
     console.log(`[SYNC] Fetching participant data for webinar ${webinarId}`);
     
+    // For participants, we need to use UUID if available
+    let endpoint: string;
+    if (webinarUuid) {
+      const encodedUuid = encodeURIComponent(webinarUuid);
+      endpoint = `https://api.zoom.us/v2/past_webinars/${encodedUuid}/participants?page_size=300`;
+      console.log(`[SYNC] Using UUID for participants: ${webinarUuid}`);
+    } else {
+      // Fallback to ID (might not work for past webinars)
+      endpoint = `https://api.zoom.us/v2/past_webinars/${webinarId}/participants?page_size=300`;
+      console.log(`[SYNC] Using ID for participants (fallback): ${webinarId}`);
+    }
+    
     const response = await rateLimiter.executeWithRateLimit(async () => {
-      return await fetch(`https://api.zoom.us/v2/past_webinars/${webinarId}/participants?page_size=300`, {
+      return await fetch(endpoint, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
@@ -386,7 +428,7 @@ async function fetchParticipantData(
       return { count, avgDuration };
     }
     
-    console.log(`[SYNC] Could not fetch participant data for webinar ${webinarId}`);
+    console.log(`[SYNC] Could not fetch participant data for webinar ${webinarId} (status: ${response.status})`);
     return { count: 0, avgDuration: 0 };
   } catch (error) {
     console.error(`[SYNC] Error fetching participant data for ${webinarId}:`, error);
@@ -398,6 +440,7 @@ async function fetchParticipantData(
 async function fetchAdditionalWebinarData(
   accessToken: string,
   webinarId: string,
+  webinarUuid: string | undefined,
   type: 'past' | 'upcoming',
   rateLimiter: RateLimitManager
 ): Promise<any> {
@@ -410,7 +453,7 @@ async function fetchAdditionalWebinarData(
 
   // Fetch participant data for past webinars
   if (type === 'past') {
-    const participantData = await fetchParticipantData(accessToken, webinarId, rateLimiter);
+    const participantData = await fetchParticipantData(accessToken, webinarId, webinarUuid, rateLimiter);
     additionalData.participantCount = participantData.count;
     additionalData.avgAttendanceDuration = participantData.avgDuration;
   }
@@ -438,10 +481,11 @@ async function fetchAdditionalWebinarData(
   }
 
   // Fetch polls, Q&A for past webinars
-  if (type === 'past') {
+  if (type === 'past' && webinarUuid) {
     try {
       additionalData.polls = await rateLimiter.executeWithRateLimit(async () => {
-        const response = await fetch(`https://api.zoom.us/v2/past_webinars/${webinarId}/polls`, {
+        const encodedUuid = encodeURIComponent(webinarUuid);
+        const response = await fetch(`https://api.zoom.us/v2/past_webinars/${encodedUuid}/polls`, {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
@@ -460,7 +504,8 @@ async function fetchAdditionalWebinarData(
 
     try {
       additionalData.qa = await rateLimiter.executeWithRateLimit(async () => {
-        const response = await fetch(`https://api.zoom.us/v2/past_webinars/${webinarId}/qa`, {
+        const encodedUuid = encodeURIComponent(webinarUuid);
+        const response = await fetch(`https://api.zoom.us/v2/past_webinars/${encodedUuid}/qa`, {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
@@ -503,10 +548,33 @@ async function processWebinar(
       })
       .eq('id', queueItem.id);
 
+    // First, check if we already have this webinar with a UUID
+    let webinarUuid = queueItem.webinar_uuid;
+    if (!webinarUuid && queueItem.webinar_type === 'past') {
+      // Try to get UUID from existing webinar record
+      const { data: existingWebinar } = await supabase
+        .from('zoom_webinars')
+        .select('uuid, zoom_uuid')
+        .eq('zoom_webinar_id', queueItem.webinar_id)
+        .eq('connection_id', connectionId)
+        .single();
+      
+      if (existingWebinar) {
+        webinarUuid = existingWebinar.uuid || existingWebinar.zoom_uuid;
+        console.log(`[SYNC] Found existing UUID for webinar ${queueItem.webinar_id}: ${webinarUuid}`);
+      }
+    }
+
     // Fetch complete webinar details
     const webinarDetails = await rateLimiter.executeWithRateLimit(() => 
-      fetchWebinarDetails(accessToken, queueItem.webinar_id, queueItem.webinar_type)
+      fetchWebinarDetails(accessToken, queueItem.webinar_id, webinarUuid, queueItem.webinar_type)
     );
+
+    // Update webinarUuid if we got it from the details
+    if (!webinarUuid && webinarDetails.uuid) {
+      webinarUuid = webinarDetails.uuid;
+      console.log(`[SYNC] Got UUID from webinar details: ${webinarUuid}`);
+    }
 
     console.log(`[SYNC] Processing webinar ${webinarDetails.id}: ${webinarDetails.topic}`);
     console.log(`[SYNC] Webinar type: ${queueItem.webinar_type}, Status from API: ${webinarDetails.status}`);
@@ -515,6 +583,7 @@ async function processWebinar(
     const additionalData = await fetchAdditionalWebinarData(
       accessToken,
       queueItem.webinar_id,
+      webinarUuid,
       queueItem.webinar_type,
       rateLimiter
     );
@@ -526,7 +595,9 @@ async function processWebinar(
     const webinarData = {
       zoom_webinar_id: webinarDetails.id || webinarDetails.uuid,
       webinar_id: webinarDetails.id || webinarDetails.uuid,
-      webinar_uuid: webinarDetails.uuid || webinarDetails.id || `webinar-${webinarDetails.id}`,
+      webinar_uuid: webinarUuid || webinarDetails.uuid || webinarDetails.id || `webinar-${webinarDetails.id}`,
+      uuid: webinarUuid || webinarDetails.uuid,
+      zoom_uuid: webinarUuid || webinarDetails.uuid,
       connection_id: connectionId,
       topic: webinarDetails.topic,
       type: webinarDetails.type || 5,
@@ -857,6 +928,7 @@ serve(async (req) => {
         if (id && !webinarMap.has(id)) {
           webinarMap.set(id, {
             webinar_id: id,
+            webinar_uuid: w.uuid,
             webinar_type: 'past'
           });
         }
@@ -900,6 +972,7 @@ serve(async (req) => {
         if (id && !webinarMap.has(id)) {
           webinarMap.set(id, {
             webinar_id: id,
+            webinar_uuid: w.uuid,
             webinar_type: 'upcoming'
           });
         }
@@ -946,15 +1019,26 @@ serve(async (req) => {
       15
     );
 
-    // Insert webinars into queue
+    // Insert webinars into queue with UUID
     if (allWebinars.length > 0) {
       const queueItems = allWebinars.map((w, index) => ({
         sync_id: syncId,
         webinar_id: w.webinar_id,
+        webinar_uuid: w.webinar_uuid,
         webinar_type: w.webinar_type,
         priority: 5,
         scheduled_at: new Date().toISOString()
       }));
+
+      // First, need to add webinar_uuid column to the table if it doesn't exist
+      await supabase.rpc('exec_sql', {
+        sql: `
+          ALTER TABLE webinar_sync_queue 
+          ADD COLUMN IF NOT EXISTS webinar_uuid TEXT;
+        `
+      }).catch(() => {
+        // Column might already exist, ignore error
+      });
 
       const { error: queueError } = await supabase
         .from('webinar_sync_queue')
