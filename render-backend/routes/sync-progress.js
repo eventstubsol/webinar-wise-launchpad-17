@@ -38,34 +38,41 @@ router.get('/sync-progress/:syncId', extractUser, async (req, res) => {
       status: syncLog.sync_status,
       started_at: syncLog.started_at,
       total_items: syncLog.total_items,
-      processed_items: syncLog.processed_items
+      processed_items: syncLog.processed_items,
+      current_operation: syncLog.current_operation,
+      sync_progress: syncLog.sync_progress
     });
 
-    // Calculate progress percentage
-    let progress = 0;
-    if (syncLog.total_items > 0) {
+    // Use sync_progress from database if available, otherwise calculate
+    let progress = syncLog.sync_progress || 0;
+    
+    // If sync_progress is not set but we have items, calculate it
+    if (!syncLog.sync_progress && syncLog.total_items > 0) {
       progress = Math.round((syncLog.processed_items / syncLog.total_items) * 100);
-    } else if (syncLog.sync_status === 'completed') {
+    } else if (syncLog.sync_status === 'completed' || syncLog.status === 'completed') {
       progress = 100;
-    } else if (syncLog.sync_status === 'running') {
-      // If running but no items yet, show at least 5%
+    } else if (syncLog.sync_status === 'running' && progress === 0) {
+      // If running but no progress yet, show at least 5%
       progress = 5;
     }
 
-    // Get current operation from metadata or determine from status
-    let currentOperation = 'Initializing...';
+    // Use current_operation from database if available
+    let currentOperation = syncLog.current_operation || 'Initializing...';
     
-    if (syncLog.sync_status === 'completed') {
-      currentOperation = 'Sync completed successfully!';
-    } else if (syncLog.sync_status === 'failed') {
-      currentOperation = 'Sync failed';
-    } else if (syncLog.sync_status === 'cancelled') {
-      currentOperation = 'Sync was cancelled';
-    } else if (syncLog.sync_status === 'running') {
-      if (syncLog.total_items > 0) {
-        currentOperation = `Processing webinars (${syncLog.processed_items}/${syncLog.total_items})`;
-      } else {
-        currentOperation = 'Fetching webinar data...';
+    // Fallback to generating operation message if not in database
+    if (!syncLog.current_operation) {
+      if (syncLog.sync_status === 'completed' || syncLog.status === 'completed') {
+        currentOperation = `Sync completed successfully! Processed ${syncLog.processed_items || 0} webinars.`;
+      } else if (syncLog.sync_status === 'failed') {
+        currentOperation = 'Sync failed';
+      } else if (syncLog.sync_status === 'cancelled') {
+        currentOperation = 'Sync was cancelled';
+      } else if (syncLog.sync_status === 'running') {
+        if (syncLog.total_items > 0) {
+          currentOperation = `Processing webinars (${syncLog.processed_items}/${syncLog.total_items})`;
+        } else {
+          currentOperation = 'Fetching webinar data...';
+        }
       }
     }
 
@@ -77,7 +84,7 @@ router.get('/sync-progress/:syncId', extractUser, async (req, res) => {
     const response = {
       success: true,
       syncId: syncLog.id,
-      status: syncLog.sync_status,
+      status: syncLog.sync_status || syncLog.status || 'pending',
       progress: progress,
       currentOperation: currentOperation,
       totalItems: syncLog.total_items || 0,

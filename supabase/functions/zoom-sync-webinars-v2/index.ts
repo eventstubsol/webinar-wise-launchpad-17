@@ -767,12 +767,14 @@ serve(async (req) => {
       syncId = syncLogId;
       console.log(`[SYNC] Using provided sync log ID: ${syncId}`);
       
-      // Update sync log status to running if needed
+      // Update sync log status to running with initial progress
       await supabase
         .from('zoom_sync_logs')
         .update({
           sync_status: 'running',
           started_at: new Date().toISOString(),
+          current_operation: 'Initializing sync...',
+          sync_progress: 0,
           metadata: { dateRange, requestId }
         })
         .eq('id', syncId);
@@ -787,6 +789,8 @@ serve(async (req) => {
           sync_status: 'running',
           started_at: new Date().toISOString(),
           sync_type: syncMode,
+          current_operation: 'Initializing sync...',
+          sync_progress: 0,
           metadata: { dateRange, requestId }
         })
         .select()
@@ -818,8 +822,18 @@ serve(async (req) => {
 
     // Phase 1: Fetch webinar lists
     await broadcastProgress(supabase, syncId, 'status', 'Fetching webinar lists...', {}, 0);
+    
+    // Update sync log
+    await supabase
+      .from('zoom_sync_logs')
+      .update({
+        current_operation: 'Fetching webinar lists...',
+        sync_progress: 5
+      })
+      .eq('id', syncId);
 
-    const allWebinars: WebinarQueueItem[] = [];
+    // Use a Map to avoid duplicates by webinar ID
+    const webinarMap = new Map<string, WebinarQueueItem>();
     
     // Fetch past webinars
     console.log('[SYNC] Fetching past webinars...');
@@ -837,10 +851,16 @@ serve(async (req) => {
         )
       );
       
-      allWebinars.push(...webinars.map(w => ({
-        webinar_id: w.id || w.uuid,
-        webinar_type: 'past' as const
-      })));
+      // Add to map to avoid duplicates
+      webinars.forEach(w => {
+        const id = w.id || w.uuid;
+        if (id && !webinarMap.has(id)) {
+          webinarMap.set(id, {
+            webinar_id: id,
+            webinar_type: 'past'
+          });
+        }
+      });
       
       nextPageToken = token;
       pageCount++;
@@ -850,18 +870,18 @@ serve(async (req) => {
         syncId,
         'progress',
         `Fetching past webinars... (Page ${pageCount})`,
-        { pageCount, webinarCount: allWebinars.length },
+        { pageCount, webinarCount: webinarMap.size },
         5
       );
     } while (nextPageToken);
 
-    console.log(`[SYNC] Found ${allWebinars.length} past webinars`);
+    const pastWebinarCount = webinarMap.size;
+    console.log(`[SYNC] Found ${pastWebinarCount} unique past webinars`);
 
     // Fetch upcoming webinars
     console.log('[SYNC] Fetching upcoming webinars...');
     nextPageToken = undefined;
     pageCount = 0;
-    const upcomingStart = allWebinars.length;
     
     do {
       const { webinars, nextPageToken: token } = await rateLimiter.executeWithRateLimit(() =>
@@ -874,10 +894,16 @@ serve(async (req) => {
         )
       );
       
-      allWebinars.push(...webinars.map(w => ({
-        webinar_id: w.id || w.uuid,
-        webinar_type: 'upcoming' as const
-      })));
+      // Add to map, but if a webinar already exists as 'past', keep it as 'past'
+      webinars.forEach(w => {
+        const id = w.id || w.uuid;
+        if (id && !webinarMap.has(id)) {
+          webinarMap.set(id, {
+            webinar_id: id,
+            webinar_type: 'upcoming'
+          });
+        }
+      });
       
       nextPageToken = token;
       pageCount++;
@@ -887,13 +913,28 @@ serve(async (req) => {
         syncId,
         'progress',
         `Fetching upcoming webinars... (Page ${pageCount})`,
-        { pageCount, webinarCount: allWebinars.length - upcomingStart },
+        { pageCount, webinarCount: webinarMap.size - pastWebinarCount },
         10
       );
     } while (nextPageToken);
 
-    console.log(`[SYNC] Found ${allWebinars.length - upcomingStart} upcoming webinars`);
-    console.log(`[SYNC] Total webinars to process: ${allWebinars.length}`);
+    // Convert map to array
+    const allWebinars = Array.from(webinarMap.values());
+    const upcomingWebinarCount = webinarMap.size - pastWebinarCount;
+    
+    console.log(`[SYNC] Found ${upcomingWebinarCount} unique upcoming webinars`);
+    console.log(`[SYNC] Total unique webinars to process: ${allWebinars.length}`);
+
+    // Update sync log with correct total
+    await supabase
+      .from('zoom_sync_logs')
+      .update({
+        total_items: allWebinars.length,
+        processed_items: 0,
+        current_operation: `Queuing ${allWebinars.length} webinars for processing...`,
+        sync_progress: 15
+      })
+      .eq('id', syncId);
 
     // Phase 2: Queue webinars for processing
     await broadcastProgress(
@@ -947,10 +988,10 @@ serve(async (req) => {
       .order('priority', { ascending: false })
       .order('scheduled_at', { ascending: true });
 
+    let processedCount = 0;
+    let failedCount = 0;
+    
     if (queuedItems && queuedItems.length > 0) {
-      let processedCount = 0;
-      let failedCount = 0;
-      
       for (const item of queuedItems) {
         try {
           await processWebinar(supabase, accessToken, item, rateLimiter, syncId, connectionId);
@@ -958,14 +999,26 @@ serve(async (req) => {
           
           // Update progress
           const percentage = 15 + (processedCount / queuedItems.length) * 80; // 15-95%
+          const currentOperation = `Processing webinars (${processedCount}/${queuedItems.length})`;
+          
           await broadcastProgress(
             supabase,
             syncId,
             'progress',
-            `Processing webinars... (${processedCount}/${queuedItems.length})`,
+            currentOperation,
             { processedCount, totalCount: queuedItems.length },
             percentage
           );
+          
+          // Update sync log
+          await supabase
+            .from('zoom_sync_logs')
+            .update({
+              processed_items: processedCount,
+              current_operation: currentOperation,
+              sync_progress: Math.round(percentage)
+            })
+            .eq('id', syncId);
           
           // Update sync state
           await supabase
@@ -989,18 +1042,25 @@ serve(async (req) => {
     }
 
     // Phase 4: Complete sync
-    const finalProcessedCount = queuedItems ? processedCount : 0;
+    const finalProcessedCount = processedCount;
+    const finalMessage = `Sync completed successfully! Processed ${processedCount} webinars.`;
+    
     await supabase
       .from('zoom_sync_logs')
       .update({
         sync_status: 'completed',
+        status: 'completed',
         completed_at: new Date().toISOString(),
         total_items: allWebinars.length,
         processed_items: finalProcessedCount,
+        current_operation: finalMessage,
+        sync_progress: 100,
         metadata: {
           dateRange,
           syncMode,
           totalWebinars: allWebinars.length,
+          processedWebinars: finalProcessedCount,
+          failedWebinars: failedCount,
           requestId
         }
       })
@@ -1010,8 +1070,8 @@ serve(async (req) => {
       supabase,
       syncId,
       'status',
-      `Sync completed successfully! Processed ${allWebinars.length} webinars.`,
-      { totalWebinars: allWebinars.length },
+      finalMessage,
+      { totalWebinars: allWebinars.length, processedWebinars: finalProcessedCount },
       100
     );
 
@@ -1021,8 +1081,8 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         syncId,
-        webinarsSynced: allWebinars.length,
-        message: 'Sync completed successfully'
+        webinarsSynced: finalProcessedCount,
+        message: finalMessage
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
