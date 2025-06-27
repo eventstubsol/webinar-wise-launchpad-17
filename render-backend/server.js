@@ -127,13 +127,16 @@ app.use((req, res, next) => {
 // Health check endpoint (no auth required)
 app.use('/health', require('./routes/health'));
 
+// Public routes that don't require authentication
+app.use('/api/email/track', require('./routes/api/email')); // Email tracking endpoints
+
 // Apply authentication middleware to all other routes
 app.use(authMiddleware);
 
 // Enhanced route registration with error handling
 const registerRoute = (path, routeModule, description) => {
   try {
-    app.use('/', routeModule);
+    app.use(path, routeModule);
     console.log(`📍 Route registered: ${description}`);
   } catch (error) {
     console.error(`❌ Failed to register route ${description}:`, error.message);
@@ -141,6 +144,8 @@ const registerRoute = (path, routeModule, description) => {
 };
 
 console.log('=== REGISTERING API ROUTES ===');
+
+// Zoom integration routes
 registerRoute('/', require('./routes/validate-credentials'), 'POST /validate-credentials');
 registerRoute('/', require('./routes/refresh-token'), 'POST /refresh-token');
 registerRoute('/', require('./routes/test-connection'), 'GET /test-connection');
@@ -151,6 +156,12 @@ registerRoute('/', require('./routes/disconnect'), 'POST /disconnect');
 registerRoute('/', require('./routes/sync-webinars'), 'POST /sync-webinars');
 registerRoute('/', require('./routes/reset-participant-sync'), 'POST /reset-participant-sync');
 registerRoute('/', require('./routes/performance-test'), 'POST /performance-test');
+
+// New API routes (migrated from edge functions)
+registerRoute('/api/email', require('./routes/api/email'), 'Email API endpoints');
+registerRoute('/api/campaigns', require('./routes/api/campaigns'), 'Campaign API endpoints');
+registerRoute('/api/ai', require('./routes/api/ai'), 'AI/Analytics API endpoints');
+registerRoute('/api/user', require('./routes/api/user'), 'User management API endpoints');
 
 // Enhanced 404 handler
 app.use('*', (req, res) => {
@@ -164,6 +175,7 @@ app.use('*', (req, res) => {
     requestId,
     availableRoutes: [
       'GET /health',
+      // Zoom routes
       'POST /validate-credentials',
       'POST /refresh-token',
       'GET /test-connection',
@@ -173,7 +185,27 @@ app.use('*', (req, res) => {
       'POST /disconnect',
       'POST /sync-webinars',
       'POST /reset-participant-sync',
-      'POST /performance-test'
+      'POST /performance-test',
+      // Email routes
+      'POST /api/email/send',
+      'POST /api/email/process-queue',
+      'GET /api/email/track/:action',
+      'GET /api/email/preferences',
+      'POST /api/email/preferences',
+      'GET /api/email/campaigns/:campaignId/stats',
+      // Campaign routes
+      'POST /api/campaigns/launch',
+      'POST /api/campaigns/schedule',
+      'GET /api/campaigns/:campaignId/status',
+      'POST /api/campaigns/:campaignId/cancel',
+      // AI routes
+      'POST /api/ai/generate-insights',
+      'GET /api/ai/insights/:webinarId',
+      'GET /api/ai/insights/detail/:insightId',
+      // User routes
+      'POST /api/user/export-data',
+      'POST /api/user/delete-account',
+      'GET /api/user/stats'
     ]
   });
 });
