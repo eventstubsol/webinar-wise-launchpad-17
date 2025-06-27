@@ -278,4 +278,14 @@ class ZoomService {
 // Create singleton instance
 const zoomService = new ZoomService();
 
-module.exports = { zoomService };
+// Export both the instance and individual methods for backward compatibility
+module.exports = zoomService;
+module.exports.zoomService = zoomService;
+module.exports.validateAccessToken = (token) => zoomService.validateAccessToken(token);
+module.exports.getServerToServerToken = (clientId, clientSecret, accountId) => zoomService.getServerToServerToken(clientId, clientSecret, accountId);
+module.exports.refreshOAuthToken = (refreshToken) => zoomService.refreshOAuthToken(refreshToken);
+module.exports.refreshTokenWithCredentials = (refreshToken, clientId, clientSecret) => zoomService.refreshTokenWithCredentials(refreshToken, clientId, clientSecret);
+module.exports.testConnection = (accessToken) => zoomService.testConnection(accessToken);
+module.exports.getWebinars = (accessToken, options) => zoomService.getWebinars(accessToken, options);
+module.exports.getWebinar = (webinarId, accessToken) => zoomService.getWebinar(webinarId, accessToken);
+module.exports.getWebinarParticipants = (webinarId, accessToken, options) => zoomService.getWebinarParticipants(webinarId, accessToken, options);

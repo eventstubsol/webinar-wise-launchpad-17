@@ -3,6 +3,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const zoomService = require('../services/zoomService');
+const zoomSyncService = require('../services/zoomSyncService');
 const supabaseService = require('../services/supabaseService');
 const { authMiddleware, extractUser } = require('../middleware/auth');
 
@@ -62,33 +63,58 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
 
     await supabaseService.createSyncLog(syncLogData);
 
-    // Start webinar sync process (simplified for now)
+    // Start webinar sync process
     try {
-      if (webinarId) {
-        // Sync specific webinar
-        const webinar = await zoomService.getWebinar(webinarId, connection.access_token);
-        console.log('Synced webinar:', webinar.topic);
-      } else {
-        // Sync all webinars
-        const webinars = await zoomService.getWebinars(connection.access_token, { page_size: 10 });
-        console.log('Found webinars:', webinars.webinars?.length || 0);
+      // Get Zoom credentials
+      const credentials = await supabaseService.getZoomCredentials(userId);
+      if (!credentials) {
+        throw new Error('Zoom credentials not found. Please set up your Zoom credentials first.');
       }
+
+      // Progress callback function
+      const onProgress = async (progress, operation) => {
+        await supabaseService.updateSyncLog(syncId, {
+          sync_progress: progress,
+          current_operation: operation,
+          updated_at: new Date().toISOString()
+        });
+      };
+
+      // Start the sync
+      const syncResults = await zoomSyncService.syncWebinars({
+        connection,
+        credentials,
+        syncLogId: syncId,
+        syncType: type,
+        onProgress
+      });
 
       // Update sync log as completed
       await supabaseService.updateSyncLog(syncId, {
         sync_status: 'completed',
         status: 'completed',
         completed_at: new Date().toISOString(),
-        processed_items: 1
+        processed_items: syncResults.processedWebinars,
+        total_items: syncResults.totalWebinars,
+        webinars_synced: syncResults.processedWebinars,
+        error_details: syncResults.errors,
+        sync_progress: 100,
+        current_operation: 'Sync completed successfully'
       });
 
+      console.log('Sync completed:', syncResults);
+
     } catch (syncError) {
+      console.error('Sync error:', syncError);
+      
       // Update sync log as failed
       await supabaseService.updateSyncLog(syncId, {
         sync_status: 'failed',
         status: 'failed',
-        error_message: syncError.message,
-        completed_at: new Date().toISOString()
+        error_message: `Sync error: ${syncError.message}`,
+        completed_at: new Date().toISOString(),
+        sync_progress: 0,
+        current_operation: 'Sync failed'
       });
       throw syncError;
     }

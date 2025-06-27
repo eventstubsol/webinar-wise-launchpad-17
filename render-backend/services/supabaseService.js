@@ -554,6 +554,36 @@ class SupabaseService {
       return [];
     }
   }
+
+  // NEW METHOD: Get Zoom credentials for a user
+  async getZoomCredentials(userId) {
+    const queryId = Math.random().toString(36).substring(7);
+    console.log(`🔍 [${queryId}] Getting Zoom credentials for user ${userId}`);
+    
+    try {
+      const { data, error } = await this.serviceClient
+        .from('zoom_credentials')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .single();
+
+      if (error) {
+        console.error(`❌ [${queryId}] Error fetching zoom credentials:`, {
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        return null;
+      }
+
+      console.log(`✅ [${queryId}] Zoom credentials found for user`);
+      return data;
+    } catch (error) {
+      console.error(`💥 [${queryId}] Exception fetching zoom credentials:`, error);
+      return null;
+    }
+  }
 }
 
 // Create singleton instance with enhanced error handling and detailed logging
@@ -612,6 +642,9 @@ try {
       throw new Error(`Supabase service not initialized: ${initError.message}`);
     },
     getRecentSyncLogs: async () => {
+      throw new Error(`Supabase service not initialized: ${initError.message}`);
+    },
+    getZoomCredentials: async () => {
       throw new Error(`Supabase service not initialized: ${initError.message}`);
     }
   };
