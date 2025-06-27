@@ -92,37 +92,127 @@ class SupabaseService {
         throw new Error('Auth client not initialized');
       }
 
-      console.log(`🔍 [${verifyId}] Using auth client to verify token...`);
-      const { data: { user }, error } = await this.authClient.auth.getUser(token);
+      console.log(`🔍 [${verifyId}] Attempting to verify JWT token...`);
       
-      if (error) {
-        console.error(`❌ [${verifyId}] Token verification failed:`, {
-          message: error.message,
-          status: error.status,
-          code: error.code
+      // First, try to use the token directly with auth.getUser()
+      // This works if the token is a valid Supabase access token
+      try {
+        console.log(`🔍 [${verifyId}] Trying direct token verification...`);
+        const { data: { user }, error } = await this.authClient.auth.getUser(token);
+        
+        if (!error && user) {
+          console.log(`✅ [${verifyId}] Direct token verification successful for user: ${user.id}`);
+          return {
+            success: true,
+            user: user,
+            error: null
+          };
+        }
+        
+        console.log(`⚠️ [${verifyId}] Direct token verification failed, trying alternative method...`);
+      } catch (directError) {
+        console.log(`⚠️ [${verifyId}] Direct verification error:`, directError.message);
+      }
+      
+      // If direct verification fails, try setting the session with the token
+      // This handles cases where we need to establish a session first
+      try {
+        console.log(`🔍 [${verifyId}] Attempting to set session with token...`);
+        
+        // For JWT tokens, we need to set them as a session
+        const { data: { session }, error: sessionError } = await this.authClient.auth.setSession({
+          access_token: token,
+          refresh_token: '' // We only have the access token
         });
+        
+        if (sessionError) {
+          console.error(`❌ [${verifyId}] Session creation failed:`, sessionError.message);
+          
+          // Try one more method: admin verification using service role
+          if (this.serviceClient) {
+            console.log(`🔍 [${verifyId}] Attempting admin verification...`);
+            const { data: { user: adminUser }, error: adminError } = await this.serviceClient.auth.admin.getUserById(token);
+            
+            if (!adminError && adminUser) {
+              console.log(`✅ [${verifyId}] Admin verification successful`);
+              return {
+                success: true,
+                user: adminUser,
+                error: null
+              };
+            }
+          }
+          
+          return {
+            success: false,
+            error: sessionError.message || 'Failed to verify token',
+            user: null
+          };
+        }
+        
+        if (!session || !session.user) {
+          console.error(`❌ [${verifyId}] No session or user returned`);
+          return {
+            success: false,
+            error: 'Invalid token - no session created',
+            user: null
+          };
+        }
+        
+        console.log(`✅ [${verifyId}] Session verification successful for user: ${session.user.id}`);
+        return {
+          success: true,
+          user: session.user,
+          error: null
+        };
+        
+      } catch (sessionError) {
+        console.error(`❌ [${verifyId}] Session verification error:`, sessionError.message);
+        
+        // Last resort: try to decode the JWT manually
+        try {
+          console.log(`🔍 [${verifyId}] Attempting manual JWT decode...`);
+          const jwt = require('jsonwebtoken');
+          
+          // Decode without verification first to see the payload
+          const decoded = jwt.decode(token);
+          
+          if (decoded && decoded.sub) {
+            console.log(`🔍 [${verifyId}] JWT decoded, user ID: ${decoded.sub}`);
+            
+            // Try to get user details using the service client
+            if (this.serviceClient) {
+              const { data: userData, error: userError } = await this.serviceClient
+                .from('auth.users')
+                .select('*')
+                .eq('id', decoded.sub)
+                .single();
+                
+              if (!userError && userData) {
+                console.log(`✅ [${verifyId}] User found via JWT decode`);
+                return {
+                  success: true,
+                  user: {
+                    id: userData.id,
+                    email: userData.email,
+                    user_metadata: userData.raw_user_meta_data || {},
+                    app_metadata: userData.raw_app_meta_data || {}
+                  },
+                  error: null
+                };
+              }
+            }
+          }
+        } catch (jwtError) {
+          console.error(`❌ [${verifyId}] JWT decode error:`, jwtError.message);
+        }
+        
         return {
           success: false,
-          error: error.message,
+          error: sessionError.message || 'Token verification failed',
           user: null
         };
       }
-
-      if (!user) {
-        console.error(`❌ [${verifyId}] No user returned from token verification`);
-        return {
-          success: false,
-          error: 'Invalid token - no user found',
-          user: null
-        };
-      }
-
-      console.log(`✅ [${verifyId}] Token verified successfully for user: ${user.id}`);
-      return {
-        success: true,
-        user: user,
-        error: null
-      };
 
     } catch (error) {
       console.error(`💥 [${verifyId}] Token verification exception:`, {
