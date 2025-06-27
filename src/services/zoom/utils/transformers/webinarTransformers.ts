@@ -39,11 +39,12 @@ export class WebinarTransformers {
     // Extract settings for comprehensive field mapping
     const settings = apiWebinar.settings || {};
     
-    // FIXED: Complete transformation with ALL 39 fields mapped correctly INCLUDING attendees_count and registrants_count
+    // Transform to match exact database schema
     const transformedData = {
       // Connection and identification
       connection_id: connectionId,
-      webinar_id: apiWebinar.id?.toString() || apiWebinar.webinar_id?.toString(),
+      zoom_webinar_id: apiWebinar.id?.toString() || apiWebinar.webinar_id?.toString(),
+      webinar_id: apiWebinar.id?.toString() || apiWebinar.webinar_id?.toString(), // Keep for backward compatibility
       uuid: apiWebinar.uuid || null,
       webinar_uuid: apiWebinar.uuid || null, // Keep for backward compatibility
       occurrence_id: apiWebinar.occurrence_id || apiWebinar.occurrences?.[0]?.occurrence_id || null,
@@ -53,7 +54,7 @@ export class WebinarTransformers {
       host_email: apiWebinar.host_email || null,
       topic: apiWebinar.topic || '',
       agenda: apiWebinar.agenda || null,
-      type: apiWebinar.type || 5,
+      webinar_type: apiWebinar.type || 5,
       status: normalizeStatus(apiWebinar.status), // FIXED: Proper enum conversion
       start_time: apiWebinar.start_time || null,
       duration: apiWebinar.duration || null,
@@ -61,30 +62,23 @@ export class WebinarTransformers {
       
       // Creation and update tracking
       webinar_created_at: apiWebinar.created_at || null,
-      created_at_db: null, // Will be set by database
-      updated_at_db: null, // Will be set by database
       
       // Access and registration
-      registration_required: !!apiWebinar.registration_url,
       registration_type: apiWebinar.registration_type || settings.registration_type || null,
       registration_url: apiWebinar.registration_url || null,
       join_url: apiWebinar.join_url || null,
       start_url: apiWebinar.start_url || null,
       approval_type: settings.approval_type || null,
-      max_registrants: settings.registrants_restrict_number || null,
-      max_attendees: settings.max_attendees || null,
+      registrants_restrict_number: settings.registrants_restrict_number || null,
       
       // Security and access
       password: apiWebinar.password || null,
       h323_passcode: apiWebinar.h323_passcode || null,
-      pstn_password: apiWebinar.pstn_password || null,
       encrypted_passcode: apiWebinar.encrypted_passcode || null,
-      webinar_passcode: apiWebinar.webinar_passcode || null,
-      pmi: apiWebinar.pmi || null,
       
       // Simulive and special features
       is_simulive: apiWebinar.is_simulive || false,
-      simulive_webinar_id: apiWebinar.record_file_id || null,
+      record_file_id: apiWebinar.record_file_id || null,
       
       // Computed metrics (will be calculated separately but need to be present for type safety)
       total_registrants: null,
@@ -93,16 +87,14 @@ export class WebinarTransformers {
       total_minutes: null,
       avg_attendance_duration: null,
       
-      // FIXED: Add the missing attendees_count and registrants_count fields
-      attendees_count: null,
-      registrants_count: null,
+      // Note: attendees_count and registrants_count fields have been removed as they don't exist in the database
+      // The database uses total_attendees and total_registrants instead
       
       // JSONB fields with enhanced extraction
       settings: this.extractSettingsData(apiWebinar.settings, apiWebinar),
       recurrence: apiWebinar.recurrence || null,
       occurrences: apiWebinar.occurrences || null,
       tracking_fields: apiWebinar.tracking_fields || null,
-      panelists: apiWebinar.panelists || null,
       
       // Sync tracking
       synced_at: new Date().toISOString(),

@@ -10,50 +10,43 @@ import { WebinarSettings, RegistrantInfo, RecordingInfo, PanelistInfo, ChatMessa
 export interface ZoomWebinar {
   id: string;
   connection_id: string;
-  webinar_id: string;
+  webinar_id: string | null;
+  zoom_webinar_id: string;
   uuid: string | null; // Fixed: mapped to database 'uuid' field
   webinar_uuid: string | null; // Keep for backward compatibility
+  zoom_uuid: string | null;
   occurrence_id: string | null; // Added missing field from database
   host_id: string | null;
   host_email: string | null;
   topic: string;
   agenda: string | null;
-  type: WebinarType | null;
-  status: WebinarStatus | null;
-  start_time: string | null;
-  duration: number | null;
-  timezone: string | null;
+  webinar_type: number;
+  status: string;
+  start_time: string;
+  duration: number;
+  timezone: string;
   
   // Database creation tracking
-  webinar_created_at: string | null; // Added missing field
-  created_at: string | null;
-  updated_at: string | null;
-  created_at_db: string | null; // Added missing database field
-  updated_at_db: string | null; // Added missing database field
+  webinar_created_at: string | null;
+  created_at: string;
+  updated_at: string;
   
   // Access and registration
-  registration_required: boolean | null;
+  registration_type: number | null;
   registration_url: string | null;
-  join_url: string | null;
+  join_url: string;
   start_url: string | null;
   password: string | null;
-  approval_type: ApprovalType | null;
-  max_registrants: number | null;
-  max_attendees: number | null; // Added missing field
+  approval_type: number | null;
+  registrants_restrict_number: number | null;
   
-  // Updated field names to match Zoom API and database
-  h323_passcode: string | null; // Updated field name
-  pstn_password: string | null; // Updated field name  
-  encrypted_passcode: string | null; // Updated field name
-  
-  // New Zoom API fields
-  registration_type: number | null;
-  pmi: number | null;
-  webinar_passcode: string | null;
+  // Security fields
+  h323_passcode: string | null;
+  encrypted_passcode: string | null;
   
   // Computed metrics fields
-  attendees_count: number | null;
-  registrants_count: number | null;
+  // NOTE: attendees_count and registrants_count have been removed as they don't exist in the database
+  // Use total_attendees and total_registrants instead
   total_registrants: number | null; // Added missing field
   total_attendees: number | null; // Added missing field
   total_absentees: number | null; // Added missing field
@@ -61,22 +54,23 @@ export interface ZoomWebinar {
   avg_attendance_duration: number | null; // Added missing field
   
   // JSONB fields
-  settings: WebinarSettings | null;
-  recurrence: any | null; // JSON type
-  occurrences: any | null; // JSON type
-  tracking_fields: TrackingInfo | null;
-  panelists: PanelistInfo[] | null;
+  settings: any | null;
+  recurrence: any | null;
+  occurrences: any | null;
+  tracking_fields: any | null;
   
   // Simulive and recording fields
-  is_simulive: boolean | null; // Added missing field
-  simulive_webinar_id: string | null; // Added missing field
+  is_simulive: boolean | null;
+  record_file_id: string | null;
+  transition_to_live: boolean | null;
+  creation_source: string | null;
   
   // Sync tracking fields
-  synced_at: string | null;
-  last_synced_at: string | null; // Added missing field
-  participant_sync_status: 'not_applicable' | 'pending' | 'synced' | 'failed' | 'no_participants' | null;
+  synced_at: string;
+  last_synced_at: string | null;
+  participant_sync_status: string | null;
   participant_sync_attempted_at: string | null;
-  participant_sync_completed_at: string | null; // Added missing field
+  participant_sync_completed_at: string | null;
   participant_sync_error: string | null;
 }
 

@@ -40,8 +40,8 @@ export class WebinarOperations {
       .upsert(
         dbWebinar,
         {
-          onConflict: 'connection_id,zoom_webinar_id',
-          ignoreDuplicates: false
+        onConflict: 'connection_id,zoom_webinar_id',
+        ignoreDuplicates: false
         }
       )
       .select('id')
