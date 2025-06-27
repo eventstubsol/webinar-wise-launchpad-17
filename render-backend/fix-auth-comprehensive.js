@@ -46,9 +46,20 @@ async function testAuthStrategies() {
     }
   }
   
-  if (!allEnvPresent) {
+  if (!envVars['SUPABASE_URL'] || !envVars['SUPABASE_ANON_KEY']) {
     log('\n❌ Missing required environment variables. Please check your .env file.', 'red');
+    log('\nTo fix:', 'yellow');
+    log('1. Copy .env.example to .env', 'yellow');
+    log('2. Update the values with your Supabase project details', 'yellow');
+    log('3. Get service role key from: https://app.supabase.com/project/lgajnzldkfpvcuofjxom/settings/api', 'yellow');
     process.exit(1);
+  }
+  
+  if (!envVars['SUPABASE_SERVICE_ROLE_KEY']) {
+    log('\n⚠️  WARNING: SUPABASE_SERVICE_ROLE_KEY is missing', 'yellow');
+    log('   Some tests will be skipped. Get it from:', 'yellow');
+    log('   https://app.supabase.com/project/lgajnzldkfpvcuofjxom/settings/api', 'yellow');
+    log('   (Look for the service_role key, not anon key)\n', 'yellow');
   }
   
   // Create clients
@@ -63,25 +74,34 @@ async function testAuthStrategies() {
     });
     log('   ✅ Auth client created', 'green');
     
-    const serviceClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
-    log('   ✅ Service client created', 'green');
+    let serviceClient = null;
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      serviceClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      });
+      log('   ✅ Service client created', 'green');
+    } else {
+      log('   ⚠️  Service client skipped (no service role key)', 'yellow');
+    }
     
     // Test database connection
     log('\n3. Testing Database Connection:', 'cyan');
-    const { error: dbError } = await serviceClient
-      .from('zoom_connections')
-      .select('id')
-      .limit(1);
-      
-    if (dbError) {
-      log(`   ❌ Database connection failed: ${dbError.message}`, 'red');
+    if (serviceClient) {
+      const { error: dbError } = await serviceClient
+        .from('zoom_connections')
+        .select('id')
+        .limit(1);
+        
+      if (dbError) {
+        log(`   ❌ Database connection failed: ${dbError.message}`, 'red');
+      } else {
+        log('   ✅ Database connection successful', 'green');
+      }
     } else {
-      log('   ✅ Database connection successful', 'green');
+      log('   ⚠️  Database test skipped (no service client)', 'yellow');
     }
     
     // Create a test user and get a token
@@ -162,37 +182,45 @@ async function testAuthStrategies() {
     
     // Method 3: Admin get user (using service role)
     log('\n   Method 3: Admin API (Service Role)', 'yellow');
-    try {
-      if (session.user) {
-        const { data: { user: adminUser }, error } = await serviceClient.auth.admin.getUserById(session.user.id);
-        if (error) {
-          log(`   ❌ Failed: ${error.message}`, 'red');
-        } else if (adminUser) {
-          log(`   ✅ Success! User ID: ${adminUser.id}`, 'green');
+    if (serviceClient) {
+      try {
+        if (session.user) {
+          const { data: { user: adminUser }, error } = await serviceClient.auth.admin.getUserById(session.user.id);
+          if (error) {
+            log(`   ❌ Failed: ${error.message}`, 'red');
+          } else if (adminUser) {
+            log(`   ✅ Success! User ID: ${adminUser.id}`, 'green');
+          }
         }
+      } catch (e) {
+        log(`   ❌ Exception: ${e.message}`, 'red');
       }
-    } catch (e) {
-      log(`   ❌ Exception: ${e.message}`, 'red');
+    } else {
+      log('   ⚠️  Skipped (no service client)', 'yellow');
     }
     
     // Method 4: Direct database query
     log('\n   Method 4: Direct Database Query', 'yellow');
-    try {
-      if (session.user) {
-        const { data, error } = await serviceClient
-          .from('auth.users')
-          .select('id, email')
-          .eq('id', session.user.id)
-          .single();
-          
-        if (error) {
-          log(`   ❌ Failed: ${error.message}`, 'red');
-        } else if (data) {
-          log(`   ✅ Success! User: ${data.email}`, 'green');
+    if (serviceClient) {
+      try {
+        if (session.user) {
+          const { data, error } = await serviceClient
+            .from('auth.users')
+            .select('id, email')
+            .eq('id', session.user.id)
+            .single();
+            
+          if (error) {
+            log(`   ❌ Failed: ${error.message}`, 'red');
+          } else if (data) {
+            log(`   ✅ Success! User: ${data.email}`, 'green');
+          }
         }
+      } catch (e) {
+        log(`   ❌ Exception: ${e.message}`, 'red');
       }
-    } catch (e) {
-      log(`   ❌ Exception: ${e.message}`, 'red');
+    } else {
+      log('   ⚠️  Skipped (no service client)', 'yellow');
     }
     
     // Recommendations

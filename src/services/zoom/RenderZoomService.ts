@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { DirectZoomSync } from './DirectZoomSyncService';
 
 // Updated with your actual Render deployment URL
 const RENDER_API_BASE_URL = process.env.NODE_ENV === 'production' 
@@ -41,6 +42,7 @@ class RenderZoomServiceClass {
   private maxRetries: number = 3;
   private retryDelay: number = 1000; // 1 second
   private isWakingUp: boolean = false;
+  private useDirectSync: boolean = false;
 
   private async getAuthHeaders(): Promise<Record<string, string>> {
     try {
@@ -194,7 +196,70 @@ class RenderZoomServiceClass {
       console.error(`❌ Render API Error (${endpoint}):`, error);
       
       if (error instanceof AxiosError) {
-        // Handle specific error cases with user-friendly messages
+        // Handle 401 Authorization error specially
+        if (error.response?.status === 401) {
+          console.error('Authorization failed - likely missing Supabase env vars on Render');
+          
+          toast.error(
+            'Backend authorization failed. Using direct sync mode.',
+            {
+              duration: 10000,
+              description: 'The Render backend is missing Supabase configuration.',
+              action: {
+                label: 'How to Fix',
+                onClick: () => {
+                  // Create and download fix instructions
+                  const instructions = `
+RENDER BACKEND AUTHORIZATION FIX
+================================
+
+The sync is failing because the Render backend cannot verify your session.
+This happens when Supabase environment variables are not set on Render.
+
+TO FIX:
+1. Go to https://dashboard.render.com
+2. Find service: webinar-wise-launchpad-17
+3. Click "Environment" tab
+4. Add these variables:
+
+   SUPABASE_URL = ${supabase.supabaseUrl || 'your-supabase-url'}
+   SUPABASE_SERVICE_ROLE_KEY = (get from Supabase dashboard)
+   SUPABASE_ANON_KEY = ${supabase.supabaseKey || 'your-anon-key'}
+   NODE_ENV = production
+
+5. Get the service role key from:
+   https://app.supabase.com/project/lgajnzldkfpvcuofjxom/settings/api
+
+6. After adding, Render will auto-redeploy
+7. Wait 2-3 minutes for deployment to complete
+
+TEMPORARY WORKAROUND:
+The app is now using direct sync mode which bypasses the Render backend.
+This will work but may be slower for large datasets.
+`;
+                  const blob = new Blob([instructions], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'fix-render-auth.txt';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }
+              }
+            }
+          );
+          
+          // Enable direct sync mode
+          this.useDirectSync = true;
+          
+          return {
+            success: false,
+            error: 'Authorization failed. Backend is missing Supabase configuration. Using direct sync mode as fallback.',
+            isServiceAvailable: true
+          };
+        }
+        
+        // Handle other specific error cases
         if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
           this.serviceHealthy = false;
           
@@ -253,16 +318,6 @@ class RenderZoomServiceClass {
           };
         }
 
-        if (error.response?.status === 401) {
-          toast.error('Authentication failed. Please log out and log back in.');
-          
-          return {
-            success: false,
-            error: 'Authentication failed. Your session may have expired. Please log out and log back in.',
-            isServiceAvailable: true
-          };
-        }
-
         if (error.response?.status === 403) {
           toast.error('Access denied. You do not have permission for this action.');
           
@@ -305,6 +360,10 @@ class RenderZoomServiceClass {
   }
 
   async testConnection(connectionId?: string): Promise<ApiResponse> {
+    if (this.useDirectSync) {
+      return DirectZoomSync.testConnection(connectionId!);
+    }
+    
     const endpoint = connectionId 
       ? `/test-connection?connection_id=${connectionId}`
       : '/test-connection';
@@ -345,6 +404,12 @@ class RenderZoomServiceClass {
   }
 
   async syncWebinars(connectionId: string, options: any = {}): Promise<ApiResponse> {
+    // If direct sync mode is enabled, use it
+    if (this.useDirectSync) {
+      console.log('Using direct sync mode due to authorization issues');
+      return DirectZoomSync.syncWebinars(connectionId);
+    }
+    
     // Show initial sync message
     toast.loading('Syncing webinars...', { id: 'webinar-sync' });
     
@@ -352,6 +417,14 @@ class RenderZoomServiceClass {
       connection_id: connectionId, 
       ...options 
     });
+    
+    // Check if we need to fallback to direct sync
+    if (!result.success && result.error?.includes('Authorization')) {
+      console.log('Authorization failed, falling back to direct sync');
+      toast.dismiss('webinar-sync');
+      this.useDirectSync = true;
+      return DirectZoomSync.syncWebinars(connectionId);
+    }
     
     if (result.success) {
       toast.success('Webinars synced successfully!', { id: 'webinar-sync' });
@@ -371,10 +444,11 @@ class RenderZoomServiceClass {
   }
 
   // Helper method to get service status
-  getServiceStatus(): { healthy: boolean; lastCheck: number } {
+  getServiceStatus(): { healthy: boolean; lastCheck: number; directSyncMode: boolean } {
     return {
       healthy: this.serviceHealthy,
-      lastCheck: this.lastHealthCheck
+      lastCheck: this.lastHealthCheck,
+      directSyncMode: this.useDirectSync
     };
   }
 
@@ -394,6 +468,12 @@ class RenderZoomServiceClass {
       // Try to wake it up
       await this.waitForService();
     }
+  }
+
+  // Reset to try Render backend again
+  resetDirectSyncMode(): void {
+    this.useDirectSync = false;
+    toast.info('Switching back to Render backend mode');
   }
 }
 
