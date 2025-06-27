@@ -203,15 +203,15 @@ class ZoomService {
   /**
    * Get user's webinars
    */
-  async getWebinars(accessToken, userId = 'me', options = {}) {
+  async getWebinars(accessToken, options = {}) {
     try {
       const params = new URLSearchParams({
-        page_size: options.pageSize || 30,
-        page_number: options.pageNumber || 1,
+        page_size: options.page_size || 100,
+        page_number: options.page_number || 1,
         type: options.type || 'scheduled'
       });
 
-      const response = await axios.get(`${this.baseURL}/users/${userId}/webinars?${params}`, {
+      const response = await axios.get(`${this.baseURL}/users/me/webinars?${params}`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
@@ -219,19 +219,58 @@ class ZoomService {
         timeout: 30000
       });
 
-      return {
-        success: true,
-        webinars: response.data.webinars || [],
-        totalRecords: response.data.total_records || 0,
-        pageCount: response.data.page_count || 1
-      };
+      return response.data;
       
     } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-        status: error.response?.status
-      };
+      console.error('Get webinars error:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a specific webinar
+   */
+  async getWebinar(webinarId, accessToken) {
+    try {
+      const response = await axios.get(`${this.baseURL}/webinars/${webinarId}`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
+
+      return response.data;
+      
+    } catch (error) {
+      console.error('Get webinar error:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get webinar participants
+   */
+  async getWebinarParticipants(webinarId, accessToken, options = {}) {
+    try {
+      const params = new URLSearchParams({
+        page_size: options.page_size || 100,
+        page_number: options.page_number || 1
+      });
+
+      const response = await axios.get(`${this.baseURL}/past_webinars/${webinarId}/participants?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
+
+      return response.data;
+      
+    } catch (error) {
+      console.error('Get webinar participants error:', error.response?.data || error.message);
+      throw error;
     }
   }
 }
