@@ -212,7 +212,17 @@ router.post('/start-sync', extractUser, async (req, res) => {
 
     // Create sync log using Service Role
     console.log(`📝 [${requestId}] Creating sync log...`);
-    const syncLog = await supabaseService.createSyncLog(connection_id, sync_type);
+    const syncLogData = {
+      connection_id: connection_id,
+      sync_type: sync_type,
+      sync_status: 'started',
+      started_at: new Date().toISOString(),
+      total_items: 0,
+      processed_items: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    const syncLog = await supabaseService.createSyncLog(syncLogData);
     console.log(`✅ [${requestId}] Created sync log:`, syncLog.id);
 
     // Update sync log to running
@@ -280,7 +290,7 @@ async function refreshServerToServerToken(connection, userId) {
     console.log(`✅ Retrieved credentials for user ${userId}`);
 
     // Get new token using client credentials flow
-    const { zoomService } = require('../services/zoomService');
+    const zoomService = require('../services/zoomService');
     const tokenData = await zoomService.getServerToServerToken(
       credentials.client_id,
       credentials.client_secret,
@@ -323,7 +333,7 @@ async function refreshOAuthToken(connection) {
       throw new Error('No refresh token available');
     }
 
-    const { zoomService } = require('../services/zoomService');
+    const zoomService = require('../services/zoomService');
     const tokenData = await zoomService.refreshOAuthToken(connection.refresh_token);
     
     // Update connection in database using Service Role

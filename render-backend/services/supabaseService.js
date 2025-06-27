@@ -360,23 +360,14 @@ class SupabaseService {
     }
   }
 
-  async createSyncLog(connectionId, syncType) {
+  async createSyncLog(syncLogData) {
     const logId = Math.random().toString(36).substring(7);
-    console.log(`📝 [${logId}] Creating sync log for connection ${connectionId}, type: ${syncType}`);
+    console.log(`📝 [${logId}] Creating sync log`);
     
     try {
       const { data, error } = await this.serviceClient
         .from('zoom_sync_logs')
-        .insert({
-          connection_id: connectionId,
-          sync_type: syncType,
-          sync_status: 'started',
-          started_at: new Date().toISOString(),
-          total_items: 0,
-          processed_items: 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
+        .insert(syncLogData)
         .select()
         .single();
 
