@@ -1,6 +1,6 @@
-
 import axios, { AxiosError } from 'axios';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 // Updated with your actual Render deployment URL
 const RENDER_API_BASE_URL = process.env.NODE_ENV === 'production' 
@@ -40,6 +40,7 @@ class RenderZoomServiceClass {
   private healthCheckInterval: number = 60000; // 1 minute
   private maxRetries: number = 3;
   private retryDelay: number = 1000; // 1 second
+  private isWakingUp: boolean = false;
 
   private async getAuthHeaders(): Promise<Record<string, string>> {
     try {
@@ -94,9 +95,22 @@ class RenderZoomServiceClass {
       return false;
     }
 
+    // Show wake-up message on first attempt
+    if (retryCount === 0 && !this.isWakingUp) {
+      this.isWakingUp = true;
+      toast.loading('Waking up sync service... This may take 30-60 seconds on free tier.', {
+        id: 'service-wakeup',
+        duration: 60000
+      });
+    }
+
     const isHealthy = await this.checkServiceHealth();
     
     if (isHealthy) {
+      if (this.isWakingUp) {
+        toast.success('Sync service is ready!', { id: 'service-wakeup' });
+        this.isWakingUp = false;
+      }
       return true;
     }
 
@@ -120,11 +134,30 @@ class RenderZoomServiceClass {
       const serviceAvailable = await this.waitForService();
       
       if (!serviceAvailable) {
+        if (this.isWakingUp) {
+          toast.dismiss('service-wakeup');
+          this.isWakingUp = false;
+        }
+        
+        // Show helpful error message
+        toast.error(
+          'Sync service is not responding. The service may be sleeping (free tier limitation).',
+          {
+            duration: 10000,
+            action: {
+              label: 'View Fix Guide',
+              onClick: () => {
+                window.open('/FIX_EDGE_FUNCTION_SYNC_ERROR.md', '_blank');
+              }
+            }
+          }
+        );
+        
         return {
           success: false,
-          error: 'Render service is currently unavailable. The service may be starting up or experiencing issues. Please wait a few minutes and try again.',
+          error: 'Sync service is currently unavailable. If you\'re on Render\'s free tier, the service may be sleeping. Please wait a moment and try again, or check the Render dashboard.',
           isServiceAvailable: false,
-          retryAfter: 60 // Suggest retry after 1 minute
+          retryAfter: 60
         };
       }
     }
@@ -161,21 +194,38 @@ class RenderZoomServiceClass {
       console.error(`❌ Render API Error (${endpoint}):`, error);
       
       if (error instanceof AxiosError) {
-        // Handle specific error cases
+        // Handle specific error cases with user-friendly messages
         if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
           this.serviceHealthy = false;
+          
+          toast.error(
+            'Cannot connect to sync service. The service may be offline.',
+            {
+              duration: 10000,
+              description: 'Check the Render dashboard for service status.',
+              action: {
+                label: 'Open Render',
+                onClick: () => {
+                  window.open('https://dashboard.render.com', '_blank');
+                }
+              }
+            }
+          );
+          
           return {
             success: false,
-            error: 'Cannot connect to Render service. The service may be offline or the URL may be incorrect.',
+            error: 'Cannot connect to sync service. The backend service may be offline or starting up. Please check the Render dashboard.',
             isServiceAvailable: false,
             retryAfter: 60
           };
         }
         
         if (error.code === 'ECONNABORTED' || error.code === 'TIMEOUT') {
+          toast.error('Request timed out. The service is taking longer than expected to respond.');
+          
           return {
             success: false,
-            error: 'Request timed out. The service may be slow to respond or starting up.',
+            error: 'Request timed out. The service may be waking up from sleep mode (free tier). Please try again in a moment.',
             isServiceAvailable: false,
             retryAfter: 30
           };
@@ -183,31 +233,39 @@ class RenderZoomServiceClass {
         
         if (error.response?.status === 503) {
           this.serviceHealthy = false;
+          toast.loading('Service is starting up. Please wait...', { duration: 5000 });
+          
           return {
             success: false,
-            error: 'Render service is starting up. Please wait a moment and try again.',
+            error: 'Sync service is starting up. This is normal for free tier services. Please wait 30-60 seconds and try again.',
             isServiceAvailable: false,
             retryAfter: 30
           };
         }
 
         if (error.response?.status === 500) {
+          toast.error('Server error. This may be due to configuration issues.');
+          
           return {
             success: false,
-            error: 'Internal server error occurred. This may be due to missing environment variables or database connection issues on the server.',
-            isServiceAvailable: true // Service is responding but has internal issues
+            error: 'Internal server error. Please check that all environment variables are correctly set in the Render dashboard.',
+            isServiceAvailable: true
           };
         }
 
         if (error.response?.status === 401) {
+          toast.error('Authentication failed. Please log out and log back in.');
+          
           return {
             success: false,
-            error: 'Authentication failed. Please log out and log back in.',
+            error: 'Authentication failed. Your session may have expired. Please log out and log back in.',
             isServiceAvailable: true
           };
         }
 
         if (error.response?.status === 403) {
+          toast.error('Access denied. You do not have permission for this action.');
+          
           return {
             success: false,
             error: 'Access denied. You do not have permission to access this resource.',
@@ -215,16 +273,24 @@ class RenderZoomServiceClass {
           };
         }
         
+        // Generic error
+        const errorMessage = error.response?.data?.error || error.message || 'Network error occurred';
+        toast.error(errorMessage);
+        
         return {
           success: false,
-          error: error.response?.data?.error || error.message || 'Network error occurred',
+          error: errorMessage,
           isServiceAvailable: error.response?.status ? true : false
         };
       }
       
+      // Non-Axios error
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      toast.error(errorMessage);
+      
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        error: errorMessage,
         isServiceAvailable: false
       };
     }
@@ -253,10 +319,21 @@ class RenderZoomServiceClass {
   }
 
   async startSync(connectionId: string, syncType: string = 'manual'): Promise<ApiResponse> {
-    return this.makeRequest('/start-sync', 'POST', { 
+    // Show initial sync message
+    toast.loading('Starting sync process...', { id: 'sync-start' });
+    
+    const result = await this.makeRequest('/start-sync', 'POST', { 
       connection_id: connectionId, 
       sync_type: syncType 
     });
+    
+    if (result.success) {
+      toast.success('Sync started successfully!', { id: 'sync-start' });
+    } else {
+      toast.dismiss('sync-start');
+    }
+    
+    return result;
   }
 
   async getSyncProgress(syncId: string): Promise<ApiResponse> {
@@ -268,10 +345,21 @@ class RenderZoomServiceClass {
   }
 
   async syncWebinars(connectionId: string, options: any = {}): Promise<ApiResponse> {
-    return this.makeRequest('/sync-webinars', 'POST', { 
+    // Show initial sync message
+    toast.loading('Syncing webinars...', { id: 'webinar-sync' });
+    
+    const result = await this.makeRequest('/sync-webinars', 'POST', { 
       connection_id: connectionId, 
       ...options 
     });
+    
+    if (result.success) {
+      toast.success('Webinars synced successfully!', { id: 'webinar-sync' });
+    } else {
+      toast.dismiss('webinar-sync');
+    }
+    
+    return result;
   }
 
   async runPerformanceTest(connectionId: string): Promise<ApiResponse> {
@@ -294,6 +382,18 @@ class RenderZoomServiceClass {
   async forceHealthCheck(): Promise<boolean> {
     this.lastHealthCheck = 0; // Reset cache
     return this.checkServiceHealth();
+  }
+
+  // New method to pre-warm the service
+  async preWarmService(): Promise<void> {
+    console.log('Pre-warming Render service...');
+    toast.info('Preparing sync service...', { duration: 3000 });
+    
+    const isHealthy = await this.checkServiceHealth();
+    if (!isHealthy) {
+      // Try to wake it up
+      await this.waitForService();
+    }
   }
 }
 
