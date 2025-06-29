@@ -362,32 +362,6 @@ class ZoomService {
       throw error;
     }
   }
-
-  /**
-   * Get webinar registrants
-   */
-  async getWebinarRegistrants(webinarId, accessToken, options = {}) {
-    try {
-      const params = new URLSearchParams({
-        page_size: options.page_size || 100,
-        page_number: options.page_number || 1
-      });
-
-      const response = await axios.get(`${this.baseURL}/webinars/${webinarId}/registrants?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      });
-
-      return response.data;
-      
-    } catch (error) {
-      console.error('Get webinar registrants error:', error.response?.data || error.message);
-      throw error;
-    }
-  }
 }
 
 // Create singleton instance
