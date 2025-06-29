@@ -3,7 +3,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const zoomService = require('../services/zoomService');
-const zoomSyncService = require('../services/zoomSyncService');
+const zoomSyncService = require('../services/zoomSyncServiceFixed');
 const supabaseService = require('../services/supabaseService');
 const { authMiddleware, extractUser } = require('../middleware/auth');
 
