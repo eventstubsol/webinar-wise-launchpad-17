@@ -1,23 +1,21 @@
-
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useZoomSync } from '@/hooks/useZoomSync';
-import { RefreshCw, Wifi, WifiOff, AlertCircle, X } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
-import { TokenStatus } from '@/services/zoom/utils/tokenUtils';
 import { ZoomConnectionModal } from '@/components/zoom/ZoomConnectionModal';
 import { SyncType } from '@/types/zoom';
+import { useState } from 'react';
 
 export function ZoomStatusSection() {
   const { connection } = useZoomConnection();
-  const { startSync, cancelSync, isSyncing, syncProgress, syncStatus, currentOperation } = useZoomSync(connection);
+  const { startSync, cancelSync, isSyncing, syncProgress } = useZoomSync(connection);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
 
-  // Query for last sync status
+  // Query for last sync
   const { data: lastSync } = useQuery({
     queryKey: ['last-sync', connection?.id],
     queryFn: async () => {
@@ -41,138 +39,80 @@ export function ZoomStatusSection() {
     enabled: !!connection?.id,
   });
 
-  const getConnectionStatus = () => {
-    if (!connection) return 'disconnected';
-    if (connection.connection_status === 'active') return 'connected';
-    return 'error';
-  };
-
-  const getConnectionIcon = () => {
-    const status = getConnectionStatus();
-    switch (status) {
-      case 'connected':
-        return <Wifi className="h-4 w-4 text-green-600" />;
-      case 'error':
-        return <AlertCircle className="h-4 w-4 text-red-600" />;
-      default:
-        return <WifiOff className="h-4 w-4 text-gray-400" />;
+  const handleSync = async () => {
+    if (!connection) {
+      setShowConnectionModal(true);
+      return;
     }
-  };
-
-  const getConnectionBadge = () => {
-    const status = getConnectionStatus();
-    switch (status) {
-      case 'connected':
-        return <Badge variant="secondary" className="bg-green-100 text-green-800">Connected</Badge>;
-      case 'error':
-        return <Badge variant="destructive">Error</Badge>;
-      default:
-        return <Badge variant="outline">Disconnected</Badge>;
-    }
-  };
-
-  const getSyncStatusBadge = () => {
+    
     if (isSyncing) {
-      return <Badge variant="default">Syncing ({syncProgress}%)</Badge>;
-    }
-    if (lastSync) {
-      const variant = lastSync.sync_status === 'completed' ? 'secondary' : 'destructive';
-      return <Badge variant={variant}>{lastSync.sync_status}</Badge>;
-    }
-    return <Badge variant="outline">Not synced</Badge>;
-  };
-
-  const handleQuickSync = async () => {
-    try {
-      await startSync(SyncType.INCREMENTAL);
-    } catch (error) {
-      console.error('Quick sync failed:', error);
-    }
-  };
-
-  const handleCancelSync = async () => {
-    try {
       await cancelSync();
-    } catch (error) {
-      console.error('Cancel sync failed:', error);
+    } else {
+      await startSync(SyncType.INCREMENTAL);
     }
   };
+
+  const getLastSyncText = () => {
+    if (!lastSync) return null;
+    
+    const syncDate = new Date(lastSync.created_at);
+    return `Last sync: ${format(syncDate, 'MMM d, yyyy h:mm a')}`;
+  };
+
+  const getConnectionStatus = () => {
+    if (!connection) return { text: 'Zoom: Not Connected', color: 'text-red-600' };
+    if (connection.connection_status === 'active') {
+      return { text: 'Zoom: Connected', color: 'text-green-600' };
+    }
+    return { text: 'Zoom: Error', color: 'text-red-600' };
+  };
+
+  const status = getConnectionStatus();
 
   return (
     <>
-      <div className="flex items-center gap-4 p-4 bg-white border rounded-lg">
+      <div className="flex items-center gap-4">
         {/* Connection Status */}
         <div className="flex items-center gap-2">
-          {getConnectionIcon()}
-          <div>
-            <div className="font-medium text-sm">Zoom Connection</div>
-            <div className="flex items-center gap-2">
-              {getConnectionBadge()}
-              {connection && (
-                <span className="text-xs text-muted-foreground">
-                  {connection.zoom_email}
-                </span>
-              )}
-            </div>
-          </div>
+          {connection ? (
+            <CheckCircle2 className="h-5 w-5 text-green-600" />
+          ) : (
+            <AlertCircle className="h-5 w-5 text-red-600" />
+          )}
+          <span className={`font-medium ${status.color}`}>
+            {status.text}
+          </span>
         </div>
 
-        {/* Sync Status */}
-        <div className="flex items-center gap-2">
-          <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''} text-blue-600`} />
-          <div>
-            <div className="font-medium text-sm">Sync Status</div>
-            <div className="flex items-center gap-2">
-              {getSyncStatusBadge()}
-              {lastSync && (
-                <span className="text-xs text-muted-foreground">
-                  {format(new Date(lastSync.created_at), 'MMM dd, HH:mm')}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Current Operation */}
-        {isSyncing && currentOperation && (
-          <div className="flex-1">
-            <div className="font-medium text-sm">Current Operation</div>
-            <div className="text-xs text-muted-foreground">{currentOperation}</div>
-          </div>
+        {/* Last Sync Info */}
+        {connection && lastSync && (
+          <span className="text-sm text-muted-foreground">
+            {getLastSyncText()}
+          </span>
         )}
 
-        {/* Actions */}
-        <div className="flex items-center gap-2">
+        {/* Sync Button */}
+        <Button
+          onClick={handleSync}
+          variant={connection ? "outline" : "default"}
+          size="sm"
+          disabled={isSyncing && connection}
+          className={connection ? "" : "bg-green-600 hover:bg-green-700"}
+        >
           {!connection ? (
-            <Button 
-              onClick={() => setShowConnectionModal(true)} 
-              variant="outline" 
-              size="sm"
-            >
-              <Wifi className="h-4 w-4 mr-2" />
-              Connect Zoom
-            </Button>
+            'Connect Zoom'
           ) : isSyncing ? (
-            <Button 
-              onClick={handleCancelSync} 
-              variant="outline" 
-              size="sm"
-            >
-              <X className="h-4 w-4 mr-2" />
-              Cancel
-            </Button>
+            <>
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              Syncing... {syncProgress > 0 && `${syncProgress}%`}
+            </>
           ) : (
-            <Button 
-              onClick={handleQuickSync} 
-              variant="outline" 
-              size="sm"
-              disabled={!connection}
-            >
+            <>
               <RefreshCw className="h-4 w-4 mr-2" />
-              Quick Sync
-            </Button>
+              Sync
+            </>
           )}
-        </div>
+        </Button>
       </div>
 
       <ZoomConnectionModal 

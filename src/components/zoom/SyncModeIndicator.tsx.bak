@@ -1,0 +1,178 @@
+import { Badge } from "@/components/ui/badge";
+import { RenderZoomService } from "@/services/zoom/RenderZoomService";
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { RefreshCw, Server, Zap, HelpCircle } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+export function SyncModeIndicator() {
+  const [status, setStatus] = useState(RenderZoomService.getServiceStatus());
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    // Check status periodically
+    const interval = setInterval(() => {
+      setStatus(RenderZoomService.getServiceStatus());
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const checkNow = async () => {
+    setChecking(true);
+    toast.info("Checking service status...");
+    
+    try {
+      await RenderZoomService.forceHealthCheck();
+      setStatus(RenderZoomService.getServiceStatus());
+      
+      if (status.healthy) {
+        toast.success("Render service is healthy!");
+      } else {
+        toast.warning("Render service is unavailable");
+      }
+    } catch (error) {
+      toast.error("Failed to check service status");
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const toggleMode = () => {
+    RenderZoomService.toggleSyncMode();
+    setStatus(RenderZoomService.getServiceStatus());
+  };
+
+  const getModeColor = () => {
+    if (status.mode === 'direct') return 'bg-yellow-500';
+    if (status.healthy) return 'bg-green-500';
+    return 'bg-red-500';
+  };
+
+  const getModeText = () => {
+    if (status.mode === 'direct') return 'Direct Sync';
+    if (status.healthy) return 'Render Sync';
+    return 'Render (Offline)';
+  };
+
+  const getModeIcon = () => {
+    if (status.mode === 'direct') return <Zap className="h-3 w-3" />;
+    return <Server className="h-3 w-3" />;
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer ${getModeColor()} text-white border-0`}
+              onClick={toggleMode}
+            >
+              {getModeIcon()}
+              <span className="ml-1">{getModeText()}</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <div className="space-y-2 max-w-xs">
+              <p className="font-semibold">Sync Mode: {getModeText()}</p>
+              {status.mode === 'direct' ? (
+                <p className="text-sm">
+                  Using browser-based sync. This is slower but always available.
+                  Click to try Render sync.
+                </p>
+              ) : status.healthy ? (
+                <p className="text-sm">
+                  Using fast Render backend sync. Everything is working normally.
+                </p>
+              ) : (
+                <p className="text-sm">
+                  Render service is offline. Click to switch to direct sync mode.
+                </p>
+              )}
+              {status.lastCheck > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Last checked: {new Date(status.lastCheck).toLocaleTimeString()}
+                </p>
+              )}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={checkNow}
+        disabled={checking}
+      >
+        <RefreshCw className={`h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
+      </Button>
+
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                const guide = `
+SYNC MODE EXPLAINED
+==================
+
+WebinarWise supports two sync modes:
+
+1. RENDER SYNC (Recommended)
+   - Uses dedicated backend service
+   - Faster and more reliable
+   - Handles large datasets efficiently
+   - Requires Render service to be online
+
+2. DIRECT SYNC (Fallback)
+   - Syncs directly through your browser
+   - Always available
+   - Slightly slower for large datasets
+   - No backend dependencies
+
+The app automatically switches to Direct Sync when:
+- Render service is sleeping (free tier)
+- Network issues prevent backend access
+- Backend configuration is missing
+
+You can manually toggle between modes by clicking the sync mode badge.
+
+For optimal performance, ensure your Render service is properly configured and consider upgrading from the free tier to prevent sleep mode.
+`;
+                toast.info("Sync Mode Guide", {
+                  description: "Check the downloaded file for details",
+                  duration: 5000
+                });
+                
+                const blob = new Blob([guide], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'sync-mode-guide.txt';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              <HelpCircle className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Learn about sync modes</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}

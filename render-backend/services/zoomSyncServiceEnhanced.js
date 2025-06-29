@@ -91,8 +91,8 @@ async function syncWebinarsEnhanced({ connection, credentials, syncLogId, syncTy
         results.totalParticipants += participantResults.totalParticipants;
         results.totalSessions += participantResults.totalSessions;
         
-        // Update webinar statistics
-        await supabase.rpc('calculate_webinar_stats', { p_webinar_id: webinarDb.id });
+        // Calculate webinar statistics
+        await calculateWebinarStats(webinarDb.id);
         
         // Update webinar with sync results
         await supabase
@@ -344,8 +344,8 @@ async function fetchAndSaveParticipants(webinarDbId, webinarIdentifier, accessTo
       console.error(`Error fetching page ${pageCount}:`, error.message);
       
       // Try fallback to basic endpoint if report fails
-      if (pageCount === 1) {
-        console.log('Report endpoint failed, trying basic endpoint...');
+      if (pageCount === 1 && error.response?.status === 400) {
+        console.log('Report endpoint failed with 400 error, trying basic endpoint...');
         return await fetchWithBasicEndpoint(webinarDbId, webinarIdentifier, accessToken);
       }
       
@@ -400,52 +400,84 @@ async function fetchAndSaveParticipants(webinarDbId, webinarIdentifier, accessTo
                             participant.id ||
                             `${webinarDbId}_${uniqueKey}`.replace(/[^a-zA-Z0-9_-]/g, '_');
       
-      // Save participant
-      const { data: savedParticipant, error: participantError } = await supabase
+      // Check if participant already exists
+      const { data: existingParticipant } = await supabase
         .from('zoom_participants')
-        .insert({
-          webinar_id: webinarDbId,
-          participant_uuid: participantUuid,
-          participant_id: participant.id || participant.registrant_id || '',
-          participant_email: participant.email || participant.user_email || null,
-          participant_name: participant.name || participant.display_name || '',
-          participant_user_id: participant.user_id || null,
-          name: participant.name || participant.display_name || '',
-          email: participant.email || participant.user_email || null,
-          user_id: participant.user_id || null,
-          registrant_id: participant.registrant_id || null,
-          attentiveness_score: participant.attentiveness_score || null,
-          customer_key: participant.customer_key || null,
-          location: participant.location || participant.city || null,
-          city: participant.city || null,
-          country: participant.country || null,
-          device: participant.device || null,
-          ip_address: participant.ip_address || null,
-          network_type: participant.network_type || null,
-          status: 'joined',
-          participant_status: 'in_meeting',
-          session_count: sessions.length,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
+        .select('id')
+        .eq('webinar_id', webinarDbId)
+        .eq('participant_uuid', participantUuid)
         .single();
 
-      if (participantError) {
-        // Try to get existing participant
-        const { data: existingParticipant } = await supabase
+      let savedParticipant;
+      
+      if (existingParticipant) {
+        // Update existing participant
+        const { data: updated, error: updateError } = await supabase
           .from('zoom_participants')
-          .select('id')
-          .eq('webinar_id', webinarDbId)
-          .eq('participant_uuid', participantUuid)
+          .update({
+            participant_email: participant.email || participant.user_email || null,
+            participant_name: participant.name || participant.display_name || '',
+            name: participant.name || participant.display_name || '',
+            email: participant.email || participant.user_email || null,
+            attentiveness_score: participant.attentiveness_score || null,
+            customer_key: participant.customer_key || null,
+            location: participant.location || participant.city || null,
+            city: participant.city || null,
+            country: participant.country || null,
+            device: participant.device || null,
+            ip_address: participant.ip_address || null,
+            network_type: participant.network_type || null,
+            session_count: sessions.length,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingParticipant.id)
+          .select()
           .single();
-        
-        if (existingParticipant) {
-          savedParticipant.id = existingParticipant.id;
-        } else {
-          console.error('Error saving participant:', participantError);
+
+        if (updateError) {
+          console.error('Error updating participant:', updateError);
           continue;
         }
+        
+        savedParticipant = updated;
+      } else {
+        // Insert new participant
+        const { data: inserted, error: insertError } = await supabase
+          .from('zoom_participants')
+          .insert({
+            webinar_id: webinarDbId,
+            participant_uuid: participantUuid,
+            participant_id: participant.id || participant.registrant_id || '',
+            participant_email: participant.email || participant.user_email || null,
+            participant_name: participant.name || participant.display_name || '',
+            participant_user_id: participant.user_id || null,
+            name: participant.name || participant.display_name || '',
+            email: participant.email || participant.user_email || null,
+            user_id: participant.user_id || null,
+            registrant_id: participant.registrant_id || null,
+            attentiveness_score: participant.attentiveness_score || null,
+            customer_key: participant.customer_key || null,
+            location: participant.location || participant.city || null,
+            city: participant.city || null,
+            country: participant.country || null,
+            device: participant.device || null,
+            ip_address: participant.ip_address || null,
+            network_type: participant.network_type || null,
+            status: 'joined',
+            participant_status: 'in_meeting',
+            session_count: sessions.length,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Error inserting participant:', insertError);
+          continue;
+        }
+        
+        savedParticipant = inserted;
       }
 
       if (savedParticipant?.id) {
@@ -455,26 +487,38 @@ async function fetchAndSaveParticipants(webinarDbId, webinarIdentifier, accessTo
         for (const session of sessions) {
           const sessionId = `${savedParticipant.id}_${session.join_time || Date.now()}`;
           
-          const { error: sessionError } = await supabase
+          // Check if session already exists
+          const { data: existingSession } = await supabase
             .from('zoom_participant_sessions')
-            .insert({
-              participant_id: savedParticipant.id,
-              webinar_id: webinarDbId,
-              session_id: sessionId,
-              join_time: session.join_time || null,
-              leave_time: session.leave_time || null,
-              duration: session.duration || 0,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .onConflict('participant_id,session_id');
-          
-          if (!sessionError) {
-            results.totalSessions++;
+            .select('id')
+            .eq('participant_id', savedParticipant.id)
+            .eq('session_id', sessionId)
+            .single();
+
+          if (!existingSession) {
+            const { error: sessionError } = await supabase
+              .from('zoom_participant_sessions')
+              .insert({
+                participant_id: savedParticipant.id,
+                webinar_id: webinarDbId,
+                session_id: sessionId,
+                join_time: session.join_time || null,
+                leave_time: session.leave_time || null,
+                duration: session.duration || 0,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
+            
+            if (!sessionError) {
+              results.totalSessions++;
+            } else {
+              console.error('Error inserting session:', sessionError);
+            }
           }
         }
         
-        // Aggregate will be done by trigger
+        // Update participant aggregated data
+        await updateParticipantAggregates(savedParticipant.id, webinarDbId);
       }
     }
   }
@@ -529,50 +573,166 @@ async function fetchWithBasicEndpoint(webinarDbId, webinarIdentifier, accessToke
                           participant.id ||
                           `${webinarDbId}_${participant.name}_${Date.now()}`.replace(/[^a-zA-Z0-9_-]/g, '_');
 
-    const { data: savedParticipant } = await supabase
+    // Check if participant already exists
+    const { data: existingParticipant } = await supabase
       .from('zoom_participants')
-      .insert({
-        webinar_id: webinarDbId,
-        participant_uuid: participantUuid,
-        participant_id: participant.id || '',
-        participant_name: participant.name || '',
-        name: participant.name || '',
-        user_id: participant.user_id || null,
-        registrant_id: participant.registrant_id || null,
-        join_time: participant.join_time || null,
-        leave_time: participant.leave_time || null,
-        duration: participant.duration || 0,
-        total_duration: participant.duration || 0,
-        status: 'joined',
-        participant_status: 'in_meeting',
-        session_count: 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .select()
+      .select('id')
+      .eq('webinar_id', webinarDbId)
+      .eq('participant_uuid', participantUuid)
       .single();
+
+    let savedParticipant;
+    
+    if (existingParticipant) {
+      // Update existing participant
+      const { data: updated } = await supabase
+        .from('zoom_participants')
+        .update({
+          participant_name: participant.name || '',
+          name: participant.name || '',
+          join_time: participant.join_time || null,
+          leave_time: participant.leave_time || null,
+          duration: participant.duration || 0,
+          total_duration: participant.duration || 0,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingParticipant.id)
+        .select()
+        .single();
+      
+      savedParticipant = updated;
+    } else {
+      // Insert new participant
+      const { data: inserted } = await supabase
+        .from('zoom_participants')
+        .insert({
+          webinar_id: webinarDbId,
+          participant_uuid: participantUuid,
+          participant_id: participant.id || '',
+          participant_name: participant.name || '',
+          name: participant.name || '',
+          user_id: participant.user_id || null,
+          registrant_id: participant.registrant_id || null,
+          join_time: participant.join_time || null,
+          leave_time: participant.leave_time || null,
+          duration: participant.duration || 0,
+          total_duration: participant.duration || 0,
+          status: 'joined',
+          participant_status: 'in_meeting',
+          session_count: 1,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      
+      savedParticipant = inserted;
+    }
 
     if (savedParticipant) {
       results.totalParticipants++;
       
       // Create single session record
-      await supabase
-        .from('zoom_participant_sessions')
-        .insert({
-          participant_id: savedParticipant.id,
-          webinar_id: webinarDbId,
-          session_id: `${savedParticipant.id}_main`,
-          join_time: participant.join_time || null,
-          leave_time: participant.leave_time || null,
-          duration: participant.duration || 0
-        })
-        .onConflict('participant_id,session_id');
+      const sessionId = `${savedParticipant.id}_main`;
       
-      results.totalSessions++;
+      // Check if session already exists
+      const { data: existingSession } = await supabase
+        .from('zoom_participant_sessions')
+        .select('id')
+        .eq('participant_id', savedParticipant.id)
+        .eq('session_id', sessionId)
+        .single();
+
+      if (!existingSession) {
+        await supabase
+          .from('zoom_participant_sessions')
+          .insert({
+            participant_id: savedParticipant.id,
+            webinar_id: webinarDbId,
+            session_id: sessionId,
+            join_time: participant.join_time || null,
+            leave_time: participant.leave_time || null,
+            duration: participant.duration || 0
+          });
+        
+        results.totalSessions++;
+      }
     }
   }
 
   return results;
+}
+
+/**
+ * Update participant aggregated data
+ */
+async function updateParticipantAggregates(participantId, webinarId) {
+  try {
+    // Get all sessions for this participant
+    const { data: sessions } = await supabase
+      .from('zoom_participant_sessions')
+      .select('duration, join_time, leave_time')
+      .eq('participant_id', participantId)
+      .eq('webinar_id', webinarId);
+
+    if (sessions && sessions.length > 0) {
+      // Calculate totals
+      const totalDuration = sessions.reduce((sum, session) => sum + (session.duration || 0), 0);
+      const firstJoinTime = sessions
+        .filter(s => s.join_time)
+        .map(s => new Date(s.join_time))
+        .sort((a, b) => a - b)[0];
+      const lastLeaveTime = sessions
+        .filter(s => s.leave_time)
+        .map(s => new Date(s.leave_time))
+        .sort((a, b) => b - a)[0];
+
+      // Update participant record
+      await supabase
+        .from('zoom_participants')
+        .update({
+          total_duration: totalDuration,
+          session_count: sessions.length,
+          first_join_time: firstJoinTime ? firstJoinTime.toISOString() : null,
+          last_leave_time: lastLeaveTime ? lastLeaveTime.toISOString() : null,
+          is_aggregated: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', participantId);
+    }
+  } catch (error) {
+    console.error('Error updating participant aggregates:', error);
+  }
+}
+
+/**
+ * Calculate webinar statistics
+ */
+async function calculateWebinarStats(webinarId) {
+  try {
+    // Get participant stats
+    const { data: stats } = await supabase
+      .from('zoom_participants')
+      .select('id, total_duration')
+      .eq('webinar_id', webinarId);
+
+    if (stats && stats.length > 0) {
+      const totalMinutes = stats.reduce((sum, p) => sum + (p.total_duration || 0), 0);
+      const avgDuration = Math.round(totalMinutes / stats.length);
+
+      await supabase
+        .from('zoom_webinars')
+        .update({
+          total_attendees: stats.length,
+          total_participant_minutes: totalMinutes,
+          avg_attendance_duration: avgDuration,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', webinarId);
+    }
+  } catch (error) {
+    console.error('Error calculating webinar stats:', error);
+  }
 }
 
 // Export both versions
