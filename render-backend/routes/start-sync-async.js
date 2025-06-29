@@ -28,7 +28,7 @@ async function runSyncAsync(syncLogId, connectionId, syncType, requestId) {
     }
 
     // Import zoom service
-    const { syncWebinars } = require('../services/zoomSyncServiceFixed');
+    const { syncWebinars } = require('../services/zoomSyncService');
     
     // Update sync log to indicate we're processing
     await supabaseService.updateSyncLog(syncLogId, {
