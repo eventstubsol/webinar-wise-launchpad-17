@@ -125,40 +125,80 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
           console.log(`Fetching participants for webinar: ${webinar.topic}`);
           
           try {
-            // Fetch all participants with pagination
+            // Try to use the report endpoint first for more detailed data
             let allParticipants = [];
+            let useReportEndpoint = true;
+            let nextPageToken = '';
             let pageNumber = 1;
-            let hasMore = true;
             
-            while (hasMore) {
-              try {
-                const participantsResponse = await zoomService.getWebinarParticipants(
+            // First try the report endpoint which has more data
+            try {
+              const reportResponse = await zoomService.getWebinarParticipantsReport(
+                webinar.id,
+                accessToken,
+                {
+                  page_size: 300,
+                  next_page_token: nextPageToken
+                }
+              );
+              
+              allParticipants = reportResponse.participants || [];
+              nextPageToken = reportResponse.next_page_token || '';
+              
+              // Continue pagination for report endpoint
+              while (nextPageToken) {
+                const nextResponse = await zoomService.getWebinarParticipantsReport(
                   webinar.id,
                   accessToken,
                   {
                     page_size: 300,
-                    page_number: pageNumber
+                    next_page_token: nextPageToken
                   }
                 );
-                
-                const participants = participantsResponse.participants || [];
-                allParticipants = allParticipants.concat(participants);
-                
-                // Check if there are more pages
-                hasMore = participantsResponse.page_count > pageNumber;
-                pageNumber++;
-                
-                // Small delay to respect rate limits
-                if (hasMore) {
-                  await new Promise(resolve => setTimeout(resolve, 100));
+                allParticipants = allParticipants.concat(nextResponse.participants || []);
+                nextPageToken = nextResponse.next_page_token || '';
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
+            } catch (reportError) {
+              console.log('Report endpoint failed, falling back to basic participants endpoint');
+              useReportEndpoint = false;
+            }
+            
+            // Fall back to basic endpoint if report fails
+            if (!useReportEndpoint) {
+              let hasMore = true;
+              pageNumber = 1;
+              
+              while (hasMore) {
+                try {
+                  const participantsResponse = await zoomService.getWebinarParticipants(
+                    webinar.id,
+                    accessToken,
+                    {
+                      page_size: 300,
+                      page_number: pageNumber
+                    }
+                  );
+                  
+                  const participants = participantsResponse.participants || [];
+                  allParticipants = allParticipants.concat(participants);
+                  
+                  // Check if there are more pages
+                  hasMore = participantsResponse.page_count > pageNumber;
+                  pageNumber++;
+                  
+                  // Small delay to respect rate limits
+                  if (hasMore) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                  }
+                } catch (paginationError) {
+                  console.error(`Error fetching page ${pageNumber}:`, paginationError);
+                  hasMore = false;
                 }
-              } catch (paginationError) {
-                console.error(`Error fetching page ${pageNumber}:`, paginationError);
-                hasMore = false;
               }
             }
             
-            console.log(`Found ${allParticipants.length} total participants across ${pageNumber - 1} pages`);
+            console.log(`Found ${allParticipants.length} total participants using ${useReportEndpoint ? 'report' : 'basic'} endpoint`);
             
             // Process participants in batches
             const batchSize = 50;
@@ -170,42 +210,56 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
                 // Map the fields correctly based on what the API actually returns
                 const participantData = {
                   webinar_id: webinarDbId,
-                  // Use the correct fields based on API response
-                  participant_id: participant.id || '',
-                  participant_uuid: participant.user_id || participant.id || '',
-                  participant_email: participant.email || null,
-                  participant_name: participant.name || '',
+                  // Primary identifier fields
+                  participant_uuid: participant.participant_user_id || participant.user_id || participant.id || '',
+                  participant_id: participant.id || participant.registrant_id || '',
+                  participant_email: participant.email || participant.user_email || null,
+                  participant_name: participant.name || participant.display_name || participant.user_name || '',
+                  participant_user_id: participant.user_id || null,
+                  
                   // Legacy columns for backward compatibility
-                  name: participant.name || '',
-                  email: null, // This column is not used
+                  name: participant.name || participant.display_name || participant.user_name || '',
+                  email: participant.email || participant.user_email || null,
                   user_id: participant.user_id || null,
-                  registrant_id: participant.registrant_id || participant.id || null,
+                  registrant_id: participant.registrant_id || null,
+                  
                   // Time and duration fields
                   join_time: participant.join_time || null,
                   leave_time: participant.leave_time || null,
                   duration: participant.duration || 0,
-                  // Fields that may not be in basic participants endpoint
+                  
+                  // Advanced metrics (from report endpoint)
                   attentiveness_score: participant.attentiveness_score || null,
                   customer_key: participant.customer_key || null,
-                  location: participant.location || null,
+                  
+                  // Location data (from report endpoint)
+                  location: participant.location || participant.city || null,
                   city: participant.city || null,
                   country: participant.country || null,
                   network_type: participant.network_type || null,
                   device: participant.device || null,
                   ip_address: participant.ip_address || null,
-                  // Default values for engagement metrics
-                  posted_chat: false,
-                  raised_hand: false,
-                  answered_polling: false,
-                  asked_question: false,
-                  camera_on_duration: 0,
-                  share_application_duration: 0,
-                  share_desktop_duration: 0,
-                  share_whiteboard_duration: 0,
+                  
+                  // Engagement metrics (from report endpoint or webhooks)
+                  posted_chat: participant.posted_chat || false,
+                  raised_hand: participant.raised_hand || false,
+                  answered_polling: participant.answered_polling || false,
+                  asked_question: participant.asked_question || false,
+                  camera_on_duration: participant.camera_on_duration || 0,
+                  share_application_duration: participant.share_application_duration || 0,
+                  share_desktop_duration: participant.share_desktop_duration || 0,
+                  share_whiteboard_duration: participant.share_whiteboard_duration || 0,
+                  
                   // Status fields
                   status: participant.status || 'joined',
-                  participant_status: 'in_meeting',
+                  participant_status: participant.participant_status || 'in_meeting',
                   failover: participant.failover || false,
+                  
+                  // Session information
+                  session_sequence: participant.session_sequence || 1,
+                  is_rejoin_session: participant.is_rejoin_session || false,
+                  participant_session_id: participant.participant_session_id || null,
+                  
                   // Timestamps
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString()

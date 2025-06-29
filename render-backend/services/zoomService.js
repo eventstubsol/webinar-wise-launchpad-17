@@ -249,7 +249,7 @@ class ZoomService {
   }
 
   /**
-   * Get webinar participants
+   * Get webinar participants (basic endpoint)
    */
   async getWebinarParticipants(webinarId, accessToken, options = {}) {
     try {
@@ -270,6 +270,35 @@ class ZoomService {
       
     } catch (error) {
       console.error('Get webinar participants error:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get webinar participants report (detailed endpoint with more data)
+   */
+  async getWebinarParticipantsReport(webinarId, accessToken, options = {}) {
+    try {
+      const params = new URLSearchParams({
+        page_size: options.page_size || 300
+      });
+
+      if (options.next_page_token) {
+        params.append('next_page_token', options.next_page_token);
+      }
+
+      const response = await axios.get(`${this.baseURL}/report/webinars/${webinarId}/participants?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
+
+      return response.data;
+      
+    } catch (error) {
+      console.error('Get webinar participants report error:', error.response?.data || error.message);
       throw error;
     }
   }
