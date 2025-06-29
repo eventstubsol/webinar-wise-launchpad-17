@@ -276,13 +276,11 @@ class ZoomService {
 
   /**
    * Get webinar participants report (detailed endpoint with more data)
-   * This endpoint provides session details for participants who joined multiple times
    */
   async getWebinarParticipantsReport(webinarId, accessToken, options = {}) {
     try {
       const params = new URLSearchParams({
-        page_size: options.page_size || 300,
-        include_fields: 'registrant_id,participant_user_id,email,join_time,leave_time,duration,attentiveness_score,customer_key,location,network_type,device,ip_address,data_center,connection_type,join_time,leave_time,share_application,share_desktop,share_whiteboard,recording,pc_name,domain,mac_address,harddisk_id,version,leave_reason,role'
+        page_size: options.page_size || 300
       });
 
       if (options.next_page_token) {
@@ -297,68 +295,10 @@ class ZoomService {
         timeout: 30000
       });
 
-      // Log response for debugging
-      console.log(`Report API response for webinar ${webinarId}:`);
-      console.log(`- Total records: ${response.data.total_records || 0}`);
-      console.log(`- Participants returned: ${response.data.participants?.length || 0}`);
-      console.log(`- Has next page: ${!!response.data.next_page_token}`);
-
       return response.data;
       
     } catch (error) {
       console.error('Get webinar participants report error:', error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Get webinar participant details with session information
-   * Uses the dashboard endpoint which provides more detailed metrics
-   */
-  async getWebinarParticipantsDashboard(webinarId, accessToken, options = {}) {
-    try {
-      const params = new URLSearchParams({
-        type: 'past',
-        page_size: options.page_size || 300
-      });
-
-      if (options.next_page_token) {
-        params.append('next_page_token', options.next_page_token);
-      }
-
-      const response = await axios.get(`${this.baseURL}/metrics/webinars/${webinarId}/participants?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      });
-
-      return response.data;
-      
-    } catch (error) {
-      console.error('Get webinar dashboard participants error:', error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Get all instances of a recurring webinar
-   */
-  async getWebinarInstances(webinarId, accessToken) {
-    try {
-      const response = await axios.get(`${this.baseURL}/past_webinars/${webinarId}/instances`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      });
-
-      return response.data;
-      
-    } catch (error) {
-      console.error('Get webinar instances error:', error.response?.data || error.message);
       throw error;
     }
   }

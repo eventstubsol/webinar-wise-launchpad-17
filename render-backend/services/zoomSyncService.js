@@ -1,20 +1,11 @@
 const { createClient } = require('@supabase/supabase-js');
 const zoomService = require('./zoomService');
 
-// Import the enhanced sync service
-const { syncWebinarsEnhanced } = require('./zoomSyncServiceEnhanced');
-
 // Create Supabase client with service role key
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
-// Use the enhanced sync as the main sync function
-async function syncWebinars(params) {
-  console.log('Using enhanced sync with session tracking...');
-  return syncWebinarsEnhanced(params);
-}
 
 async function syncWebinars({ connection, credentials, syncLogId, syncType, onProgress }) {
   const results = {
@@ -277,19 +268,20 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
                 participantInserts.push(participantData);
               }
               
-              // Batch upsert participants (use insert to avoid constraint issues)
+              // Batch upsert participants
               if (participantInserts.length > 0) {
-                // First, try to insert all new participants
-                const { error: insertError } = await supabase
+                const { error } = await supabase
                   .from('zoom_participants')
-                  .insert(participantInserts)
-                  .onConflict('webinar_id,participant_uuid'); // This will skip duplicates
+                  .upsert(participantInserts, {
+                    onConflict: 'webinar_id,participant_uuid',
+                    ignoreDuplicates: false
+                  });
                 
-                if (insertError && insertError.code !== '23505') { // 23505 is unique violation
-                  console.error(`Error inserting participant batch ${i / batchSize + 1}:`, insertError);
+                if (error) {
+                  console.error(`Error upserting participant batch ${i / batchSize + 1}:`, error);
                   results.errors.push({
                     webinar_id: webinar.id,
-                    error: `Failed to insert participants batch: ${insertError.message}`
+                    error: `Failed to upsert participants batch: ${error.message}`
                   });
                 }
               }
@@ -367,5 +359,5 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
 }
 
 module.exports = {
-  syncWebinars: require('./zoomSyncServiceEnhanced').syncWebinarsEnhanced
+  syncWebinars
 };
