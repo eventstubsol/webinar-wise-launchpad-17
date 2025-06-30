@@ -381,114 +381,58 @@ async function fetchParticipantData(
   webinarId: string,
   webinarUuid: string | undefined,
   rateLimiter: RateLimitManager
-): Promise<{ count: number; uniqueCount: number; avgDuration: number; allParticipants: any[] }> {
+): Promise<{ count: number; avgDuration: number }> {
   try {
     console.log(`[SYNC] Fetching participant data for webinar ${webinarId}`);
     
-    // For webinars, we need to use the report API to get ALL participants (not just panelists)
-    // The regular participants endpoint only returns panelists for webinars
+    // For participants, we need to use UUID if available
     let endpoint: string;
-    // Try report endpoint first (includes all attendees)
-    endpoint = `https://api.zoom.us/v2/report/webinars/${webinarId}/participants`;
-    console.log(`[SYNC] Using report API for webinar participants: ${webinarId}`);
+    if (webinarUuid) {
+      const encodedUuid = encodeURIComponent(webinarUuid);
+      endpoint = `https://api.zoom.us/v2/past_webinars/${encodedUuid}/participants?page_size=300`;
+      console.log(`[SYNC] Using UUID for participants: ${webinarUuid}`);
+    } else {
+      // Fallback to ID (might not work for past webinars)
+      endpoint = `https://api.zoom.us/v2/past_webinars/${webinarId}/participants?page_size=300`;
+      console.log(`[SYNC] Using ID for participants (fallback): ${webinarId}`);
+    }
     
-    // Note: If report endpoint fails, we'll try the past_webinars endpoint as fallback
-    
-    // Fetch all participants with pagination
-    let allParticipants: any[] = [];
-    let nextPageToken: string | undefined;
-    let pageCount = 0;
-    
-    do {
-      const url = endpoint + `?page_size=300${nextPageToken ? `&next_page_token=${nextPageToken}` : ''}`;
-      
-      const response = await rateLimiter.executeWithRateLimit(async () => {
-        return await fetch(url, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        });
-      });
-
-      if (!response.ok) {
-        console.log(`[SYNC] Could not fetch participant data for webinar ${webinarId} (status: ${response.status})`);
-        
-        // If report endpoint fails and this is the first attempt, try fallback endpoints
-        if (pageCount === 0 && endpoint.includes('/report/')) {
-          console.log(`[SYNC] Report API failed, trying fallback endpoints...`);
-          
-          // Try with UUID if available
-          if (webinarUuid) {
-            const encodedUuid = encodeURIComponent(webinarUuid);
-            endpoint = `https://api.zoom.us/v2/past_webinars/${encodedUuid}/participants`;
-            console.log(`[SYNC] Trying past_webinars with UUID: ${webinarUuid}`);
-            continue;
-          } else {
-            // Fallback to ID
-            endpoint = `https://api.zoom.us/v2/past_webinars/${webinarId}/participants`;
-            console.log(`[SYNC] Trying past_webinars with ID: ${webinarId}`);
-            continue;
-          }
+    const response = await rateLimiter.executeWithRateLimit(async () => {
+      return await fetch(endpoint, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
         }
-        
-        break;
-      }
-      
+      });
+    });
+
+    if (response.ok) {
       const data = await response.json();
       const participants = data.participants || [];
-      allParticipants.push(...participants);
+      const count = data.total_records || participants.length;
       
-      nextPageToken = data.next_page_token;
-      pageCount++;
+      // Calculate average duration
+      let totalDuration = 0;
+      let validParticipants = 0;
       
-      console.log(`[SYNC] Fetched page ${pageCount} with ${participants.length} participants`);
-    } while (nextPageToken && pageCount < 10); // Safety limit of 10 pages
-    
-    // Calculate unique participants
-    const uniqueParticipants = new Map();
-    let totalDuration = 0;
-    let validParticipants = 0;
-    
-    allParticipants.forEach((p: any) => {
-      // Use email as primary identifier, fall back to user_id or id
-      const identifier = p.email || p.user_id || p.id || `participant_${validParticipants}`;
+      participants.forEach((p: any) => {
+        if (p.duration && p.duration > 0) {
+          totalDuration += p.duration;
+          validParticipants++;
+        }
+      });
       
-      if (!uniqueParticipants.has(identifier)) {
-        uniqueParticipants.set(identifier, {
-          ...p,
-          totalDuration: p.duration || 0,
-          sessionCount: 1
-        });
-      } else {
-        // Update existing participant with cumulative duration
-        const existing = uniqueParticipants.get(identifier);
-        existing.totalDuration += (p.duration || 0);
-        existing.sessionCount++;
-      }
+      const avgDuration = validParticipants > 0 ? Math.round(totalDuration / validParticipants) : 0;
       
-      if (p.duration && p.duration > 0) {
-        totalDuration += p.duration;
-        validParticipants++;
-      }
-    });
+      console.log(`[SYNC] Found ${count} participants with avg duration ${avgDuration} seconds for webinar ${webinarId}`);
+      return { count, avgDuration };
+    }
     
-    const uniqueCount = uniqueParticipants.size;
-    const avgDuration = validParticipants > 0 ? Math.round(totalDuration / validParticipants) : 0;
-    
-    console.log(`[SYNC] Total participant sessions: ${allParticipants.length}`);
-    console.log(`[SYNC] Unique attendees: ${uniqueCount}`);
-    console.log(`[SYNC] Average duration: ${avgDuration} seconds`);
-    
-    return { 
-      count: allParticipants.length, // Total sessions
-      uniqueCount: uniqueCount, // Unique attendees
-      avgDuration,
-      allParticipants: Array.from(uniqueParticipants.values())
-    };
+    console.log(`[SYNC] Could not fetch participant data for webinar ${webinarId} (status: ${response.status})`);
+    return { count: 0, avgDuration: 0 };
   } catch (error) {
     console.error(`[SYNC] Error fetching participant data for ${webinarId}:`, error);
-    return { count: 0, uniqueCount: 0, avgDuration: 0, allParticipants: [] };
+    return { count: 0, avgDuration: 0 };
   }
 }
 
@@ -510,10 +454,8 @@ async function fetchAdditionalWebinarData(
   // Fetch participant data for past webinars
   if (type === 'past') {
     const participantData = await fetchParticipantData(accessToken, webinarId, webinarUuid, rateLimiter);
-    additionalData.participantCount = participantData.uniqueCount; // Use unique count for attendees
-    additionalData.totalParticipantSessions = participantData.count; // Total sessions (including rejoins)
+    additionalData.participantCount = participantData.count;
     additionalData.avgAttendanceDuration = participantData.avgDuration;
-    additionalData.uniqueParticipants = participantData.allParticipants; // Store for later participant sync
   }
 
   // Fetch tracking sources (only for upcoming webinars)
@@ -689,12 +631,10 @@ async function processWebinar(
       
       // Use calculated counts
       total_registrants: registrantCount,
-      total_attendees: attendeeCount, // This will now be unique attendees
+      total_attendees: attendeeCount,
       total_absentees: absenteeCount,
       total_minutes: webinarDetails.total_minutes || 0,
       avg_attendance_duration: additionalData.avgAttendanceDuration || webinarDetails.avg_attendance_duration || 0,
-      actual_participant_count: additionalData.totalParticipantSessions || attendeeCount, // Total sessions
-      unique_participant_count: attendeeCount, // Unique attendees
       
       // Meeting settings - with null checks
       audio: webinarDetails.settings?.audio || webinarDetails.audio || 'both',
