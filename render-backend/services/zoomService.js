@@ -302,6 +302,63 @@ class ZoomService {
       throw error;
     }
   }
+
+  /**
+   * Get all users in the account
+   */
+  async getUsers(accessToken, options = {}) {
+    try {
+      const params = new URLSearchParams({
+        page_size: options.page_size || 300,
+        status: options.status || 'active'
+      });
+
+      if (options.page_number) {
+        params.append('page_number', options.page_number);
+      }
+
+      const response = await axios.get(`${this.baseURL}/users?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
+
+      return response.data;
+      
+    } catch (error) {
+      console.error('Get users error:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get webinars for a specific user
+   */
+  async getUserWebinars(userId, accessToken, options = {}) {
+    try {
+      const params = new URLSearchParams({
+        page_size: options.page_size || 100,
+        page_number: options.page_number || 1,
+        type: options.type || 'scheduled'
+      });
+
+      const response = await axios.get(`${this.baseURL}/users/${userId}/webinars?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
+
+      return response.data;
+      
+    } catch (error) {
+      console.error(`Get webinars for user ${userId} error:`, error.response?.data || error.message);
+      throw error;
+    }
+  }
 }
 
 // Create singleton instance

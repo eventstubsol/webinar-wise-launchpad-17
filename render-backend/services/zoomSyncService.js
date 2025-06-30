@@ -7,6 +7,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+/**
+ * Simplified sync service that maps Zoom API data directly to database
+ * No complex transformations - just store what Zoom gives us
+ */
 async function syncWebinars({ connection, credentials, syncLogId, syncType, onProgress }) {
   const results = {
     totalWebinars: 0,
@@ -44,275 +48,153 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
         .eq('id', connection.id);
     }
 
-    // Fetch both scheduled and past webinars
+    // Fetch webinars from Zoom
     console.log('Fetching webinars from Zoom...');
     
-    // Fetch scheduled webinars
-    const scheduledResponse = await zoomService.getWebinars(accessToken, {
-      page_size: 100,
-      type: 'scheduled'
+    // First, get all users in the account
+    console.log('Getting users in the account...');
+    const usersResponse = await zoomService.getUsers(accessToken, {
+      page_size: 300,
+      status: 'active'
     });
     
-    const webinars = scheduledResponse.webinars || [];
-    results.totalWebinars = webinars.length;
+    const users = usersResponse.users || [];
+    console.log(`Found ${users.length} users in the account`);
+    
+    // Get all webinar types
+    const webinarTypes = ['scheduled', 'past'];
+    const allWebinars = [];
+    
+    // For each user, fetch their webinars
+    for (const user of users) {
+      console.log(`\nFetching webinars for user: ${user.email} (${user.id})`);
+      
+      for (const type of webinarTypes) {
+        try {
+          const response = await zoomService.getUserWebinars(user.id, accessToken, {
+            page_size: 100,
+            type: type
+          });
+          
+          if (response.webinars && response.webinars.length > 0) {
+            // Add user info to each webinar for reference
+            const webinarsWithUser = response.webinars.map(w => ({
+              ...w,
+              host_email: user.email // Ensure we have host email
+            }));
+            allWebinars.push(...webinarsWithUser);
+            console.log(`  Found ${response.webinars.length} ${type} webinars for ${user.email}`);
+          }
+        } catch (error) {
+          console.error(`  Error fetching ${type} webinars for user ${user.email}:`, error.message);
+        }
+      }
+    }
+    
+    results.totalWebinars = allWebinars.length;
+    console.log(`Total webinars found: ${results.totalWebinars}`);
 
     if (onProgress) {
-      await onProgress(40, `Found ${webinars.length} webinars, processing...`);
+      await onProgress(40, `Found ${allWebinars.length} webinars, syncing to database...`);
     }
 
     // Process each webinar
-    for (let i = 0; i < webinars.length; i++) {
-      const webinar = webinars[i];
+    for (let i = 0; i < allWebinars.length; i++) {
+      const webinar = allWebinars[i];
       
       try {
-        console.log(`Processing webinar: ${webinar.topic}`);
+        console.log(`Processing webinar: ${webinar.topic} (ID: ${webinar.id})`);
         
-        // Check if webinar already exists
-        const { data: existingWebinar } = await supabase
-          .from('zoom_webinars')
-          .select('id')
-          .eq('webinar_id', webinar.id)
-          .eq('connection_id', connection.id)
-          .single();
-
+        // Fetch complete webinar details from the detail endpoint
+        // The list endpoint doesn't return all fields we need
+        let fullWebinarData = webinar;
+        try {
+          console.log(`Fetching full details for webinar ${webinar.id}...`);
+          fullWebinarData = await zoomService.getWebinar(webinar.id, accessToken);
+          console.log(`Got full details for webinar ${webinar.id}`);
+          
+          // Add a small delay to respect rate limits (Zoom allows 10 requests per second)
+          await new Promise(resolve => setTimeout(resolve, 150));
+        } catch (detailError) {
+          console.error(`Failed to get full details for webinar ${webinar.id}, using list data:`, detailError.message);
+          // Continue with limited data from list endpoint
+        }
+        
+        // Map Zoom data directly to our schema - no complex transformations
         const webinarData = {
           connection_id: connection.id,
-          webinar_id: webinar.id,
-          webinar_uuid: webinar.uuid || webinar.id,
-          topic: webinar.topic,
-          start_time: webinar.start_time,
-          duration: webinar.duration,
-          timezone: webinar.timezone,
-          agenda: webinar.agenda,
-          host_email: webinar.host_email,
-          type: webinar.type,
-          registration_url: webinar.registration_url,
-          status: webinar.status || 'scheduled',
-          join_url: webinar.join_url,
-          total_registrants: 0,
-          total_attendees: 0,
-          raw_data: webinar,
+          zoom_webinar_id: String(fullWebinarData.id),
+          uuid: fullWebinarData.uuid || null,
+          host_id: String(fullWebinarData.host_id || ''),
+          host_email: fullWebinarData.host_email || '',
+          topic: fullWebinarData.topic || 'Untitled Webinar',
+          type: fullWebinarData.type || 5,
+          start_time: fullWebinarData.start_time ? new Date(fullWebinarData.start_time).toISOString() : new Date().toISOString(),
+          duration: parseInt(fullWebinarData.duration || '60', 10),
+          timezone: fullWebinarData.timezone || 'UTC',
+          agenda: fullWebinarData.agenda || null,
+          created_at: fullWebinarData.created_at ? new Date(fullWebinarData.created_at).toISOString() : new Date().toISOString(),
+          start_url: fullWebinarData.start_url || null,
+          join_url: fullWebinarData.join_url || '',
+          registration_url: fullWebinarData.registration_url || null,
+          password: fullWebinarData.password || null,
+          h323_password: fullWebinarData.h323_password || null,
+          pstn_password: fullWebinarData.pstn_password || null,
+          encrypted_password: fullWebinarData.encrypted_password || null,
+          status: mapWebinarStatus(fullWebinarData.status),
+          settings: fullWebinarData.settings || {},
+          recurrence: fullWebinarData.recurrence || null,
+          occurrences: fullWebinarData.occurrences || null,
+          tracking_fields: fullWebinarData.tracking_fields || [],
+          registrants_count: fullWebinarData.registrants_count || 0,
+          synced_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
-
-        let webinarDbId;
-        if (existingWebinar) {
-          webinarDbId = existingWebinar.id;
-          await supabase
-            .from('zoom_webinars')
-            .update(webinarData)
-            .eq('id', existingWebinar.id);
-        } else {
-          webinarData.created_at = new Date().toISOString();
-          const { data: newWebinar } = await supabase
-            .from('zoom_webinars')
-            .insert(webinarData)
-            .select('id')
-            .single();
-          webinarDbId = newWebinar.id;
+        
+        // Upsert webinar (insert or update)
+        const { data: upsertedWebinar, error: upsertError } = await supabase
+          .from('zoom_webinars')
+          .upsert(webinarData, {
+            onConflict: 'connection_id,zoom_webinar_id'
+          })
+          .select('id')
+          .single();
+          
+        if (upsertError) {
+          throw upsertError;
         }
-
+        
+        const webinarDbId = upsertedWebinar.id;
+        
+        // Initialize metrics record if it doesn't exist
+        await supabase
+          .from('webinar_metrics')
+          .upsert({
+            webinar_id: webinarDbId,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'webinar_id'
+          });
+        
         results.processedWebinars++;
 
         // Update progress
-        const progress = 40 + Math.floor((i + 1) / webinars.length * 40);
+        const progress = 40 + Math.floor((i + 1) / allWebinars.length * 40);
         if (onProgress) {
-          await onProgress(progress, `Processed ${i + 1} of ${webinars.length} webinars`);
+          await onProgress(progress, `Processed ${i + 1} of ${allWebinars.length} webinars`);
         }
 
-        // Fetch participants for past webinars
-        if (webinar.status === 'completed' || new Date(webinar.start_time) < new Date()) {
-          console.log(`Fetching participants for webinar: ${webinar.topic}`);
-          
+        // For past/ended webinars, sync participants
+        if (webinar.status === 'ended' || new Date(webinar.start_time) < new Date()) {
           try {
-            // Try to use the report endpoint first for more detailed data
-            let allParticipants = [];
-            let useReportEndpoint = true;
-            let nextPageToken = '';
-            let pageNumber = 1;
-            
-            // First try the report endpoint which has more data
-            try {
-              const reportResponse = await zoomService.getWebinarParticipantsReport(
-                webinar.id,
-                accessToken,
-                {
-                  page_size: 300,
-                  next_page_token: nextPageToken
-                }
-              );
-              
-              allParticipants = reportResponse.participants || [];
-              nextPageToken = reportResponse.next_page_token || '';
-              
-              // Continue pagination for report endpoint
-              while (nextPageToken) {
-                const nextResponse = await zoomService.getWebinarParticipantsReport(
-                  webinar.id,
-                  accessToken,
-                  {
-                    page_size: 300,
-                    next_page_token: nextPageToken
-                  }
-                );
-                allParticipants = allParticipants.concat(nextResponse.participants || []);
-                nextPageToken = nextResponse.next_page_token || '';
-                await new Promise(resolve => setTimeout(resolve, 100));
-              }
-            } catch (reportError) {
-              console.log('Report endpoint failed, falling back to basic participants endpoint');
-              useReportEndpoint = false;
-            }
-            
-            // Fall back to basic endpoint if report fails
-            if (!useReportEndpoint) {
-              let hasMore = true;
-              pageNumber = 1;
-              
-              while (hasMore) {
-                try {
-                  const participantsResponse = await zoomService.getWebinarParticipants(
-                    webinar.id,
-                    accessToken,
-                    {
-                      page_size: 300,
-                      page_number: pageNumber
-                    }
-                  );
-                  
-                  const participants = participantsResponse.participants || [];
-                  allParticipants = allParticipants.concat(participants);
-                  
-                  // Check if there are more pages
-                  hasMore = participantsResponse.page_count > pageNumber;
-                  pageNumber++;
-                  
-                  // Small delay to respect rate limits
-                  if (hasMore) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                  }
-                } catch (paginationError) {
-                  console.error(`Error fetching page ${pageNumber}:`, paginationError);
-                  hasMore = false;
-                }
-              }
-            }
-            
-            console.log(`Found ${allParticipants.length} total participants using ${useReportEndpoint ? 'report' : 'basic'} endpoint`);
-            
-            // Process participants in batches
-            const batchSize = 50;
-            for (let i = 0; i < allParticipants.length; i += batchSize) {
-              const batch = allParticipants.slice(i, i + batchSize);
-              const participantInserts = [];
-              
-              for (const participant of batch) {
-                // Map the fields correctly based on what the API actually returns
-                const participantData = {
-                  webinar_id: webinarDbId,
-                  // Primary identifier fields
-                  participant_uuid: participant.participant_user_id || participant.user_id || participant.id || '',
-                  participant_id: participant.id || participant.registrant_id || '',
-                  participant_email: participant.email || participant.user_email || null,
-                  participant_name: participant.name || participant.display_name || participant.user_name || '',
-                  participant_user_id: participant.user_id || null,
-                  
-                  // Legacy columns for backward compatibility
-                  name: participant.name || participant.display_name || participant.user_name || '',
-                  email: participant.email || participant.user_email || null,
-                  user_id: participant.user_id || null,
-                  registrant_id: participant.registrant_id || null,
-                  
-                  // Time and duration fields
-                  join_time: participant.join_time || null,
-                  leave_time: participant.leave_time || null,
-                  duration: participant.duration || 0,
-                  
-                  // Advanced metrics (from report endpoint)
-                  attentiveness_score: participant.attentiveness_score || null,
-                  customer_key: participant.customer_key || null,
-                  
-                  // Location data (from report endpoint)
-                  location: participant.location || participant.city || null,
-                  city: participant.city || null,
-                  country: participant.country || null,
-                  network_type: participant.network_type || null,
-                  device: participant.device || null,
-                  ip_address: participant.ip_address || null,
-                  
-                  // Engagement metrics (from report endpoint or webhooks)
-                  posted_chat: participant.posted_chat || false,
-                  raised_hand: participant.raised_hand || false,
-                  answered_polling: participant.answered_polling || false,
-                  asked_question: participant.asked_question || false,
-                  camera_on_duration: participant.camera_on_duration || 0,
-                  share_application_duration: participant.share_application_duration || 0,
-                  share_desktop_duration: participant.share_desktop_duration || 0,
-                  share_whiteboard_duration: participant.share_whiteboard_duration || 0,
-                  
-                  // Status fields
-                  status: participant.status || 'joined',
-                  participant_status: participant.participant_status || 'in_meeting',
-                  failover: participant.failover || false,
-                  
-                  // Session information
-                  session_sequence: participant.session_sequence || 1,
-                  is_rejoin_session: participant.is_rejoin_session || false,
-                  participant_session_id: participant.participant_session_id || null,
-                  
-                  // Timestamps
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                };
-                
-                participantInserts.push(participantData);
-              }
-              
-              // Batch upsert participants
-              if (participantInserts.length > 0) {
-                const { error } = await supabase
-                  .from('zoom_participants')
-                  .upsert(participantInserts, {
-                    onConflict: 'webinar_id,participant_uuid',
-                    ignoreDuplicates: false
-                  });
-                
-                if (error) {
-                  console.error(`Error upserting participant batch ${i / batchSize + 1}:`, error);
-                  results.errors.push({
-                    webinar_id: webinar.id,
-                    error: `Failed to upsert participants batch: ${error.message}`
-                  });
-                }
-              }
-            }
-
-            // Update webinar attendee count
-            await supabase
-              .from('zoom_webinars')
-              .update({ 
-                total_attendees: allParticipants.length,
-                participant_sync_status: 'synced',
-                participant_sync_attempted_at: new Date().toISOString()
-              })
-              .eq('id', webinarDbId);
-
+            await syncWebinarParticipants(webinar, webinarDbId, accessToken);
           } catch (participantError) {
-            console.error(`Error fetching participants for webinar ${webinar.id}:`, participantError);
+            console.error(`Failed to sync participants for webinar ${webinar.id}:`, participantError.message);
             results.errors.push({
               webinar_id: webinar.id,
-              error: participantError.message
+              error: `Participant sync failed: ${participantError.message}`,
+              type: 'participant_sync'
             });
-            
-            // Update sync status as failed
-            await supabase
-              .from('zoom_webinars')
-              .update({ 
-                participant_sync_status: 'failed',
-                participant_sync_error: participantError.message,
-                participant_sync_attempted_at: new Date().toISOString()
-              })
-              .eq('id', webinarDbId);
           }
         }
 
@@ -320,7 +202,8 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
         console.error(`Error processing webinar ${webinar.id}:`, error);
         results.errors.push({
           webinar_id: webinar.id,
-          error: error.message
+          error: error.message,
+          details: error.details || error.hint || ''
         });
       }
     }
@@ -329,8 +212,7 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
     await supabase
       .from('zoom_connections')
       .update({
-        last_sync_at: new Date().toISOString(),
-        last_sync_status: 'success'
+        last_sync_at: new Date().toISOString()
       })
       .eq('id', connection.id);
 
@@ -343,17 +225,209 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
 
   } catch (error) {
     console.error('Sync failed:', error);
-    
-    // Update connection with error status
-    await supabase
-      .from('zoom_connections')
-      .update({
-        last_sync_at: new Date().toISOString(),
-        last_sync_status: 'failed',
-        error_message: error.message
-      })
-      .eq('id', connection.id);
+    throw error;
+  }
+}
 
+/**
+ * Map Zoom status to our database enum
+ */
+function mapWebinarStatus(zoomStatus) {
+  const statusMap = {
+    'waiting': 'waiting',
+    'started': 'started',
+    'ended': 'ended',
+    'scheduled': 'scheduled',
+    'upcoming': 'upcoming',
+    'finished': 'finished'
+  };
+  
+  return statusMap[zoomStatus] || 'scheduled';
+}
+
+/**
+ * Sync participants for a webinar
+ */
+async function syncWebinarParticipants(webinar, webinarDbId, accessToken) {
+  console.log(`Syncing participants for webinar: ${webinar.topic}`);
+  
+  try {
+    // Update sync status
+    await supabase
+      .from('webinar_metrics')
+      .update({ 
+        participant_sync_status: 'syncing',
+        participant_sync_attempted_at: new Date().toISOString()
+      })
+      .eq('webinar_id', webinarDbId);
+    
+    // Try report endpoint first (has more data)
+    let allParticipants = [];
+    let useReportEndpoint = true;
+    
+    try {
+      // Get participants from report endpoint
+      let nextPageToken = '';
+      do {
+        const response = await zoomService.getWebinarParticipantsReport(
+          webinar.id,
+          accessToken,
+          {
+            page_size: 300,
+            next_page_token: nextPageToken
+          }
+        );
+        
+        allParticipants = allParticipants.concat(response.participants || []);
+        nextPageToken = response.next_page_token || '';
+        
+        // Small delay between requests
+        if (nextPageToken) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      } while (nextPageToken);
+      
+    } catch (reportError) {
+      console.log('Report endpoint failed, falling back to basic participants endpoint');
+      useReportEndpoint = false;
+      allParticipants = [];
+    }
+    
+    // Fallback to basic endpoint if report fails
+    if (!useReportEndpoint) {
+      let pageNumber = 1;
+      let hasMore = true;
+      
+      while (hasMore) {
+        try {
+          const response = await zoomService.getWebinarParticipants(
+            webinar.id,
+            accessToken,
+            {
+              page_size: 300,
+              page_number: pageNumber
+            }
+          );
+          
+          allParticipants = allParticipants.concat(response.participants || []);
+          hasMore = response.page_count > pageNumber;
+          pageNumber++;
+          
+          if (hasMore) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        } catch (error) {
+          console.error(`Error fetching page ${pageNumber}:`, error);
+          hasMore = false;
+        }
+      }
+    }
+    
+    console.log(`Found ${allParticipants.length} participant records`);
+    
+    // Calculate unique attendees (excluding panelists/hosts)
+    const uniqueEmails = new Set();
+    let actualAttendeeCount = 0;
+    
+    // Process participants
+    const batchSize = 100;
+    for (let i = 0; i < allParticipants.length; i += batchSize) {
+      const batch = allParticipants.slice(i, i + batchSize);
+      const participantRecords = [];
+      
+      for (const participant of batch) {
+        // Check if this is a panelist/host
+        const email = (participant.email || '').toLowerCase();
+        const isPanelist = 
+          email.includes('allianthealth.org') ||
+          email.includes('eventsibles.com') ||
+          participant.role === 'panelist' ||
+          participant.role === 'host';
+        
+        // Count unique attendees (not panelists)
+        if (!isPanelist && participant.email) {
+          uniqueEmails.add(email);
+          actualAttendeeCount++;
+        }
+        
+        // Create participant record
+        const participantData = {
+          webinar_id: webinarDbId,
+          participant_uuid: participant.participant_user_id || participant.user_id || participant.id || '',
+          participant_id: participant.id || participant.registrant_id || '',
+          participant_email: participant.email || null,
+          participant_name: participant.name || participant.display_name || '',
+          participant_user_id: participant.user_id || null,
+          
+          // Legacy columns
+          name: participant.name || participant.display_name || '',
+          email: participant.email || null,
+          user_id: participant.user_id || null,
+          registrant_id: participant.registrant_id || null,
+          
+          // Time data
+          join_time: participant.join_time || null,
+          leave_time: participant.leave_time || null,
+          duration: participant.duration || 0,
+          
+          status: participant.status || 'joined',
+          failover: participant.failover || false,
+          
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        participantRecords.push(participantData);
+      }
+      
+      // Batch upsert
+      if (participantRecords.length > 0) {
+        const { error } = await supabase
+          .from('zoom_participants')
+          .upsert(participantRecords, {
+            onConflict: 'webinar_id,participant_uuid'
+          });
+        
+        if (error) {
+          console.error('Error upserting participants:', error);
+          throw error;
+        }
+      }
+    }
+    
+    // Update metrics
+    const uniqueAttendees = uniqueEmails.size;
+    const totalAbsentees = Math.max(0, (webinar.registrants_count || 0) - uniqueAttendees);
+    
+    await supabase
+      .from('webinar_metrics')
+      .update({
+        total_attendees: uniqueAttendees,
+        unique_attendees: uniqueAttendees,
+        total_absentees: totalAbsentees,
+        actual_participant_count: allParticipants.length,
+        participant_sync_status: 'completed',
+        participant_sync_completed_at: new Date().toISOString(),
+        participant_sync_error: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('webinar_id', webinarDbId);
+    
+    console.log(`Synced ${allParticipants.length} participants (${uniqueAttendees} unique attendees)`);
+    
+  } catch (error) {
+    console.error(`Error syncing participants:`, error);
+    
+    // Update sync status as failed
+    await supabase
+      .from('webinar_metrics')
+      .update({ 
+        participant_sync_status: 'failed',
+        participant_sync_error: error.message,
+        updated_at: new Date().toISOString()
+      })
+      .eq('webinar_id', webinarDbId);
+      
     throw error;
   }
 }
