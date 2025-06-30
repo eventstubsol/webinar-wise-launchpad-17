@@ -317,6 +317,9 @@ class ZoomService {
         params.append('page_number', options.page_number);
       }
 
+      console.log(`\n[ZoomService] GET /users - Params:`, params.toString());
+      console.log(`[ZoomService] Using access token: ${accessToken.substring(0, 20)}...`);
+
       const response = await axios.get(`${this.baseURL}/users?${params}`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -325,10 +328,32 @@ class ZoomService {
         timeout: 30000
       });
 
+      console.log(`[ZoomService] GET /users - Success:`, {
+        status: response.status,
+        total_records: response.data?.total_records,
+        users_count: response.data?.users?.length || 0
+      });
+
       return response.data;
       
     } catch (error) {
-      console.error('Get users error:', error.response?.data || error.message);
+      console.error('[ZoomService] GET /users - Error:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        code: error.code
+      });
+      
+      // Log specific Zoom API error details
+      if (error.response?.data) {
+        console.error('[ZoomService] Zoom API Error Details:', {
+          code: error.response.data.code,
+          message: error.response.data.message,
+          errors: error.response.data.errors
+        });
+      }
+      
       throw error;
     }
   }
@@ -344,6 +369,10 @@ class ZoomService {
         type: options.type || 'scheduled'
       });
 
+      console.log(`\n[ZoomService] GET /users/${userId}/webinars - Params:`, params.toString());
+      console.log(`[ZoomService] User ID: ${userId}`);
+      console.log(`[ZoomService] Type: ${options.type || 'scheduled'}`);
+
       const response = await axios.get(`${this.baseURL}/users/${userId}/webinars?${params}`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -352,10 +381,33 @@ class ZoomService {
         timeout: 30000
       });
 
+      console.log(`[ZoomService] GET /users/${userId}/webinars - Success:`, {
+        status: response.status,
+        total_records: response.data?.total_records,
+        webinars_count: response.data?.webinars?.length || 0
+      });
+
       return response.data;
       
     } catch (error) {
-      console.error(`Get webinars for user ${userId} error:`, error.response?.data || error.message);
+      console.error(`[ZoomService] GET /users/${userId}/webinars - Error:`, {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        userId: userId,
+        type: options.type
+      });
+      
+      // Log specific Zoom API error details
+      if (error.response?.data) {
+        console.error('[ZoomService] Zoom API Error Details:', {
+          code: error.response.data.code,
+          message: error.response.data.message,
+          errors: error.response.data.errors
+        });
+      }
+      
       throw error;
     }
   }

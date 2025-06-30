@@ -12,6 +12,12 @@ const supabase = createClient(
  * No complex transformations - just store what Zoom gives us
  */
 async function syncWebinars({ connection, credentials, syncLogId, syncType, onProgress }) {
+  console.log('\n=== START SYNC WEBINARS ===');
+  console.log('Sync Log ID:', syncLogId);
+  console.log('Connection ID:', connection.id);
+  console.log('Connection Type:', connection.connection_type);
+  console.log('Credentials Account ID:', credentials?.account_id);
+  
   const results = {
     totalWebinars: 0,
     processedWebinars: 0,
@@ -28,13 +34,23 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
     let accessToken = connection.access_token;
     const tokenExpiresAt = new Date(connection.token_expires_at);
     
+    console.log('Token expires at:', tokenExpiresAt);
+    console.log('Current time:', new Date());
+    
     if (tokenExpiresAt <= new Date()) {
       console.log('Token expired, refreshing...');
+      console.log('Using credentials:', {
+        client_id: credentials.client_id?.substring(0, 10) + '...',
+        account_id: credentials.account_id
+      });
+      
       const tokenData = await zoomService.getServerToServerToken(
         credentials.client_id,
         credentials.client_secret,
         credentials.account_id
       );
+      
+      console.log('Token refresh successful, new expiry:', new Date(Date.now() + (tokenData.expires_in * 1000)));
       
       accessToken = tokenData.access_token;
       
@@ -46,20 +62,61 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
           token_expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString()
         })
         .eq('id', connection.id);
+    } else {
+      console.log('Token still valid, using existing token');
     }
 
     // Fetch webinars from Zoom
-    console.log('Fetching webinars from Zoom...');
+    console.log('\n=== FETCHING USERS FROM ZOOM ===');
     
     // First, get all users in the account
-    console.log('Getting users in the account...');
-    const usersResponse = await zoomService.getUsers(accessToken, {
+    console.log('Calling zoomService.getUsers with params:', {
       page_size: 300,
       status: 'active'
     });
     
+    let usersResponse;
+    try {
+      usersResponse = await zoomService.getUsers(accessToken, {
+        page_size: 300,
+        status: 'active'
+      });
+      console.log('Users API Response:', {
+        total_records: usersResponse.total_records,
+        page_count: usersResponse.page_count,
+        page_number: usersResponse.page_number,
+        users_count: usersResponse.users?.length || 0
+      });
+    } catch (error) {
+      console.error('ERROR getting users:', {
+        message: error.message,
+        response_status: error.response?.status,
+        response_data: error.response?.data,
+        stack: error.stack
+      });
+      
+      // If it's a 400 error, try to understand why
+      if (error.response?.status === 400) {
+        console.error('400 Error Details:', {
+          code: error.response?.data?.code,
+          message: error.response?.data?.message,
+          errors: error.response?.data?.errors
+        });
+      }
+      
+      throw error;
+    }
+    
     const users = usersResponse.users || [];
     console.log(`Found ${users.length} users in the account`);
+    
+    // Log first few users for debugging
+    if (users.length > 0) {
+      console.log('First 3 users:');
+      users.slice(0, 3).forEach(user => {
+        console.log(`  - ${user.email} (ID: ${user.id}, Type: ${user.type})`);
+      });
+    }
     
     // Get all webinar types
     const webinarTypes = ['scheduled', 'past'];
@@ -67,13 +124,19 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
     
     // For each user, fetch their webinars
     for (const user of users) {
-      console.log(`\nFetching webinars for user: ${user.email} (${user.id})`);
+      console.log(`\n=== Fetching webinars for user: ${user.email} (${user.id}) ===`);
       
       for (const type of webinarTypes) {
         try {
+          console.log(`  Attempting to fetch ${type} webinars...`);
           const response = await zoomService.getUserWebinars(user.id, accessToken, {
             page_size: 100,
             type: type
+          });
+          
+          console.log(`  Response for ${type} webinars:`, {
+            total_records: response.total_records,
+            webinars_count: response.webinars?.length || 0
           });
           
           if (response.webinars && response.webinars.length > 0) {
@@ -83,16 +146,30 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
               host_email: user.email // Ensure we have host email
             }));
             allWebinars.push(...webinarsWithUser);
-            console.log(`  Found ${response.webinars.length} ${type} webinars for ${user.email}`);
+            console.log(`  ✅ Found ${response.webinars.length} ${type} webinars for ${user.email}`);
           }
         } catch (error) {
-          console.error(`  Error fetching ${type} webinars for user ${user.email}:`, error.message);
+          console.error(`  ❌ Error fetching ${type} webinars for user ${user.email}:`, {
+            message: error.message,
+            status: error.response?.status,
+            data: error.response?.data
+          });
+          
+          // If 400 error, log more details
+          if (error.response?.status === 400) {
+            console.error('  400 Error Details:', {
+              code: error.response?.data?.code,
+              message: error.response?.data?.message,
+              user_type: user.type,
+              user_status: user.status
+            });
+          }
         }
       }
     }
     
     results.totalWebinars = allWebinars.length;
-    console.log(`Total webinars found: ${results.totalWebinars}`);
+    console.log(`\n=== Total webinars found: ${results.totalWebinars} ===`);
 
     if (onProgress) {
       await onProgress(40, `Found ${allWebinars.length} webinars, syncing to database...`);
@@ -103,20 +180,23 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
       const webinar = allWebinars[i];
       
       try {
-        console.log(`Processing webinar: ${webinar.topic} (ID: ${webinar.id})`);
+        console.log(`\nProcessing webinar ${i+1}/${allWebinars.length}: ${webinar.topic} (ID: ${webinar.id})`);
         
         // Fetch complete webinar details from the detail endpoint
         // The list endpoint doesn't return all fields we need
         let fullWebinarData = webinar;
         try {
-          console.log(`Fetching full details for webinar ${webinar.id}...`);
+          console.log(`  Fetching full details for webinar ${webinar.id}...`);
           fullWebinarData = await zoomService.getWebinar(webinar.id, accessToken);
-          console.log(`Got full details for webinar ${webinar.id}`);
+          console.log(`  ✅ Got full details for webinar ${webinar.id}`);
           
           // Add a small delay to respect rate limits (Zoom allows 10 requests per second)
           await new Promise(resolve => setTimeout(resolve, 150));
         } catch (detailError) {
-          console.error(`Failed to get full details for webinar ${webinar.id}, using list data:`, detailError.message);
+          console.error(`  ❌ Failed to get full details for webinar ${webinar.id}:`, {
+            message: detailError.message,
+            status: detailError.response?.status
+          });
           // Continue with limited data from list endpoint
         }
         
@@ -151,6 +231,8 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
           updated_at: new Date().toISOString()
         };
         
+        console.log('  Upserting webinar to database...');
+        
         // Upsert webinar (insert or update)
         const { data: upsertedWebinar, error: upsertError } = await supabase
           .from('zoom_webinars')
@@ -161,8 +243,11 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
           .single();
           
         if (upsertError) {
+          console.error('  ❌ Database upsert error:', upsertError);
           throw upsertError;
         }
+        
+        console.log('  ✅ Webinar upserted successfully');
         
         const webinarDbId = upsertedWebinar.id;
         
@@ -189,7 +274,7 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
           try {
             await syncWebinarParticipants(webinar, webinarDbId, accessToken);
           } catch (participantError) {
-            console.error(`Failed to sync participants for webinar ${webinar.id}:`, participantError.message);
+            console.error(`  ❌ Failed to sync participants for webinar ${webinar.id}:`, participantError.message);
             results.errors.push({
               webinar_id: webinar.id,
               error: `Participant sync failed: ${participantError.message}`,
@@ -199,7 +284,7 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
         }
 
       } catch (error) {
-        console.error(`Error processing webinar ${webinar.id}:`, error);
+        console.error(`❌ Error processing webinar ${webinar.id}:`, error);
         results.errors.push({
           webinar_id: webinar.id,
           error: error.message,
@@ -209,6 +294,7 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
     }
 
     // Update connection last sync time
+    console.log('\nUpdating connection last sync time...');
     await supabase
       .from('zoom_connections')
       .update({
@@ -220,11 +306,18 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
       await onProgress(90, 'Finalizing sync...');
     }
 
-    console.log('Sync completed successfully:', results);
+    console.log('\n=== SYNC COMPLETED SUCCESSFULLY ===');
+    console.log('Results:', results);
     return results;
 
   } catch (error) {
-    console.error('Sync failed:', error);
+    console.error('\n=== SYNC FAILED ===');
+    console.error('Error:', {
+      message: error.message,
+      stack: error.stack,
+      response_status: error.response?.status,
+      response_data: error.response?.data
+    });
     throw error;
   }
 }
@@ -249,7 +342,7 @@ function mapWebinarStatus(zoomStatus) {
  * Sync participants for a webinar
  */
 async function syncWebinarParticipants(webinar, webinarDbId, accessToken) {
-  console.log(`Syncing participants for webinar: ${webinar.topic}`);
+  console.log(`  Syncing participants for webinar: ${webinar.topic}`);
   
   try {
     // Update sync status
@@ -287,8 +380,10 @@ async function syncWebinarParticipants(webinar, webinarDbId, accessToken) {
         }
       } while (nextPageToken);
       
+      console.log(`    ✅ Got ${allParticipants.length} participants from report endpoint`);
+      
     } catch (reportError) {
-      console.log('Report endpoint failed, falling back to basic participants endpoint');
+      console.log('    Report endpoint failed, falling back to basic participants endpoint');
       useReportEndpoint = false;
       allParticipants = [];
     }
@@ -317,13 +412,15 @@ async function syncWebinarParticipants(webinar, webinarDbId, accessToken) {
             await new Promise(resolve => setTimeout(resolve, 100));
           }
         } catch (error) {
-          console.error(`Error fetching page ${pageNumber}:`, error);
+          console.error(`    Error fetching page ${pageNumber}:`, error.message);
           hasMore = false;
         }
       }
+      
+      console.log(`    ✅ Got ${allParticipants.length} participants from basic endpoint`);
     }
     
-    console.log(`Found ${allParticipants.length} participant records`);
+    console.log(`    Total participant records: ${allParticipants.length}`);
     
     // Calculate unique attendees (excluding panelists/hosts)
     const uniqueEmails = new Set();
@@ -389,7 +486,7 @@ async function syncWebinarParticipants(webinar, webinarDbId, accessToken) {
           });
         
         if (error) {
-          console.error('Error upserting participants:', error);
+          console.error('    ❌ Error upserting participants:', error);
           throw error;
         }
       }
@@ -413,10 +510,10 @@ async function syncWebinarParticipants(webinar, webinarDbId, accessToken) {
       })
       .eq('webinar_id', webinarDbId);
     
-    console.log(`Synced ${allParticipants.length} participants (${uniqueAttendees} unique attendees)`);
+    console.log(`    ✅ Synced ${allParticipants.length} participants (${uniqueAttendees} unique attendees)`);
     
   } catch (error) {
-    console.error(`Error syncing participants:`, error);
+    console.error(`    ❌ Error syncing participants:`, error.message);
     
     // Update sync status as failed
     await supabase
