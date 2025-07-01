@@ -8,14 +8,15 @@ const supabase = createClient(
 );
 
 /**
- * Sync service that fetches webinars from Zoom and stores them in the database
- * This version uses the /users/me/webinars endpoint which works correctly for Server-to-Server OAuth apps
+ * Simplified sync service that maps Zoom API data directly to database
+ * No complex transformations - just store what Zoom gives us
  */
 async function syncWebinars({ connection, credentials, syncLogId, syncType, onProgress }) {
   console.log('\n=== START SYNC WEBINARS ===');
   console.log('Sync Log ID:', syncLogId);
   console.log('Connection ID:', connection.id);
   console.log('Connection Type:', connection.connection_type);
+  console.log('Credentials Account ID:', credentials?.account_id);
   
   const results = {
     totalWebinars: 0,
@@ -66,63 +67,109 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
     }
 
     // Fetch webinars from Zoom
-    console.log('\n=== FETCHING WEBINARS FROM ZOOM ===');
-    console.log('NOTE: Using /users/me/webinars endpoint which works correctly for Server-to-Server OAuth apps');
+    console.log('\n=== FETCHING USERS FROM ZOOM ===');
+    
+    // First, get all users in the account
+    console.log('Calling zoomService.getUsers with params:', {
+      page_size: 300,
+      status: 'active'
+    });
+    
+    let usersResponse;
+    try {
+      usersResponse = await zoomService.getUsers(accessToken, {
+        page_size: 300,
+        status: 'active'
+      });
+      console.log('Users API Response:', {
+        total_records: usersResponse.total_records,
+        page_count: usersResponse.page_count,
+        page_number: usersResponse.page_number,
+        users_count: usersResponse.users?.length || 0
+      });
+    } catch (error) {
+      console.error('ERROR getting users:', {
+        message: error.message,
+        response_status: error.response?.status,
+        response_data: error.response?.data,
+        stack: error.stack
+      });
+      
+      // If it's a 400 error, try to understand why
+      if (error.response?.status === 400) {
+        console.error('400 Error Details:', {
+          code: error.response?.data?.code,
+          message: error.response?.data?.message,
+          errors: error.response?.data?.errors
+        });
+      }
+      
+      throw error;
+    }
+    
+    const users = usersResponse.users || [];
+    console.log(`Found ${users.length} users in the account`);
+    
+    // Log first few users for debugging
+    if (users.length > 0) {
+      console.log('First 3 users:');
+      users.slice(0, 3).forEach(user => {
+        console.log(`  - ${user.email} (ID: ${user.id}, Type: ${user.type})`);
+      });
+    }
     
     // Get all webinar types
     const webinarTypes = ['scheduled', 'past'];
     const allWebinars = [];
     
-    for (const type of webinarTypes) {
-      try {
-        console.log(`\nFetching ${type} webinars...`);
-        let pageNumber = 1;
-        let hasMorePages = true;
-        
-        while (hasMorePages) {
-          const response = await zoomService.getWebinars(accessToken, {
+    // For each user, fetch their webinars
+    for (const user of users) {
+      console.log(`\n=== Fetching webinars for user: ${user.email} (${user.id}) ===`);
+      
+      for (const type of webinarTypes) {
+        try {
+          console.log(`  Attempting to fetch ${type} webinars...`);
+          const response = await zoomService.getUserWebinars(user.id, accessToken, {
             page_size: 100,
-            page_number: pageNumber,
             type: type
           });
           
-          console.log(`  Page ${pageNumber}: Found ${response.webinars?.length || 0} webinars (Total records: ${response.total_records})`);
+          console.log(`  Response for ${type} webinars:`, {
+            total_records: response.total_records,
+            webinars_count: response.webinars?.length || 0
+          });
           
           if (response.webinars && response.webinars.length > 0) {
-            allWebinars.push(...response.webinars);
+            // Add user info to each webinar for reference
+            const webinarsWithUser = response.webinars.map(w => ({
+              ...w,
+              host_email: user.email // Ensure we have host email
+            }));
+            allWebinars.push(...webinarsWithUser);
+            console.log(`  ✅ Found ${response.webinars.length} ${type} webinars for ${user.email}`);
           }
-          
-          // Check if there are more pages
-          hasMorePages = response.page_count > pageNumber;
-          pageNumber++;
-          
-          // Add a small delay between pages to respect rate limits
-          if (hasMorePages) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
-        }
-        
-        console.log(`✅ Total ${type} webinars found: ${allWebinars.filter(w => (type === 'past' ? new Date(w.start_time) < new Date() : new Date(w.start_time) >= new Date())).length}`);
-        
-      } catch (error) {
-        console.error(`❌ Error fetching ${type} webinars:`, {
-          message: error.message,
-          status: error.response?.status,
-          data: error.response?.data
-        });
-        
-        // Log specific Zoom API error details
-        if (error.response?.data) {
-          console.error('Zoom API Error Details:', {
-            code: error.response.data.code,
-            message: error.response.data.message
+        } catch (error) {
+          console.error(`  ❌ Error fetching ${type} webinars for user ${user.email}:`, {
+            message: error.message,
+            status: error.response?.status,
+            data: error.response?.data
           });
+          
+          // If 400 error, log more details
+          if (error.response?.status === 400) {
+            console.error('  400 Error Details:', {
+              code: error.response?.data?.code,
+              message: error.response?.data?.message,
+              user_type: user.type,
+              user_status: user.status
+            });
+          }
         }
       }
     }
     
     results.totalWebinars = allWebinars.length;
-    console.log(`\n=== Total webinars found across all types: ${results.totalWebinars} ===`);
+    console.log(`\n=== Total webinars found: ${results.totalWebinars} ===`);
 
     if (onProgress) {
       await onProgress(40, `Found ${allWebinars.length} webinars, syncing to database...`);
@@ -153,7 +200,7 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
           // Continue with limited data from list endpoint
         }
         
-        // Map Zoom data directly to our schema
+        // Map Zoom data directly to our schema - no complex transformations
         const webinarData = {
           connection_id: connection.id,
           zoom_webinar_id: String(fullWebinarData.id),
@@ -223,9 +270,9 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
         }
 
         // For past/ended webinars, sync participants
-        if (fullWebinarData.status === 'ended' || new Date(fullWebinarData.start_time) < new Date()) {
+        if (webinar.status === 'ended' || new Date(webinar.start_time) < new Date()) {
           try {
-            await syncWebinarParticipants(fullWebinarData, webinarDbId, accessToken);
+            await syncWebinarParticipants(webinar, webinarDbId, accessToken);
           } catch (participantError) {
             console.error(`  ❌ Failed to sync participants for webinar ${webinar.id}:`, participantError.message);
             results.errors.push({

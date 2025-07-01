@@ -10,94 +10,78 @@ async function fixUniqueAttendees() {
   console.log('=== FIXING UNIQUE ATTENDEE COUNTS ===');
   
   try {
-    // First, let's get all ended webinars
-    const { data: webinars, error: fetchError } = await supabase
-      .from('zoom_webinars')
-      .select('id, zoom_webinar_id, topic, total_registrants, total_attendees, status')
-      .eq('status', 'ended');
+    // First, let's analyze the current situation
+    const { data: analysis, error: analysisError } = await supabase.rpc('exec_sql', {
+      sql: `
+        SELECT 
+          COUNT(*) as total_webinars,
+          COUNT(CASE WHEN total_attendees > 0 THEN 1 END) as webinars_with_attendees,
+          COUNT(CASE WHEN total_registrants > 100 AND total_attendees < 10 THEN 1 END) as suspicious_webinars
+        FROM zoom_webinars
+        WHERE status = 'ended';
+      `
+    });
 
-    if (fetchError) {
-      throw new Error(`Failed to fetch webinars: ${fetchError.message}`);
+    if (!analysisError && analysis?.[0]) {
+      console.log('Current state:', analysis[0]);
     }
 
-    console.log(`Found ${webinars.length} ended webinars to process`);
+    // Update all webinars with the correct unique attendee count
+    console.log('Updating attendee counts...');
+    
+    const { data: updateResult, error: updateError } = await supabase.rpc('exec_sql', {
+      sql: `
+        WITH unique_attendee_counts AS (
+          SELECT 
+            w.id as webinar_id,
+            COUNT(DISTINCT COALESCE(p.email, p.participant_id, p.participant_user_id)) as unique_attendees,
+            COUNT(*) as total_sessions
+          FROM zoom_webinars w
+          LEFT JOIN zoom_participants p ON p.webinar_id = w.id
+          WHERE w.status = 'ended'
+          GROUP BY w.id
+        )
+        UPDATE zoom_webinars w
+        SET 
+          total_attendees = COALESCE(uac.unique_attendees, 0),
+          unique_participant_count = COALESCE(uac.unique_attendees, 0),
+          actual_participant_count = COALESCE(uac.total_sessions, 0),
+          total_absentees = GREATEST(0, w.total_registrants - COALESCE(uac.unique_attendees, 0)),
+          updated_at = NOW()
+        FROM unique_attendee_counts uac
+        WHERE w.id = uac.webinar_id
+          AND w.status = 'ended'
+        RETURNING w.id, w.topic, w.total_attendees, w.unique_participant_count, w.total_registrants, w.total_absentees;
+      `
+    });
 
-    let updatedCount = 0;
-    const updates = [];
-
-    // Process each webinar
-    for (const webinar of webinars) {
-      // Get participant count for this webinar
-      const { data: participants, error: participantError } = await supabase
-        .from('zoom_participants')
-        .select('email, participant_id, participant_user_id, participant_email')
-        .eq('webinar_id', webinar.id);
-
-      if (participantError) {
-        console.error(`Error fetching participants for webinar ${webinar.id}:`, participantError);
-        continue;
-      }
-
-      // Count unique participants
-      const uniqueParticipants = new Map();
-      
-      participants.forEach(p => {
-        // Use email as primary identifier, fallback to IDs
-        const identifier = p.email || p.participant_email || p.participant_id || p.participant_user_id;
-        if (identifier) {
-          uniqueParticipants.set(identifier, true);
-        }
-      });
-
-      const uniqueCount = uniqueParticipants.size;
-      const newAbsenteeCount = Math.max(0, webinar.total_registrants - uniqueCount);
-
-      // Only update if the count is different
-      if (webinar.total_attendees !== uniqueCount) {
-        const { error: updateError } = await supabase
-          .from('zoom_webinars')
-          .update({
-            total_attendees: uniqueCount,
-            unique_participant_count: uniqueCount,
-            actual_participant_count: participants.length,
-            total_absentees: newAbsenteeCount,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', webinar.id);
-
-        if (updateError) {
-          console.error(`Error updating webinar ${webinar.id}:`, updateError);
-        } else {
-          updatedCount++;
-          updates.push({
-            zoom_webinar_id: webinar.zoom_webinar_id,
-            topic: webinar.topic,
-            old_attendees: webinar.total_attendees,
-            new_attendees: uniqueCount,
-            total_sessions: participants.length,
-            registrants: webinar.total_registrants,
-            absentees: newAbsenteeCount
-          });
-        }
-      }
+    if (updateError) {
+      throw new Error(`Failed to update attendee counts: ${updateError.message}`);
     }
 
+    const updatedCount = updateResult?.length || 0;
     console.log(`Updated ${updatedCount} webinars with correct unique attendee counts`);
 
-    // Show some examples
-    if (updates.length > 0) {
+    // Get some examples of the fixes
+    const { data: examples, error: examplesError } = await supabase
+      .from('zoom_webinars')
+      .select('zoom_webinar_id, topic, total_attendees, unique_participant_count, total_registrants, total_absentees')
+      .eq('status', 'ended')
+      .gt('total_attendees', 0)
+      .order('updated_at', { ascending: false })
+      .limit(10);
+
+    if (!examplesError && examples) {
       console.log('\nExample updates:');
-      updates.slice(0, 10).forEach(u => {
-        console.log(`- ${u.topic.substring(0, 50)}...`);
-        console.log(`  Old: ${u.old_attendees} attendees → New: ${u.new_attendees} unique attendees (${u.total_sessions} total sessions)`);
-        console.log(`  Registrants: ${u.registrants}, Absentees: ${u.absentees}`);
+      examples.forEach(w => {
+        console.log(`- ${w.topic}: ${w.total_attendees} unique attendees (${w.total_registrants} registrants, ${w.total_absentees} absentees)`);
       });
     }
 
     return {
       success: true,
       updatedCount,
-      examples: updates.slice(0, 10)
+      examples
     };
 
   } catch (error) {

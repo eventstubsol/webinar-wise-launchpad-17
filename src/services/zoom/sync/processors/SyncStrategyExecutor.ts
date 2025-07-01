@@ -62,9 +62,6 @@ export async function executeInitialSync(
         current: `Completed: ${webinar.topic}`,
         overallProgress
       });
-      await progressTracker.updateSyncLog(syncLogId, {
-        current_operation: `Processing webinar ${i + 1}/${webinars.length}: ${webinar.topic}`
-      });
     } catch (error) {
       failedCount++;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -85,7 +82,6 @@ export async function executeInitialSync(
   await progressTracker.updateSyncLog(syncLogId, {
     processed_items: processedCount,
     failed_items: failedCount,
-    webinars_synced: processedCount, // Track webinars synced
     error_details: failedWebinars.length > 0 ? { 
       error_message: `${failedWebinars.length} webinars failed to sync`,
       error_code: 'PARTIAL_SYNC_FAILURE',
@@ -167,8 +163,7 @@ export async function executeIncrementalSync(
 
   await progressTracker.updateSyncLog(syncLogId, {
     processed_items: processedCount,
-    failed_items: failedCount,
-    webinars_synced: processedCount // Track webinars synced
+    failed_items: failedCount
   });
 }
 

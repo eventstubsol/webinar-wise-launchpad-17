@@ -15,10 +15,9 @@ export class ParticipantOperations {
     avgDuration: number;
   }> {
     try {
-      // Get all participants with their details to calculate unique attendees
       const { data: participants, error } = await supabase
         .from('zoom_participants')
-        .select('participant_id, participant_email, duration')
+        .select('duration')
         .eq('webinar_id', webinarDbId);
 
       if (error) {
@@ -26,31 +25,9 @@ export class ParticipantOperations {
         return { totalAttendees: 0, totalMinutes: 0, avgDuration: 0 };
       }
 
-      if (!participants || participants.length === 0) {
-        return { totalAttendees: 0, totalMinutes: 0, avgDuration: 0 };
-      }
-
-      // Calculate unique attendees based on participant_id or email
-      const uniqueParticipants = new Map();
-      let totalMinutes = 0;
-
-      participants.forEach(p => {
-        // Use participant_id as primary key, fall back to email if not available
-        const key = p.participant_id || p.participant_email || `unknown_${Math.random()}`;
-        
-        if (!uniqueParticipants.has(key)) {
-          uniqueParticipants.set(key, { duration: 0 });
-        }
-        
-        // Sum up duration for each unique participant
-        uniqueParticipants.get(key).duration += (p.duration || 0);
-        totalMinutes += (p.duration || 0);
-      });
-
-      const totalAttendees = uniqueParticipants.size;
+      const totalAttendees = participants?.length || 0;
+      const totalMinutes = participants?.reduce((sum, p) => sum + (p.duration || 0), 0) || 0;
       const avgDuration = totalAttendees > 0 ? totalMinutes / totalAttendees : 0;
-
-      console.log(`Webinar ${webinarDbId} metrics: ${totalAttendees} unique attendees, ${totalMinutes} total minutes`);
 
       return {
         totalAttendees,

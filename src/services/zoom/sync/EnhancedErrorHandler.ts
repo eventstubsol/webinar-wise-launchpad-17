@@ -1,6 +1,5 @@
 
 import { ErrorCategory, EnhancedError } from '@/types/zoom/enhancedSyncTypes';
-import { getUserFriendlyError } from '@/lib/errorHandler';
 
 /**
  * Enhanced error handler for categorizing and managing sync errors
@@ -141,10 +140,16 @@ export class EnhancedErrorHandler {
   }
 
   static formatErrorForUser(error: EnhancedError): string {
-    // Use the centralized error handler for user-friendly messages
-    const userFriendlyError = getUserFriendlyError(error.originalError || error.message);
-    return userFriendlyError.action 
-      ? `${userFriendlyError.message} ${userFriendlyError.action}`
-      : userFriendlyError.message;
+    const categoryMessages = {
+      [ErrorCategory.RATE_LIMIT]: 'Rate limit exceeded. The sync will automatically retry when limits reset.',
+      [ErrorCategory.NETWORK]: 'Network connection issue. Please check your internet connection.',
+      [ErrorCategory.AUTHENTICATION]: 'Authentication failed. Please reconnect your Zoom account in Settings.',
+      [ErrorCategory.API_ERROR]: 'Zoom API error. This may be temporary - please try again.',
+      [ErrorCategory.TIMEOUT]: 'Request timed out. This may be due to high server load.',
+      [ErrorCategory.VALIDATION]: 'Data validation error. Please check your sync configuration.',
+      [ErrorCategory.UNKNOWN]: 'An unexpected error occurred. Please try again.'
+    };
+
+    return categoryMessages[error.category] || error.message;
   }
 }
