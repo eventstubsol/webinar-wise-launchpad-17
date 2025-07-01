@@ -1,3 +1,5 @@
+// Quick fix to prevent the error from showing in the UI
+// This wraps the metrics fetch with better error handling
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,9 +40,14 @@ export const useWebinarMetrics = () => {
         const metricsData = await WebinarMetricsCalculator.calculateMetrics(webinars, lastSync, syncHistoryCount);
         setMetrics(metricsData);
 
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error fetching webinar metrics:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch metrics');
+        // Don't show PostgREST errors to users - these are internal
+        if (err?.code === 'PGRST200') {
+          setError('Unable to load metrics. Please try refreshing the page.');
+        } else {
+          setError(err instanceof Error ? err.message : 'Failed to fetch metrics');
+        }
         setMetrics(WebinarMetricsCalculator.createEmptyMetrics());
       } finally {
         setLoading(false);

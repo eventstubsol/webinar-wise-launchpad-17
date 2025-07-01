@@ -2,8 +2,9 @@
 import React from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, RefreshCw, ExternalLink, Settings } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { getUserFriendlyError, formatErrorForDisplay } from '@/lib/errorHandler';
 
 interface ServiceStatusAlertProps {
   healthCheck: any;
@@ -74,67 +75,22 @@ export const ServiceStatusAlert: React.FC<ServiceStatusAlertProps> = ({
 
   const getAlertContent = () => {
     const error = healthCheck.error || '';
+    const userFriendlyError = getUserFriendlyError(error);
     
-    if (error.includes('starting up') || error.includes('unavailable')) {
-      return {
-        title: "Service Starting Up",
-        description: "The Render sync service is starting up. This usually takes 1-2 minutes for cold starts.",
-        variant: "default" as const,
-        actions: (
-          <div className="flex gap-2 mt-2">
-            <Button onClick={onRefresh} variant="outline" size="sm">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Check Again
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <a 
-                href="https://dashboard.render.com" 
-                target="_blank" 
-                rel="noopener noreferrer"
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Render Status
-              </a>
-            </Button>
-          </div>
-        )
-      };
-    }
-    
-    if (error.includes('environment variables') || error.includes('Internal server error')) {
-      return {
-        title: "Service Configuration Issue",
-        description: "The sync service has a configuration problem. Please check that all environment variables are properly set in your Render service.",
-        variant: "destructive" as const,
-        actions: (
-          <div className="flex gap-2 mt-2">
-            <Button onClick={onRefresh} variant="outline" size="sm">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Retry
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <a 
-                href="https://dashboard.render.com" 
-                target="_blank" 
-                rel="noopener noreferrer"
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Check Render Config
-              </a>
-            </Button>
-          </div>
-        )
-      };
+    // Determine variant based on error type
+    let variant: "default" | "destructive" = "destructive";
+    if (error.includes('starting up') || error.includes('503') || error.includes('cold start')) {
+      variant = "default";
     }
     
     return {
-      title: "Service Unavailable",
-      description: error || "The sync service is currently unavailable. Please try again later.",
-      variant: "destructive" as const,
+      title: "Service Status",
+      description: formatErrorForDisplay(userFriendlyError),
+      variant,
       actions: (
         <Button onClick={onRefresh} variant="outline" size="sm">
           <RefreshCw className="h-4 w-4 mr-2" />
-          Retry
+          Try Again
         </Button>
       )
     };

@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { ZoomConnection, SyncType } from '@/types/zoom';
 import { RenderZoomService } from '@/services/zoom/RenderZoomService';
+import { getUserFriendlyError, formatErrorForDisplay } from '@/lib/errorHandler';
 
 export const useZoomSync = (connection?: ZoomConnection | null) => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -50,9 +51,10 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           setIsSyncing(false);
           clearProgressInterval();
           
+          const userError = getUserFriendlyError(result.error || "An error occurred during synchronization.");
           toast({
             title: "Sync failed",
-            description: result.error || "An error occurred during synchronization.",
+            description: formatErrorForDisplay(userError),
             variant: "destructive",
           });
         } else if (result.status === 'no_data') {
@@ -74,9 +76,10 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       setIsSyncing(false);
       clearProgressInterval();
       
+      const userError = getUserFriendlyError(error);
       toast({
         title: "Sync monitoring failed",
-        description: "Unable to monitor sync progress.",
+        description: formatErrorForDisplay(userError),
         variant: "destructive",
       });
     }
@@ -136,9 +139,10 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       setSyncStatus('failed');
       setCurrentOperation('');
       
+      const userError = getUserFriendlyError(error);
       toast({
         title: "Sync failed to start",
-        description: error instanceof Error ? error.message : "Unable to start synchronization.",
+        description: formatErrorForDisplay(userError),
         variant: "destructive",
       });
     }
@@ -189,9 +193,10 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       }
     } catch (error) {
       console.error('Error testing connection:', error);
+      const userError = getUserFriendlyError(error);
       toast({
         title: "Connection test failed",
-        description: error instanceof Error ? error.message : "Unable to test Zoom API connection.",
+        description: formatErrorForDisplay(userError),
         variant: "destructive",
       });
     }

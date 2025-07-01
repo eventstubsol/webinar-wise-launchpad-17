@@ -186,7 +186,7 @@ router.post('/start-sync', extractUser, async (req, res) => {
     console.log(`🔄 [${requestId}] Calling zoom-sync-webinars edge function...`);
     
     try {
-      const { data: edgeFunctionResult, error: edgeFunctionError } = await supabase.functions.invoke('zoom-sync-webinars', {
+      const { data: edgeFunctionResult, error: edgeFunctionError } = await supabase.functions.invoke('zoom-sync-webinars-v2', {
         body: {
           connectionId: connection_id,
           syncLogId: syncLog.id,

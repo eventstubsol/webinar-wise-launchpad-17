@@ -1,4 +1,3 @@
-
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { WebinarEngagementService } from '@/services/zoom/analytics';
@@ -17,15 +16,47 @@ export const useWebinarDetail = (webinarId: string, connectionId: string) => {
   return useQuery({
     queryKey: ['webinar-detail', webinarId],
     queryFn: async (): Promise<WebinarDetailData> => {
-      // Fetch webinar details
+      // Fetch webinar details with metrics
       const { data: webinar, error: webinarError } = await supabase
         .from('zoom_webinars')
-        .select('*')
+        .select(`
+          *,
+          metrics:webinar_metrics(
+            total_attendees,
+            unique_attendees,
+            total_absentees,
+            actual_participant_count,
+            total_minutes,
+            avg_attendance_duration,
+            participant_sync_status,
+            participant_sync_attempted_at,
+            participant_sync_completed_at,
+            participant_sync_error
+          )
+        `)
         .eq('id', webinarId)
         .eq('connection_id', connectionId)
         .single();
 
       if (webinarError) throw webinarError;
+
+      // Transform webinar data to flatten metrics
+      const transformedWebinar = webinar ? {
+        ...webinar,
+        // Add metrics fields at root level for backward compatibility
+        total_attendees: webinar.metrics?.total_attendees || 0,
+        unique_attendees: webinar.metrics?.unique_attendees || 0,
+        total_absentees: webinar.metrics?.total_absentees || 0,
+        actual_participant_count: webinar.metrics?.actual_participant_count || 0,
+        total_minutes: webinar.metrics?.total_minutes || 0,
+        avg_attendance_duration: webinar.metrics?.avg_attendance_duration || 0,
+        participant_sync_status: webinar.metrics?.participant_sync_status || 'pending',
+        participant_sync_attempted_at: webinar.metrics?.participant_sync_attempted_at,
+        participant_sync_completed_at: webinar.metrics?.participant_sync_completed_at,
+        participant_sync_error: webinar.metrics?.participant_sync_error,
+        // Rename for backward compatibility
+        total_registrants: webinar.registrants_count || 0
+      } : {};
 
       // Fetch participants
       const { data: participants, error: participantsError } = await supabase
@@ -70,11 +101,11 @@ export const useWebinarDetail = (webinarId: string, connectionId: string) => {
 
       if (registrantsError) throw registrantsError;
 
-      // Calculate analytics - fixed to use correct method name
+      // Calculate analytics
       const analytics = await WebinarEngagementService.getWebinarEngagement(webinarId);
 
       return {
-        webinar: webinar || {},
+        webinar: transformedWebinar,
         participants: participants || [],
         polls: polls || [],
         qna: qna || [],

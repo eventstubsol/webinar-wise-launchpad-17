@@ -58,8 +58,15 @@ async function runSyncAsync(syncLogId, connectionId, syncType, requestId) {
       completed_at: new Date().toISOString(),
       total_items: result.totalWebinars || 0,
       processed_items: result.processedWebinars || 0,
+      webinars_synced: result.processedWebinars || 0,
       sync_progress: 100,
-      current_operation: 'Sync completed successfully'
+      current_operation: 'Sync completed successfully',
+      metadata: {
+        totalWebinars: result.totalWebinars || 0,
+        processedWebinars: result.processedWebinars || 0,
+        errors: result.errors || [],
+        completedAt: new Date().toISOString()
+      }
     });
 
     console.log(`[ASYNC] Local sync completed successfully for sync ${syncLogId}:`, result);

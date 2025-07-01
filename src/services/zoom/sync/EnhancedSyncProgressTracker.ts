@@ -178,6 +178,7 @@ export class EnhancedSyncProgressTracker {
       total_items: progress.total,
       processed_items: progress.processed,
       failed_items: progress.failed,
+      webinars_synced: progress.processed, // Track webinars synced
       status: SyncStatus.IN_PROGRESS // Only set status, sync_status is generated automatically
     });
 
@@ -193,12 +194,21 @@ export class EnhancedSyncProgressTracker {
       return;
     }
 
+    // Get the final count of processed items to set webinars_synced
+    const { data: syncLog } = await supabase
+      .from('zoom_sync_logs')
+      .select('processed_items')
+      .eq('id', syncLogId)
+      .single();
+
     await this.updateSyncLog(syncLogId, {
       status: SyncStatus.COMPLETED, // Only set status, sync_status is generated automatically
       completed_at: new Date().toISOString(),
       current_webinar_id: null,
       sync_stage: 'completed',
-      stage_progress_percentage: 100
+      stage_progress_percentage: 100,
+      webinars_synced: syncLog?.processed_items || 0, // Set final webinars synced count
+      current_operation: 'Sync completed successfully'
     });
   }
 

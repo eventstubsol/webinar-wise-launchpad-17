@@ -2,6 +2,7 @@ import axios, { AxiosError } from 'axios';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { DirectZoomSync } from './DirectZoomSyncService';
+import { getUserFriendlyError, formatErrorForDisplay } from '@/lib/errorHandler';
 
 // Updated with your actual Render deployment URL
 const RENDER_API_BASE_URL = process.env.NODE_ENV === 'production' 
@@ -38,9 +39,9 @@ interface ApiResponse<T = any> {
 class RenderZoomServiceClass {
   private serviceHealthy: boolean = true;
   private lastHealthCheck: number = 0;
-  private healthCheckInterval: number = 60000; // 1 minute
+  private healthCheckInterval: number = 300000; // 5 minutes (longer interval since service is always up)
   private maxRetries: number = 3;
-  private retryDelay: number = 1000; // 1 second
+  private retryDelay: number = 500; // 500ms (faster retries since no cold starts)
   private isWakingUp: boolean = false;
   private useDirectSync: boolean = false;
 
@@ -73,7 +74,7 @@ class RenderZoomServiceClass {
     try {
       console.log('🏥 Checking Render service health...');
       const response = await axios.get(`${RENDER_API_BASE_URL}/health`, {
-        timeout: 10000, // 10 second timeout for health check
+        timeout: 5000, // 5 second timeout (faster on Starter plan)
         headers: {
           'Accept': 'application/json',
         }
@@ -100,9 +101,9 @@ class RenderZoomServiceClass {
     // Show wake-up message on first attempt
     if (retryCount === 0 && !this.isWakingUp) {
       this.isWakingUp = true;
-      toast.loading('Waking up sync service... This may take 30-60 seconds on free tier.', {
+      toast.loading('Connecting to sync service...', {
         id: 'service-wakeup',
-        duration: 60000
+        duration: 10000
       });
     }
 
@@ -141,23 +142,13 @@ class RenderZoomServiceClass {
           this.isWakingUp = false;
         }
         
-        // Show helpful error message
-        toast.error(
-          'Sync service is not responding. The service may be sleeping (free tier limitation).',
-          {
-            duration: 10000,
-            action: {
-              label: 'View Fix Guide',
-              onClick: () => {
-                window.open('/FIX_EDGE_FUNCTION_SYNC_ERROR.md', '_blank');
-              }
-            }
-          }
-        );
+        // Show user-friendly error message
+        const userError = getUserFriendlyError('Service unavailable - sleeping or tier limitation');
+        toast.error(formatErrorForDisplay(userError), { duration: 10000 });
         
         return {
           success: false,
-          error: 'Sync service is currently unavailable. If you\'re on Render\'s free tier, the service may be sleeping. Please wait a moment and try again, or check the Render dashboard.',
+          error: 'Service temporarily unavailable. Please try again in a moment.',
           isServiceAvailable: false,
           retryAfter: 60
         };
@@ -173,7 +164,7 @@ class RenderZoomServiceClass {
         method,
         url: `${RENDER_API_BASE_URL}${endpoint}`,
         headers,
-        timeout: endpoint === '/health' ? 10000 : 60000, // Increased timeout to 60 seconds
+        timeout: endpoint === '/health' ? 5000 : 30000, // 30 seconds (reasonable for Starter plan)
         ...(data && { data })
       };
 
@@ -200,61 +191,15 @@ class RenderZoomServiceClass {
         if (error.response?.status === 401) {
           console.error('Authorization failed - likely missing Supabase env vars on Render');
           
-          toast.error(
-            'Backend authorization failed. Using direct sync mode.',
-            {
-              duration: 10000,
-              description: 'The Render backend is missing Supabase configuration.',
-              action: {
-                label: 'How to Fix',
-                onClick: () => {
-                  // Create and download fix instructions
-                  const instructions = `
-RENDER BACKEND AUTHORIZATION FIX
-================================
-
-The sync is failing because the Render backend cannot verify your session.
-This happens when Supabase environment variables are not set on Render.
-
-TO FIX:
-1. Go to https://dashboard.render.com
-2. Find service: webinar-wise-launchpad-17
-3. Click "Environment" tab
-4. Add these variables:
-
-   SUPABASE_URL = ${supabase.supabaseUrl || 'your-supabase-url'}
-   SUPABASE_SERVICE_ROLE_KEY = (get from Supabase dashboard)
-   SUPABASE_ANON_KEY = ${supabase.supabaseKey || 'your-anon-key'}
-   NODE_ENV = production
-
-5. Get the service role key from:
-   https://app.supabase.com/project/lgajnzldkfpvcuofjxom/settings/api
-
-6. After adding, Render will auto-redeploy
-7. Wait 2-3 minutes for deployment to complete
-
-TEMPORARY WORKAROUND:
-The app is now using direct sync mode which bypasses the Render backend.
-This will work but may be slower for large datasets.
-`;
-                  const blob = new Blob([instructions], { type: 'text/plain' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = 'fix-render-auth.txt';
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }
-              }
-            }
-          );
+          const authError = getUserFriendlyError('Authorization failed');
+          toast.error(formatErrorForDisplay(authError), { duration: 10000 });
           
           // Enable direct sync mode
           this.useDirectSync = true;
           
           return {
             success: false,
-            error: 'Authorization failed. Backend is missing Supabase configuration. Using direct sync mode as fallback.',
+            error: 'Authentication issue detected. Please try again.',
             isServiceAvailable: true
           };
         }
@@ -263,34 +208,24 @@ This will work but may be slower for large datasets.
         if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
           this.serviceHealthy = false;
           
-          toast.error(
-            'Cannot connect to sync service. The service may be offline.',
-            {
-              duration: 10000,
-              description: 'Check the Render dashboard for service status.',
-              action: {
-                label: 'Open Render',
-                onClick: () => {
-                  window.open('https://dashboard.render.com', '_blank');
-                }
-              }
-            }
-          );
+          const connectionError = getUserFriendlyError('Cannot connect to service');
+          toast.error(formatErrorForDisplay(connectionError), { duration: 10000 });
           
           return {
             success: false,
-            error: 'Cannot connect to sync service. The backend service may be offline or starting up. Please check the Render dashboard.',
+            error: 'Unable to connect to the sync service. Please try again.',
             isServiceAvailable: false,
             retryAfter: 60
           };
         }
         
         if (error.code === 'ECONNABORTED' || error.code === 'TIMEOUT') {
-          toast.error('Request timed out. The service is taking longer than expected to respond.');
+          const timeoutError = getUserFriendlyError('Request timeout');
+          toast.error(formatErrorForDisplay(timeoutError));
           
           return {
             success: false,
-            error: 'Request timed out. The service may be waking up from sleep mode (free tier). Please try again in a moment.',
+            error: 'Request timed out. Please try again.',
             isServiceAvailable: false,
             retryAfter: 30
           };
@@ -298,22 +233,23 @@ This will work but may be slower for large datasets.
         
         if (error.response?.status === 503) {
           this.serviceHealthy = false;
-          toast.loading('Service is starting up. Please wait...', { duration: 5000 });
+          toast.loading('Service is starting up...', { duration: 5000 });
           
           return {
             success: false,
-            error: 'Sync service is starting up. This is normal for free tier services. Please wait 30-60 seconds and try again.',
+            error: 'Service is starting up. Please wait a moment and try again.',
             isServiceAvailable: false,
             retryAfter: 30
           };
         }
 
         if (error.response?.status === 500) {
-          toast.error('Server error. This may be due to configuration issues.');
+          const serverError = getUserFriendlyError('Internal server error');
+          toast.error(formatErrorForDisplay(serverError));
           
           return {
             success: false,
-            error: 'Internal server error. Please check that all environment variables are correctly set in the Render dashboard.',
+            error: 'Something went wrong on our end. Please try again later.',
             isServiceAvailable: true
           };
         }
@@ -330,7 +266,8 @@ This will work but may be slower for large datasets.
         
         // Generic error
         const errorMessage = error.response?.data?.error || error.message || 'Network error occurred';
-        toast.error(errorMessage);
+        const userError = getUserFriendlyError(errorMessage);
+        toast.error(formatErrorForDisplay(userError));
         
         return {
           success: false,
@@ -341,7 +278,8 @@ This will work but may be slower for large datasets.
       
       // Non-Axios error
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      toast.error(errorMessage);
+      const userError = getUserFriendlyError(errorMessage);
+      toast.error(formatErrorForDisplay(userError));
       
       return {
         success: false,
@@ -461,7 +399,7 @@ This will work but may be slower for large datasets.
   // New method to pre-warm the service
   async preWarmService(): Promise<void> {
     console.log('Pre-warming Render service...');
-    toast.info('Preparing sync service...', { duration: 3000 });
+    toast.info('Preparing service...', { duration: 3000 });
     
     const isHealthy = await this.checkServiceHealth();
     if (!isHealthy) {
@@ -473,7 +411,7 @@ This will work but may be slower for large datasets.
   // Reset to try Render backend again
   resetDirectSyncMode(): void {
     this.useDirectSync = false;
-    toast.info('Switching back to Render backend mode');
+    toast.info('Switching to standard sync mode');
   }
 }
 

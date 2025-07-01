@@ -82,11 +82,11 @@ export function ZoomStatusSection() {
     return <Badge variant="outline">Not synced</Badge>;
   };
 
-  const handleQuickSync = async () => {
+  const handleSync = async () => {
     try {
-      await startSync(SyncType.INCREMENTAL);
+      await startSync(SyncType.MANUAL);
     } catch (error) {
-      console.error('Quick sync failed:', error);
+      console.error('Sync failed:', error);
     }
   };
 
@@ -163,13 +163,13 @@ export function ZoomStatusSection() {
             </Button>
           ) : (
             <Button 
-              onClick={handleQuickSync} 
+              onClick={handleSync} 
               variant="outline" 
               size="sm"
               disabled={!connection}
             >
               <RefreshCw className="h-4 w-4 mr-2" />
-              Quick Sync
+              Sync
             </Button>
           )}
         </div>

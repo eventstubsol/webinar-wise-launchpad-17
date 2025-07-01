@@ -1,77 +1,104 @@
-
 /**
  * Database types for Zoom webinar data and related entities
+ * Updated to match simplified database structure
  */
 
 import { WebinarStatus, WebinarType, ApprovalType } from './enums';
 import { WebinarSettings, RegistrantInfo, RecordingInfo, PanelistInfo, ChatMessageInfo, TrackingInfo } from './jsonTypes';
 
-/** Core webinar entity from Zoom API - Updated to match actual database schema */
+/** 
+ * Core webinar entity from database - matches simplified zoom_webinars table 
+ * This matches the Zoom API structure exactly
+ */
 export interface ZoomWebinar {
+  // Primary key
   id: string;
+  
+  // Relationship
   connection_id: string;
-  webinar_id: string | null;
+  
+  // Core Zoom fields (from API)
   zoom_webinar_id: string;
-  uuid: string | null; // Fixed: mapped to database 'uuid' field
-  webinar_uuid: string | null; // Keep for backward compatibility
-  zoom_uuid: string | null;
-  occurrence_id: string | null; // Added missing field from database
-  host_id: string | null;
-  host_email: string | null;
+  uuid: string | null;
+  host_id: string;
+  host_email: string;
   topic: string;
-  agenda: string | null;
-  webinar_type: number;
-  status: string;
+  type: number; // 5=webinar, 6=recurring no fixed time, 9=recurring fixed time
   start_time: string;
-  duration: number;
+  duration: number; // in minutes
   timezone: string;
-  
-  // Database creation tracking
-  webinar_created_at: string | null;
+  agenda: string | null;
   created_at: string;
-  updated_at: string;
   
-  // Access and registration
-  registration_type: number | null;
-  registration_url: string | null;
-  join_url: string;
+  // URLs
   start_url: string | null;
+  join_url: string;
+  registration_url: string | null;
+  
+  // Authentication
   password: string | null;
-  approval_type: number | null;
-  registrants_restrict_number: number | null;
+  h323_password: string | null;
+  pstn_password: string | null;
+  encrypted_password: string | null;
   
-  // Security fields
-  h323_passcode: string | null;
-  encrypted_passcode: string | null;
+  // Status
+  status: WebinarStatus;
   
-  // Computed metrics fields
-  // NOTE: attendees_count and registrants_count have been removed as they don't exist in the database
-  // Use total_attendees and total_registrants instead
-  total_registrants: number | null; // Added missing field
-  total_attendees: number | null; // Added missing field
-  total_absentees: number | null; // Added missing field
-  total_minutes: number | null; // Added missing field
-  avg_attendance_duration: number | null; // Added missing field
-  
-  // JSONB fields
-  settings: any | null;
+  // JSON fields for complex data
+  settings: WebinarSettings | null;
   recurrence: any | null;
   occurrences: any | null;
-  tracking_fields: any | null;
+  tracking_fields: TrackingInfo[] | null;
   
-  // Simulive and recording fields
-  is_simulive: boolean | null;
-  record_file_id: string | null;
-  transition_to_live: boolean | null;
-  creation_source: string | null;
+  // Metrics (from API)
+  registrants_count: number;
   
-  // Sync tracking fields
+  // Sync metadata
   synced_at: string;
-  last_synced_at: string | null;
-  participant_sync_status: string | null;
+  updated_at: string;
+  
+  // Metrics from join (optional - only present when joined with webinar_metrics)
+  metrics?: WebinarMetrics;
+  
+  // Backward compatibility fields (populated from metrics join)
+  total_attendees?: number;
+  unique_attendees?: number;
+  total_absentees?: number;
+  actual_participant_count?: number;
+  total_minutes?: number;
+  avg_attendance_duration?: number;
+  participant_sync_status?: string;
+  participant_sync_attempted_at?: string | null;
+  participant_sync_completed_at?: string | null;
+  participant_sync_error?: string | null;
+}
+
+/**
+ * Webinar metrics - calculated data stored separately
+ */
+export interface WebinarMetrics {
+  id: string;
+  webinar_id: string;
+  
+  // Participant counts
+  total_attendees: number;
+  unique_attendees: number;
+  total_absentees: number;
+  actual_participant_count: number;
+  
+  // Time metrics
+  total_minutes: number;
+  avg_attendance_duration: number;
+  
+  // Sync status
+  participant_sync_status: string;
   participant_sync_attempted_at: string | null;
   participant_sync_completed_at: string | null;
   participant_sync_error: string | null;
+  
+  // Timestamps
+  created_at: string;
+  updated_at: string;
 }
 
 /** Webinar registrant information */
@@ -157,3 +184,17 @@ export interface ZoomWebinarTracking {
   tracking_value: string | null;
   created_at: string | null;
 }
+
+// Backward compatibility types
+export type ZoomWebinarWithMetrics = ZoomWebinar & {
+  total_attendees: number;
+  unique_attendees: number;
+  total_absentees: number;
+  actual_participant_count: number;
+  total_minutes: number;
+  avg_attendance_duration: number;
+  participant_sync_status: string;
+  participant_sync_attempted_at: string | null;
+  participant_sync_completed_at: string | null;
+  participant_sync_error: string | null;
+};

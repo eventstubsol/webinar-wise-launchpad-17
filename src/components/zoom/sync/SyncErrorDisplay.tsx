@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { X, AlertCircle } from 'lucide-react';
 import { SyncError } from '@/hooks/sync/types';
+import { getUserFriendlyError, formatErrorForDisplay } from '@/lib/errorHandler';
 
 interface SyncErrorDisplayProps {
   errors: SyncError[];
@@ -22,7 +23,7 @@ export const SyncErrorDisplay: React.FC<SyncErrorDisplayProps> = ({
         <Alert key={error.id} variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription className="flex justify-between items-start">
-            <span>{error.message}</span>
+            <span>{formatErrorForDisplay(getUserFriendlyError(error.message))}</span>
             {error.dismissible && (
               <Button
                 variant="ghost"
