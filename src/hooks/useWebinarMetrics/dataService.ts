@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import type { SyncHistoryData, WebinarData } from './types';
 
@@ -22,22 +21,28 @@ export class WebinarMetricsDataService {
       .from('zoom_webinars')
       .select(`
         *,
-        zoom_registrants(count),
         zoom_participants(count)
       `)
       .eq('connection_id', connectionId);
 
     if (error) throw error;
-    return webinars || [];
+    
+    // Add registrant count from the webinar data itself
+    return (webinars || []).map(webinar => ({
+      ...webinar,
+      zoom_registrants: [{ count: webinar.registrants_count || 0 }]
+    }));
   }
 
   static async getRegistrantCount(webinarId: string): Promise<number> {
-    const { count } = await supabase
-      .from('zoom_registrants')
-      .select('*', { count: 'exact', head: true })
-      .eq('webinar_id', webinarId);
+    // Get registrant count from the webinar record itself
+    const { data: webinar } = await supabase
+      .from('zoom_webinars')
+      .select('registrants_count')
+      .eq('id', webinarId)
+      .single();
 
-    return count || 0;
+    return webinar?.registrants_count || 0;
   }
 
   static async getParticipantCount(webinarId: string): Promise<number> {
