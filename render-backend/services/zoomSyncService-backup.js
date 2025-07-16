@@ -1,6 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
 const zoomService = require('./zoomService');
-const axios = require('axios');
 
 // Create Supabase client with service role key
 const supabase = createClient(
@@ -222,7 +221,7 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
           h323_password: fullWebinarData.h323_password || null,
           pstn_password: fullWebinarData.pstn_password || null,
           encrypted_password: fullWebinarData.encrypted_password || null,
-          status: mapWebinarStatus(fullWebinarData),
+          status: mapWebinarStatus(fullWebinarData.status),
           settings: fullWebinarData.settings || {},
           recurrence: fullWebinarData.recurrence || null,
           occurrences: fullWebinarData.occurrences || null,
@@ -270,8 +269,8 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
           await onProgress(progress, `Processed ${i + 1} of ${allWebinars.length} webinars`);
         }
 
-        // For past/ended webinars, sync participants and registrants
-        if (webinarData.status === 'ended' || new Date(webinar.start_time) < new Date()) {
+        // For past/ended webinars, sync participants
+        if (webinar.status === 'ended' || new Date(webinar.start_time) < new Date()) {
           try {
             await syncWebinarParticipants(webinar, webinarDbId, accessToken);
           } catch (participantError) {
@@ -282,18 +281,6 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
               type: 'participant_sync'
             });
           }
-        }
-
-        // Sync registrants for all webinars
-        try {
-          await syncWebinarRegistrants(webinar, webinarDbId, accessToken);
-        } catch (registrantError) {
-          console.error(`  ❌ Failed to sync registrants for webinar ${webinar.id}:`, registrantError.message);
-          results.errors.push({
-            webinar_id: webinar.id,
-            error: `Registrant sync failed: ${registrantError.message}`,
-            type: 'registrant_sync'
-          });
         }
 
       } catch (error) {
@@ -336,40 +323,23 @@ async function syncWebinars({ connection, credentials, syncLogId, syncType, onPr
 }
 
 /**
- * Map Zoom status to our database enum with proper date checking
+ * Map Zoom status to our database enum
  */
-function mapWebinarStatus(webinarData) {
-  // First check if the webinar has already happened based on date
-  const webinarStartTime = new Date(webinarData.start_time);
-  const currentTime = new Date();
-  
-  // If the webinar is in the past (start time + duration has passed)
-  if (webinarStartTime < currentTime) {
-    const durationMs = (webinarData.duration || 60) * 60 * 1000; // Convert minutes to milliseconds
-    const webinarEndTime = new Date(webinarStartTime.getTime() + durationMs);
-    
-    if (webinarEndTime < currentTime) {
-      // Webinar has definitely ended
-      return 'ended';
-    }
-  }
-  
-  // Otherwise use Zoom's status if available
+function mapWebinarStatus(zoomStatus) {
   const statusMap = {
     'waiting': 'waiting',
     'started': 'started',
     'ended': 'ended',
     'scheduled': 'scheduled',
     'upcoming': 'upcoming',
-    'finished': 'ended' // Map 'finished' to 'ended'
+    'finished': 'finished'
   };
   
-  // Default to scheduled for future webinars
-  return statusMap[webinarData.status] || 'scheduled';
+  return statusMap[zoomStatus] || 'scheduled';
 }
 
 /**
- * Sync participants for a webinar (attendees)
+ * Sync participants for a webinar
  */
 async function syncWebinarParticipants(webinar, webinarDbId, accessToken) {
   console.log(`  Syncing participants for webinar: ${webinar.topic}`);
@@ -540,15 +510,6 @@ async function syncWebinarParticipants(webinar, webinarDbId, accessToken) {
       })
       .eq('webinar_id', webinarDbId);
     
-    // Also update attendees_count in zoom_webinars table
-    await supabase
-      .from('zoom_webinars')
-      .update({
-        attendees_count: uniqueAttendees,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', webinarDbId);
-    
     console.log(`    ✅ Synced ${allParticipants.length} participants (${uniqueAttendees} unique attendees)`);
     
   } catch (error) {
@@ -564,106 +525,6 @@ async function syncWebinarParticipants(webinar, webinarDbId, accessToken) {
       })
       .eq('webinar_id', webinarDbId);
       
-    throw error;
-  }
-}
-
-/**
- * Sync registrants for a webinar
- */
-async function syncWebinarRegistrants(webinar, webinarDbId, accessToken) {
-  console.log(`  Syncing registrants for webinar: ${webinar.topic}`);
-  
-  try {
-    let allRegistrants = [];
-    let pageNumber = 1;
-    let hasMore = true;
-    
-    while (hasMore) {
-      try {
-        const params = new URLSearchParams({
-          page_size: 300,
-          page_number: pageNumber
-        });
-        
-        const response = await axios.get(
-          `https://api.zoom.us/v2/webinars/${webinar.id}/registrants?${params}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            },
-            timeout: 30000
-          }
-        );
-        
-        allRegistrants = allRegistrants.concat(response.data.registrants || []);
-        hasMore = response.data.page_count > pageNumber;
-        pageNumber++;
-        
-        if (hasMore) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      } catch (error) {
-        console.error(`    Error fetching registrants page ${pageNumber}:`, error.message);
-        hasMore = false;
-      }
-    }
-    
-    console.log(`    Found ${allRegistrants.length} registrants`);
-    
-    // Process registrants in batches
-    const batchSize = 100;
-    for (let i = 0; i < allRegistrants.length; i += batchSize) {
-      const batch = allRegistrants.slice(i, i + batchSize);
-      const registrantRecords = [];
-      
-      for (const registrant of batch) {
-        const registrantData = {
-          webinar_id: webinarDbId,
-          registrant_id: registrant.id || registrant.registrant_id || '',
-          email: registrant.email || null,
-          first_name: registrant.first_name || '',
-          last_name: registrant.last_name || '',
-          status: registrant.status || 'approved',
-          create_time: registrant.create_time ? new Date(registrant.create_time).toISOString() : new Date().toISOString(),
-          join_url: registrant.join_url || null,
-          custom_questions: registrant.custom_questions || [],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        registrantRecords.push(registrantData);
-      }
-      
-      // Batch upsert
-      if (registrantRecords.length > 0) {
-        const { error } = await supabase
-          .from('zoom_registrants')
-          .upsert(registrantRecords, {
-            onConflict: 'webinar_id,registrant_id'
-          });
-        
-        if (error) {
-          console.error('    ❌ Error upserting registrants:', error);
-          throw error;
-        }
-      }
-    }
-    
-    // Update registrants count in webinar
-    await supabase
-      .from('zoom_webinars')
-      .update({
-        registrants_count: allRegistrants.length,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', webinarDbId);
-    
-    console.log(`    ✅ Synced ${allRegistrants.length} registrants`);
-    
-  } catch (error) {
-    console.error(`    ❌ Error syncing registrants:`, error.message);
     throw error;
   }
 }
