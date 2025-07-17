@@ -10,10 +10,16 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Zoom OAuth configuration
+// Zoom OAuth configuration with detailed logging
 const ZOOM_CLIENT_ID = process.env.ZOOM_OAUTH_CLIENT_ID;
 const ZOOM_CLIENT_SECRET = process.env.ZOOM_OAUTH_CLIENT_SECRET;
 const ZOOM_REDIRECT_URI = process.env.ZOOM_OAUTH_REDIRECT_URI || `${process.env.RENDER_EXTERNAL_URL || 'http://localhost:3001'}/api/auth/zoom/callback`;
+
+console.log('=== ZOOM OAUTH CONFIGURATION ===');
+console.log('Client ID:', ZOOM_CLIENT_ID ? `${ZOOM_CLIENT_ID.substring(0, 8)}...` : 'NOT SET');
+console.log('Client Secret:', ZOOM_CLIENT_SECRET ? '[SET]' : 'NOT SET');
+console.log('Redirect URI:', ZOOM_REDIRECT_URI);
+console.log('Environment:', process.env.NODE_ENV);
 
 // Required scopes for Webinar Wise
 const ZOOM_SCOPES = [
@@ -33,6 +39,26 @@ const stateStore = new Map();
  */
 router.get('/zoom/authorize', async (req, res) => {
   try {
+    console.log('\n=== ZOOM AUTHORIZE REQUEST ===');
+    console.log('Return URL:', req.query.returnUrl);
+    console.log('Origin:', req.get('origin'));
+    
+    // Check if credentials are configured
+    if (!ZOOM_CLIENT_ID || !ZOOM_CLIENT_SECRET) {
+      console.error('❌ Zoom OAuth credentials not configured!');
+      console.error('Please set ZOOM_OAUTH_CLIENT_ID and ZOOM_OAUTH_CLIENT_SECRET environment variables');
+      
+      return res.status(500).json({ 
+        error: 'Zoom OAuth not configured',
+        details: 'Missing client credentials',
+        configured: {
+          clientId: !!ZOOM_CLIENT_ID,
+          clientSecret: !!ZOOM_CLIENT_SECRET,
+          redirectUri: !!ZOOM_REDIRECT_URI
+        }
+      });
+    }
+
     // Generate a secure random state
     const state = crypto.randomBytes(32).toString('hex');
     
@@ -41,6 +67,8 @@ router.get('/zoom/authorize', async (req, res) => {
       timestamp: Date.now(),
       returnUrl: req.query.returnUrl || '/dashboard'
     });
+    
+    console.log('Generated state:', state);
     
     // Clean up old states
     for (const [key, value] of stateStore.entries()) {
@@ -60,13 +88,24 @@ router.get('/zoom/authorize', async (req, res) => {
 
     const zoomAuthUrl = `https://zoom.us/oauth/authorize?${params.toString()}`;
     
+    console.log('Generated Auth URL:', zoomAuthUrl);
+    console.log('Redirect URI in URL:', ZOOM_REDIRECT_URI);
+    
     res.json({ 
       authUrl: zoomAuthUrl,
-      state: state 
+      state: state,
+      debug: {
+        clientIdLength: ZOOM_CLIENT_ID.length,
+        redirectUri: ZOOM_REDIRECT_URI,
+        scopes: ZOOM_SCOPES.split(' ')
+      }
     });
   } catch (error) {
-    console.error('Error generating Zoom OAuth URL:', error);
-    res.status(500).json({ error: 'Failed to generate authorization URL' });
+    console.error('❌ Error generating Zoom OAuth URL:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate authorization URL',
+      details: error.message
+    });
   }
 });
 
@@ -76,20 +115,26 @@ router.get('/zoom/authorize', async (req, res) => {
  */
 router.get('/zoom/callback', async (req, res) => {
   try {
+    console.log('\n=== ZOOM CALLBACK REQUEST ===');
+    console.log('Query params:', req.query);
+    
     const { code, state, error: zoomError } = req.query;
 
     // Check for Zoom errors
     if (zoomError) {
-      console.error('Zoom OAuth error:', zoomError);
+      console.error('❌ Zoom OAuth error:', zoomError);
       return res.redirect(`${process.env.VITE_APP_URL}/login?error=zoom_oauth_denied`);
     }
 
     // Validate state
     const stateData = stateStore.get(state);
     if (!stateData) {
-      console.error('Invalid or expired state');
+      console.error('❌ Invalid or expired state:', state);
+      console.log('Current states:', Array.from(stateStore.keys()));
       return res.redirect(`${process.env.VITE_APP_URL}/login?error=invalid_state`);
     }
+    
+    console.log('✅ State validated successfully');
     
     // Clean up state
     stateStore.delete(state);
@@ -100,6 +145,12 @@ router.get('/zoom/callback', async (req, res) => {
       grant_type: 'authorization_code',
       code: code,
       redirect_uri: ZOOM_REDIRECT_URI
+    });
+
+    console.log('Token exchange request:', {
+      url: tokenUrl,
+      params: tokenParams.toString(),
+      redirectUri: ZOOM_REDIRECT_URI
     });
 
     const tokenResponse = await fetch(tokenUrl, {
@@ -113,11 +164,16 @@ router.get('/zoom/callback', async (req, res) => {
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text();
-      console.error('Token exchange failed:', errorData);
+      console.error('❌ Token exchange failed:', {
+        status: tokenResponse.status,
+        statusText: tokenResponse.statusText,
+        error: errorData
+      });
       return res.redirect(`${process.env.VITE_APP_URL}/login?error=token_exchange_failed`);
     }
 
     const tokenData = await tokenResponse.json();
+    console.log('✅ Token received successfully');
 
     // Get user information from Zoom
     const userResponse = await fetch('https://api.zoom.us/v2/users/me', {
@@ -127,11 +183,16 @@ router.get('/zoom/callback', async (req, res) => {
     });
 
     if (!userResponse.ok) {
-      console.error('Failed to fetch user info');
+      console.error('❌ Failed to fetch user info:', userResponse.status);
       return res.redirect(`${process.env.VITE_APP_URL}/login?error=user_info_failed`);
     }
 
     const zoomUser = await userResponse.json();
+    console.log('✅ User info retrieved:', {
+      email: zoomUser.email,
+      id: zoomUser.id,
+      role: zoomUser.role_name
+    });
 
     // Check if user exists in Supabase
     let { data: existingUser, error: userError } = await supabase
@@ -144,6 +205,8 @@ router.get('/zoom/callback', async (req, res) => {
     let isNewUser = false;
 
     if (!existingUser) {
+      console.log('Creating new user...');
+      
       // Create new user in Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: zoomUser.email,
@@ -157,7 +220,7 @@ router.get('/zoom/callback', async (req, res) => {
       });
 
       if (authError) {
-        console.error('Failed to create user:', authError);
+        console.error('❌ Failed to create user:', authError);
         return res.redirect(`${process.env.VITE_APP_URL}/login?error=user_creation_failed`);
       }
 
@@ -174,17 +237,18 @@ router.get('/zoom/callback', async (req, res) => {
           avatar_url: zoomUser.pic_url,
           zoom_user_id: zoomUser.id,
           zoom_account_id: zoomUser.account_id,
-          role: zoomUser.role_name === 'Owner' ? 'zoom_admin' : 'member',
+          role: zoomUser.role_name === 'Owner' ? 'owner' : 'member',
           is_zoom_admin: ['Owner', 'Admin'].includes(zoomUser.role_name),
           zoom_account_level: zoomUser.role_name
         });
 
       if (profileError) {
-        console.error('Failed to create profile:', profileError);
+        console.error('⚠️ Failed to create profile:', profileError);
         // Continue anyway, profile will be created later
       }
     } else {
       userId = existingUser.id;
+      console.log('Updating existing user...');
       
       // Update profile with latest Zoom info
       await supabase
@@ -193,7 +257,7 @@ router.get('/zoom/callback', async (req, res) => {
           avatar_url: zoomUser.pic_url,
           zoom_user_id: zoomUser.id,
           zoom_account_id: zoomUser.account_id,
-          role: zoomUser.role_name === 'Owner' ? 'zoom_admin' : existingUser.role,
+          role: zoomUser.role_name === 'Owner' ? 'owner' : existingUser.role,
           is_zoom_admin: ['Owner', 'Admin'].includes(zoomUser.role_name),
           zoom_account_level: zoomUser.role_name
         })
@@ -201,6 +265,7 @@ router.get('/zoom/callback', async (req, res) => {
     }
 
     // Store Zoom OAuth tokens
+    console.log('Storing Zoom connection...');
     const { error: connectionError } = await supabase
       .from('zoom_connections')
       .upsert({
@@ -219,11 +284,12 @@ router.get('/zoom/callback', async (req, res) => {
       });
 
     if (connectionError) {
-      console.error('Failed to store Zoom connection:', connectionError);
+      console.error('❌ Failed to store Zoom connection:', connectionError);
       return res.redirect(`${process.env.VITE_APP_URL}/login?error=connection_storage_failed`);
     }
 
     // Generate a magic link for the user to sign in
+    console.log('Generating magic link...');
     const { data: magicLinkData, error: magicLinkError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: zoomUser.email,
@@ -233,15 +299,17 @@ router.get('/zoom/callback', async (req, res) => {
     });
 
     if (magicLinkError) {
-      console.error('Failed to generate magic link:', magicLinkError);
+      console.error('❌ Failed to generate magic link:', magicLinkError);
       return res.redirect(`${process.env.VITE_APP_URL}/login?error=magic_link_failed`);
     }
 
+    console.log('✅ OAuth flow completed successfully, redirecting...');
+    
     // Redirect to the magic link
     res.redirect(magicLinkData.properties.action_link);
 
   } catch (error) {
-    console.error('OAuth callback error:', error);
+    console.error('💥 OAuth callback error:', error);
     res.redirect(`${process.env.VITE_APP_URL}/login?error=oauth_error`);
   }
 });

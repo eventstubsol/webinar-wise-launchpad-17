@@ -148,50 +148,52 @@ export function ZoomConsentDialog({ isOpen, onClose, onConsent, isLoading = fals
             <Shield className="h-6 w-6 text-blue-600" />
             <DialogTitle>Connect Your Zoom Account</DialogTitle>
           </div>
-          <DialogDescription className="mt-3">
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <LoadingSpinner size="md" />
-              </div>
-            ) : consentInfo ? (
-              <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-sm text-blue-900">
-                    {consentInfo.summary}
-                  </p>
+          <DialogDescription asChild>
+            <div className="mt-3">
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <LoadingSpinner size="md" />
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span>Secure OAuth 2.0 connection</span>
+              ) : consentInfo ? (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p className="text-sm text-blue-900">
+                      {consentInfo.summary}
+                    </p>
                   </div>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={handleViewDetails}
-                    className="text-blue-600 hover:text-blue-700"
-                  >
-                    <Info className="h-4 w-4 mr-1" />
-                    View details
-                    <ExternalLink className="h-3 w-3 ml-1" />
-                  </Button>
-                </div>
 
-                <div className="text-xs text-gray-500 mt-3">
-                  By connecting your account, you agree to our{' '}
-                  <a href={consentInfo.termsUrl} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">
-                    Terms of Service
-                  </a>{' '}
-                  and{' '}
-                  <a href={consentInfo.privacyUrl} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">
-                    Privacy Policy
-                  </a>.
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 text-sm text-gray-600">
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                      <span>Secure OAuth 2.0 connection</span>
+                    </div>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={handleViewDetails}
+                      className="text-blue-600 hover:text-blue-700"
+                    >
+                      <Info className="h-4 w-4 mr-1" />
+                      View details
+                      <ExternalLink className="h-3 w-3 ml-1" />
+                    </Button>
+                  </div>
+
+                  <div className="text-xs text-gray-500 mt-3">
+                    By connecting your account, you agree to our{' '}
+                    <a href={consentInfo.termsUrl} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">
+                      Terms of Service
+                    </a>{' '}
+                    and{' '}
+                    <a href={consentInfo.privacyUrl} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">
+                      Privacy Policy
+                    </a>.
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <p className="text-red-600">Failed to load consent information. Please try again.</p>
-            )}
+              ) : (
+                <p className="text-red-600">Failed to load consent information. Please try again.</p>
+              )}
+            </div>
           </DialogDescription>
         </DialogHeader>
 

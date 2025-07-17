@@ -107,18 +107,30 @@ const Login = () => {
     
     try {
       // Get Zoom OAuth URL from backend
-      const response = await fetch(
-        `${import.meta.env.VITE_RENDER_BACKEND_URL || 'http://localhost:3001'}/api/auth/zoom/authorize?returnUrl=/dashboard`
-      );
+      const backendUrl = import.meta.env.VITE_RENDER_BACKEND_URL || 'http://localhost:3001';
+      const authUrl = `${backendUrl}/api/auth/zoom/authorize?returnUrl=/dashboard`;
+      
+      console.log('Backend URL:', backendUrl);
+      console.log('Auth URL:', authUrl);
+      
+      const response = await fetch(authUrl);
       
       if (!response.ok) {
-        throw new Error('Failed to get authorization URL');
+        const errorText = await response.text();
+        console.error('Backend error:', response.status, errorText);
+        throw new Error(`Failed to get authorization URL: ${response.status}`);
       }
       
-      const { authUrl } = await response.json();
+      const data = await response.json();
+      console.log('Backend response:', data);
+      
+      if (!data.authUrl) {
+        throw new Error('No auth URL in response');
+      }
       
       // Redirect to Zoom OAuth
-      window.location.href = authUrl;
+      console.log('Redirecting to:', data.authUrl);
+      window.location.href = data.authUrl;
     } catch (error) {
       console.error('Zoom OAuth error:', error);
       toast({
