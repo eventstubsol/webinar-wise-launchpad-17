@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -29,14 +28,19 @@ import {
   Download,
   Activity,
   Zap,
-  RefreshCw
+  RefreshCw,
+  Shield,
+  UserCog,
+  Building
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { useUserRole } from '@/hooks/useUserRole';
 
 export const AppSidebar = () => {
   const location = useLocation();
   const { signOut } = useAuth();
+  const { isZoomAdmin } = useUserRole();
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path);
 
@@ -200,6 +204,47 @@ export const AppSidebar = () => {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Admin Section - Only visible for Zoom admins */}
+        {isZoomAdmin && (
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarGroupLabel>
+                <Shield className="h-4 w-4 inline mr-1" />
+                Admin
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <Button asChild variant={isActive('/admin/users') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                      <Link to="/admin/users">
+                        <UserCog className="h-4 w-4 mr-2" />
+                        <span>User Management</span>
+                      </Link>
+                    </Button>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <Button asChild variant={isActive('/admin/account-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                      <Link to="/admin/account-analytics">
+                        <Building className="h-4 w-4 mr-2" />
+                        <span>Account Analytics</span>
+                      </Link>
+                    </Button>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <Button asChild variant={isActive('/admin/webinars') ? 'secondary' : 'ghost'} className="w-full justify-start">
+                      <Link to="/admin/webinars">
+                        <Video className="h-4 w-4 mr-2" />
+                        <span>All Webinars</span>
+                      </Link>
+                    </Button>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
       </SidebarContent>
       
       <SidebarFooter>

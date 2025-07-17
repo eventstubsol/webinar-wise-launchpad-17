@@ -129,6 +129,7 @@ app.use('/health', require('./routes/health'));
 
 // Public routes that don't require authentication
 app.use('/api/email/track', require('./routes/api/email')); // Email tracking endpoints
+app.use('/api/auth', require('./routes/api/auth/zoom-oauth')); // Zoom OAuth endpoints
 
 // Apply authentication middleware to all other routes
 app.use(authMiddleware);
@@ -175,6 +176,11 @@ app.use('*', (req, res) => {
     requestId,
     availableRoutes: [
       'GET /health',
+      // Auth routes
+      'GET /api/auth/zoom/authorize',
+      'GET /api/auth/zoom/callback',
+      'GET /api/auth/zoom/consent-info',
+      'POST /api/auth/zoom/refresh',
       // Zoom routes
       'POST /validate-credentials',
       'POST /refresh-token',

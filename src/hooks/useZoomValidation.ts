@@ -9,6 +9,7 @@ import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
 import { RenderZoomService } from '@/services/zoom/RenderZoomService';
 import { RenderConnectionService } from '@/services/zoom/RenderConnectionService';
 import { ZoomConnection } from '@/types/zoom';
+import { syncUserRole } from '@/services/userRoleService';
 
 interface UseZoomValidationProps {
   onConnectionSuccess?: (connection: ZoomConnection) => void;
@@ -73,11 +74,24 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
       }
 
       // Convert the result to our interface format
-      return {
+      const validationResult = {
         success: result.success,
         connection: result.connection,
         message: result.message || 'Credentials validated successfully'
       };
+
+      // Sync user role after successful connection
+      if (result.success && result.connection) {
+        try {
+          await syncUserRole(user.id);
+          console.log('User role synced successfully');
+        } catch (error) {
+          console.error('Failed to sync user role:', error);
+          // Don't fail the connection if role sync fails
+        }
+      }
+
+      return validationResult;
     },
     onSuccess: (result: ValidationResult) => {
       setIsValidating(false);

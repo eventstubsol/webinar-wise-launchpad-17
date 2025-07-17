@@ -1,144 +1,80 @@
-# CRITICAL: Zoom Webinar Sync Issues - Continuation Prompt
+# Zoom Sync Issue - Continuation Prompt
 
 ## Project Context
-**App Name:** Webinar Wise - SaaS for transforming Zoom webinar data into business intelligence  
-**Platform:** Lovable.dev  
-**Tech Stack:** React + TypeScript + Supabase + Tailwind + Shadcn UI  
-**Supabase Project ID:** guwvvinnifypcxwbcnzz  
-**Project Location:** C:\Users\rajar\Desktop\AA-Webinar-Wise-Master\Version-12-09062025\webinar-wise-launchpad
+I'm working on a Zoom webinar analytics SaaS application called "Webinar Wise" that syncs data from Zoom to Supabase. The app is built with React, TypeScript, Supabase, and uses Edge Functions for syncing.
 
-## Current State
-I have just completed implementing a 5-phase fix for the Zoom sync system. The sync process now works and completes, BUT there are critical data quality issues that need to be resolved.
+**Project Details:**
+- App Name: Webinar Wise
+- Platform: Lovable.dev
+- Tech Stack: React + TypeScript + Supabase + Tailwind + Shadcn UI
+- Supabase Project ID: lgajnzldkfpvcuofjxom
+- Project Location: C:\Users\rajar\Desktop\AA-Webinar-Wise-Master\Version-25-26-06-2025\webinar-wise-launchpad-17
+- GitHub: https://github.com/eventstubsol/webinar-wise-launchpad-17
+- Render Project URL: https://webinar-wise-launchpad-17.onrender.com
 
-## NON-NEGOTIABLE REQUIREMENTS
-1. **MANUAL SYNC ONLY**: The sync process must ALWAYS be triggered exclusively by the Sync button on the Dashboard. No automatic syncs, no scheduled syncs, no webhook-triggered syncs.
-2. **DO NOT BREAK WORKING CODE**: The sync process is currently functional. Any changes must maintain existing functionality while fixing the issues.
-3. **PRESERVE ALL EXISTING FEATURES**: All current features must continue to work as expected.
+## Current Issue
+The sync process appears to be running in the UI (progress bar moves, status updates show), but:
+1. **No data changes in zoom_webinars table** - Despite the sync showing as successful, the webinar data isn't being updated or inserted
+2. **No participants data in zoom_participants table** - The participants table remains empty even after sync
 
-## CRITICAL ISSUES TO FIX
+## What We've Already Tried
+In the previous conversation, we:
+1. Created a comprehensive sync processor (`comprehensive-sync-processor.ts`) that should:
+   - Properly determine webinar status (ended vs scheduled)
+   - Store participants in zoom_participants table
+   - Store registrants in zoom_registrants table
+   - Update webinar counts
+   
+2. Added missing columns to zoom_webinars table:
+   - total_attendees
+   - total_registrants
+   - total_absentees
+   - avg_attendance_duration
+   - total_minutes
 
-### Issue 1: Incorrect Webinar Status
-**Problem:** Some past webinars (that have already occurred) are showing status as "scheduled" instead of "finished" or "completed"
-**Impact:** This makes it impossible to distinguish between upcoming and past webinars
-**Required Fix:** 
-- Investigate why the Edge Function is not correctly determining webinar status
-- Check if we're using the correct Zoom API endpoint for past webinars
-- Ensure the status logic considers the webinar's start_time and current time
-- The Edge Function should check: if webinar type is 'past' OR if start_time < NOW(), then status should be 'finished'
+3. Modified the Edge Function to use the new processor
 
-### Issue 2: Missing Column Data
-**Problem:** Many columns in the zoom_webinars table are not being populated despite the sync completing
-**Specific columns often missing data:**
-- total_registrants
-- total_attendees  
-- avg_attendance_duration
-- host_email
-- registration_url
-- Various settings columns (audio, auto_recording, etc.)
-- Authentication-related columns
-- Email notification settings
+## Specific Symptoms
+- Sync progress shows in UI (0% → 100%)
+- Sync status shows as "completed" in zoom_sync_logs table
+- sync_logs show processed_items count matching total_items
+- BUT: No actual data changes in zoom_webinars or zoom_participants tables
+- The sync appears successful but no data is actually stored
 
-**Required Fix:**
-- Add detailed logging to identify which API responses are missing data
-- Check if we need to make additional API calls to get complete webinar details
-- Verify the data mapping between Zoom API response and database columns
-- Some data might require fetching from different Zoom API endpoints
+## Database Tables Involved
+1. **zoom_webinars** - Should store webinar data with proper status
+2. **zoom_participants** - Should store individual participant records
+3. **zoom_registrants** - Should store individual registrant records
+4. **zoom_sync_logs** - Shows sync history (this IS updating)
+5. **zoom_connections** - Stores Zoom account connections
 
-### Issue 3: Implement Comprehensive Console Logging
-**Requirements:**
-- Add detailed console.log statements in the Edge Function to track:
-  - Each webinar being processed (ID, title, type)
-  - API responses received from Zoom
-  - Data transformation steps
-  - Which columns are being populated and which are null
-  - Any errors or warnings during processing
-  - Success/failure status for each webinar
+## Key Files to Check
+1. `/supabase/functions/zoom-sync-webinars/index.ts` - Main edge function
+2. `/supabase/functions/zoom-sync-webinars/fixes/comprehensive-sync-processor.ts` - The sync processor
+3. `/supabase/functions/zoom-sync-webinars/zoom-api-client.ts` - Zoom API client
+4. `/src/hooks/useZoomSync.tsx` - Frontend sync hook
+5. `/render-backend/routes/start-sync.js` - Backend sync starter
 
-**Logging Format Example:**
-```javascript
-console.log(`[SYNC] Processing webinar ${webinarId}: ${topic}`);
-console.log(`[SYNC] Webinar type: ${type}, Status from API: ${apiStatus}`);
-console.log(`[SYNC] Missing data fields: ${missingFields.join(', ')}`);
-console.log(`[SYNC] ✓ Successfully synced webinar ${webinarId}`);
-console.log(`[SYNC] ✗ Failed to sync webinar ${webinarId}: ${error.message}`);
-```
-
-## Current File Structure
-Key files that handle the sync process:
-1. **Edge Function:** `/supabase/functions/zoom-sync-webinars-v2/index.ts`
-2. **Frontend Button:** `/src/components/zoom/EnhancedZoomSyncButton.tsx`
-3. **Progress Modal:** `/src/components/zoom/SyncProgressModal.tsx`
-4. **Database Schema:** Various migration files in `/supabase/migrations/`
-
-## Technical Details
-
-### Current Edge Function Flow:
-1. Receives sync request with connectionId
-2. Fetches webinar list from Zoom API
-3. Queues webinars for processing
-4. Processes each webinar individually
-5. Updates database with webinar data
-
-### Zoom API Endpoints Being Used:
-- List webinars: `GET /users/me/webinars`
-- Get webinar details: `GET /webinars/{webinarId}` (upcoming) or `GET /past_webinars/{webinarId}` (past)
-- Additional endpoints may be needed for complete data
-
-### Database Table: zoom_webinars
-Has 42+ columns that need to be populated, including:
-- Basic info: webinar_id, topic, start_time, duration, status
-- Attendance: total_registrants, total_attendees, avg_attendance_duration  
-- Settings: Various boolean and text fields for webinar configuration
-- Sync metadata: last_synced_at, sync_status, validation_status
-
-## Specific Tasks
-
-### Task 1: Fix Status Determination
-```javascript
-// Current logic might be:
-status: webinarDetails.status || (queueItem.webinar_type === 'past' ? 'finished' : 'scheduled')
-
-// Should be enhanced to:
-status: determineWebinarStatus(webinarDetails, queueItem.webinar_type)
-
-// Where determineWebinarStatus checks:
-// 1. If type is 'past' -> 'finished'
-// 2. If start_time < now -> 'finished'  
-// 3. If webinarDetails.status exists, validate it makes sense
-// 4. Default to appropriate status based on context
-```
-
-### Task 2: Ensure Complete Data Collection
-- Check if we need to make additional API calls for registrant/attendee counts
-- Verify we're fetching all settings data
-- Some data might be in nested objects in the API response
-- Add null checks and default values where appropriate
-
-### Task 3: Add Comprehensive Logging
-- Log at the start of each major operation
-- Log API request/response details (without sensitive data)
-- Log data transformation steps
-- Log any missing or invalid data
-- Log final database update status
-
-## Expected Outcome
-After implementing these fixes:
-1. All past webinars should show correct status ('finished' not 'scheduled')
-2. All available data from Zoom API should be populated in database columns
-3. Console logs should clearly show the sync process for debugging
-4. The manual sync button remains the only trigger
-5. All existing functionality continues to work
+## Debugging Information Needed
+Please help me:
+1. Check if the Edge Function is actually calling the database upsert operations
+2. Verify if there are any RLS (Row Level Security) policies blocking the inserts
+3. Check if the Zoom API is actually returning data
+4. Verify the Edge Function logs for any errors
+5. Check if the data transformation is correct before inserting
 
 ## Important Notes
-- The sync already works - we're fixing data quality issues, not the sync mechanism
-- Maintain the current rate limiting and error handling
-- Keep the progress tracking and real-time updates working
-- Test thoroughly to ensure no regression in existing features
+- We're using Supabase Edge Functions (Deno runtime)
+- The sync goes through a Render backend first, then calls the Edge Function
+- Zoom scopes have been updated and should include all necessary permissions
+- The Edge Function uses service role key, so RLS shouldn't block it, but worth checking
 
-## Reference Information
-- Previous implementation added all required database columns in Phase 1
-- Phase 2 added validation and retry logic
-- The Edge Function uses SimpleTokenEncryption for token management
-- Rate limiting is set to 30 calls/minute, 2 calls/second
+## Request
+I need you to:
+1. Do a deep dive analysis using MCP tools to check Supabase logs and database
+2. Identify why data isn't being stored despite sync showing as successful
+3. Check if there are any silent failures in the Edge Function
+4. Provide a fix that ensures data is actually stored in the database
+5. Verify the fix works by checking actual data in tables after sync
 
-Please help fix these specific issues while maintaining all existing functionality and ensuring the sync remains manual-only via the dashboard button.
+Please use the Supabase MCP tools to analyze logs, check table structures, RLS policies, and Edge Function execution. The main mystery is: why does the sync appear successful but no data is stored?

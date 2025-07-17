@@ -45,6 +45,11 @@ import Integrations from '@/pages/Integrations';
 // Protected Pages - Reports
 import Reports from '@/pages/Reports';
 
+// Protected Pages - Admin
+import UserManagement from '@/pages/admin/UserManagement';
+import AccountAnalytics from '@/pages/admin/AccountAnalytics';
+import AllWebinars from '@/pages/admin/AllWebinars';
+
 // 404 Page
 import NotFound from '@/pages/NotFound';
 
@@ -223,6 +228,32 @@ export const AppRoutes = () => (
       element={
         <ProtectedRoute>
           <Reports />
+        </ProtectedRoute>
+      }
+    />
+
+    {/* Protected Routes - Admin */}
+    <Route
+      path="/admin/users"
+      element={
+        <ProtectedRoute>
+          <UserManagement />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/admin/account-analytics"
+      element={
+        <ProtectedRoute>
+          <AccountAnalytics />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/admin/webinars"
+      element={
+        <ProtectedRoute>
+          <AllWebinars />
         </ProtectedRoute>
       }
     />

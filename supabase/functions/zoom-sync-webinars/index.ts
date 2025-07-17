@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "../_shared/cors.ts";
 import { validateEnhancedRequest } from "./enhanced-validation.ts";
-import { processEnhancedWebinarSync } from "./enhanced-sync-processor-fixed-v2.ts";
+import { processComprehensiveWebinarSync } from "./fixes/comprehensive-sync-processor-fixed.ts";
 
 serve(async (req: Request): Promise<Response> => {
   console.log('=== ENHANCED SYNC FUNCTION START ===');
@@ -71,8 +71,8 @@ serve(async (req: Request): Promise<Response> => {
         options: requestBody.options || {}
       };
 
-      // Call the real sync processor
-      await processEnhancedWebinarSync(
+      // Call the comprehensive sync processor
+      await processComprehensiveWebinarSync(
         supabase,
         syncOperation,
         connection,

@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User, Building, Briefcase, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,13 +11,20 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
 import { registerSchema, type RegisterFormData } from '@/lib/validations/auth';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { ZoomSignInButton } from '@/components/auth/ZoomSignInButton';
+import { ZoomConsentDialog } from '@/components/auth/ZoomConsentDialog';
+import { useToast } from '@/hooks/use-toast';
 
 const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isZoomLoading, setIsZoomLoading] = useState(false);
+  const [showConsentDialog, setShowConsentDialog] = useState(false);
   const { signUp, user, loading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { toast } = useToast();
 
   const {
     register,
@@ -27,6 +33,32 @@ const Register = () => {
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
   });
+
+  // Handle OAuth errors from URL params
+  useEffect(() => {
+    const error = searchParams.get('error');
+    if (error) {
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      switch (error) {
+        case 'zoom_oauth_denied':
+          errorMessage = 'Zoom authorization was denied. Please try again.';
+          break;
+        case 'user_creation_failed':
+          errorMessage = 'Failed to create your account. Please try again.';
+          break;
+        case 'oauth_error':
+          errorMessage = 'An error occurred during registration. Please try again.';
+          break;
+      }
+      
+      toast({
+        title: 'Registration Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    }
+  }, [searchParams, toast]);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -52,6 +84,39 @@ const Register = () => {
       console.error('Registration error:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleZoomSignUp = () => {
+    setShowConsentDialog(true);
+  };
+
+  const handleZoomConsent = async () => {
+    setIsZoomLoading(true);
+    setShowConsentDialog(false);
+    
+    try {
+      // Get Zoom OAuth URL from backend
+      const response = await fetch(
+        `${import.meta.env.VITE_RENDER_BACKEND_URL || 'http://localhost:3001'}/api/auth/zoom/authorize?returnUrl=/dashboard`
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to get authorization URL');
+      }
+      
+      const { authUrl } = await response.json();
+      
+      // Redirect to Zoom OAuth
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error('Zoom OAuth error:', error);
+      toast({
+        title: 'Connection Error',
+        description: 'Failed to connect to Zoom. Please try again.',
+        variant: 'destructive',
+      });
+      setIsZoomLoading(false);
     }
   };
 
@@ -87,6 +152,28 @@ const Register = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Zoom Sign Up */}
+            <div className="mb-6">
+              <ZoomSignInButton
+                onClick={handleZoomSignUp}
+                isLoading={isZoomLoading}
+                text="Sign up with Zoom"
+              />
+              <p className="mt-2 text-xs text-center text-gray-500">
+                Create an account using your Zoom credentials
+              </p>
+            </div>
+
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center">
+                <Separator />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-gray-500">Or register with email</span>
+              </div>
+            </div>
+
+            {/* Email Registration Form */}
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div className="space-y-4">
                 <div>
@@ -104,7 +191,7 @@ const Register = () => {
                       autoComplete="name"
                       className={`pl-10 ${errors.full_name ? 'border-red-500 focus:border-red-500' : ''}`}
                       placeholder="Full name"
-                      disabled={isLoading || isSubmitting}
+                      disabled={isLoading || isSubmitting || isZoomLoading}
                     />
                   </div>
                   {errors.full_name && (
@@ -127,7 +214,7 @@ const Register = () => {
                       autoComplete="email"
                       className={`pl-10 ${errors.email ? 'border-red-500 focus:border-red-500' : ''}`}
                       placeholder="Email address"
-                      disabled={isLoading || isSubmitting}
+                      disabled={isLoading || isSubmitting || isZoomLoading}
                     />
                   </div>
                   {errors.email && (
@@ -151,7 +238,7 @@ const Register = () => {
                         autoComplete="organization"
                         className="pl-10"
                         placeholder="Company (optional)"
-                        disabled={isLoading || isSubmitting}
+                        disabled={isLoading || isSubmitting || isZoomLoading}
                       />
                     </div>
                   </div>
@@ -171,7 +258,7 @@ const Register = () => {
                         autoComplete="organization-title"
                         className="pl-10"
                         placeholder="Job title (optional)"
-                        disabled={isLoading || isSubmitting}
+                        disabled={isLoading || isSubmitting || isZoomLoading}
                       />
                     </div>
                   </div>
@@ -192,13 +279,13 @@ const Register = () => {
                       autoComplete="new-password"
                       className={`pl-10 pr-10 ${errors.password ? 'border-red-500 focus:border-red-500' : ''}`}
                       placeholder="Password"
-                      disabled={isLoading || isSubmitting}
+                      disabled={isLoading || isSubmitting || isZoomLoading}
                     />
                     <button
                       type="button"
                       className="absolute inset-y-0 right-0 pr-3 flex items-center"
                       onClick={() => setShowPassword(!showPassword)}
-                      disabled={isLoading || isSubmitting}
+                      disabled={isLoading || isSubmitting || isZoomLoading}
                     >
                       {showPassword ? (
                         <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-500" />
@@ -227,13 +314,13 @@ const Register = () => {
                       autoComplete="new-password"
                       className={`pl-10 pr-10 ${errors.confirmPassword ? 'border-red-500 focus:border-red-500' : ''}`}
                       placeholder="Confirm password"
-                      disabled={isLoading || isSubmitting}
+                      disabled={isLoading || isSubmitting || isZoomLoading}
                     />
                     <button
                       type="button"
                       className="absolute inset-y-0 right-0 pr-3 flex items-center"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      disabled={isLoading || isSubmitting}
+                      disabled={isLoading || isSubmitting || isZoomLoading}
                     >
                       {showConfirmPassword ? (
                         <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-500" />
@@ -251,7 +338,7 @@ const Register = () => {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={isLoading || isSubmitting}
+                disabled={isLoading || isSubmitting || isZoomLoading}
               >
                 {isLoading || isSubmitting ? (
                   <LoadingSpinner size="sm" className="mr-2" />
@@ -278,6 +365,14 @@ const Register = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Zoom Consent Dialog */}
+      <ZoomConsentDialog
+        isOpen={showConsentDialog}
+        onClose={() => setShowConsentDialog(false)}
+        onConsent={handleZoomConsent}
+        isLoading={isZoomLoading}
+      />
     </div>
   );
 };
