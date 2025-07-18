@@ -10,7 +10,6 @@ interface Webinar {
   start_time: string;
   duration: number;
   status: string;
-  participant_sync_status: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,7 +45,6 @@ export const useWebinarAnalytics = (connectionId?: string) => {
             start_time,
             duration,
             status,
-            participant_sync_status,
             created_at,
             updated_at
           `)

@@ -72,8 +72,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (existingProfile) {
-        setProfile(existingProfile);
-        return existingProfile;
+        setProfile({
+          ...existingProfile,
+          role: (existingProfile.role as 'owner' | 'admin' | 'member') || 'member'
+        });
+        return {
+          ...existingProfile,
+          role: (existingProfile.role as 'owner' | 'admin' | 'member') || 'member'
+        };
       }
 
       // If no profile exists, create one
@@ -97,8 +103,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       console.log('[AuthProvider] Profile created successfully:', newProfile);
-      setProfile(newProfile);
-      return newProfile;
+      const typedProfile = {
+        ...newProfile,
+        role: (newProfile.role as 'owner' | 'admin' | 'member') || 'member'
+      };
+      setProfile(typedProfile);
+      return typedProfile;
 
     } catch (error) {
       console.error('[AuthProvider] Profile fetch error:', error);
@@ -301,8 +311,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (error) throw error;
         
-        setProfile(data);
-        return data;
+        const typedProfile = {
+          ...data,
+          role: (data.role as 'owner' | 'admin' | 'member') || 'member'
+        };
+        setProfile(typedProfile);
+        return typedProfile;
       } catch (error) {
         console.error('Error updating profile:', error);
         return null;

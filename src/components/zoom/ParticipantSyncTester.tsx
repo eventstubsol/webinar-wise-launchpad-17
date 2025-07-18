@@ -12,7 +12,7 @@ import { SyncResultsCard } from './participant-sync/SyncResultsCard';
 
 interface WebinarForSync {
   id: string;
-  webinar_id: string;
+  zoom_webinar_id: string;
   topic: string;
   start_time: string;
   participant_sync_status: string;
@@ -45,7 +45,7 @@ export function ParticipantSyncTester() {
 
       const { data, error } = await supabase
         .from('zoom_webinars')
-        .select('id, webinar_id, topic, start_time, participant_sync_status, participant_sync_completed_at')
+        .select('id, zoom_webinar_id, topic, start_time, participant_sync_status, participant_sync_completed_at')
         .eq('connection_id', connection.id)
         .order('start_time', { ascending: false })
         .limit(50);
@@ -145,7 +145,7 @@ export function ParticipantSyncTester() {
     if (selectedWebinars.length === webinars?.length) {
       setSelectedWebinars([]);
     } else {
-      setSelectedWebinars(webinars?.map(w => w.webinar_id) || []);
+      setSelectedWebinars(webinars?.map(w => w.zoom_webinar_id) || []);
     }
   };
 

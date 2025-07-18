@@ -1879,6 +1879,9 @@ export type Database = {
           id: string
           join_url: string
           occurrences: Json | null
+          participant_sync_attempted_at: string | null
+          participant_sync_completed_at: string | null
+          participant_sync_status: string | null
           password: string | null
           pstn_password: string | null
           recurrence: Json | null
@@ -1910,6 +1913,9 @@ export type Database = {
           id?: string
           join_url: string
           occurrences?: Json | null
+          participant_sync_attempted_at?: string | null
+          participant_sync_completed_at?: string | null
+          participant_sync_status?: string | null
           password?: string | null
           pstn_password?: string | null
           recurrence?: Json | null
@@ -1941,6 +1947,9 @@ export type Database = {
           id?: string
           join_url?: string
           occurrences?: Json | null
+          participant_sync_attempted_at?: string | null
+          participant_sync_completed_at?: string | null
+          participant_sync_status?: string | null
           password?: string | null
           pstn_password?: string | null
           recurrence?: Json | null
