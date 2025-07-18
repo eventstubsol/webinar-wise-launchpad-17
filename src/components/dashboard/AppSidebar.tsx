@@ -47,7 +47,7 @@ export const AppSidebar = () => {
   return (
     <Sidebar>
       <SidebarHeader>
-        <img src="/lovable-uploads/d3011340-f45f-4d8c-b42a-3c95a640618a.png" alt="Webinar Wise" className="h-8 w-auto" />
+        <img src="/lovable-uploads/3c2a8db7-3750-4dc1-a7b7-f17ec71a02ff.png" alt="WebinarWise" className="h-8 w-auto sm:h-10" />
       </SidebarHeader>
       
       <SidebarContent>

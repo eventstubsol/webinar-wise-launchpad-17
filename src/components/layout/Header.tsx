@@ -20,11 +20,12 @@ const menuItems = [
 
 const Logo = ({ className }: { className?: string }) => {
   return (
-    <div className="flex items-center space-x-2">
-      <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-        <span className="text-white font-bold text-sm">WW</span>
-      </div>
-      <span className="font-semibold text-xl" style={{ color: '#0f172a' }}>Webinar Wise</span>
+    <div className="flex items-center">
+      <img 
+        src="/lovable-uploads/3c2a8db7-3750-4dc1-a7b7-f17ec71a02ff.png" 
+        alt="WebinarWise Logo"
+        className={`h-8 w-auto sm:h-10 lg:h-12 ${className || ''}`}
+      />
     </div>
   );
 };
