@@ -24,7 +24,7 @@ const Logo = ({ className }: { className?: string }) => {
       <img 
         src="/lovable-uploads/3c2a8db7-3750-4dc1-a7b7-f17ec71a02ff.png" 
         alt="WebinarWise Logo"
-        className={`h-8 w-auto sm:h-10 lg:h-12 ${className || ''}`}
+        className={`h-16 w-auto sm:h-20 lg:h-24 ${className || ''}`}
       />
     </div>
   );
