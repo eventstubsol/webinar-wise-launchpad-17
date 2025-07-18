@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { applySecurityHeaders } from '@/lib/security-headers'
+
+// Apply security headers immediately
+applySecurityHeaders();
 
 const queryClient = new QueryClient({
   defaultOptions: {

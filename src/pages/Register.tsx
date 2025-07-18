@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
 import { registerSchema, type RegisterFormData } from '@/lib/validations/auth';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { validatePasswordStrength, checkRateLimit, clearRateLimit, sanitizeAuthInput } from '@/lib/auth-security';
 import { ZoomSignInButton } from '@/components/auth/ZoomSignInButton';
 import { ZoomConsentDialog } from '@/components/auth/ZoomConsentDialog';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +22,8 @@ const Register = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isZoomLoading, setIsZoomLoading] = useState(false);
   const [showConsentDialog, setShowConsentDialog] = useState(false);
+  const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+  const [isRateLimited, setIsRateLimited] = useState(false);
   const { signUp, user, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -67,16 +70,52 @@ const Register = () => {
     }
   }, [user, loading, navigate]);
 
+  // Real-time password validation
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const password = e.target.value;
+    const validation = validatePasswordStrength(password);
+    setPasswordErrors(validation.errors);
+  };
+
   const onSubmit = async (data: RegisterFormData) => {
+    // Check rate limiting
+    if (!checkRateLimit(data.email, 3, 15 * 60 * 1000)) {
+      setIsRateLimited(true);
+      toast({
+        title: 'Too Many Attempts',
+        description: 'Please wait 15 minutes before trying again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate password strength
+    const passwordValidation = validatePasswordStrength(data.password);
+    if (!passwordValidation.isValid) {
+      setPasswordErrors(passwordValidation.errors);
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const { error } = await signUp(data.email, data.password, {
-        full_name: data.full_name,
-        company: data.company,
-        job_title: data.job_title,
+      // Sanitize inputs
+      const sanitizedData = {
+        email: sanitizeAuthInput(data.email),
+        password: data.password,
+        full_name: sanitizeAuthInput(data.full_name),
+        company: data.company ? sanitizeAuthInput(data.company) : undefined,
+        job_title: data.job_title ? sanitizeAuthInput(data.job_title) : undefined,
+      };
+
+      const { error } = await signUp(sanitizedData.email, sanitizedData.password, {
+        full_name: sanitizedData.full_name,
+        company: sanitizedData.company,
+        job_title: sanitizedData.job_title,
       });
       
       if (!error) {
+        // Clear rate limit on success
+        clearRateLimit(data.email);
         // Show success message and redirect to login or verification page
         navigate('/verify-email', { replace: true });
       }
@@ -273,11 +312,13 @@ const Register = () => {
                       <Lock className="h-5 w-5 text-gray-400" />
                     </div>
                     <Input
-                      {...register('password')}
+                      {...register('password', {
+                        onChange: handlePasswordChange
+                      })}
                       id="password"
                       type={showPassword ? 'text' : 'password'}
                       autoComplete="new-password"
-                      className={`pl-10 pr-10 ${errors.password ? 'border-red-500 focus:border-red-500' : ''}`}
+                      className={`pl-10 pr-10 ${errors.password || passwordErrors.length > 0 ? 'border-red-500 focus:border-red-500' : ''}`}
                       placeholder="Password"
                       disabled={isLoading || isSubmitting || isZoomLoading}
                     />
@@ -294,9 +335,23 @@ const Register = () => {
                       )}
                     </button>
                   </div>
-                  {errors.password && (
-                    <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
-                  )}
+                   {(errors.password || passwordErrors.length > 0) && (
+                     <div className="mt-1 space-y-1">
+                       {errors.password && (
+                         <p className="text-sm text-red-600">{errors.password.message}</p>
+                       )}
+                       {passwordErrors.length > 0 && (
+                         <div className="text-xs text-red-600">
+                           <p className="font-medium">Password requirements:</p>
+                           <ul className="list-disc list-inside space-y-1">
+                             {passwordErrors.map((error, index) => (
+                               <li key={index}>{error}</li>
+                             ))}
+                           </ul>
+                         </div>
+                       )}
+                     </div>
+                   )}
                 </div>
 
                 <div>

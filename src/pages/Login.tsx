@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
 import { loginSchema, type LoginFormData } from '@/lib/validations/auth';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { checkRateLimit, clearRateLimit, sanitizeAuthInput } from '@/lib/auth-security';
 import { ZoomSignInButton } from '@/components/auth/ZoomSignInButton';
 import { ZoomConsentDialog } from '@/components/auth/ZoomConsentDialog';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +22,7 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isZoomLoading, setIsZoomLoading] = useState(false);
   const [showConsentDialog, setShowConsentDialog] = useState(false);
+  const [isRateLimited, setIsRateLimited] = useState(false);
   const { signIn, user, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -83,11 +85,27 @@ const Login = () => {
   }, [user, loading, navigate]);
 
   const onSubmit = async (data: LoginFormData) => {
+    // Check rate limiting
+    if (!checkRateLimit(data.email, 5, 15 * 60 * 1000)) {
+      setIsRateLimited(true);
+      toast({
+        title: 'Too Many Attempts',
+        description: 'Please wait 15 minutes before trying again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const { error } = await signIn(data.email, data.password);
+      // Sanitize inputs
+      const sanitizedEmail = sanitizeAuthInput(data.email);
+      
+      const { error } = await signIn(sanitizedEmail, data.password);
       
       if (!error) {
+        // Clear rate limit on success
+        clearRateLimit(data.email);
         navigate('/dashboard', { replace: true });
       }
     } catch (error) {
