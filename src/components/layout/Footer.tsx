@@ -30,7 +30,7 @@ export const Footer = ({ className }: BaseComponentProps) => {
               <img 
                 src="/lovable-uploads/3c2a8db7-3750-4dc1-a7b7-f17ec71a02ff.png" 
                 alt="WebinarWise Logo"
-                className="h-12 w-auto group-hover:scale-105 transition-transform duration-300"
+                className="h-18 w-auto group-hover:scale-105 transition-transform duration-300"
               />
             </div>
             <p className="text-gray-600 leading-relaxed mb-8">
