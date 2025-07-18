@@ -12,6 +12,7 @@ import ResetPassword from '@/pages/ResetPassword';
 import VerifyEmail from '@/pages/VerifyEmail';
 import Unsubscribe from '@/pages/Unsubscribe';
 import PrivacyPolicy from '@/pages/PrivacyPolicy';
+import TermsOfService from '@/pages/TermsOfService';
 
 // Protected Pages - Core
 import Dashboard from '@/pages/Dashboard';
@@ -67,6 +68,7 @@ export const AppRoutes = () => (
     <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
     <Route path={ROUTES.UNSUBSCRIBE} element={<Unsubscribe />} />
     <Route path={ROUTES.PRIVACY_POLICY} element={<PrivacyPolicy />} />
+    <Route path={ROUTES.TERMS_OF_SERVICE} element={<TermsOfService />} />
 
     {/* Protected Routes - Core */}
     <Route

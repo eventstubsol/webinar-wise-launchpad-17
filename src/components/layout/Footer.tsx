@@ -84,7 +84,8 @@ export const Footer = ({ className }: BaseComponentProps) => {
                 { name: "Blog", href: "/" },
                 { name: "Careers", href: "/" },
                 { name: "Contact", href: "/" },
-                { name: "Privacy Policy", href: "/privacy-policy" }
+                { name: "Privacy Policy", href: "/privacy-policy" },
+                { name: "Terms of Service", href: "/terms" }
               ].map((item, idx) => (
                 <li key={idx}>
                   <Link to={item.href} className="text-gray-600 hover:text-black transition-colors duration-300 flex items-center group">

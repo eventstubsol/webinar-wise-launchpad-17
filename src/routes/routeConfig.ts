@@ -10,6 +10,7 @@ export const ROUTES = {
   VERIFY_EMAIL: '/verify-email',
   UNSUBSCRIBE: '/unsubscribe',
   PRIVACY_POLICY: '/privacy-policy',
+  TERMS_OF_SERVICE: '/terms',
 
   // Protected routes - Core
   DASHBOARD: '/dashboard',
