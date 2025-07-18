@@ -441,6 +441,33 @@ export type Database = {
         }
         Relationships: []
       }
+      oauth_states: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          metadata: Json | null
+          return_url: string
+          state: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          metadata?: Json | null
+          return_url?: string
+          state: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          metadata?: Json | null
+          return_url?: string
+          state?: string
+        }
+        Relationships: []
+      }
       organization_invitations: {
         Row: {
           created_at: string | null
@@ -2417,6 +2444,10 @@ export type Database = {
               check_time: string
             }
         Returns: string
+      }
+      cleanup_expired_oauth_states: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       cleanup_old_security_logs: {
         Args: Record<PropertyKey, never>
