@@ -30,11 +30,7 @@ export const useZoomOAuth = () => {
         throw new Error(data.error || 'OAuth initialization failed');
       }
 
-      // Store state in session storage for validation
-      if (data.state) {
-        sessionStorage.setItem('zoom_oauth_state', data.state);
-      }
-
+      // No need to store state in session storage anymore - it's handled in the database
       // Redirect to Zoom OAuth
       window.location.href = data.authUrl;
       return { success: true };

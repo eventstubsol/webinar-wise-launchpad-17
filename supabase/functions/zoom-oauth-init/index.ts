@@ -71,8 +71,8 @@ serve(async (req) => {
       throw new Error('Failed to initialize OAuth flow');
     }
 
-    // Use the new zoom-oauth-complete endpoint for the redirect
-    const redirectUri = `${supabaseUrl}/functions/v1/zoom-oauth-complete`;
+    // Use the frontend callback endpoint instead of the edge function
+    const redirectUri = 'https://webinarwise.io/auth/zoom/callback';
     
     const scopes = [
       'user:read',

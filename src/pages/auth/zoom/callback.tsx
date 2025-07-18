@@ -71,34 +71,37 @@ const ZoomOAuthCallback: React.FC = () => {
         return;
       }
 
-      // Validate state parameter
-      const storedState = sessionStorage.getItem('zoom_oauth_state');
-      if (!storedState || storedState !== state) {
-        setStatus('error');
-        setErrorMessage('Invalid state parameter. Possible security issue.');
-        
-        toast({
-          title: "Security Error",
-          description: "Invalid OAuth state. Please try connecting again.",
-          variant: "destructive",
-        });
-
-        // Clear potentially compromised state
-        sessionStorage.removeItem('zoom_oauth_state');
-
-        setTimeout(() => {
-          navigate('/dashboard', { replace: true });
-        }, 3000);
-        return;
-      }
-
-      // Bridge to the Edge Function - call zoom-oauth-exchange
+      // Validate state parameter against database
       try {
+        const { data: stateData, error: stateError } = await supabase
+          .from('oauth_states')
+          .select('*')
+          .eq('state', state)
+          .gt('expires_at', new Date().toISOString())
+          .single();
+
+        if (stateError || !stateData) {
+          setStatus('error');
+          setErrorMessage('Invalid or expired OAuth state. Please try connecting again.');
+          
+          toast({
+            title: "Security Error",
+            description: "Invalid OAuth state. Please try connecting again.",
+            variant: "destructive",
+          });
+
+          setTimeout(() => {
+            navigate('/dashboard', { replace: true });
+          }, 3000);
+          return;
+        }
+
+        // Call zoom-oauth-exchange Edge Function
         const { data, error: exchangeError } = await supabase.functions.invoke('zoom-oauth-exchange', {
           body: {
             code,
             state,
-            redirectUri: `${window.location.origin}/auth/zoom/callback`
+            redirectUri: 'https://webinarwise.io/auth/zoom/callback'
           }
         });
 
@@ -109,17 +112,21 @@ const ZoomOAuthCallback: React.FC = () => {
         if (data.success && data.connection) {
           setStatus('success');
           
-          // Clear OAuth state from session storage
-          sessionStorage.removeItem('zoom_oauth_state');
+          // Clean up OAuth state from database
+          await supabase
+            .from('oauth_states')
+            .delete()
+            .eq('state', state);
           
           toast({
             title: "Success!",
             description: `Zoom account ${data.connection.zoom_email} connected successfully.`,
           });
 
-          // Redirect to dashboard after a short delay to show success state
+          // Redirect to the return URL or dashboard
+          const returnUrl = stateData.return_url || '/dashboard';
           setTimeout(() => {
-            navigate('/dashboard', { replace: true });
+            navigate(returnUrl, { replace: true });
           }, 2000);
         } else {
           throw new Error(data.error || 'Unknown error occurred');
