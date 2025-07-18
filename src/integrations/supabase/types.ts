@@ -1871,6 +1871,7 @@ export type Database = {
           attendees_count: number | null
           connection_id: string
           created_at: string | null
+          creation_source: string | null
           duration: number
           encrypted_password: string | null
           h323_password: string | null
@@ -1894,10 +1895,14 @@ export type Database = {
           synced_at: string | null
           timezone: string
           topic: string
+          total_attendees: number | null
+          total_registrants: number | null
           tracking_fields: Json | null
+          transition_to_live: boolean | null
           type: number | null
           updated_at: string | null
           uuid: string | null
+          zoom_uuid: string | null
           zoom_webinar_id: string
         }
         Insert: {
@@ -1905,6 +1910,7 @@ export type Database = {
           attendees_count?: number | null
           connection_id: string
           created_at?: string | null
+          creation_source?: string | null
           duration: number
           encrypted_password?: string | null
           h323_password?: string | null
@@ -1928,10 +1934,14 @@ export type Database = {
           synced_at?: string | null
           timezone: string
           topic: string
+          total_attendees?: number | null
+          total_registrants?: number | null
           tracking_fields?: Json | null
+          transition_to_live?: boolean | null
           type?: number | null
           updated_at?: string | null
           uuid?: string | null
+          zoom_uuid?: string | null
           zoom_webinar_id: string
         }
         Update: {
@@ -1939,6 +1949,7 @@ export type Database = {
           attendees_count?: number | null
           connection_id?: string
           created_at?: string | null
+          creation_source?: string | null
           duration?: number
           encrypted_password?: string | null
           h323_password?: string | null
@@ -1962,10 +1973,14 @@ export type Database = {
           synced_at?: string | null
           timezone?: string
           topic?: string
+          total_attendees?: number | null
+          total_registrants?: number | null
           tracking_fields?: Json | null
+          transition_to_live?: boolean | null
           type?: number | null
           updated_at?: string | null
           uuid?: string | null
+          zoom_uuid?: string | null
           zoom_webinar_id?: string
         }
         Relationships: [
