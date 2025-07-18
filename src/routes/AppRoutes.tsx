@@ -14,6 +14,7 @@ import Unsubscribe from '@/pages/Unsubscribe';
 import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import TermsOfService from '@/pages/TermsOfService';
 import Support from '@/pages/Support';
+import Documentation from '@/pages/Documentation';
 
 // Protected Pages - Core
 import Dashboard from '@/pages/Dashboard';
@@ -71,6 +72,7 @@ export const AppRoutes = () => (
     <Route path={ROUTES.PRIVACY_POLICY} element={<PrivacyPolicy />} />
     <Route path={ROUTES.TERMS_OF_SERVICE} element={<TermsOfService />} />
     <Route path={ROUTES.SUPPORT} element={<Support />} />
+    <Route path={ROUTES.DOCUMENTATION} element={<Documentation />} />
 
     {/* Protected Routes - Core */}
     <Route

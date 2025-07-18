@@ -12,6 +12,7 @@ export const ROUTES = {
   PRIVACY_POLICY: '/privacy-policy',
   TERMS_OF_SERVICE: '/terms',
   SUPPORT: '/support',
+  DOCUMENTATION: '/documentation',
 
   // Protected routes - Core
   DASHBOARD: '/dashboard',
