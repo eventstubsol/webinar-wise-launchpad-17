@@ -397,6 +397,7 @@ const Register = () => {
               </p>
             </div>
           </CardContent>
+        </Card>
         )}
       </div>
     </div>
