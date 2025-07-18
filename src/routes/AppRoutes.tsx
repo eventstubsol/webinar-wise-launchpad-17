@@ -11,6 +11,7 @@ import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import VerifyEmail from '@/pages/VerifyEmail';
 import Unsubscribe from '@/pages/Unsubscribe';
+import PrivacyPolicy from '@/pages/PrivacyPolicy';
 
 // Protected Pages - Core
 import Dashboard from '@/pages/Dashboard';
@@ -65,6 +66,7 @@ export const AppRoutes = () => (
     <Route path={ROUTES.RESET_PASSWORD} element={<ResetPassword />} />
     <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
     <Route path={ROUTES.UNSUBSCRIBE} element={<Unsubscribe />} />
+    <Route path={ROUTES.PRIVACY_POLICY} element={<PrivacyPolicy />} />
 
     {/* Protected Routes - Core */}
     <Route
