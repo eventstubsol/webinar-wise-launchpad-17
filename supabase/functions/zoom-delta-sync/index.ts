@@ -182,7 +182,7 @@ async function getZoomAccessToken(supabase: any, connection: any): Promise<strin
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${btoa(`${Deno.env.get('ZOOM_CLIENT_ID')}:${Deno.env.get('ZOOM_CLIENT_SECRET')}`)}`
+        'Authorization': `Basic ${btoa(`${Deno.env.get('ZOOM_OAUTH_CLIENT_ID')}:${Deno.env.get('ZOOM_OAUTH_CLIENT_SECRET')}`)}`
       },
       body: new URLSearchParams({
         grant_type: 'refresh_token',

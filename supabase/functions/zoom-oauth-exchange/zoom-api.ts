@@ -3,8 +3,8 @@ import { TokenResponse, ZoomUser } from './types.ts';
 
 export class ZoomApiService {
   static async exchangeCodeForTokens(code: string, redirectUri: string): Promise<TokenResponse> {
-    const clientId = Deno.env.get('ZOOM_CLIENT_ID')!;
-    const clientSecret = Deno.env.get('ZOOM_CLIENT_SECRET')!;
+    const clientId = Deno.env.get('ZOOM_OAUTH_CLIENT_ID')!;
+    const clientSecret = Deno.env.get('ZOOM_OAUTH_CLIENT_SECRET')!;
     
     const tokenUrl = 'https://zoom.us/oauth/token';
     const params = new URLSearchParams({

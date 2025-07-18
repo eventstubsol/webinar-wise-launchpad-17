@@ -10,8 +10,8 @@ export class RequestValidator {
   }
 
   static validateEnvironment(): string | null {
-    const clientId = Deno.env.get('ZOOM_CLIENT_ID');
-    const clientSecret = Deno.env.get('ZOOM_CLIENT_SECRET');
+    const clientId = Deno.env.get('ZOOM_OAUTH_CLIENT_ID');
+    const clientSecret = Deno.env.get('ZOOM_OAUTH_CLIENT_SECRET');
     
     if (!clientId || !clientSecret) {
       return 'OAuth configuration error';

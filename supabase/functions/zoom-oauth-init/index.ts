@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { UrlConfig } from '../_shared/url-config.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -71,8 +72,8 @@ serve(async (req) => {
       throw new Error('Failed to initialize OAuth flow');
     }
 
-    // Use the frontend callback endpoint instead of the edge function
-    const redirectUri = 'https://webinar-wise-launchpad-17.lovable.app/auth/zoom/callback';
+    // Use the frontend callback endpoint with dynamic URL
+    const redirectUri = UrlConfig.getAuthCallbackUrl();
     
     const scopes = [
       'user:read',

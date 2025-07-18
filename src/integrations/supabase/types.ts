@@ -2477,6 +2477,14 @@ export type Database = {
         Args: { webinar_start_time: string; webinar_duration: number }
         Returns: string
       }
+      identify_security_definer_views: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          view_name: string
+          view_definition: string
+          should_fix: boolean
+        }[]
+      }
       invalidate_cache_dependencies: {
         Args: { dep_pattern: string }
         Returns: number
