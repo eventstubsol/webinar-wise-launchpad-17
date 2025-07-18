@@ -101,7 +101,7 @@ const ZoomOAuthCallback: React.FC = () => {
           body: {
             code,
             state,
-            redirectUri: 'https://webinarwise.io/auth/zoom/callback'
+            redirectUri: 'https://webinar-wise-launchpad-17.lovable.app/auth/zoom/callback'
           }
         });
 

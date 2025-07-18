@@ -72,7 +72,7 @@ serve(async (req) => {
     }
 
     // Use the frontend callback endpoint instead of the edge function
-    const redirectUri = 'https://webinarwise.io/auth/zoom/callback';
+    const redirectUri = 'https://webinar-wise-launchpad-17.lovable.app/auth/zoom/callback';
     
     const scopes = [
       'user:read',
