@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
-import { sanitizeAuthInput } from '@/lib/auth-security';
+// Simplified sanitization function
+const sanitizeAuthInput = (input: string) => {
+  return input.replace(/[<>]/g, '').trim();
+};
 import { cn } from '@/lib/utils';
 
 interface SecuredInputProps extends React.InputHTMLAttributes<HTMLInputElement> {

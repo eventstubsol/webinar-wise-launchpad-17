@@ -4,8 +4,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
 // Public Pages
 import Landing from '@/pages/Landing';
-import Login from '@/pages/Login';
-import Register from '@/pages/Register';
+import Auth from '@/pages/Auth';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import VerifyEmail from '@/pages/VerifyEmail';
@@ -63,8 +62,8 @@ export const AppRoutes = () => (
   <Routes>
     {/* Public Routes */}
     <Route path={ROUTES.HOME} element={<Landing />} />
-    <Route path={ROUTES.LOGIN} element={<Login />} />
-    <Route path={ROUTES.REGISTER} element={<Register />} />
+    <Route path={ROUTES.LOGIN} element={<Auth />} />
+    <Route path={ROUTES.REGISTER} element={<Auth />} />
     <Route path={ROUTES.FORGOT_PASSWORD} element={<ForgotPassword />} />
     <Route path={ROUTES.RESET_PASSWORD} element={<ResetPassword />} />
     <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
