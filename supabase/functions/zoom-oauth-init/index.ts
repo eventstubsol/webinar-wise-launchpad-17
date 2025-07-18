@@ -34,11 +34,7 @@ serve(async (req) => {
           success: false,
           error: 'Zoom OAuth not configured',
           message: 'Please configure your Zoom OAuth credentials in Supabase secrets.',
-          configRequired: {
-            secrets: ['ZOOM_OAUTH_CLIENT_ID', 'ZOOM_OAUTH_CLIENT_SECRET'],
-            hasClientId: !!zoomClientId,
-            hasClientSecret: !!zoomClientSecret
-          }
+          configRequired: true
         }),
         {
           status: 400,
@@ -50,9 +46,12 @@ serve(async (req) => {
     // Create Supabase client
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Get request body
+    const requestBody = await req.json().catch(() => ({}));
+    const returnUrl = requestBody.returnUrl || '/dashboard';
+
     // Generate secure state
     const state = crypto.randomUUID();
-    const returnUrl = new URL(req.url).searchParams.get('returnUrl') || '/dashboard';
 
     // Store state in database for security
     const { error: stateError } = await supabase
@@ -60,7 +59,11 @@ serve(async (req) => {
       .insert({
         state,
         return_url: returnUrl,
-        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
+        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes
+        metadata: {
+          origin: req.headers.get('origin'),
+          userAgent: req.headers.get('user-agent')?.substring(0, 100)
+        }
       });
 
     if (stateError) {
@@ -68,12 +71,13 @@ serve(async (req) => {
       throw new Error('Failed to initialize OAuth flow');
     }
 
-    // Build Zoom OAuth URL
+    // Use the new zoom-oauth-complete endpoint for the redirect
     const redirectUri = `${supabaseUrl}/functions/v1/zoom-oauth-complete`;
+    
     const scopes = [
       'user:read',
       'webinar:read',
-      'webinar:read:admin',
+      'webinar:read:admin', 
       'report:read:admin',
       'recording:read'
     ].join(' ');
@@ -89,6 +93,7 @@ serve(async (req) => {
     const authUrl = `https://zoom.us/oauth/authorize?${params.toString()}`;
 
     console.log('Generated OAuth URL successfully');
+    console.log('Redirect URI:', redirectUri);
 
     return new Response(
       JSON.stringify({

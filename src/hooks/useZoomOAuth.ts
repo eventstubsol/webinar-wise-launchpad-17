@@ -22,12 +22,17 @@ export const useZoomOAuth = () => {
         if (data.configRequired) {
           toast({
             title: "Configuration Required",
-            description: data.message,
+            description: data.message || 'Zoom OAuth credentials need to be configured.',
             variant: "destructive",
           });
           return { success: false, configRequired: true, data };
         }
         throw new Error(data.error || 'OAuth initialization failed');
+      }
+
+      // Store state in session storage for validation
+      if (data.state) {
+        sessionStorage.setItem('zoom_oauth_state', data.state);
       }
 
       // Redirect to Zoom OAuth
