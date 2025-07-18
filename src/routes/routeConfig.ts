@@ -11,6 +11,7 @@ export const ROUTES = {
   UNSUBSCRIBE: '/unsubscribe',
   PRIVACY_POLICY: '/privacy-policy',
   TERMS_OF_SERVICE: '/terms',
+  SUPPORT: '/support',
 
   // Protected routes - Core
   DASHBOARD: '/dashboard',
