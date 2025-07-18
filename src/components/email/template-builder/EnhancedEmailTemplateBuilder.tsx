@@ -11,6 +11,7 @@ import {
   ProductShowcaseEditor,
   renderAdvancedBlock
 } from './AdvancedBlocks';
+import { SafeHtml } from "@/utils/htmlSanitizer";
 
 interface EnhancedEmailTemplateBuilderProps {
   templateBlocks?: TemplateBlock[];
@@ -180,10 +181,10 @@ export function EnhancedEmailTemplateBuilder({
       {/* Preview (right) */}
       <div className="flex-1 bg-muted border rounded-md p-6 shadow-inner min-h-[400px]">
         <div className="font-semibold mb-2 text-center">Live Email Preview</div>
-        <div
+        <SafeHtml 
+          html={buildHTMLPreview(blocks)}
           className="bg-white p-4 rounded shadow"
           style={{ minHeight: 340 }}
-          dangerouslySetInnerHTML={{ __html: buildHTMLPreview(blocks) }}
         />
       </div>
     </div>

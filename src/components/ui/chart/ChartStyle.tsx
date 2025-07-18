@@ -1,4 +1,3 @@
-
 import * as React from "react"
 import type { ChartConfig } from "./ChartContext"
 
@@ -13,12 +12,9 @@ export const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) 
     return null
   }
 
-  return (
-    <style
-      dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
-            ([theme, prefix]) => `
+  const styles = Object.entries(THEMES)
+    .map(
+      ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
@@ -27,12 +23,16 @@ ${colorConfig
       itemConfig.color
     return color ? `  --color-${key}: ${color};` : null
   })
+  .filter(Boolean)
   .join("\n")}
 }
 `
-          )
-          .join("\n"),
-      }}
-    />
+    )
+    .join("\n");
+
+  return (
+    <style>
+      {styles}
+    </style>
   )
 }

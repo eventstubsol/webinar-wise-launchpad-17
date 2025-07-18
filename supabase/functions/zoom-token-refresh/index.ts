@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { TokenEncryption } from "../encryption/index.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -104,11 +105,14 @@ serve(async (req) => {
       const tokenData = await tokenResponse.json();
       const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
 
-      // Update connection with new plain text token
+      // Encrypt and update connection with new token
+      const encryptionSalt = Deno.env.get('ENCRYPTION_SALT') || 'default-salt';
+      const encryptedAccessToken = await TokenEncryption.encryptToken(tokenData.access_token, encryptionSalt);
+      
       const { data: updatedConnection, error: updateError } = await serviceClient
         .from('zoom_connections')
         .update({
-          access_token: tokenData.access_token, // Plain text
+          access_token: encryptedAccessToken,
           token_expires_at: newExpiresAt,
           updated_at: new Date().toISOString(),
         })
@@ -132,7 +136,19 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
-      // For OAuth connections, use refresh token (plain text)
+      // For OAuth connections, decrypt and use refresh token
+      const encryptionSalt = Deno.env.get('ENCRYPTION_SALT') || 'default-salt';
+      let refreshToken;
+      try {
+        refreshToken = await TokenEncryption.decryptToken(connection.refresh_token, encryptionSalt);
+      } catch (error) {
+        console.error('Failed to decrypt refresh token:', error);
+        return new Response(
+          JSON.stringify({ error: 'Invalid refresh token' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
       const tokenResponse = await fetch('https://zoom.us/oauth/token', {
         method: 'POST',
         headers: {
@@ -140,7 +156,7 @@ serve(async (req) => {
         },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
-          refresh_token: connection.refresh_token, // Already plain text
+          refresh_token: refreshToken,
         }),
       });
 
@@ -163,12 +179,17 @@ serve(async (req) => {
       const tokenData = await tokenResponse.json();
       const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
 
-      // Update connection with new plain text tokens
+      // Encrypt and update connection with new tokens
+      const encryptedAccessToken = await TokenEncryption.encryptToken(tokenData.access_token, encryptionSalt);
+      const encryptedRefreshToken = tokenData.refresh_token ? 
+        await TokenEncryption.encryptToken(tokenData.refresh_token, encryptionSalt) : 
+        connection.refresh_token; // Keep existing if no new one provided
+      
       const { data: updatedConnection, error: updateError } = await serviceClient
         .from('zoom_connections')
         .update({
-          access_token: tokenData.access_token, // Plain text
-          refresh_token: tokenData.refresh_token || connection.refresh_token, // Plain text
+          access_token: encryptedAccessToken,
+          refresh_token: encryptedRefreshToken,
           token_expires_at: newExpiresAt,
           updated_at: new Date().toISOString(),
         })

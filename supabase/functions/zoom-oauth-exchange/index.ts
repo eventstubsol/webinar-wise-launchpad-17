@@ -1,5 +1,5 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { TokenEncryption } from "../encryption/index.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -104,15 +104,21 @@ serve(async (req) => {
     const zoomUser = await userResponse.json();
     const tokenExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
 
-    // Store connection with plain text tokens
+    // Encrypt tokens before storing
+    const encryptionSalt = Deno.env.get('ENCRYPTION_SALT') || 'default-salt';
+    const encryptedAccessToken = await TokenEncryption.encryptToken(tokenData.access_token, encryptionSalt);
+    const encryptedRefreshToken = tokenData.refresh_token ? 
+      await TokenEncryption.encryptToken(tokenData.refresh_token, encryptionSalt) : null;
+
+    // Store connection with encrypted tokens
     const connectionData = {
       user_id: user.id,
       zoom_user_id: zoomUser.id,
       zoom_account_id: zoomUser.account_id || zoomUser.id,
       zoom_email: zoomUser.email,
       zoom_account_type: zoomUser.type === 2 ? 'Licensed' : 'Basic',
-      access_token: tokenData.access_token, // Plain text
-      refresh_token: tokenData.refresh_token, // Plain text
+      access_token: encryptedAccessToken,
+      refresh_token: encryptedRefreshToken,
       token_expires_at: tokenExpiresAt,
       scopes: tokenData.scope.split(' '),
       connection_status: 'active',
@@ -142,7 +148,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Zoom account connected successfully (no encryption)",
+        message: "Zoom account connected successfully with encrypted tokens",
         connection,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
