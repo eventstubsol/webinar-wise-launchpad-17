@@ -184,7 +184,7 @@ class DirectZoomSyncService {
           const { data: existingWebinar } = await supabase
             .from('zoom_webinars')
             .select('id')
-            .eq('webinar_id', webinar.id)
+            .eq('zoom_webinar_id', webinar.id)
             .eq('connection_id', connectionId)
             .single();
 

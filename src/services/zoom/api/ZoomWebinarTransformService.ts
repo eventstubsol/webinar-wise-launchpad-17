@@ -60,8 +60,6 @@ export class ZoomWebinarTransformService {
       // Missing computed fields
       total_absentees: null,
       avg_attendance_duration: null,
-      actual_participant_count: null,
-      unique_participant_count: null,
       
       // Missing creation tracking
       webinar_created_at: apiWebinar.created_at || null,
@@ -86,6 +84,11 @@ export class ZoomWebinarTransformService {
       // FIXED: Added missing computed metrics fields (only valid fields)
       total_registrants: null,
       total_attendees: null,
+      total_minutes: null,
+      
+      // Simulive and recording fields
+      is_simulive: apiWebinar.is_simulive || false,
+      record_file_id: apiWebinar.record_file_id || null,
       
       // JSONB fields - FIXED: Complete extraction
       settings: apiWebinar.settings || null,
