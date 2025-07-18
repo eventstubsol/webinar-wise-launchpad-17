@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
@@ -23,6 +22,7 @@ import Settings from '@/pages/Settings';
 // Protected Pages - Zoom Integration
 import ZoomTest from '@/pages/ZoomTest';
 import ZoomDiagnostics from '@/pages/ZoomDiagnostics';
+import ZoomOAuthCallback from '@/pages/auth/zoom/callback';
 
 // Protected Pages - Data Management
 import Webinars from '@/pages/Webinars';
@@ -73,6 +73,16 @@ export const AppRoutes = () => (
     <Route path={ROUTES.TERMS_OF_SERVICE} element={<TermsOfService />} />
     <Route path={ROUTES.SUPPORT} element={<Support />} />
     <Route path={ROUTES.DOCUMENTATION} element={<Documentation />} />
+
+    {/* Zoom OAuth Callback - needs to be protected */}
+    <Route
+      path="/auth/zoom/callback"
+      element={
+        <ProtectedRoute>
+          <ZoomOAuthCallback />
+        </ProtectedRoute>
+      }
+    />
 
     {/* Protected Routes - Core */}
     <Route

@@ -1,35 +1,17 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 
-interface OAuthExchangeRequest {
-  code: string;
-  state: string;
-  redirectUri: string;
-}
-
-interface OAuthExchangeResponse {
-  success: boolean;
-  connection?: {
-    id: string;
-    zoom_email: string;
-    zoom_account_type: string;
-  };
-  error?: string;
-}
-
 const ZoomOAuthCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -39,137 +21,129 @@ const ZoomOAuthCallback: React.FC = () => {
   const error = searchParams.get('error');
   const errorDescription = searchParams.get('error_description');
 
-  // OAuth token exchange mutation
-  const exchangeTokenMutation = useMutation({
-    mutationFn: async (request: OAuthExchangeRequest): Promise<OAuthExchangeResponse> => {
-      const { data, error } = await supabase.functions.invoke('zoom-oauth-exchange', {
-        body: request
-      });
-
-      if (error) {
-        throw new Error(error.message || 'Failed to exchange OAuth code');
+  useEffect(() => {
+    const handleOAuthCallback = async () => {
+      // Check if user is authenticated
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to connect your Zoom account.",
+          variant: "destructive",
+        });
+        navigate('/login', { replace: true });
+        return;
       }
 
-      return data;
-    },
-    onSuccess: (data) => {
-      if (data.success && data.connection) {
-        setStatus('success');
-        
-        // Clear OAuth state from session storage
-        sessionStorage.removeItem('zoom_oauth_state');
-        
-        // Invalidate zoom connection queries to refetch
-        queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
+      // Check for OAuth errors
+      if (error) {
+        setStatus('error');
+        const message = errorDescription || 
+          (error === 'access_denied' ? 'You denied access to your Zoom account.' : 
+           `OAuth error: ${error}`);
+        setErrorMessage(message);
         
         toast({
-          title: "Success!",
-          description: `Zoom account ${data.connection.zoom_email} connected successfully.`,
+          title: "Connection Cancelled",
+          description: message,
+          variant: "destructive",
         });
 
-        // Redirect to dashboard after a short delay to show success state
         setTimeout(() => {
           navigate('/dashboard', { replace: true });
-        }, 2000);
-      } else {
-        throw new Error(data.error || 'Unknown error occurred');
+        }, 3000);
+        return;
       }
-    },
-    onError: (error: Error) => {
-      console.error('OAuth exchange error:', error);
-      setStatus('error');
-      setErrorMessage(error.message);
-      
-      toast({
-        title: "Connection Failed",
-        description: error.message,
-        variant: "destructive",
-      });
 
-      // Redirect to dashboard after showing error
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 3000);
-    }
-  });
+      // Check for required parameters
+      if (!code || !state) {
+        setStatus('error');
+        setErrorMessage('Missing required OAuth parameters.');
+        
+        toast({
+          title: "Invalid Callback",
+          description: "Missing required OAuth parameters.",
+          variant: "destructive",
+        });
 
-  useEffect(() => {
-    // Check if user is authenticated
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to connect your Zoom account.",
-        variant: "destructive",
-      });
-      navigate('/login', { replace: true });
-      return;
-    }
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 3000);
+        return;
+      }
 
-    // Check for OAuth errors
-    if (error) {
-      setStatus('error');
-      const message = errorDescription || 
-        (error === 'access_denied' ? 'You denied access to your Zoom account.' : 
-         `OAuth error: ${error}`);
-      setErrorMessage(message);
-      
-      toast({
-        title: "Connection Cancelled",
-        description: message,
-        variant: "destructive",
-      });
+      // Validate state parameter
+      const storedState = sessionStorage.getItem('zoom_oauth_state');
+      if (!storedState || storedState !== state) {
+        setStatus('error');
+        setErrorMessage('Invalid state parameter. Possible security issue.');
+        
+        toast({
+          title: "Security Error",
+          description: "Invalid OAuth state. Please try connecting again.",
+          variant: "destructive",
+        });
 
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 3000);
-      return;
-    }
+        // Clear potentially compromised state
+        sessionStorage.removeItem('zoom_oauth_state');
 
-    // Check for required parameters
-    if (!code || !state) {
-      setStatus('error');
-      setErrorMessage('Missing required OAuth parameters.');
-      
-      toast({
-        title: "Invalid Callback",
-        description: "Missing required OAuth parameters.",
-        variant: "destructive",
-      });
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 3000);
+        return;
+      }
 
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 3000);
-      return;
-    }
+      // Bridge to the Edge Function - call zoom-oauth-exchange
+      try {
+        const { data, error: exchangeError } = await supabase.functions.invoke('zoom-oauth-exchange', {
+          body: {
+            code,
+            state,
+            redirectUri: `${window.location.origin}/auth/zoom/callback`
+          }
+        });
 
-    // Validate state parameter
-    const storedState = sessionStorage.getItem('zoom_oauth_state');
-    if (!storedState || storedState !== state) {
-      setStatus('error');
-      setErrorMessage('Invalid state parameter. Possible security issue.');
-      
-      toast({
-        title: "Security Error",
-        description: "Invalid OAuth state. Please try connecting again.",
-        variant: "destructive",
-      });
+        if (exchangeError) {
+          throw new Error(exchangeError.message || 'Failed to exchange OAuth code');
+        }
 
-      // Clear potentially compromised state
-      sessionStorage.removeItem('zoom_oauth_state');
+        if (data.success && data.connection) {
+          setStatus('success');
+          
+          // Clear OAuth state from session storage
+          sessionStorage.removeItem('zoom_oauth_state');
+          
+          toast({
+            title: "Success!",
+            description: `Zoom account ${data.connection.zoom_email} connected successfully.`,
+          });
 
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 3000);
-      return;
-    }
+          // Redirect to dashboard after a short delay to show success state
+          setTimeout(() => {
+            navigate('/dashboard', { replace: true });
+          }, 2000);
+        } else {
+          throw new Error(data.error || 'Unknown error occurred');
+        }
+      } catch (error) {
+        console.error('OAuth exchange error:', error);
+        setStatus('error');
+        setErrorMessage(error instanceof Error ? error.message : 'Unknown error occurred');
+        
+        toast({
+          title: "Connection Failed",
+          description: error instanceof Error ? error.message : 'Unknown error occurred',
+          variant: "destructive",
+        });
 
-    // All validations passed, exchange the code for tokens
-    exchangeTokenMutation.mutate({
-      code,
-      state,
-      redirectUri: `${window.location.origin}/auth/zoom/callback`
-    });
-  }, [code, state, error, errorDescription, user, navigate, toast, exchangeTokenMutation]);
+        // Redirect to dashboard after showing error
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 3000);
+      }
+    };
+
+    handleOAuthCallback();
+  }, [code, state, error, errorDescription, user, navigate, toast]);
 
   const renderStatusContent = () => {
     switch (status) {
