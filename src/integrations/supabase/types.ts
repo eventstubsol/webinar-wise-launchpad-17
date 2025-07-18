@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instanciate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
+  }
   public: {
     Tables: {
       analytics_cache: {
@@ -436,6 +441,133 @@ export type Database = {
         }
         Relationships: []
       }
+      organization_invitations: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          invitation_token: string | null
+          invited_by: string | null
+          organization_id: string | null
+          role: string | null
+          status: string | null
+          updated_at: string | null
+          zoom_email: string
+          zoom_user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          invitation_token?: string | null
+          invited_by?: string | null
+          organization_id?: string | null
+          role?: string | null
+          status?: string | null
+          updated_at?: string | null
+          zoom_email: string
+          zoom_user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          invitation_token?: string | null
+          invited_by?: string | null
+          organization_id?: string | null
+          role?: string | null
+          status?: string | null
+          updated_at?: string | null
+          zoom_email?: string
+          zoom_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_invitations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_members: {
+        Row: {
+          created_at: string | null
+          id: string
+          joined_at: string | null
+          organization_id: string | null
+          permissions: Json | null
+          role: string
+          updated_at: string | null
+          user_id: string | null
+          zoom_user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          joined_at?: string | null
+          organization_id?: string | null
+          permissions?: Json | null
+          role: string
+          updated_at?: string | null
+          user_id?: string | null
+          zoom_user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          joined_at?: string | null
+          organization_id?: string | null
+          permissions?: Json | null
+          role?: string
+          updated_at?: string | null
+          user_id?: string | null
+          zoom_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string | null
+          owner_user_id: string | null
+          settings: Json | null
+          subscription_plan: string | null
+          updated_at: string | null
+          zoom_account_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          owner_user_id?: string | null
+          settings?: Json | null
+          subscription_plan?: string | null
+          updated_at?: string | null
+          zoom_account_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          owner_user_id?: string | null
+          settings?: Json | null
+          subscription_plan?: string | null
+          updated_at?: string | null
+          zoom_account_id?: string
+        }
+        Relationships: []
+      }
       processing_queue: {
         Row: {
           completed_at: string | null
@@ -488,15 +620,7 @@ export type Database = {
           user_id?: string | null
           webinar_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "processing_queue_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -506,9 +630,17 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          is_zoom_admin: boolean | null
           job_title: string | null
+          organization_id: string | null
           phone: string | null
+          role: string | null
           updated_at: string | null
+          zoom_account_id: string | null
+          zoom_account_level: string | null
+          zoom_provider_refresh_token: string | null
+          zoom_provider_token: string | null
+          zoom_user_id: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -517,9 +649,17 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
+          is_zoom_admin?: boolean | null
           job_title?: string | null
+          organization_id?: string | null
           phone?: string | null
+          role?: string | null
           updated_at?: string | null
+          zoom_account_id?: string | null
+          zoom_account_level?: string | null
+          zoom_provider_refresh_token?: string | null
+          zoom_provider_token?: string | null
+          zoom_user_id?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -528,11 +668,27 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          is_zoom_admin?: boolean | null
           job_title?: string | null
+          organization_id?: string | null
           phone?: string | null
+          role?: string | null
           updated_at?: string | null
+          zoom_account_id?: string | null
+          zoom_account_level?: string | null
+          zoom_provider_refresh_token?: string | null
+          zoom_provider_token?: string | null
+          zoom_user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rate_limit_tracking: {
         Row: {
@@ -704,6 +860,36 @@ export type Database = {
           },
         ]
       }
+      sync_progress_updates: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          id: string
+          message: string
+          progress_percentage: number | null
+          sync_id: string
+          update_type: string
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          message: string
+          progress_percentage?: number | null
+          sync_id: string
+          update_type: string
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          message?: string
+          progress_percentage?: number | null
+          sync_id?: string
+          update_type?: string
+        }
+        Relationships: []
+      }
       sync_queue: {
         Row: {
           completed_at: string | null
@@ -755,13 +941,6 @@ export type Database = {
             referencedRelation: "zoom_sync_logs"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "sync_queue_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
         ]
       }
       sync_schedules: {
@@ -796,6 +975,78 @@ export type Database = {
           },
         ]
       }
+      sync_state: {
+        Row: {
+          connection_id: string
+          created_at: string | null
+          id: string
+          last_processed_item: string | null
+          processed_items: number | null
+          state_data: Json | null
+          state_type: string
+          sync_id: string
+          total_items: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string | null
+          id?: string
+          last_processed_item?: string | null
+          processed_items?: number | null
+          state_data?: Json | null
+          state_type: string
+          sync_id: string
+          total_items?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string | null
+          id?: string
+          last_processed_item?: string | null
+          processed_items?: number | null
+          state_data?: Json | null
+          state_type?: string
+          sync_id?: string
+          total_items?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_organizations: {
+        Row: {
+          admin_user_id: string | null
+          created_at: string | null
+          id: string
+          managed_user_id: string | null
+          permissions: Json | null
+          relationship_type: string | null
+          updated_at: string | null
+          zoom_account_id: string
+        }
+        Insert: {
+          admin_user_id?: string | null
+          created_at?: string | null
+          id?: string
+          managed_user_id?: string | null
+          permissions?: Json | null
+          relationship_type?: string | null
+          updated_at?: string | null
+          zoom_account_id: string
+        }
+        Update: {
+          admin_user_id?: string | null
+          created_at?: string | null
+          id?: string
+          managed_user_id?: string | null
+          permissions?: Json | null
+          relationship_type?: string | null
+          updated_at?: string | null
+          zoom_account_id?: string
+        }
+        Relationships: []
+      }
       user_settings: {
         Row: {
           created_at: string | null
@@ -826,15 +1077,136 @@ export type Database = {
         }
         Relationships: []
       }
+      webinar_metrics: {
+        Row: {
+          actual_participant_count: number | null
+          avg_attendance_duration: number | null
+          created_at: string | null
+          id: string
+          participant_sync_attempted_at: string | null
+          participant_sync_completed_at: string | null
+          participant_sync_error: string | null
+          participant_sync_status: string | null
+          total_absentees: number | null
+          total_attendees: number | null
+          total_minutes: number | null
+          unique_attendees: number | null
+          updated_at: string | null
+          webinar_id: string
+        }
+        Insert: {
+          actual_participant_count?: number | null
+          avg_attendance_duration?: number | null
+          created_at?: string | null
+          id?: string
+          participant_sync_attempted_at?: string | null
+          participant_sync_completed_at?: string | null
+          participant_sync_error?: string | null
+          participant_sync_status?: string | null
+          total_absentees?: number | null
+          total_attendees?: number | null
+          total_minutes?: number | null
+          unique_attendees?: number | null
+          updated_at?: string | null
+          webinar_id: string
+        }
+        Update: {
+          actual_participant_count?: number | null
+          avg_attendance_duration?: number | null
+          created_at?: string | null
+          id?: string
+          participant_sync_attempted_at?: string | null
+          participant_sync_completed_at?: string | null
+          participant_sync_error?: string | null
+          participant_sync_status?: string | null
+          total_absentees?: number | null
+          total_attendees?: number | null
+          total_minutes?: number | null
+          unique_attendees?: number | null
+          updated_at?: string | null
+          webinar_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webinar_metrics_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: true
+            referencedRelation: "organization_webinars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webinar_metrics_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: true
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webinar_sync_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          priority: number | null
+          processing_status: string | null
+          retry_count: number | null
+          scheduled_at: string | null
+          started_at: string | null
+          sync_id: string
+          updated_at: string | null
+          webinar_id: string
+          webinar_type: string
+          webinar_uuid: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          priority?: number | null
+          processing_status?: string | null
+          retry_count?: number | null
+          scheduled_at?: string | null
+          started_at?: string | null
+          sync_id: string
+          updated_at?: string | null
+          webinar_id: string
+          webinar_type: string
+          webinar_uuid?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          priority?: number | null
+          processing_status?: string | null
+          retry_count?: number | null
+          scheduled_at?: string | null
+          started_at?: string | null
+          sync_id?: string
+          updated_at?: string | null
+          webinar_id?: string
+          webinar_type?: string
+          webinar_uuid?: string | null
+        }
+        Relationships: []
+      }
       zoom_connections: {
         Row: {
           access_token: string
+          can_view_all_users: boolean | null
           connection_status: string
           connection_type: string
           created_at: string
           id: string
+          is_account_admin: boolean | null
+          is_active: boolean | null
           is_primary: boolean
           last_sync_at: string | null
+          organization_id: string | null
           refresh_token: string | null
           scopes: string[]
           token_expires_at: string
@@ -843,16 +1215,22 @@ export type Database = {
           zoom_account_id: string
           zoom_account_type: string
           zoom_email: string
+          zoom_role: string | null
+          zoom_role_id: string | null
           zoom_user_id: string
         }
         Insert: {
           access_token: string
+          can_view_all_users?: boolean | null
           connection_status?: string
           connection_type?: string
           created_at?: string
           id?: string
+          is_account_admin?: boolean | null
+          is_active?: boolean | null
           is_primary?: boolean
           last_sync_at?: string | null
+          organization_id?: string | null
           refresh_token?: string | null
           scopes?: string[]
           token_expires_at: string
@@ -861,16 +1239,22 @@ export type Database = {
           zoom_account_id: string
           zoom_account_type?: string
           zoom_email: string
+          zoom_role?: string | null
+          zoom_role_id?: string | null
           zoom_user_id: string
         }
         Update: {
           access_token?: string
+          can_view_all_users?: boolean | null
           connection_status?: string
           connection_type?: string
           created_at?: string
           id?: string
+          is_account_admin?: boolean | null
+          is_active?: boolean | null
           is_primary?: boolean
           last_sync_at?: string | null
+          organization_id?: string | null
           refresh_token?: string | null
           scopes?: string[]
           token_expires_at?: string
@@ -879,9 +1263,19 @@ export type Database = {
           zoom_account_id?: string
           zoom_account_type?: string
           zoom_email?: string
+          zoom_role?: string | null
+          zoom_role_id?: string | null
           zoom_user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "zoom_connections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       zoom_credentials: {
         Row: {
@@ -925,22 +1319,71 @@ export type Database = {
         }
         Relationships: []
       }
+      zoom_participant_sessions: {
+        Row: {
+          created_at: string | null
+          duration: number | null
+          id: string
+          join_time: string | null
+          leave_time: string | null
+          participant_id: string | null
+          session_id: string | null
+          updated_at: string | null
+          webinar_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration?: number | null
+          id?: string
+          join_time?: string | null
+          leave_time?: string | null
+          participant_id?: string | null
+          session_id?: string | null
+          updated_at?: string | null
+          webinar_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          duration?: number | null
+          id?: string
+          join_time?: string | null
+          leave_time?: string | null
+          participant_id?: string | null
+          session_id?: string | null
+          updated_at?: string | null
+          webinar_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_participant_sessions_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       zoom_participants: {
         Row: {
           answered_polling: boolean | null
           asked_question: boolean | null
           attentiveness_score: number | null
           camera_on_duration: number | null
+          city: string | null
+          country: string | null
           created_at: string
           customer_key: string | null
           device: string | null
           duration: number | null
           email: string | null
           failover: boolean | null
+          first_join_time: string | null
           id: string
           ip_address: string | null
+          is_aggregated: boolean | null
           is_rejoin_session: boolean | null
           join_time: string | null
+          last_leave_time: string | null
           leave_time: string | null
           location: string | null
           name: string
@@ -955,11 +1398,13 @@ export type Database = {
           posted_chat: boolean | null
           raised_hand: boolean | null
           registrant_id: string | null
+          session_count: number | null
           session_sequence: number | null
           share_application_duration: number | null
           share_desktop_duration: number | null
           share_whiteboard_duration: number | null
           status: string | null
+          total_duration: number | null
           updated_at: string
           user_id: string | null
           version: string | null
@@ -970,16 +1415,21 @@ export type Database = {
           asked_question?: boolean | null
           attentiveness_score?: number | null
           camera_on_duration?: number | null
+          city?: string | null
+          country?: string | null
           created_at?: string
           customer_key?: string | null
           device?: string | null
           duration?: number | null
           email?: string | null
           failover?: boolean | null
+          first_join_time?: string | null
           id?: string
           ip_address?: string | null
+          is_aggregated?: boolean | null
           is_rejoin_session?: boolean | null
           join_time?: string | null
+          last_leave_time?: string | null
           leave_time?: string | null
           location?: string | null
           name: string
@@ -994,11 +1444,13 @@ export type Database = {
           posted_chat?: boolean | null
           raised_hand?: boolean | null
           registrant_id?: string | null
+          session_count?: number | null
           session_sequence?: number | null
           share_application_duration?: number | null
           share_desktop_duration?: number | null
           share_whiteboard_duration?: number | null
           status?: string | null
+          total_duration?: number | null
           updated_at?: string
           user_id?: string | null
           version?: string | null
@@ -1009,16 +1461,21 @@ export type Database = {
           asked_question?: boolean | null
           attentiveness_score?: number | null
           camera_on_duration?: number | null
+          city?: string | null
+          country?: string | null
           created_at?: string
           customer_key?: string | null
           device?: string | null
           duration?: number | null
           email?: string | null
           failover?: boolean | null
+          first_join_time?: string | null
           id?: string
           ip_address?: string | null
+          is_aggregated?: boolean | null
           is_rejoin_session?: boolean | null
           join_time?: string | null
+          last_leave_time?: string | null
           leave_time?: string | null
           location?: string | null
           name?: string
@@ -1033,17 +1490,26 @@ export type Database = {
           posted_chat?: boolean | null
           raised_hand?: boolean | null
           registrant_id?: string | null
+          session_count?: number | null
           session_sequence?: number | null
           share_application_duration?: number | null
           share_desktop_duration?: number | null
           share_whiteboard_duration?: number | null
           status?: string | null
+          total_duration?: number | null
           updated_at?: string
           user_id?: string | null
           version?: string | null
           webinar_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "zoom_participants_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "organization_webinars"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "zoom_participants_webinar_id_fkey"
             columns: ["webinar_id"]
@@ -1131,15 +1597,7 @@ export type Database = {
           updated_at?: string
           webinar_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_polls_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       zoom_qna: {
         Row: {
@@ -1166,15 +1624,7 @@ export type Database = {
           updated_at?: string
           webinar_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_qna_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       zoom_recordings: {
         Row: {
@@ -1225,15 +1675,7 @@ export type Database = {
           updated_at?: string
           webinar_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_recordings_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       zoom_registrants: {
         Row: {
@@ -1344,21 +1786,14 @@ export type Database = {
           webinar_id?: string | null
           zip?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_registrants_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       zoom_sync_logs: {
         Row: {
           completed_at: string | null
           connection_id: string
           created_at: string
+          current_operation: string | null
           duration_seconds: number | null
           error_details: Json | null
           error_message: string | null
@@ -1368,6 +1803,7 @@ export type Database = {
           stage_progress_percentage: number | null
           started_at: string
           status: string | null
+          sync_progress: number | null
           sync_stage: string | null
           sync_status: string
           sync_type: string
@@ -1379,6 +1815,7 @@ export type Database = {
           completed_at?: string | null
           connection_id: string
           created_at?: string
+          current_operation?: string | null
           duration_seconds?: number | null
           error_details?: Json | null
           error_message?: string | null
@@ -1388,6 +1825,7 @@ export type Database = {
           stage_progress_percentage?: number | null
           started_at?: string
           status?: string | null
+          sync_progress?: number | null
           sync_stage?: string | null
           sync_status?: string
           sync_type: string
@@ -1399,6 +1837,7 @@ export type Database = {
           completed_at?: string | null
           connection_id?: string
           created_at?: string
+          current_operation?: string | null
           duration_seconds?: number | null
           error_details?: Json | null
           error_message?: string | null
@@ -1408,6 +1847,7 @@ export type Database = {
           stage_progress_percentage?: number | null
           started_at?: string
           status?: string | null
+          sync_progress?: number | null
           sync_stage?: string | null
           sync_status?: string
           sync_type?: string
@@ -1428,149 +1868,95 @@ export type Database = {
       zoom_webinars: {
         Row: {
           agenda: string | null
-          approval_type: number | null
-          avg_attendance_duration: number | null
+          attendees_count: number | null
           connection_id: string
-          created_at: string
-          creation_source: string | null
+          created_at: string | null
           duration: number
-          encrypted_passcode: string | null
-          h323_passcode: string | null
+          encrypted_password: string | null
+          h323_password: string | null
           host_email: string
           host_id: string
           id: string
-          is_simulive: boolean | null
           join_url: string
-          last_synced_at: string | null
-          occurrence_id: string | null
           occurrences: Json | null
-          participant_sync_attempted_at: string | null
-          participant_sync_completed_at: string | null
-          participant_sync_error: string | null
-          participant_sync_status: string | null
           password: string | null
-          record_file_id: string | null
+          pstn_password: string | null
           recurrence: Json | null
-          registrants_restrict_number: number | null
-          registration_type: number | null
+          registrants_count: number | null
           registration_url: string | null
           settings: Json | null
           start_time: string
           start_url: string | null
           status: string
-          synced_at: string
+          synced_at: string | null
           timezone: string
           topic: string
-          total_absentees: number | null
-          total_attendees: number | null
-          total_minutes: number | null
-          total_registrants: number | null
           tracking_fields: Json | null
-          transition_to_live: boolean | null
-          updated_at: string
+          type: number | null
+          updated_at: string | null
           uuid: string | null
-          webinar_created_at: string | null
-          webinar_id: string | null
-          webinar_type: number
-          zoom_uuid: string | null
           zoom_webinar_id: string
         }
         Insert: {
           agenda?: string | null
-          approval_type?: number | null
-          avg_attendance_duration?: number | null
+          attendees_count?: number | null
           connection_id: string
-          created_at?: string
-          creation_source?: string | null
+          created_at?: string | null
           duration: number
-          encrypted_passcode?: string | null
-          h323_passcode?: string | null
+          encrypted_password?: string | null
+          h323_password?: string | null
           host_email: string
           host_id: string
           id?: string
-          is_simulive?: boolean | null
           join_url: string
-          last_synced_at?: string | null
-          occurrence_id?: string | null
           occurrences?: Json | null
-          participant_sync_attempted_at?: string | null
-          participant_sync_completed_at?: string | null
-          participant_sync_error?: string | null
-          participant_sync_status?: string | null
           password?: string | null
-          record_file_id?: string | null
+          pstn_password?: string | null
           recurrence?: Json | null
-          registrants_restrict_number?: number | null
-          registration_type?: number | null
+          registrants_count?: number | null
           registration_url?: string | null
           settings?: Json | null
           start_time: string
           start_url?: string | null
           status: string
-          synced_at?: string
+          synced_at?: string | null
           timezone: string
           topic: string
-          total_absentees?: number | null
-          total_attendees?: number | null
-          total_minutes?: number | null
-          total_registrants?: number | null
           tracking_fields?: Json | null
-          transition_to_live?: boolean | null
-          updated_at?: string
+          type?: number | null
+          updated_at?: string | null
           uuid?: string | null
-          webinar_created_at?: string | null
-          webinar_id?: string | null
-          webinar_type: number
-          zoom_uuid?: string | null
           zoom_webinar_id: string
         }
         Update: {
           agenda?: string | null
-          approval_type?: number | null
-          avg_attendance_duration?: number | null
+          attendees_count?: number | null
           connection_id?: string
-          created_at?: string
-          creation_source?: string | null
+          created_at?: string | null
           duration?: number
-          encrypted_passcode?: string | null
-          h323_passcode?: string | null
+          encrypted_password?: string | null
+          h323_password?: string | null
           host_email?: string
           host_id?: string
           id?: string
-          is_simulive?: boolean | null
           join_url?: string
-          last_synced_at?: string | null
-          occurrence_id?: string | null
           occurrences?: Json | null
-          participant_sync_attempted_at?: string | null
-          participant_sync_completed_at?: string | null
-          participant_sync_error?: string | null
-          participant_sync_status?: string | null
           password?: string | null
-          record_file_id?: string | null
+          pstn_password?: string | null
           recurrence?: Json | null
-          registrants_restrict_number?: number | null
-          registration_type?: number | null
+          registrants_count?: number | null
           registration_url?: string | null
           settings?: Json | null
           start_time?: string
           start_url?: string | null
           status?: string
-          synced_at?: string
+          synced_at?: string | null
           timezone?: string
           topic?: string
-          total_absentees?: number | null
-          total_attendees?: number | null
-          total_minutes?: number | null
-          total_registrants?: number | null
           tracking_fields?: Json | null
-          transition_to_live?: boolean | null
-          updated_at?: string
+          type?: number | null
+          updated_at?: string | null
           uuid?: string | null
-          webinar_created_at?: string | null
-          webinar_id?: string | null
-          webinar_type?: number
-          zoom_uuid?: string | null
           zoom_webinar_id?: string
         }
         Relationships: [
@@ -1583,11 +1969,375 @@ export type Database = {
           },
         ]
       }
+      zoom_webinars_backup: {
+        Row: {
+          actual_participant_count: number | null
+          add_audio_watermark: boolean | null
+          add_watermark: boolean | null
+          additional_data: Json | null
+          agenda: string | null
+          allow_multiple_devices: boolean | null
+          allow_multiple_view_on_same_device: boolean | null
+          alternative_hosts: string[] | null
+          alternative_hosts_email_notification: boolean | null
+          approval_type: number | null
+          attendees_and_panelists_reminder_email_notification: Json | null
+          audio: string | null
+          audio_conferencing: Json | null
+          authentication_domains: string | null
+          authentication_name: string | null
+          authentication_option: string | null
+          auto_recording: string | null
+          avg_attendance_duration: number | null
+          cloud_recording: Json | null
+          connection_id: string | null
+          contact_email: string | null
+          contact_name: string | null
+          created_at: string | null
+          creation_source: string | null
+          duration: number | null
+          email_language: string | null
+          email_notification: boolean | null
+          enable_dedicated_pin_for_all_panelists: boolean | null
+          encrypted_password: string | null
+          enforce_login: boolean | null
+          follow_up_absentees_email_notification: Json | null
+          follow_up_attendees_email_notification: Json | null
+          global_dial_in_countries: string[] | null
+          global_dial_in_numbers: Json | null
+          h323_password: string | null
+          hd_video: boolean | null
+          hd_video_for_attendees: boolean | null
+          host_email: string | null
+          host_id: string | null
+          host_save_video_order: boolean | null
+          host_video: boolean | null
+          id: string | null
+          is_simulive: boolean | null
+          join_url: string | null
+          language_interpretation: Json | null
+          last_successful_sync: string | null
+          last_synced_at: string | null
+          max_attendees: number | null
+          max_registrants: number | null
+          meeting_authentication: boolean | null
+          notify_registrants: boolean | null
+          occurrence_id: string | null
+          occurrences: Json | null
+          on_demand: boolean | null
+          panelists_invitation_email_notification: boolean | null
+          panelists_video: boolean | null
+          participant_sync_attempted_at: string | null
+          participant_sync_completed_at: string | null
+          participant_sync_error: string | null
+          participant_sync_status: string | null
+          password: string | null
+          post_webinar_survey: boolean | null
+          practice_session: boolean | null
+          pstn_password: string | null
+          question_answer: boolean | null
+          record_file_id: string | null
+          recurrence: Json | null
+          registrants_confirmation_email: boolean | null
+          registrants_email_notification: boolean | null
+          registrants_restrict_by_domain: string | null
+          registrants_restrict_number: number | null
+          registration_required: boolean | null
+          registration_type: number | null
+          registration_url: string | null
+          send_1080p_video_to_attendees: boolean | null
+          settings: Json | null
+          show_share_button: boolean | null
+          sign_language_interpretation: Json | null
+          start_time: string | null
+          start_url: string | null
+          status: string | null
+          survey_url: string | null
+          sync_method: string | null
+          sync_status: string | null
+          synced_at: string | null
+          timezone: string | null
+          topic: string | null
+          total_absentees: number | null
+          total_attendees: number | null
+          total_minutes: number | null
+          total_participant_minutes: number | null
+          total_registrants: number | null
+          tracking_fields: Json | null
+          transition_to_live: boolean | null
+          type: number | null
+          unique_participant_count: number | null
+          updated_at: string | null
+          uuid: string | null
+          webinar_created_at: string | null
+          zoom_webinar_id: string | null
+        }
+        Insert: {
+          actual_participant_count?: number | null
+          add_audio_watermark?: boolean | null
+          add_watermark?: boolean | null
+          additional_data?: Json | null
+          agenda?: string | null
+          allow_multiple_devices?: boolean | null
+          allow_multiple_view_on_same_device?: boolean | null
+          alternative_hosts?: string[] | null
+          alternative_hosts_email_notification?: boolean | null
+          approval_type?: number | null
+          attendees_and_panelists_reminder_email_notification?: Json | null
+          audio?: string | null
+          audio_conferencing?: Json | null
+          authentication_domains?: string | null
+          authentication_name?: string | null
+          authentication_option?: string | null
+          auto_recording?: string | null
+          avg_attendance_duration?: number | null
+          cloud_recording?: Json | null
+          connection_id?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string | null
+          creation_source?: string | null
+          duration?: number | null
+          email_language?: string | null
+          email_notification?: boolean | null
+          enable_dedicated_pin_for_all_panelists?: boolean | null
+          encrypted_password?: string | null
+          enforce_login?: boolean | null
+          follow_up_absentees_email_notification?: Json | null
+          follow_up_attendees_email_notification?: Json | null
+          global_dial_in_countries?: string[] | null
+          global_dial_in_numbers?: Json | null
+          h323_password?: string | null
+          hd_video?: boolean | null
+          hd_video_for_attendees?: boolean | null
+          host_email?: string | null
+          host_id?: string | null
+          host_save_video_order?: boolean | null
+          host_video?: boolean | null
+          id?: string | null
+          is_simulive?: boolean | null
+          join_url?: string | null
+          language_interpretation?: Json | null
+          last_successful_sync?: string | null
+          last_synced_at?: string | null
+          max_attendees?: number | null
+          max_registrants?: number | null
+          meeting_authentication?: boolean | null
+          notify_registrants?: boolean | null
+          occurrence_id?: string | null
+          occurrences?: Json | null
+          on_demand?: boolean | null
+          panelists_invitation_email_notification?: boolean | null
+          panelists_video?: boolean | null
+          participant_sync_attempted_at?: string | null
+          participant_sync_completed_at?: string | null
+          participant_sync_error?: string | null
+          participant_sync_status?: string | null
+          password?: string | null
+          post_webinar_survey?: boolean | null
+          practice_session?: boolean | null
+          pstn_password?: string | null
+          question_answer?: boolean | null
+          record_file_id?: string | null
+          recurrence?: Json | null
+          registrants_confirmation_email?: boolean | null
+          registrants_email_notification?: boolean | null
+          registrants_restrict_by_domain?: string | null
+          registrants_restrict_number?: number | null
+          registration_required?: boolean | null
+          registration_type?: number | null
+          registration_url?: string | null
+          send_1080p_video_to_attendees?: boolean | null
+          settings?: Json | null
+          show_share_button?: boolean | null
+          sign_language_interpretation?: Json | null
+          start_time?: string | null
+          start_url?: string | null
+          status?: string | null
+          survey_url?: string | null
+          sync_method?: string | null
+          sync_status?: string | null
+          synced_at?: string | null
+          timezone?: string | null
+          topic?: string | null
+          total_absentees?: number | null
+          total_attendees?: number | null
+          total_minutes?: number | null
+          total_participant_minutes?: number | null
+          total_registrants?: number | null
+          tracking_fields?: Json | null
+          transition_to_live?: boolean | null
+          type?: number | null
+          unique_participant_count?: number | null
+          updated_at?: string | null
+          uuid?: string | null
+          webinar_created_at?: string | null
+          zoom_webinar_id?: string | null
+        }
+        Update: {
+          actual_participant_count?: number | null
+          add_audio_watermark?: boolean | null
+          add_watermark?: boolean | null
+          additional_data?: Json | null
+          agenda?: string | null
+          allow_multiple_devices?: boolean | null
+          allow_multiple_view_on_same_device?: boolean | null
+          alternative_hosts?: string[] | null
+          alternative_hosts_email_notification?: boolean | null
+          approval_type?: number | null
+          attendees_and_panelists_reminder_email_notification?: Json | null
+          audio?: string | null
+          audio_conferencing?: Json | null
+          authentication_domains?: string | null
+          authentication_name?: string | null
+          authentication_option?: string | null
+          auto_recording?: string | null
+          avg_attendance_duration?: number | null
+          cloud_recording?: Json | null
+          connection_id?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string | null
+          creation_source?: string | null
+          duration?: number | null
+          email_language?: string | null
+          email_notification?: boolean | null
+          enable_dedicated_pin_for_all_panelists?: boolean | null
+          encrypted_password?: string | null
+          enforce_login?: boolean | null
+          follow_up_absentees_email_notification?: Json | null
+          follow_up_attendees_email_notification?: Json | null
+          global_dial_in_countries?: string[] | null
+          global_dial_in_numbers?: Json | null
+          h323_password?: string | null
+          hd_video?: boolean | null
+          hd_video_for_attendees?: boolean | null
+          host_email?: string | null
+          host_id?: string | null
+          host_save_video_order?: boolean | null
+          host_video?: boolean | null
+          id?: string | null
+          is_simulive?: boolean | null
+          join_url?: string | null
+          language_interpretation?: Json | null
+          last_successful_sync?: string | null
+          last_synced_at?: string | null
+          max_attendees?: number | null
+          max_registrants?: number | null
+          meeting_authentication?: boolean | null
+          notify_registrants?: boolean | null
+          occurrence_id?: string | null
+          occurrences?: Json | null
+          on_demand?: boolean | null
+          panelists_invitation_email_notification?: boolean | null
+          panelists_video?: boolean | null
+          participant_sync_attempted_at?: string | null
+          participant_sync_completed_at?: string | null
+          participant_sync_error?: string | null
+          participant_sync_status?: string | null
+          password?: string | null
+          post_webinar_survey?: boolean | null
+          practice_session?: boolean | null
+          pstn_password?: string | null
+          question_answer?: boolean | null
+          record_file_id?: string | null
+          recurrence?: Json | null
+          registrants_confirmation_email?: boolean | null
+          registrants_email_notification?: boolean | null
+          registrants_restrict_by_domain?: string | null
+          registrants_restrict_number?: number | null
+          registration_required?: boolean | null
+          registration_type?: number | null
+          registration_url?: string | null
+          send_1080p_video_to_attendees?: boolean | null
+          settings?: Json | null
+          show_share_button?: boolean | null
+          sign_language_interpretation?: Json | null
+          start_time?: string | null
+          start_url?: string | null
+          status?: string | null
+          survey_url?: string | null
+          sync_method?: string | null
+          sync_status?: string | null
+          synced_at?: string | null
+          timezone?: string | null
+          topic?: string | null
+          total_absentees?: number | null
+          total_attendees?: number | null
+          total_minutes?: number | null
+          total_participant_minutes?: number | null
+          total_registrants?: number | null
+          tracking_fields?: Json | null
+          transition_to_live?: boolean | null
+          type?: number | null
+          unique_participant_count?: number | null
+          updated_at?: string | null
+          uuid?: string | null
+          webinar_created_at?: string | null
+          zoom_webinar_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      organization_webinars: {
+        Row: {
+          agenda: string | null
+          attendees_count: number | null
+          connection_id: string | null
+          created_at: string | null
+          duration: number | null
+          encrypted_password: string | null
+          h323_password: string | null
+          host_email: string | null
+          host_id: string | null
+          id: string | null
+          join_url: string | null
+          occurrences: Json | null
+          organization_id: string | null
+          organization_name: string | null
+          password: string | null
+          pstn_password: string | null
+          recurrence: Json | null
+          registrants_count: number | null
+          registration_url: string | null
+          settings: Json | null
+          start_time: string | null
+          start_url: string | null
+          status: string | null
+          synced_at: string | null
+          timezone: string | null
+          topic: string | null
+          tracking_fields: Json | null
+          type: number | null
+          updated_at: string | null
+          user_id: string | null
+          uuid: string | null
+          zoom_webinar_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_connections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zoom_webinars_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      aggregate_participant_sessions: {
+        Args: { p_participant_id: string }
+        Returns: undefined
+      }
       batch_update_webinar_statuses: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1596,6 +2346,10 @@ export type Database = {
           live_count: number
           ended_count: number
         }[]
+      }
+      calculate_webinar_stats: {
+        Args: { p_webinar_id: string }
+        Returns: undefined
       }
       calculate_webinar_status: {
         Args:
@@ -1635,6 +2389,10 @@ export type Database = {
         Args: { dep_pattern: string }
         Returns: number
       }
+      is_user_admin: {
+        Args: { user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
@@ -1645,21 +2403,25 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -1677,14 +2439,16 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -1700,14 +2464,16 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -1723,14 +2489,16 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -1738,14 +2506,16 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
