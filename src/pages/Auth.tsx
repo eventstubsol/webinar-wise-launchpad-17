@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { ZoomSignInButton } from '@/components/auth/ZoomSignInButton';
-import { useZoomOAuth } from '@/hooks/useZoomOAuth';
+// Zoom OAuth removed - focusing on email/password authentication
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
@@ -38,7 +38,6 @@ const Auth = () => {
   const { signIn, signUp, user, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { initiateZoomOAuth, isLoading: isZoomLoading } = useZoomOAuth();
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -149,28 +148,8 @@ const Auth = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Zoom Sign In */}
-            <div className="mb-6">
-              <ZoomSignInButton
-                onClick={handleZoomAuth}
-                isLoading={isZoomLoading}
-                text="Continue with Zoom"
-              />
-              <p className="mt-2 text-xs text-center text-gray-500">
-                Connect with your Zoom account for seamless integration
-              </p>
-            </div>
-
-            <div className="relative mb-6">
-              <div className="absolute inset-0 flex items-center">
-                <Separator />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white px-2 text-gray-500">Or continue with email</span>
-              </div>
-            </div>
-
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
+          {/* Email/Password Authentication Only */}
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">Sign In</TabsTrigger>
                 <TabsTrigger value="register">Sign Up</TabsTrigger>
