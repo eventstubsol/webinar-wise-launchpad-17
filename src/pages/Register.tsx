@@ -13,21 +13,22 @@ import { registerSchema, type RegisterFormData } from '@/lib/validations/auth';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { validatePasswordStrength, checkRateLimit, clearRateLimit, sanitizeAuthInput } from '@/lib/auth-security';
 import { ZoomSignInButton } from '@/components/auth/ZoomSignInButton';
-import { ZoomConsentDialog } from '@/components/auth/ZoomConsentDialog';
 import { useToast } from '@/hooks/use-toast';
+import { useZoomOAuth } from '@/hooks/useZoomOAuth';
+import { ZoomOAuthSetup } from '@/components/auth/ZoomOAuthSetup';
 
 const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isZoomLoading, setIsZoomLoading] = useState(false);
-  const [showConsentDialog, setShowConsentDialog] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [isRateLimited, setIsRateLimited] = useState(false);
   const { signUp, user, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const [showZoomSetup, setShowZoomSetup] = useState(false);
+  const { initiateZoomOAuth, isLoading: isZoomLoading } = useZoomOAuth();
 
   const {
     register,
@@ -126,36 +127,11 @@ const Register = () => {
     }
   };
 
-  const handleZoomSignUp = () => {
-    setShowConsentDialog(true);
-  };
-
-  const handleZoomConsent = async () => {
-    setIsZoomLoading(true);
-    setShowConsentDialog(false);
+  const handleZoomSignUp = async () => {
+    const result = await initiateZoomOAuth('/dashboard');
     
-    try {
-      // Get Zoom OAuth URL from backend
-      const response = await fetch(
-        `${import.meta.env.VITE_RENDER_BACKEND_URL || 'http://localhost:3001'}/api/auth/zoom/authorize?returnUrl=/dashboard`
-      );
-      
-      if (!response.ok) {
-        throw new Error('Failed to get authorization URL');
-      }
-      
-      const { authUrl } = await response.json();
-      
-      // Redirect to Zoom OAuth
-      window.location.href = authUrl;
-    } catch (error) {
-      console.error('Zoom OAuth error:', error);
-      toast({
-        title: 'Connection Error',
-        description: 'Failed to connect to Zoom. Please try again.',
-        variant: 'destructive',
-      });
-      setIsZoomLoading(false);
+    if (!result.success && result.configRequired) {
+      setShowZoomSetup(true);
     }
   };
 
@@ -183,25 +159,28 @@ const Register = () => {
           </p>
         </div>
 
-        <Card className="shadow-lg border-0">
-          <CardHeader className="text-center pb-6">
-            <CardTitle className="text-xl">Join Webinar Wise</CardTitle>
-            <CardDescription>
-              Start transforming your webinar data today
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {/* Zoom Sign Up */}
-            <div className="mb-6">
-              <ZoomSignInButton
-                onClick={handleZoomSignUp}
-                isLoading={isZoomLoading}
-                text="Sign up with Zoom"
-              />
-              <p className="mt-2 text-xs text-center text-gray-500">
-                Create an account using your Zoom credentials
-              </p>
-            </div>
+        {showZoomSetup ? (
+          <ZoomOAuthSetup onConfigured={() => setShowZoomSetup(false)} />
+        ) : (
+          <Card className="shadow-lg border-0">
+            <CardHeader className="text-center pb-6">
+              <CardTitle className="text-xl">Join Webinar Wise</CardTitle>
+              <CardDescription>
+                Start transforming your webinar data today
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Zoom Sign Up */}
+              <div className="mb-6">
+                <ZoomSignInButton
+                  onClick={handleZoomSignUp}
+                  isLoading={isZoomLoading}
+                  text="Sign up with Zoom"
+                />
+                <p className="mt-2 text-xs text-center text-gray-500">
+                  Create an account using your Zoom credentials
+                </p>
+              </div>
 
             <div className="relative mb-6">
               <div className="absolute inset-0 flex items-center">
@@ -418,16 +397,8 @@ const Register = () => {
               </p>
             </div>
           </CardContent>
-        </Card>
+        )}
       </div>
-
-      {/* Zoom Consent Dialog */}
-      <ZoomConsentDialog
-        isOpen={showConsentDialog}
-        onClose={() => setShowConsentDialog(false)}
-        onConsent={handleZoomConsent}
-        isLoading={isZoomLoading}
-      />
     </div>
   );
 };
