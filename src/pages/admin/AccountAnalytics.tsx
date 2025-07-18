@@ -87,15 +87,12 @@ export default function AccountAnalytics() {
       if (!user) return;
 
       // Get all managed users
+      // Get all managed users for the admin
       const { data: orgRelationships, error: orgError } = await supabase
         .from('user_organizations')
         .select(`
           managed_user_id,
-          profiles!user_organizations_managed_user_id_fkey (
-            id,
-            email,
-            full_name
-          )
+          admin_user_id
         `)
         .eq('admin_user_id', user.id);
 
@@ -159,8 +156,15 @@ export default function AccountAnalytics() {
       
       for (const webinar of webinars || []) {
         const userId = webinar.zoom_connections?.user_id;
-        const user = orgRelationships?.find(r => r.managed_user_id === userId)?.profiles;
-        const userName = user?.full_name || user?.email || 'Unknown';
+        
+        // Get user profile for display name
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', userId)
+          .single();
+        
+        const userName = userProfile?.full_name || userProfile?.email || 'Unknown';
         
         if (!userDataMap.has(userId)) {
           userDataMap.set(userId, {

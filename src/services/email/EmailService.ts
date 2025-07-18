@@ -143,7 +143,7 @@ export class EmailService {
   /**
    * Get auth headers (reuse from RenderZoomService)
    */
-  protected static async getAuthHeaders() {
+  public static async getAuthHeaders() {
     const { supabase } = await import('@/integrations/supabase/client');
     const { data: { session } } = await supabase.auth.getSession();
     

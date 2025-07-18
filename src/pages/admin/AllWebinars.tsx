@@ -69,20 +69,21 @@ export default function AllWebinars() {
       // Get all managed users
       const { data: orgRelationships, error: orgError } = await supabase
         .from('user_organizations')
-        .select(`
-          managed_user_id,
-          profiles!user_organizations_managed_user_id_fkey (
-            id,
-            email,
-            full_name,
-            avatar_url
-          )
-        `)
+        .select('managed_user_id')
         .eq('admin_user_id', user.id);
 
       if (orgError) throw orgError;
 
-      const managedUsers = orgRelationships?.map(rel => rel.profiles) || [];
+      // Get profiles for these users
+      const managedUserIds = orgRelationships?.map(rel => rel.managed_user_id) || [];
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, avatar_url')
+        .in('id', managedUserIds);
+
+      if (profilesError) throw profilesError;
+
+      const managedUsers = profiles || [];
       setUsers(managedUsers);
 
       // Determine which users to fetch webinars for
@@ -93,19 +94,13 @@ export default function AllWebinars() {
         userIds = [filterUser];
       }
 
-      // Build query
+      // Build query - simplified to avoid foreign key issues
       let query = supabase
         .from('zoom_webinars')
         .select(`
           *,
           zoom_connections!inner (
-            user_id,
-            profiles!zoom_connections_user_id_fkey (
-              id,
-              email,
-              full_name,
-              avatar_url
-            )
+            user_id
           ),
           webinar_metrics (
             total_attendees,
@@ -124,17 +119,27 @@ export default function AllWebinars() {
 
       if (webinarsError) throw webinarsError;
 
-      // Format the data
-      const formattedWebinars: WebinarWithUser[] = webinarsData?.map(webinar => ({
-        id: webinar.id,
-        topic: webinar.topic,
-        start_time: webinar.start_time,
-        duration: webinar.duration,
-        status: webinar.status,
-        attendees_count: webinar.webinar_metrics?.[0]?.total_attendees || 0,
-        registrants_count: webinar.registrants_count || 0,
-        user: webinar.zoom_connections.profiles
-      })) || [];
+      // Format the data - manually join with user profiles
+      const formattedWebinars: WebinarWithUser[] = webinarsData?.map(webinar => {
+        const userId = webinar.zoom_connections?.user_id;
+        const userProfile = profiles?.find(p => p.id === userId) || {
+          id: userId || '',
+          email: 'Unknown',
+          full_name: null,
+          avatar_url: null
+        };
+        
+        return {
+          id: webinar.id,
+          topic: webinar.topic,
+          start_time: webinar.start_time,
+          duration: webinar.duration,
+          status: webinar.status,
+          attendees_count: webinar.webinar_metrics?.[0]?.total_attendees || 0,
+          registrants_count: webinar.registrants_count || 0,
+          user: userProfile
+        };
+      }) || [];
 
       setWebinars(formattedWebinars);
     } catch (error) {
