@@ -1,8 +1,12 @@
 
-import { IEmailServiceProvider } from "./EmailService";
+// Interface for email providers
 
 const RESEND_API_URL = "https://api.resend.com/emails";
 const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY || "";
+
+interface IEmailServiceProvider {
+  send(params: any): Promise<any>;
+}
 
 export const ResendEmailProvider: IEmailServiceProvider = {
   async send({ to, subject, html, from, metadata, abVariant }) {

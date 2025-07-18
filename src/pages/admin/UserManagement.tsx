@@ -54,35 +54,37 @@ export default function UserManagement() {
     try {
       setLoading(true);
 
-      // Get all users that this admin can manage
+      // Get all users that this admin can manage - simplified query
       const { data: orgRelationships, error: orgError } = await supabase
         .from('user_organizations')
-        .select(`
-          managed_user_id,
-          permissions,
-          profiles!user_organizations_managed_user_id_fkey (
-            id,
-            email,
-            full_name,
-            avatar_url,
-            role,
-            is_zoom_admin
-          ),
-          zoom_connections!inner (
-            last_sync_at
-          )
-        `)
+        .select('managed_user_id, permissions')
         .eq('admin_user_id', (await supabase.auth.getUser()).data.user?.id);
 
       if (orgError) throw orgError;
 
-      // Get webinar counts for each user
-      const userIds = orgRelationships?.map(rel => rel.managed_user_id) || [];
+      const managedUserIds = orgRelationships?.map(rel => rel.managed_user_id) || [];
       
+      // Get profiles separately to avoid foreign key issues
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, avatar_url, role, is_zoom_admin')
+        .in('id', managedUserIds);
+
+      if (profilesError) throw profilesError;
+
+      // Get zoom connections separately  
+      const { data: connections, error: connectionsError } = await supabase
+        .from('zoom_connections')
+        .select('user_id, last_sync_at')
+        .in('user_id', managedUserIds);
+
+      if (connectionsError) throw connectionsError;
+
+      // Get webinar counts for each user
       const { data: webinarCounts, error: webinarError } = await supabase
         .from('zoom_webinars')
         .select('connection_id, zoom_connections!inner(user_id)')
-        .in('zoom_connections.user_id', userIds);
+        .in('zoom_connections.user_id', managedUserIds);
 
       if (webinarError) throw webinarError;
 
@@ -95,17 +97,22 @@ export default function UserManagement() {
         return acc;
       }, {} as Record<string, number>) || {};
 
-      // Format the data
-      const formattedUsers: ManagedUser[] = orgRelationships?.map(rel => ({
-        id: rel.profiles.id,
-        email: rel.profiles.email,
-        full_name: rel.profiles.full_name,
-        avatar_url: rel.profiles.avatar_url,
-        role: rel.profiles.role as 'owner' | 'admin' | 'member',
-        is_zoom_admin: rel.profiles.is_zoom_admin,
-        last_sync: rel.zoom_connections?.last_sync_at,
-        webinar_count: webinarCountMap[rel.profiles.id] || 0
-      })) || [];
+      // Format the data with proper null checking
+      const formattedUsers: ManagedUser[] = profiles?.map(profile => {
+        const connection = connections?.find(c => c.user_id === profile.id);
+        const relationship = orgRelationships?.find(r => r.managed_user_id === profile.id);
+        
+        return {
+          id: profile.id,
+          email: profile.email,
+          full_name: profile.full_name,
+          avatar_url: profile.avatar_url,
+          role: (profile.role as 'owner' | 'admin' | 'member') || 'member',
+          is_zoom_admin: profile.is_zoom_admin || false,
+          last_sync: connection?.last_sync_at || null,
+          webinar_count: webinarCountMap[profile.id] || 0
+        };
+      }) || [];
 
       setUsers(formattedUsers);
     } catch (error) {

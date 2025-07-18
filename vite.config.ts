@@ -25,6 +25,9 @@ const customLogger = {
   hasErrorLogged() {
     return false;
   },
+  warnOnce(msg: string) {
+    this.warn(msg);
+  },
 };
 
 // https://vitejs.dev/config/

@@ -37,64 +37,62 @@ export class ZoomWebinarTransformService {
     return {
       // Core identification - FIXED: Added all missing fields
       connection_id: connectionId,
-      webinar_id: apiWebinar.id?.toString() || apiWebinar.webinar_id?.toString(),
-      uuid: apiWebinar.uuid || null, // FIXED: Added missing uuid field
-      webinar_uuid: apiWebinar.uuid || null, // Keep for backward compatibility
-      occurrence_id: apiWebinar.occurrence_id || null, // FIXED: Added missing field
+      zoom_webinar_id: apiWebinar.id?.toString() || apiWebinar.webinar_id?.toString(), // Correct field name
+      uuid: apiWebinar.uuid || null,
+      zoom_uuid: apiWebinar.zoom_uuid || null,
+      occurrence_id: apiWebinar.occurrence_id || null,
+      
+      // Add missing required fields
+      webinar_id: apiWebinar.id?.toString(),
+      webinar_uuid: apiWebinar.uuid || null,
+      webinar_type: apiWebinar.type || 5,
       
       // Basic webinar information
       host_id: apiWebinar.host_id || null,
       host_email: apiWebinar.host_email || null,
       topic: apiWebinar.topic || '',
       agenda: apiWebinar.agenda || null,
-      type: apiWebinar.type || 5,
-      status: normalizeStatus(apiWebinar.status), // FIXED: Proper enum conversion
+      status: normalizeStatus(apiWebinar.status),
       start_time: apiWebinar.start_time || null,
       duration: apiWebinar.duration || null,
       timezone: apiWebinar.timezone || null,
       
-      // FIXED: Added missing creation tracking fields
+      // Missing computed fields
+      total_absentees: null,
+      avg_attendance_duration: null,
+      actual_participant_count: null,
+      unique_participant_count: null,
+      
+      // Missing creation tracking
       webinar_created_at: apiWebinar.created_at || null,
-      created_at_db: null, // Will be set by database
-      updated_at_db: null, // Will be set by database
+      creation_source: apiWebinar.creation_source || null,
+      transition_to_live: apiWebinar.transition_to_live || false,
       
       // Access and registration - FIXED: Complete mapping
-      registration_required: !!apiWebinar.registration_url,
+      // registrants_count: null, // Remove this field as it doesn't exist in database schema
+      registrants_restrict_number: apiWebinar.settings?.registrants_restrict_number || null,
       registration_type: apiWebinar.registration_type || apiWebinar.settings?.registration_type || null,
       registration_url: apiWebinar.registration_url || null,
       join_url: apiWebinar.join_url || null,
       start_url: apiWebinar.start_url || null, // FIXED: Added missing field
       approval_type: apiWebinar.settings?.approval_type || null,
-      max_registrants: apiWebinar.settings?.registrants_restrict_number || null,
-      max_attendees: apiWebinar.settings?.max_attendees || null, // FIXED: Added missing field
       
       // Security and access - FIXED: Correct field names
       password: apiWebinar.password || null,
       h323_passcode: apiWebinar.h323_passcode || null,
-      pstn_password: apiWebinar.pstn_password || null,
+      // pstn_password: apiWebinar.pstn_password || null, // Remove this field as it doesn't exist in schema
       encrypted_passcode: apiWebinar.encrypted_passcode || null,
-      webinar_passcode: apiWebinar.webinar_passcode || null, // FIXED: Added missing field
-      pmi: apiWebinar.pmi || null,
       
-      // FIXED: Added missing simulive fields
-      is_simulive: apiWebinar.is_simulive || false,
-      simulive_webinar_id: apiWebinar.record_file_id || null,
-      
-      // FIXED: Added missing computed metrics fields (including attendees_count and registrants_count)
+      // FIXED: Added missing computed metrics fields (only valid fields)
       total_registrants: null,
       total_attendees: null,
-      total_absentees: null,
-      total_minutes: null,
-      avg_attendance_duration: null,
-      attendees_count: null, // FIXED: Added missing field
-      registrants_count: null, // FIXED: Added missing field
       
       // JSONB fields - FIXED: Complete extraction
       settings: apiWebinar.settings || null,
       recurrence: apiWebinar.recurrence || null, // FIXED: Added missing field
       occurrences: apiWebinar.occurrences || null, // FIXED: Added missing field
       tracking_fields: apiWebinar.tracking_fields || null,
-      panelists: apiWebinar.panelists || null, // FIXED: Added missing field
+      // panelists: apiWebinar.panelists || null, // Remove this field as it doesn't exist in schema
       
       // FIXED: Sync tracking fields
       synced_at: new Date().toISOString(),

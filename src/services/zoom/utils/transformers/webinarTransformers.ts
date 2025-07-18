@@ -60,7 +60,10 @@ export class WebinarTransformers {
       duration: apiWebinar.duration || null,
       timezone: apiWebinar.timezone || null,
       
-      // Creation and update tracking
+      // Creation and update tracking - Add missing fields
+      creation_source: apiWebinar.creation_source || null,
+      transition_to_live: apiWebinar.transition_to_live || false,
+      zoom_uuid: apiWebinar.zoom_uuid || null,
       webinar_created_at: apiWebinar.created_at || null,
       
       // Access and registration
@@ -110,7 +113,7 @@ export class WebinarTransformers {
     const totalFields = Object.keys(transformedData).length;
     console.log(`📊 TRANSFORMER SUCCESS: ${populatedFields}/${totalFields} fields populated (${((populatedFields/totalFields)*100).toFixed(1)}%)`);
     
-    return transformedData;
+    return transformedData; // Return the data as-is without adding non-existent fields
   }
 
   /**
