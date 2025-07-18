@@ -185,7 +185,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
             variant: "destructive",
           });
 
-        } else if (result.status === 'running' || result.status === 'started') {
+        } else if (result.status === 'running') {
           // Continue polling
           setTimeout(() => pollSyncProgress(syncId), 2000);
         }

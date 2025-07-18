@@ -222,9 +222,9 @@ TO FIX:
 3. Click "Environment" tab
 4. Add these variables:
 
-   SUPABASE_URL = ${supabase.supabaseUrl || 'your-supabase-url'}
-   SUPABASE_SERVICE_ROLE_KEY = (get from Supabase dashboard)
-   SUPABASE_ANON_KEY = ${supabase.supabaseKey || 'your-anon-key'}
+    SUPABASE_URL = https://lgajnzldkfpvcuofjxom.supabase.co
+    SUPABASE_SERVICE_ROLE_KEY = (get from Supabase dashboard)
+    SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxnYWpuemxka2ZwdmN1b2ZqeG9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4MjkzOTksImV4cCI6MjA2NjQwNTM5OX0.Czjd8aGqWo31lFYwzGz0RgPBwJxNK3Fr20Mbj6Jv0dA
    NODE_ENV = production
 
 5. Get the service role key from:

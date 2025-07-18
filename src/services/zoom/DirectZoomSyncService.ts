@@ -221,6 +221,8 @@ class DirectZoomSyncService {
               .from('zoom_webinars')
               .insert({
                 ...webinarData,
+                host_id: webinar.host_id || 'unknown',
+                zoom_webinar_id: webinar.id,
                 created_at: new Date().toISOString()
               });
           }
