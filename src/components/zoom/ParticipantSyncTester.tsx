@@ -4,7 +4,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
-import { RenderZoomService } from '@/services/zoom/RenderZoomService';
+import { UnifiedZoomService } from '@/services/zoom/UnifiedZoomService';
 import { toast } from 'sonner';
 import { WebinarSelectionCard } from './participant-sync/WebinarSelectionCard';
 import { SyncControlsCard } from './participant-sync/SyncControlsCard';
@@ -66,12 +66,8 @@ export function ParticipantSyncTester() {
         throw new Error('No connection ID available');
       }
 
-      // Use RenderZoomService for participant sync
-      const result = await RenderZoomService.syncWebinars(connection.id, {
-        type: 'manual',
-        debug: true,
-        testMode: false
-      });
+      // Use UnifiedZoomService for participant sync
+      const result = await UnifiedZoomService.startSync(connection.id, 'manual');
 
       if (!result.success) {
         throw new Error(result.error || 'Sync failed');
@@ -91,7 +87,7 @@ export function ParticipantSyncTester() {
 
         const poll = async () => {
           try {
-            const result = await RenderZoomService.getSyncProgress(data.syncId!);
+            const result = await UnifiedZoomService.getSyncProgress(data.syncId!);
             
             if (result.success && result.status === 'completed') {
               // Create mock sync results for display
@@ -176,7 +172,7 @@ export function ParticipantSyncTester() {
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
-          Now using Render API for participant sync operations.
+          Now using Unified Edge Functions for participant sync operations.
         </AlertDescription>
       </Alert>
 

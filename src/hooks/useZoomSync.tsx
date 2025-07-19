@@ -11,6 +11,9 @@ interface SyncData {
   syncProgress: number;
   syncStatus: 'idle' | 'syncing' | 'completed' | 'failed';
   currentOperation: string;
+  syncMode: string;
+  fallbackMode: boolean;
+  stuckSyncDetected: boolean;
   activeSyncId: string;
   syncError: string | null;
   testConnection: () => Promise<any>;
@@ -325,6 +328,9 @@ export const useZoomSync = (connection: ZoomConnection | null): SyncData => {
     syncProgress,
     syncStatus,
     currentOperation,
+    syncMode: 'unified',
+    fallbackMode: false,
+    stuckSyncDetected: false,
     activeSyncId,
     startSync,
     cancelSync,

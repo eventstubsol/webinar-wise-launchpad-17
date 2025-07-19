@@ -21,7 +21,7 @@ import Dashboard from '@/pages/Dashboard';
 import Settings from '@/pages/Settings';
 
 // Protected Pages - Zoom Integration
-import ZoomTest from '@/pages/ZoomTest';
+// ZoomTest page removed in favor of simplified unified sync
 import ZoomDiagnostics from '@/pages/ZoomDiagnostics';
 import ZoomOAuthCallback from '@/pages/auth/zoom/callback';
 
@@ -113,14 +113,7 @@ export const AppRoutes = () => (
     />
 
     {/* Protected Routes - Zoom Integration (No gating for setup/diagnostics) */}
-    <Route
-      path={ROUTES.ZOOM_TEST}
-      element={
-        <ProtectedRoute>
-          <ZoomTest />
-        </ProtectedRoute>
-      }
-    />
+    {/* ZoomTest route removed - functionality integrated into SyncCenter */}
     <Route
       path={ROUTES.ZOOM_DIAGNOSTICS}
       element={

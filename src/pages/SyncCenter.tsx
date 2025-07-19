@@ -527,10 +527,7 @@ export default function SyncCenter() {
 
         <TabsContent value="realtime" className="space-y-6">
           {/* Fixed: Remove connectionId prop and use correct interface */}
-          <RealTimeSyncProgress onSyncComplete={() => {
-            queryClient.invalidateQueries({ queryKey: ['sync-logs'] });
-            queryClient.invalidateQueries({ queryKey: ['sync-queue'] });
-          }} />
+          <RealTimeSyncProgress connection={connection} />
         </TabsContent>
 
         <TabsContent value="history" className="space-y-6">

@@ -7,7 +7,7 @@ import { Wifi, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
-import { RenderZoomService } from '@/services/zoom/RenderZoomService';
+import { UnifiedZoomService } from '@/services/zoom/UnifiedZoomService';
 import { toast } from 'sonner';
 
 export function ConnectionHealthCheck() {
@@ -58,8 +58,8 @@ export function ConnectionHealthCheck() {
 
   const testConnectionMutation = useMutation({
     mutationFn: async () => {
-      // Use RenderZoomService for testing connection with connection ID
-      const result = await RenderZoomService.testConnection(connection?.id);
+      // Use UnifiedZoomService for testing connection with connection ID
+      const result = await UnifiedZoomService.testConnection(connection?.id);
       
       // Log the test result to connection_health_log if possible
       if (connection?.user_id) {
@@ -126,7 +126,7 @@ export function ConnectionHealthCheck() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Wifi className="h-5 w-5" />
-          Connection Health (Render API)
+          Connection Health (Unified API)
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -186,7 +186,7 @@ export function ConnectionHealthCheck() {
 
             <div className="text-xs text-muted-foreground">
               <div className="flex items-center gap-1">
-                Using Render API for connection testing
+                Using Unified Edge Functions for connection testing
               </div>
             </div>
           </>

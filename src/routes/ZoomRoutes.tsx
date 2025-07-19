@@ -2,20 +2,13 @@
 import React from 'react';
 import { Route } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import ZoomTest from '@/pages/ZoomTest';
+// ZoomTest page removed in favor of simplified unified sync
 import ZoomDiagnostics from '@/pages/ZoomDiagnostics';
 import { ROUTES } from './routeConfig';
 
 export const ZoomRoutes = () => (
   <>
-    <Route
-      path={ROUTES.ZOOM_TEST}
-      element={
-        <ProtectedRoute>
-          <ZoomTest />
-        </ProtectedRoute>
-      }
-    />
+    {/* ZoomTest route removed - functionality integrated into SyncCenter */}
     <Route
       path={ROUTES.ZOOM_DIAGNOSTICS}
       element={

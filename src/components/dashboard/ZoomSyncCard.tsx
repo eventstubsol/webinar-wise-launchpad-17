@@ -22,7 +22,7 @@ import { useZoomSync } from '@/hooks/useZoomSync';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { SyncType } from '@/types/zoom';
 
-import { ZoomSyncDiagnosticsPanel } from '@/components/zoom/ZoomSyncDiagnosticsPanel';
+// Diagnostics panel removed in favor of simplified unified sync
 
 export function ZoomSyncCard() {
   const { connection } = useZoomConnection();
@@ -109,7 +109,7 @@ export function ZoomSyncCard() {
                 {syncMode === 'render' ? 'Cloud' : 'Direct'}
               </Badge>
             )}
-            {fallbackMode === 'direct' && (
+            {fallbackMode && (
               <Badge variant="secondary" className="text-xs">
                 Fallback Mode
               </Badge>
@@ -238,15 +238,7 @@ export function ZoomSyncCard() {
             )}
           </div>
 
-          {/* Diagnostic Panel Toggle */}
-          <details className="group">
-            <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800">
-              Advanced Diagnostics
-            </summary>
-            <div className="mt-4 border-t pt-4">
-              <ZoomSyncDiagnosticsPanel />
-            </div>
-          </details>
+          {/* Simplified unified sync - diagnostics integrated */}
         </div>
 
         {/* Diagnostic Info */}
@@ -257,7 +249,7 @@ export function ZoomSyncCard() {
           </div>
           <div className="flex justify-between">
             <span>Backend:</span>
-            <span>{fallbackMode === 'direct' ? 'Direct (Fallback)' : 'Render API'}</span>
+            <span>{fallbackMode ? 'Fallback Mode' : 'Unified Edge Functions'}</span>
           </div>
           <div className="flex justify-between">
             <span>Status:</span>

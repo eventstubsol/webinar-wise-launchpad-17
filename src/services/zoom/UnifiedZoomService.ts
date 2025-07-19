@@ -17,6 +17,7 @@ interface ProgressResponse {
   processed_items?: number;
   total_items?: number;
   error_message?: string;
+  message?: string;
 }
 
 /**
@@ -86,7 +87,7 @@ export class UnifiedZoomService {
       console.error('Get progress error:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
