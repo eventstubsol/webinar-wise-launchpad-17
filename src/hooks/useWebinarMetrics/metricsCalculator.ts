@@ -13,11 +13,11 @@ export class WebinarMetricsCalculator {
       return this.createEmptyMetrics();
     }
 
-    const totalParticipants = webinars.reduce((sum, webinar) => {
+    const totalAttendees = webinars.reduce((sum, webinar) => {
       return sum + (webinar.total_attendees || 0);
     }, 0);
 
-    const averageAttendees = totalWebinars > 0 ? Math.round(totalParticipants / totalWebinars) : 0;
+    const averageAttendees = totalWebinars > 0 ? Math.round(totalAttendees / totalWebinars) : 0;
     
     const totalDuration = webinars.reduce((sum, webinar) => {
       return sum + (webinar.duration || 0);
@@ -31,26 +31,36 @@ export class WebinarMetricsCalculator {
 
     return {
       totalWebinars,
-      totalParticipants,
-      averageAttendees,
+      totalRegistrants: 0, // TODO: Calculate from webinar data
+      totalAttendees,
+      attendanceRate: totalWebinars > 0 ? totalAttendees / totalWebinars : 0,
+      totalEngagement: 0, // TODO: Calculate engagement metrics
       averageDuration,
-      mostRecentWebinar,
+      monthlyTrends: [], // TODO: Calculate monthly trends
+      recentWebinars: [], // TODO: Transform recent webinars
+      upcomingWebinars: [], // TODO: Get upcoming webinars
+      hasData: totalWebinars > 0,
+      isEmpty: false,
       lastSyncAt: lastSync,
       syncHistoryCount,
-      isEmpty: false, // Not empty if we have webinars or sync history
     };
   }
 
   static createEmptyMetrics(): WebinarMetrics {
     return {
       totalWebinars: 0,
-      totalParticipants: 0,
-      averageAttendees: 0,
+      totalRegistrants: 0,
+      totalAttendees: 0,
+      attendanceRate: 0,
+      totalEngagement: 0,
       averageDuration: 0,
-      mostRecentWebinar: null,
+      monthlyTrends: [],
+      recentWebinars: [],
+      upcomingWebinars: [],
+      hasData: false,
+      isEmpty: true,
       lastSyncAt: null,
       syncHistoryCount: 0,
-      isEmpty: true,
     };
   }
 }
