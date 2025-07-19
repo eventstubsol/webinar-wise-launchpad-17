@@ -43,7 +43,7 @@ export class ParticipantHistoryService {
     dateRange?: { startDate: string; endDate: string }
   ): Promise<ParticipantEngagementHistory | null> {
     try {
-      let query = supabase
+      let query = (supabase
         .from('zoom_participants')
         .select(`
           *,
@@ -53,7 +53,7 @@ export class ParticipantHistoryService {
             start_time,
             connection_id
           )
-        `)
+        `) as any)
         .eq('email', participantEmail)
         .eq('zoom_webinars.connection_id', connectionId);
 

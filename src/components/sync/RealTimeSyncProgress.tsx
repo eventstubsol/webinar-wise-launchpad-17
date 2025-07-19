@@ -32,19 +32,19 @@ export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
     syncProgress, 
     syncStatus, 
     currentOperation,
-    syncId,
+    activeSyncId,
     healthCheck 
   } = useZoomSync(connection);
 
   const getStatusIcon = () => {
     switch (syncStatus) {
-      case 'running':
+      case 'syncing':
         return <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />;
       case 'completed':
         return <CheckCircle className="h-5 w-5 text-green-600" />;
       case 'failed':
         return <XCircle className="h-5 w-5 text-red-600" />;
-      case 'pending':
+      case 'idle':
         return <Clock className="h-5 w-5 text-orange-600" />;
       default:
         return <Activity className="h-5 w-5 text-gray-400" />;
@@ -53,13 +53,13 @@ export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
 
   const getStatusBadge = () => {
     switch (syncStatus) {
-      case 'running':
+      case 'syncing':
         return <Badge variant="default">Syncing</Badge>;
       case 'completed':
         return <Badge variant="secondary" className="bg-green-100 text-green-800">Completed</Badge>;
       case 'failed':
         return <Badge variant="destructive">Failed</Badge>;
-      case 'pending':
+      case 'idle':
         return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Pending</Badge>;
       default:
         return <Badge variant="outline">Idle</Badge>;
@@ -133,9 +133,9 @@ export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
                 </div>
               )}
 
-              {syncId && (
+              {activeSyncId && (
                 <div className="text-xs text-muted-foreground">
-                  Sync ID: {syncId}
+                  Sync ID: {activeSyncId}
                 </div>
               )}
             </div>
@@ -193,10 +193,10 @@ export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
             </div>
           )}
 
-          {syncStatus === 'pending' && (
-            <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
-              <div className="text-orange-800 text-sm">
-                Sync is queued and will start shortly.
+          {syncStatus === 'idle' && !isSyncing && (
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="text-gray-800 text-sm">
+                Ready to sync. Click a sync button to start.
               </div>
             </div>
           )}
