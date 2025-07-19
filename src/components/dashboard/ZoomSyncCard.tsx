@@ -23,17 +23,20 @@ import { SyncType } from '@/types/zoom';
 
 export function ZoomSyncCard() {
   const { connection } = useZoomConnection();
+  const syncData = useZoomSync(connection);
   const {
     isSyncing,
     syncProgress,
     syncStatus,
     currentOperation,
     syncMode,
-    stuckSyncDetected,
     startSync,
     cancelSync,
-    forceResetAndRestart,
-  } = useZoomSync(connection);
+    testApiConnection,
+  } = syncData;
+
+  const stuckSyncDetected = (syncData as any).stuckSyncDetected || false;
+  const forceResetAndRestart = (syncData as any).forceResetAndRestart || (() => {});
 
   const getSyncStatusInfo = () => {
     if (stuckSyncDetected) {

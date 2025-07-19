@@ -357,6 +357,6 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     cancelSync,
     forceResetAndRestart,
     testApiConnection,
-    healthCheck: { success: true },
+    healthCheck: { success: true, error: '' },
   };
 };
