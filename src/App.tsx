@@ -9,7 +9,7 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 
 const App = () => {
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <BrowserRouter>
         <AuthProvider>
           <TooltipProvider>
