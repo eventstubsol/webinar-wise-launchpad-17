@@ -76,7 +76,7 @@ const ConnectionVisualization = () => (
         alt="WebinarWise logo"
         className="w-20 h-auto mb-3"
       />
-      <span className="text-sm font-semibold text-teal-600">WebinarWise</span>
+      
     </div>
   </div>
 );
