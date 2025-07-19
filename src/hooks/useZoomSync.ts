@@ -1,7 +1,8 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { RenderZoomService } from '@/services/zoom/RenderZoomService';
+import { SyncRecoveryService } from '@/services/zoom/sync/SyncRecoveryService';
 import { ZoomConnection, SyncType } from '@/types/zoom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -33,8 +34,13 @@ export function useZoomSync(connection: ZoomConnection | null) {
   const { data: healthCheck, refetch: refetchHealth } = useQuery({
     queryKey: ['render-health'],
     queryFn: async () => {
-      const result = await RenderZoomService.healthCheck();
-      return result;
+      try {
+        const result = await RenderZoomService.healthCheck();
+        return result;
+      } catch (error) {
+        console.error('Health check failed:', error);
+        return { success: false, error: 'Service unavailable' };
+      }
     },
     refetchInterval: 60000, // Check every minute
     retry: (failureCount, error) => {
@@ -42,6 +48,32 @@ export function useZoomSync(connection: ZoomConnection | null) {
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
+
+  // Auto-detect and recover stuck syncs
+  useEffect(() => {
+    if (!connection?.id) return;
+
+    const checkForStuckSyncs = async () => {
+      try {
+        const recoveredCount = await SyncRecoveryService.detectAndRecoverStuckSyncs(connection.id);
+        if (recoveredCount > 0) {
+          console.log(`Auto-recovered ${recoveredCount} stuck sync(s)`);
+          // Refresh sync stats
+          queryClient.invalidateQueries({ queryKey: ['zoom-sync-stats'] });
+        }
+      } catch (error) {
+        console.error('Error in automatic stuck sync recovery:', error);
+      }
+    };
+
+    // Check for stuck syncs every 5 minutes
+    const interval = setInterval(checkForStuckSyncs, 5 * 60 * 1000);
+    
+    // Also check immediately
+    checkForStuckSyncs();
+
+    return () => clearInterval(interval);
+  }, [connection?.id, queryClient]);
 
   const startSync = useCallback(async (syncType: SyncType = SyncType.MANUAL) => {
     if (!connection?.id) {
@@ -51,6 +83,21 @@ export function useZoomSync(connection: ZoomConnection | null) {
         variant: "destructive",
       });
       return;
+    }
+
+    // Check for existing active syncs first
+    try {
+      const currentSync = await SyncRecoveryService.getCurrentSyncStatus(connection.id);
+      if (currentSync && !currentSync.isStuck) {
+        toast({
+          title: "Sync Already Running",
+          description: "A sync is already in progress. Please wait for it to complete.",
+          variant: "destructive",
+        });
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking current sync status:', error);
     }
 
     // Check service health first
@@ -67,9 +114,10 @@ export function useZoomSync(connection: ZoomConnection | null) {
       ...prev,
       isSyncing: true,
       syncStatus: 'pending',
-      currentOperation: 'Preparing to sync...',
+      currentOperation: 'Initializing sync...',
       error: null,
-      requiresReconnection: false
+      requiresReconnection: false,
+      syncProgress: 5
     }));
 
     try {
@@ -82,7 +130,8 @@ export function useZoomSync(connection: ZoomConnection | null) {
           ...prev,
           syncStatus: 'running',
           syncId: result.syncId,
-          currentOperation: 'Sync started successfully...'
+          currentOperation: 'Sync started successfully...',
+          syncProgress: 10
         }));
 
         toast({
@@ -91,7 +140,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
         });
 
         // Start polling for progress immediately
-        setTimeout(() => pollSyncProgress(result.syncId), 1000);
+        setTimeout(() => pollSyncProgress(result.syncId), 2000);
 
       } else {
         throw new Error(result.error || 'Failed to start sync');
@@ -113,7 +162,8 @@ export function useZoomSync(connection: ZoomConnection | null) {
         syncStatus: 'failed',
         error: errorMessage,
         currentOperation: '',
-        requiresReconnection
+        requiresReconnection,
+        syncProgress: 0
       }));
 
       // Show appropriate error message based on the error type
@@ -148,7 +198,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
       if (result.success) {
         setSyncState(prev => ({
           ...prev,
-          syncProgress: result.progress || prev.syncProgress,
+          syncProgress: Math.max(prev.syncProgress, result.progress || 0),
           currentOperation: result.currentOperation || prev.currentOperation
         }));
 
@@ -176,7 +226,8 @@ export function useZoomSync(connection: ZoomConnection | null) {
             isSyncing: false,
             syncStatus: 'failed',
             error: result.error || 'Sync failed',
-            currentOperation: ''
+            currentOperation: '',
+            syncProgress: 0
           }));
 
           toast({
@@ -186,14 +237,26 @@ export function useZoomSync(connection: ZoomConnection | null) {
           });
 
         } else if (result.status === 'running') {
-          // Continue polling
-          setTimeout(() => pollSyncProgress(syncId), 2000);
+          // Continue polling, but with timeout protection
+          const maxPollingTime = 20 * 60 * 1000; // 20 minutes
+          const startTime = Date.now();
+          
+          if ((Date.now() - startTime) < maxPollingTime) {
+            setTimeout(() => pollSyncProgress(syncId), 3000);
+          } else {
+            // Sync has been running too long, mark as potentially stuck
+            setSyncState(prev => ({
+              ...prev,
+              currentOperation: 'Sync taking longer than expected...',
+              error: 'Sync may be stuck - consider resetting if it doesn\'t progress'
+            }));
+          }
         }
       }
     } catch (error) {
       console.error('Error polling sync progress:', error);
-      // Continue polling despite errors (service might be temporarily unavailable)
-      setTimeout(() => pollSyncProgress(syncId), 5000);
+      // Continue polling despite errors, but less frequently
+      setTimeout(() => pollSyncProgress(syncId), 10000);
     }
   }, [queryClient, toast]);
 

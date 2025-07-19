@@ -2,7 +2,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Database, Settings, RefreshCw, AlertCircle } from 'lucide-react';
+import { Database, Settings, RefreshCw, AlertCircle, Clock } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useZoomSync } from '@/hooks/useZoomSync';
 import { useQuery } from '@tanstack/react-query';
@@ -10,6 +10,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { SyncStatusMessage } from '@/components/zoom/sync/SyncStatusMessage';
 import { ServiceStatusAlert } from '@/components/zoom/sync/ServiceStatusAlert';
+import { SyncResetButton } from '@/components/zoom/sync/SyncResetButton';
+import { SyncRecoveryService } from '@/services/zoom/sync/SyncRecoveryService';
 import { SyncType } from '@/types/zoom';
 
 export function ZoomSyncCard() {
@@ -27,14 +29,14 @@ export function ZoomSyncCard() {
     forceHealthCheck
   } = useZoomSync(connection);
 
-  // Get sync statistics
-  const { data: syncStats } = useQuery({
+  // Get sync statistics and current sync status
+  const { data: syncStats, refetch: refetchStats } = useQuery({
     queryKey: ['zoom-sync-stats', connection?.id],
     queryFn: async () => {
       if (!connection?.id) return null;
 
       try {
-        const [webinarsResult, syncLogsResult] = await Promise.all([
+        const [webinarsResult, syncLogsResult, currentSyncResult] = await Promise.all([
           supabase
             .from('zoom_webinars')
             .select('id, synced_at', { count: 'exact' })
@@ -46,9 +48,11 @@ export function ZoomSyncCard() {
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle(),
+          SyncRecoveryService.getCurrentSyncStatus(connection.id)
         ]);
 
         const lastSyncData = syncLogsResult.data;
+        const currentSync = currentSyncResult;
 
         return {
           totalWebinars: webinarsResult.count || 0,
@@ -56,6 +60,9 @@ export function ZoomSyncCard() {
           lastSyncStatus: lastSyncData?.sync_status || 'idle',
           lastSyncError: lastSyncData?.error_message,
           processedItems: lastSyncData?.processed_items || 0,
+          currentSync,
+          hasStuckSync: currentSync?.isStuck || false,
+          canReset: currentSync?.canReset || false
         };
       } catch (error) {
         console.error('Error fetching sync stats:', error);
@@ -65,11 +72,14 @@ export function ZoomSyncCard() {
           lastSyncStatus: 'idle',
           lastSyncError: null,
           processedItems: 0,
+          currentSync: null,
+          hasStuckSync: false,
+          canReset: false
         };
       }
     },
     enabled: !!connection?.id,
-    refetchInterval: 30000,
+    refetchInterval: 15000, // Check every 15 seconds for stuck syncs
     retry: (failureCount, error) => {
       const hasStatus = error && typeof error === 'object' && 'status' in error;
       const status = hasStatus ? (error as any).status : null;
@@ -87,6 +97,11 @@ export function ZoomSyncCard() {
 
   const handleConnectionTest = async () => {
     await testApiConnection();
+  };
+
+  const handleSyncReset = () => {
+    // Refetch stats after reset
+    refetchStats();
   };
 
   if (!isConnected) {
@@ -133,7 +148,8 @@ export function ZoomSyncCard() {
   }
 
   const isServiceHealthy = healthCheck?.success !== false;
-  const canSync = !isSyncing && !isExpired && isServiceHealthy && !requiresReconnection;
+  const canSync = !isSyncing && !isExpired && isServiceHealthy && !requiresReconnection && !syncStats?.hasStuckSync;
+  const hasStuckSync = syncStats?.hasStuckSync || false;
 
   return (
     <Card>
@@ -141,7 +157,7 @@ export function ZoomSyncCard() {
         <CardTitle className="flex items-center gap-2">
           <Database className="h-5 w-5" />
           Webinar Data Sync (Render API)
-          {(!isServiceHealthy || requiresReconnection) && (
+          {(!isServiceHealthy || requiresReconnection || hasStuckSync) && (
             <AlertCircle className="h-4 w-4 text-red-500" />
           )}
         </CardTitle>
@@ -152,6 +168,30 @@ export function ZoomSyncCard() {
           onRefresh={forceHealthCheck}
           syncState={{ error, requiresReconnection }}
         />
+
+        {/* Stuck Sync Alert */}
+        {hasStuckSync && syncStats?.currentSync && (
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+            <div className="flex items-start gap-2">
+              <Clock className="h-4 w-4 text-amber-600 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-amber-800">Sync Appears Stuck</h4>
+                <p className="text-sm text-amber-700 mt-1">
+                  Your sync has been running for {syncStats.currentSync.minutesRunning} minutes in the "{syncStats.currentSync.sync_stage}" stage. 
+                  This might indicate a problem.
+                </p>
+                <div className="mt-2">
+                  <SyncResetButton 
+                    connectionId={connection.id}
+                    syncLogId={syncStats.currentSync.id}
+                    variant="cancel-current"
+                    onReset={handleSyncReset}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <SyncStatusMessage 
           status={currentSyncStatus}
@@ -180,7 +220,7 @@ export function ZoomSyncCard() {
           </div>
         )}
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button 
             onClick={handleSyncClick}
             disabled={!canSync}
@@ -206,6 +246,16 @@ export function ZoomSyncCard() {
             </Link>
           </Button>
         </div>
+
+        {/* Reset button for stuck syncs */}
+        {syncStats?.canReset && (
+          <div className="pt-2 border-t">
+            <SyncResetButton 
+              connectionId={connection.id}
+              onReset={handleSyncReset}
+            />
+          </div>
+        )}
 
         <div className="text-xs text-muted-foreground">
           <div>Total webinars: {syncStats?.totalWebinars || 0}</div>
