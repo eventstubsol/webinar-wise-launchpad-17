@@ -16,11 +16,11 @@ const ConnectionVisualization = () => (
   <div className="flex items-center justify-center space-x-16 mb-16">
     {/* Zoom Logo */}
     <div className="flex flex-col items-center">
-      <div className="w-20 h-20 bg-blue-500 rounded-2xl flex items-center justify-center shadow-lg mb-3">
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-          <path d="M20 5C11.715 5 5 11.715 5 20s6.715 15 15 15 15-6.715 15-15S28.285 5 20 5zm8 23H12v-6h16v6zm0-8H12v-6h16v6z" fill="white"/>
-        </svg>
-      </div>
+      <img 
+        src="/lovable-uploads/39a2694e-d98b-464b-bc05-52f9c1609776.png" 
+        alt="Zoom logo"
+        className="w-20 h-auto mb-3"
+      />
       <span className="text-sm font-semibold text-blue-600">Zoom</span>
     </div>
     
