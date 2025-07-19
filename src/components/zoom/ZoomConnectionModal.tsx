@@ -47,17 +47,26 @@ export const ZoomConnectionModal: React.FC<ZoomConnectionModalProps> = ({
     
     setStep('connecting');
     
-    // Save credentials first
-    await createCredentials({
-      user_id: user.id,
-      account_id: formData.account_id,
-      client_id: formData.client_id,
-      client_secret: formData.client_secret,
-      app_name: 'Zoom Server-to-Server OAuth App'
-    });
+    try {
+      // Save credentials first
+      await createCredentials({
+        user_id: user.id,
+        account_id: formData.account_id,
+        client_id: formData.client_id,
+        client_secret: formData.client_secret,
+        app_name: 'Zoom Server-to-Server OAuth App'
+      });
 
-    // Start validation
-    startValidation();
+      // Start validation with the form data
+      startValidation({
+        account_id: formData.account_id,
+        client_id: formData.client_id,
+        client_secret: formData.client_secret
+      });
+    } catch (error) {
+      console.error('Error saving credentials:', error);
+      setStep('error');
+    }
   };
 
   React.useEffect(() => {

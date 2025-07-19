@@ -76,7 +76,6 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
   const getButtonVariant = () => {
     if (connection) {
       const tokenStatus = TokenUtils.getTokenStatus(connection);
-      // Use centralized token status instead of direct expiration check
       return tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED ? 'destructive' : 'secondary';
     }
     return variant;
@@ -94,7 +93,6 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
 
     if (connection) {
       const tokenStatus = TokenUtils.getTokenStatus(connection);
-      // Use centralized token status logic instead of direct expiration check
       if (tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED) {
         console.log('🔄 Starting reconnection process...');
         startValidation();
@@ -102,7 +100,6 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
         handleDisconnect(connection);
       }
     } else {
-      // Open the connection modal instead of starting validation immediately
       setShowConnectionModal(true);
     }
   };

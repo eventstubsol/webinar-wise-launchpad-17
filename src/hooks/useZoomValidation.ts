@@ -5,8 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useZoomCredentials } from '@/hooks/useZoomCredentials';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
-import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
-import { UnifiedZoomService } from '@/services/zoom/UnifiedZoomService';
+import { supabase } from '@/integrations/supabase/client';
 import { ZoomConnection } from '@/types/zoom';
 import { syncUserRole } from '@/services/userRoleService';
 
@@ -15,12 +14,17 @@ interface UseZoomValidationProps {
   onConnectionError?: (error: string) => void;
 }
 
-// Enhanced interface to handle both types of responses
 interface ValidationResult {
   success: boolean;
   connection?: ZoomConnection;
   message?: string;
   error?: string;
+}
+
+interface ValidationPayload {
+  account_id: string;
+  client_id: string;
+  client_secret: string;
 }
 
 export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: UseZoomValidationProps = {}) => {
@@ -33,50 +37,73 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
   const validateCredentialsMutation = useMutation({
-    mutationFn: async (): Promise<ValidationResult> => {
+    mutationFn: async (payload?: ValidationPayload): Promise<ValidationResult> => {
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
 
-      if (!credentials) {
+      // Use provided payload or fallback to existing credentials
+      const validationData = payload || credentials;
+      
+      if (!validationData) {
         throw new Error('Zoom credentials not configured');
       }
 
-      // For now, just return the credentials as success - connection creation is handled elsewhere
-      // This validation hook is primarily used for UI validation
+      console.log('🔄 Calling validate-zoom-credentials edge function...');
       
-      // Sync user role after successful connection
-      if (connection) {
-        try {
-          await syncUserRole(user.id);
-          console.log('User role synced successfully');
-        } catch (error) {
-          console.error('Failed to sync user role:', error);
-          // Don't fail the connection if role sync fails
+      // Call the edge function to validate credentials and create connection
+      const { data, error } = await supabase.functions.invoke('validate-zoom-credentials', {
+        body: {
+          account_id: validationData.account_id,
+          client_id: validationData.client_id,
+          client_secret: validationData.client_secret
         }
+      });
+
+      if (error) {
+        console.error('❌ Edge function error:', error);
+        throw new Error(error.message || 'Failed to validate credentials');
+      }
+
+      if (!data?.success) {
+        console.error('❌ Validation failed:', data?.error);
+        throw new Error(data?.error || 'Credential validation failed');
+      }
+
+      console.log('✅ Credentials validated successfully:', data);
+
+      // Sync user role after successful connection
+      try {
+        await syncUserRole(user.id);
+        console.log('User role synced successfully');
+      } catch (error) {
+        console.error('Failed to sync user role:', error);
+        // Don't fail the connection if role sync fails
       }
 
       return {
         success: true,
-        connection: null, // Connection creation handled elsewhere
-        message: 'Credentials validated successfully'
+        connection: data.connection,
+        message: data.message || 'Zoom credentials validated and connection established successfully'
       };
     },
     onSuccess: (result: ValidationResult) => {
       setIsValidating(false);
       setValidationResult(result);
       
-      // Immediately invalidate and refetch connection data
+      // Immediately invalidate and refetch all connection-related queries
       queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
+      queryClient.invalidateQueries({ queryKey: ['zoom-connections'] });
+      queryClient.invalidateQueries({ queryKey: ['zoom-credentials'] });
       
-      // Also update the cache optimistically with the new connection data
+      // Update the cache optimistically with the new connection data
       if (result.connection) {
         queryClient.setQueryData(['zoom-connection', user?.id], result.connection);
       }
       
       toast({
         title: "Success!",
-        description: result.message || "Your Zoom credentials have been validated and connection established via Render API.",
+        description: result.message || "Your Zoom credentials have been validated and connection established.",
       });
       
       if (result.connection) {
@@ -87,19 +114,23 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
       setIsValidating(false);
       setValidationResult({ success: false, error: error.message });
       const errorMessage = error.message || 'Failed to validate Zoom credentials';
+      
+      console.error('❌ Validation error:', error);
+      
       toast({
         title: "Validation Failed",
         description: errorMessage,
         variant: "destructive",
       });
+      
       onConnectionError?.(errorMessage);
     },
   });
 
-  const startValidation = () => {
+  const startValidation = (payload?: ValidationPayload) => {
     setIsValidating(true);
     setValidationResult(null);
-    validateCredentialsMutation.mutate();
+    validateCredentialsMutation.mutate(payload);
   };
 
   return {
