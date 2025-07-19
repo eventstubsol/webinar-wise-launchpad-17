@@ -90,7 +90,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
   const isDisabled = isLoadingConnection || isValidating || !user || (!credentials && !connection);
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col items-center space-y-2">
       <Button
         onClick={handleClick}
         variant={getButtonVariant()}
