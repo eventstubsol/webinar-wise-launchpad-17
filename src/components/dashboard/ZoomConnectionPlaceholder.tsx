@@ -56,7 +56,7 @@ export function ZoomConnectionPlaceholder() {
         <ConnectionVisualization />
         
         {/* Connect button at the bottom */}
-        <div className="flex justify-center">
+        <div className="flex justify-center items-center">
           <ZoomConnectButton 
             variant="default"
             size="lg"
