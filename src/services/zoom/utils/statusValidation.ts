@@ -120,19 +120,19 @@ export async function validateDatabaseTrigger(): Promise<boolean> {
       return true; // Not an error if no webinars exist
     }
     
-    // Use the calculated status view to check if the function works
+    // Test the database function directly since the view was dropped
     const { data: calculatedData, error: calcError } = await supabase
-      .from('zoom_webinars_with_calculated_status')
-      .select('calculated_status')
-      .eq('id', sampleWebinar.id)
-      .single();
+      .rpc('calculate_webinar_status', {
+        webinar_start_time: sampleWebinar.start_time,
+        webinar_duration: sampleWebinar.duration
+      });
     
     if (calcError) {
       console.error('❌ Database function test failed:', calcError);
       return false;
     }
     
-    console.log(`✅ Database trigger test passed. Sample status: ${calculatedData?.calculated_status}`);
+    console.log(`✅ Database trigger test passed. Sample status: ${calculatedData}`);
     return true;
   } catch (error) {
     console.error('❌ Database trigger validation error:', error);

@@ -557,6 +557,13 @@ async function upsertWebinar(supabase: any, webinar: WebinarData, connectionId: 
       updated_at: new Date().toISOString()
     };
 
+    console.log(`🔄 Attempting to upsert webinar: ${webinar.topic}`);
+    console.log(`📝 Webinar data:`, {
+      connection_id: connectionId,
+      zoom_webinar_id: webinar.id,
+      topic: webinar.topic
+    });
+
     const { data, error } = await supabase
       .from('zoom_webinars')
       .upsert(webinarData, {
@@ -567,13 +574,28 @@ async function upsertWebinar(supabase: any, webinar: WebinarData, connectionId: 
       .single();
 
     if (error) {
-      console.error('❌ Error upserting webinar:', error);
+      console.error('❌ Error upserting webinar:', {
+        webinarTitle: webinar.topic,
+        zoomWebinarId: webinar.id,
+        connectionId: connectionId,
+        error: error,
+        errorMessage: error.message,
+        errorDetails: error.details,
+        errorHint: error.hint,
+        errorCode: error.code
+      });
       return null;
     }
 
+    console.log(`✅ Successfully upserted webinar: ${webinar.topic} with DB ID: ${data.id}`);
     return data.id;
   } catch (error) {
-    console.error('❌ Error in upsertWebinar:', error);
+    console.error('❌ Catch block error in upsertWebinar:', {
+      webinarTitle: webinar.topic,
+      error: error,
+      message: error.message,
+      stack: error.stack
+    });
     return null;
   }
 }
