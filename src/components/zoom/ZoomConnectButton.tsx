@@ -11,6 +11,7 @@ import { useZoomDisconnect } from '@/hooks/useZoomDisconnect';
 import { ZoomButtonContent } from './ZoomButtonContent';
 import { ZoomButtonStatus } from './ZoomButtonStatus';
 import { ZoomConnectionModal } from './ZoomConnectionModal';
+import { ZoomCredentials } from '@/types/zoomCredentials';
 
 interface ZoomConnectButtonProps {
   onConnectionSuccess?: (connection: ZoomConnection) => void;
@@ -110,7 +111,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
       
       <ZoomButtonStatus
         connection={connection}
-        credentials={credentials}
+        credentials={credentials as ZoomCredentials}
         validationResult={validationResult}
       />
 

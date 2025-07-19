@@ -34,22 +34,19 @@ export const useParticipantSessions = (webinarId?: string) => {
         setLoading(true);
         setError(null);
 
-        // Fetch participant sessions with enhanced tracking data
+        // Fetch participant sessions data
         const { data: participants, error: fetchError } = await supabase
           .from('zoom_participants')
           .select(`
             id,
             participant_email,
-            session_sequence,
             is_rejoin_session,
             duration,
             join_time,
-            leave_time,
-            participant_session_id
+            leave_time
           `)
           .eq('webinar_id', webinarId)
-          .order('participant_email', { ascending: true })
-          .order('session_sequence', { ascending: true });
+          .order('participant_email', { ascending: true });
 
         if (fetchError) {
           throw fetchError;
