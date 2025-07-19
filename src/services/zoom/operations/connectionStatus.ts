@@ -24,7 +24,7 @@ export class ZoomConnectionStatusService {
         .from('zoom_connections')
         .select('*')
         .eq('id', connectionId)
-        .single();
+        .maybeSingle();
 
       if (error || !connection) {
         return {
@@ -181,24 +181,31 @@ export class ZoomConnectionStatusService {
         .select('*')
         .eq('user_id', userId)
         .eq('is_primary', true)
-        .single();
+        .maybeSingle();
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          // No primary connection found, try to get any connection
-          const { data: anyConnection, error: anyError } = await supabase
-            .from('zoom_connections')
-            .select('*')
-            .eq('user_id', userId)
-            .limit(1)
-            .single();
-
-          return anyError ? null : anyConnection;
-        }
+        console.error('Error getting primary connection:', error);
         return null;
       }
 
-      return connection;
+      if (connection) {
+        return connection;
+      }
+
+      // No primary connection found, try to get any connection
+      const { data: anyConnection, error: anyError } = await supabase
+        .from('zoom_connections')
+        .select('*')
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle();
+
+      if (anyError) {
+        console.error('Error getting any connection:', anyError);
+        return null;
+      }
+
+      return anyConnection;
     } catch (error) {
       console.error('Error getting primary connection:', error);
       return null;
