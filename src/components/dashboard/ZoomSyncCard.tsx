@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,11 +15,14 @@ import {
   Clock,
   Zap,
   RotateCcw,
-  StopCircle
+  StopCircle,
+  TestTube
 } from 'lucide-react';
 import { useZoomSync } from '@/hooks/useZoomSync';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { SyncType } from '@/types/zoom';
+
+import { ZoomSyncDiagnosticsPanel } from '@/components/zoom/ZoomSyncDiagnosticsPanel';
 
 export function ZoomSyncCard() {
   const { connection } = useZoomConnection();
@@ -31,14 +33,14 @@ export function ZoomSyncCard() {
     syncStatus,
     currentOperation,
     syncMode,
+    syncError,
+    fallbackMode,
     startSync,
     cancelSync,
-    testApiConnection,
+    testConnection,
+    forceResetAndRestart,
+    stuckSyncDetected
   } = syncData;
-
-  const stuckSyncDetected = (syncData as any).stuckSyncDetected || false;
-  const forceCancelSync = (syncData as any).forceCancelSync || (() => {});
-  const forceResetAndRestart = (syncData as any).forceResetAndRestart || (() => {});
 
   const getSyncStatusInfo = () => {
     if (stuckSyncDetected) {
@@ -107,6 +109,11 @@ export function ZoomSyncCard() {
                 {syncMode === 'render' ? 'Cloud' : 'Direct'}
               </Badge>
             )}
+            {fallbackMode === 'direct' && (
+              <Badge variant="secondary" className="text-xs">
+                Fallback Mode
+              </Badge>
+            )}
             <Badge variant={statusInfo.variant} className="flex items-center gap-1">
               <StatusIcon className={`w-3 h-3 ${isSyncing && !stuckSyncDetected ? 'animate-spin' : ''}`} />
               {statusInfo.label}
@@ -115,12 +122,44 @@ export function ZoomSyncCard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Error Alert */}
+        {syncError && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="space-y-2">
+                <p className="font-medium">Sync Error:</p>
+                <p className="text-sm">{syncError}</p>
+                {syncError.includes('Connection test failed') && (
+                  <p className="text-sm">
+                    Try testing your connection or switching to direct sync mode.
+                  </p>
+                )}
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Stuck Sync Alert */}
         {stuckSyncDetected && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Sync appears to be stuck due to communication issues. Use Force Cancel to stop it immediately, or Force Reset to restart.
+              <div className="space-y-2">
+                <p className="font-medium">Sync Stuck Detected</p>
+                <p className="text-sm">
+                  The sync has been running for several minutes without progress. 
+                  This usually indicates an issue with the Zoom API or network connectivity.
+                </p>
+                <div className="flex gap-2 mt-2">
+                  <Button size="sm" variant="outline" onClick={testConnection}>
+                    Test Connection
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={forceResetAndRestart}>
+                    Force Reset & Restart
+                  </Button>
+                </div>
+              </div>
             </AlertDescription>
           </Alert>
         )}
@@ -154,17 +193,26 @@ export function ZoomSyncCard() {
           {/* Primary Actions */}
           <div className="flex gap-2">
             {!isSyncing && !stuckSyncDetected ? (
-              <Button 
-                onClick={handleStartSync} 
-                disabled={!connection}
-                className="flex-1"
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Start Enhanced Sync
-              </Button>
+              <>
+                <Button 
+                  onClick={handleStartSync} 
+                  disabled={!connection}
+                  className="flex-1"
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  Start Enhanced Sync
+                </Button>
+                <Button 
+                  onClick={testConnection}
+                  variant="outline"
+                  disabled={!connection}
+                >
+                  <TestTube className="w-4 h-4 mr-2" />
+                  Test
+                </Button>
+              </>
             ) : (
               <div className="flex gap-2 w-full">
-                {/* Always show cancel button when syncing */}
                 <Button 
                   onClick={cancelSync} 
                   variant="outline"
@@ -174,18 +222,8 @@ export function ZoomSyncCard() {
                   Cancel
                 </Button>
                 
-                {/* Force cancel for stuck syncs */}
                 {stuckSyncDetected && (
                   <>
-                    <Button 
-                      onClick={forceCancelSync}
-                      variant="destructive"
-                      className="flex-1"
-                    >
-                      <StopCircle className="w-4 h-4 mr-2" />
-                      Force Cancel
-                    </Button>
-                    
                     <Button 
                       onClick={forceResetAndRestart}
                       variant="destructive"
@@ -200,23 +238,39 @@ export function ZoomSyncCard() {
             )}
           </div>
 
-          {/* Diagnostic Info */}
-          {(isSyncing || stuckSyncDetected) && (
-            <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
-              <div className="flex justify-between">
-                <span>Sync Mode:</span>
-                <span>{syncMode || 'Detecting...'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Heartbeat:</span>
-                <span>{isSyncing ? 'Active' : 'Stopped'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Status:</span>
-                <span className={stuckSyncDetected ? 'text-red-600 font-medium' : ''}>
-                  {stuckSyncDetected ? 'STUCK - Action Required' : 'Normal'}
-                </span>
-              </div>
+          {/* Diagnostic Panel Toggle */}
+          <details className="group">
+            <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800">
+              Advanced Diagnostics
+            </summary>
+            <div className="mt-4 border-t pt-4">
+              <ZoomSyncDiagnosticsPanel />
+            </div>
+          </details>
+        </div>
+
+        {/* Diagnostic Info */}
+        <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded space-y-1">
+          <div className="flex justify-between">
+            <span>Sync Mode:</span>
+            <span>{syncMode || 'Detecting...'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Backend:</span>
+            <span>{fallbackMode === 'direct' ? 'Direct (Fallback)' : 'Render API'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Status:</span>
+            <span className={stuckSyncDetected ? 'text-red-600 font-medium' : ''}>
+              {stuckSyncDetected ? 'STUCK - Action Required' : 'Normal'}
+            </span>
+          </div>
+          {syncError && (
+            <div className="flex justify-between">
+              <span>Last Error:</span>
+              <span className="text-red-600 text-xs truncate ml-2">
+                {syncError.substring(0, 50)}...
+              </span>
             </div>
           )}
         </div>

@@ -1,537 +1,512 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
 import { ZoomConnection, SyncType } from '@/types/zoom';
 import { RenderZoomService } from '@/services/zoom/RenderZoomService';
-import { SyncManagementService } from '@/services/zoom/sync/SyncManagementService';
-import { SyncDiagnosticService } from '@/services/zoom/sync/SyncDiagnosticService';
-import { SyncHeartbeatService } from '@/services/zoom/sync/SyncHeartbeatService';
-import { SyncRecoveryService } from '@/services/zoom/sync/SyncRecoveryService';
-import { SyncStateRecoveryService } from '@/services/zoom/sync/SyncStateRecoveryService';
 import { SyncLoggingService } from '@/services/zoom/sync/SyncLoggingService';
+import { SyncManagementService } from '@/services/zoom/sync/SyncManagementService';
+import { SyncRecoveryService } from '@/services/zoom/sync/SyncRecoveryService';
+import { supabase } from '@/integrations/supabase/client';
+import { ZoomConnectionTestService } from '@/services/zoom/ZoomConnectionTestService';
+import { ZoomSyncMigrationService } from '@/services/zoom/ZoomSyncMigrationService';
 
-export const useZoomSync = (connection?: ZoomConnection | null) => {
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState(0);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'completed' | 'failed' | 'no_data'>('idle');
-  const [currentOperation, setCurrentOperation] = useState('');
-  const [syncId, setSyncId] = useState<string | null>(null);
+interface SyncData {
+  isSyncing: boolean;
+  syncProgress: number;
+  syncStatus: 'idle' | 'syncing' | 'completed' | 'failed';
+  currentOperation: string;
+  syncMode: 'render' | 'direct' | null;
+  syncError: string | null;
+  fallbackMode: 'render' | 'direct';
+  testConnection: () => Promise<any>;
+  forceResetAndRestart: () => Promise<void>;
+  stuckSyncDetected: boolean;
+  startSync: (syncType: SyncType, options?: { webinarId?: string }) => Promise<void>;
+  cancelSync: () => Promise<void>;
+}
+
+const LOCAL_STORAGE_KEY = 'zoomSyncState';
+
+const getInitialState = () => {
+  if (typeof window === 'undefined') {
+    return {
+      isSyncing: false,
+      syncProgress: 0,
+      syncStatus: 'idle',
+      activeSyncId: '',
+      lastUpdate: null
+    };
+  }
+
+  try {
+    const storedState = localStorage.getItem(LOCAL_STORAGE_KEY);
+    return storedState ? JSON.parse(storedState) : {
+      isSyncing: false,
+      syncProgress: 0,
+      syncStatus: 'idle',
+      activeSyncId: '',
+      lastUpdate: null
+    };
+  } catch (error) {
+    console.error('Error reading from localStorage:', error);
+    return {
+      isSyncing: false,
+      syncProgress: 0,
+      syncStatus: 'idle',
+      activeSyncId: '',
+      lastUpdate: null
+    };
+  }
+};
+
+const saveToLocalStorage = (state: any) => {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.error('Error saving to localStorage:', error);
+  }
+};
+
+const clearLocalStorage = () => {
+  try {
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+  } catch (error) {
+    console.error('Error clearing localStorage:', error);
+  }
+};
+
+const getCurrentSyncStatus = async (syncId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('zoom_sync_logs')
+      .select('*')
+      .eq('id', syncId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching sync status from database:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error getting current sync status:', error);
+    return null;
+  }
+};
+
+export const useZoomSync = (connection: ZoomConnection | null): SyncData => {
+  const [isSyncing, setIsSyncing] = useState(getInitialState().isSyncing || false);
+  const [syncProgress, setSyncProgress] = useState(getInitialState().syncProgress || 0);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'completed' | 'failed'>(getInitialState().syncStatus || 'idle');
+  const [currentOperation, setCurrentOperation] = useState('Ready to sync');
   const [syncMode, setSyncMode] = useState<'render' | 'direct' | null>(null);
+  const [activeSyncId, setActiveSyncId] = useState(getInitialState().activeSyncId || '');
   const [stuckSyncDetected, setStuckSyncDetected] = useState(false);
-  const [isRecovered, setIsRecovered] = useState(false);
-  
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const stuckSyncCheckRef = useRef<NodeJS.Timeout | null>(null);
+  const monitoringIntervalRef = useRef<any>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [fallbackMode, setFallbackMode] = useState<'render' | 'direct'>('render');
+  const [lastConnectionTest, setLastConnectionTest] = useState<Date | null>(null);
 
-  // Enhanced debug logging for hook usage
-  console.log('🏠 [useZoomSync] Hook Instance Created:', {
-    connectionId: connection?.id,
-    isSyncing,
-    syncProgress,
-    syncStatus,
-    stuckSyncDetected,
-    syncId
-  });
-
-  // State recovery on mount/connection change with enhanced persistence
-  useEffect(() => {
-    const recoverSyncState = async () => {
-      if (!connection?.id || isRecovered) return;
-
-      console.log('🔄 [useZoomSync] Starting state recovery for connection:', connection.id);
-      SyncLoggingService.logUserAction('Mount/Connection Change', undefined, { connectionId: connection.id });
-      
-      const recoveredState = await SyncStateRecoveryService.recoverActiveSyncState(connection.id);
-      
-      if (recoveredState) {
-        console.log('✅ [useZoomSync] Recovered sync state:', recoveredState);
-        SyncLoggingService.logSyncRecovery(recoveredState.syncId, 'State Recovery', recoveredState);
-        
-        setSyncId(recoveredState.syncId);
-        setIsSyncing(true);
-        setSyncProgress(recoveredState.syncProgress);
-        setSyncStatus('syncing');
-        setCurrentOperation(recoveredState.currentOperation);
-        setStuckSyncDetected(recoveredState.isStuck);
-        setIsRecovered(true);
-
-        // Store in localStorage for additional persistence
-        localStorage.setItem('zoom_active_sync', JSON.stringify({
-          syncId: recoveredState.syncId,
-          connectionId: connection.id,
-          timestamp: Date.now()
-        }));
-
-        if (recoveredState.isStuck) {
-          toast({
-            title: "Sync appears stuck",
-            description: `Found a sync running for ${recoveredState.minutesRunning} minutes. You can cancel it using the Force Cancel button.`,
-            variant: "destructive",
-          });
-        } else {
-          // Resume monitoring
-          startStuckSyncMonitoring(recoveredState.syncId);
-          setTimeout(() => pollSyncProgress(recoveredState.syncId), 2000);
-        }
-      } else {
-        console.log('ℹ️ [useZoomSync] No active sync found to recover');
-        // Clear any stale localStorage data
-        localStorage.removeItem('zoom_active_sync');
-        setIsRecovered(true);
-      }
-    };
-
-    recoverSyncState();
-  }, [connection?.id, isRecovered]);
-
-  // Additional localStorage check on mount
-  useEffect(() => {
-    const checkLocalStorage = () => {
-      const storedSync = localStorage.getItem('zoom_active_sync');
-      if (storedSync && connection?.id) {
-        try {
-          const parsedSync = JSON.parse(storedSync);
-          const isStale = Date.now() - parsedSync.timestamp > 30 * 60 * 1000; // 30 minutes
-          
-          if (isStale || parsedSync.connectionId !== connection.id) {
-            localStorage.removeItem('zoom_active_sync');
-          } else {
-            console.log('📦 [useZoomSync] Found localStorage sync data:', parsedSync);
-          }
-        } catch (error) {
-          console.error('Error parsing localStorage sync data:', error);
-          localStorage.removeItem('zoom_active_sync');
-        }
-      }
-    };
-
-    if (connection?.id) {
-      checkLocalStorage();
-    }
-  }, [connection?.id]);
-
-  const clearProgressInterval = useCallback(() => {
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = null;
-    }
-  }, []);
-
-  const clearStuckSyncCheck = useCallback(() => {
-    if (stuckSyncCheckRef.current) {
-      clearInterval(stuckSyncCheckRef.current);
-      stuckSyncCheckRef.current = null;
-    }
-  }, []);
-
-  const pollSyncProgress = useCallback(async (syncId: string) => {
-    try {
-      SyncLoggingService.logRenderServiceCall('/sync-progress', syncId);
-      
-      // Get progress from both Render and database
-      const [renderResult, dbResult] = await Promise.allSettled([
-        RenderZoomService.getSyncProgress(syncId),
-        connection?.id ? SyncRecoveryService.getCurrentSyncStatus(connection.id) : null
-      ]);
-
-      const renderProgress = renderResult.status === 'fulfilled' ? renderResult.value : null;
-      const dbProgress = dbResult.status === 'fulfilled' ? dbResult.value : null;
-
-      SyncLoggingService.logRenderServiceResponse('/sync-progress', renderProgress, syncId);
-      SyncLoggingService.logDatabaseUpdate('zoom_sync_logs', 'getCurrentSyncStatus', dbProgress, syncId);
-
-      // Enhanced logging for debugging
-      console.log(`📊 Sync Progress Check ${syncId}:`, {
-        render: renderProgress?.success ? {
-          progress: renderProgress.progress,
-          status: renderProgress.status,
-          operation: renderProgress.currentOperation
-        } : 'Failed',
-        database: dbProgress ? {
-          progress: dbProgress.stage_progress_percentage,
-          status: dbProgress.sync_status,
-          stage: dbProgress.sync_stage
-        } : 'Not found'
-      });
-
-      // Check for phantom sync
-      if (renderProgress?.success && dbProgress) {
-        const isPhantom = await SyncDiagnosticService.detectPhantomSync(syncId, renderProgress, dbProgress);
-        if (isPhantom) {
-          SyncLoggingService.logSyncStuck(syncId, 'Phantom sync detected', 0);
-          setStuckSyncDetected(true);
-          setCurrentOperation('Sync communication issue detected...');
-          return;
-        }
-      }
-
-      // Use database progress as primary source, fall back to Render
-      let progressData = null;
-      if (dbProgress && dbProgress.stage_progress_percentage > 0) {
-        progressData = {
-          progress: dbProgress.stage_progress_percentage,
-          status: dbProgress.sync_status,
-          currentOperation: dbProgress.sync_stage || 'Processing...'
-        };
-        SyncLoggingService.logProgressUpdate(syncId, progressData.progress, progressData.currentOperation, 'database');
-      } else if (renderProgress?.success) {
-        progressData = renderProgress;
-        SyncLoggingService.logProgressUpdate(syncId, progressData.progress || 0, progressData.currentOperation || 'Processing...', 'render');
-      }
-
-      if (progressData) {
-        setSyncProgress(Math.max(syncProgress, progressData.progress || 0));
-        setCurrentOperation(progressData.currentOperation || currentOperation);
-        
-        if (progressData.status === 'completed') {
-          setSyncStatus('completed');
-          setIsSyncing(false);
-          clearProgressInterval();
-          SyncHeartbeatService.stopHeartbeat(syncId);
-          localStorage.removeItem('zoom_active_sync');
-          
-          queryClient.invalidateQueries({ queryKey: ['zoom-webinars'] });
-          queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
-          queryClient.invalidateQueries({ queryKey: ['zoom-sync-stats'] });
-          
-          toast({
-            title: "Sync completed successfully",
-            description: "Your Zoom data has been synchronized.",
-          });
-        } else if (progressData.status === 'failed') {
-          setSyncStatus('failed');
-          setIsSyncing(false);
-          clearProgressInterval();
-          SyncHeartbeatService.stopHeartbeat(syncId);
-          localStorage.removeItem('zoom_active_sync');
-          
-          toast({
-            title: "Sync failed",
-            description: progressData.error || "An error occurred during synchronization.",
-            variant: "destructive",
-          });
-        } else if (progressData.status === 'no_data') {
-          setSyncStatus('no_data');
-          setIsSyncing(false);
-          clearProgressInterval();
-          SyncHeartbeatService.stopHeartbeat(syncId);
-          localStorage.removeItem('zoom_active_sync');
-          
-          toast({
-            title: "No data to sync",
-            description: "No webinars found to synchronize.",
-          });
-        } else {
-          // Continue polling
-          setTimeout(() => pollSyncProgress(syncId), 2000);
-        }
-      } else {
-        // No progress data available - continue polling but with longer interval
-        SyncLoggingService.logSyncCommunicationFailure(syncId, 'No progress data available', 1);
-        console.warn(`📊 No progress data available for sync ${syncId}, continuing...`);
-        setTimeout(() => pollSyncProgress(syncId), 5000);
-      }
-    } catch (error) {
-      SyncLoggingService.logSyncCommunicationFailure(syncId, error, 1);
-      console.error('Error polling sync progress:', error);
-      setTimeout(() => pollSyncProgress(syncId), 5000);
-    }
-  }, [clearProgressInterval, queryClient, toast, syncProgress, currentOperation, connection?.id]);
-
-  const startStuckSyncMonitoring = useCallback((syncId: string) => {
-    // Clear existing check
-    clearStuckSyncCheck();
-    
-    // Start monitoring for stuck sync after 2 minutes
-    stuckSyncCheckRef.current = setTimeout(async () => {
-      if (!connection?.id) return;
-      
-      const stalledCheck = await SyncDiagnosticService.detectStalledProgress(connection.id);
-      if (stalledCheck.isStalled) {
-        SyncLoggingService.logSyncStuck(syncId, stalledCheck.reason || 'Unknown', 2);
-        setStuckSyncDetected(true);
-        setCurrentOperation(`Sync appears stuck: ${stalledCheck.reason}`);
-        
-        toast({
-          title: "Sync appears stuck",
-          description: "The sync has been running without progress. Use the Force Cancel option.",
-          variant: "destructive",
-        });
-      }
-    }, 2 * 60 * 1000); // 2 minutes
-  }, [connection?.id, clearStuckSyncCheck, toast]);
-
-  const startSync = useCallback(async (syncType: SyncType = SyncType.INCREMENTAL) => {
+  const startSync = useCallback(async (syncType: SyncType, options?: { webinarId?: string }) => {
     if (!connection?.id) {
-      toast({
-        title: "No connection",
-        description: "Please connect your Zoom account first.",
-        variant: "destructive",
-      });
+      toast.error('No connection available');
       return;
     }
 
     if (isSyncing) {
-      toast({
-        title: "Sync in progress",
-        description: "A sync operation is already running.",
-        variant: "destructive",
-      });
+      toast.error('Sync already in progress');
       return;
     }
 
-    console.log('🚀 [useZoomSync] Starting sync:', { syncType, connectionId: connection.id });
+    console.log(`🚀 [useZoomSync] Starting enhanced sync:`, { syncType, connectionId: connection.id, fallbackMode });
     SyncLoggingService.logUserAction('Start Sync', undefined, { syncType });
 
-    setIsSyncing(true);
-    setSyncProgress(5);
-    setSyncStatus('syncing');
-    setCurrentOperation('Starting enhanced sync...');
-    setSyncMode(null);
-    setStuckSyncDetected(false);
-
     try {
-      console.log(`🔄 Starting enhanced ${syncType} sync for connection:`, connection.id);
+      setIsSyncing(true);
+      setSyncProgress(5);
+      setSyncStatus('syncing');
+      setCurrentOperation('Starting enhanced sync...');
+      setSyncError(null);
       
-      const result = await SyncManagementService.startReliableSync(connection.id, syncType);
-      
-      if (result.success && result.syncId) {
-        SyncLoggingService.logSyncStart(result.syncId, connection.id, syncType);
-        
-        setSyncId(result.syncId);
-        setSyncMode(result.mode);
-        setSyncProgress(10);
-        setCurrentOperation('Sync started successfully...');
-        
-        // Store in localStorage
-        localStorage.setItem('zoom_active_sync', JSON.stringify({
-          syncId: result.syncId,
-          connectionId: connection.id,
-          timestamp: Date.now()
-        }));
-        
-        // Start heartbeat monitoring
-        SyncHeartbeatService.startHeartbeat(result.syncId, connection.id);
-        
-        // Start stuck sync monitoring
-        startStuckSyncMonitoring(result.syncId);
-        
-        toast({
-          title: "Sync started",
-          description: `${result.message} (${result.mode} mode)`,
-        });
+      // Save initial state
+      saveToLocalStorage({ isSyncing: true, syncProgress: 5, syncStatus: 'syncing' });
 
-        // Start polling for progress
-        setTimeout(() => pollSyncProgress(result.syncId!), 2000);
+      // Test connection first if not tested recently
+      const shouldTestConnection = !lastConnectionTest || 
+        (Date.now() - lastConnectionTest.getTime()) > 300000; // 5 minutes
 
-      } else {
-        throw new Error(result.message || 'Failed to start sync');
+      if (shouldTestConnection) {
+        setCurrentOperation('Testing Zoom connection...');
+        const testResult = await ZoomConnectionTestService.testConnection(connection.id);
+        setLastConnectionTest(new Date());
+        
+        if (!testResult.success) {
+          throw new Error(`Connection test failed: ${testResult.message}`);
+        }
+        console.log('✅ [useZoomSync] Connection test passed');
       }
+
+      let syncResult;
+      
+      if (fallbackMode === 'render') {
+        // Try Render service first
+        setCurrentOperation('Starting Render service sync...');
+        setSyncProgress(10);
+        
+        try {
+          syncResult = await SyncManagementService.startReliableSync(connection.id, syncType);
+          
+          if (!syncResult.success) {
+            console.log('⚠️ [useZoomSync] Render sync failed, switching to direct mode...');
+            setFallbackMode('direct');
+            throw new Error('Render sync failed, trying direct mode');
+          }
+          
+          setSyncMode('render');
+          
+        } catch (renderError) {
+          console.error('❌ [useZoomSync] Render sync error:', renderError);
+          
+          // Fallback to direct sync
+          console.log('🔄 [useZoomSync] Falling back to direct sync...');
+          setFallbackMode('direct');
+          setCurrentOperation('Falling back to direct sync...');
+          
+          syncResult = await ZoomSyncMigrationService.enhancedSync(connection.id, {
+            syncType,
+            webinarId: options?.webinarId,
+            priority: 'high',
+            debug: true
+          });
+          
+          setSyncMode('direct');
+        }
+      } else {
+        // Use direct sync mode
+        setCurrentOperation('Starting direct sync...');
+        setSyncProgress(10);
+        
+        syncResult = await ZoomSyncMigrationService.enhancedSync(connection.id, {
+          syncType,
+          webinarId: options?.webinarId,
+          priority: 'high',
+          debug: true
+        });
+        
+        setSyncMode('direct');
+      }
+
+      if (syncResult.success && syncResult.syncId) {
+        setActiveSyncId(syncResult.syncId);
+        setCurrentOperation('Sync started successfully...');
+        setSyncProgress(15);
+        
+        // Start monitoring the sync
+        startSyncMonitoring(syncResult.syncId);
+        
+        toast.success(`Sync started successfully (${syncMode} mode)`);
+        SyncLoggingService.logSyncStart(syncResult.syncId, connection.id, syncType);
+        
+      } else {
+        throw new Error(syncResult.message || 'Failed to start sync');
+      }
+
     } catch (error) {
-      console.error('Enhanced sync error:', error);
+      console.error('❌ [useZoomSync] Sync start error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      setSyncError(errorMessage);
       setIsSyncing(false);
       setSyncStatus('failed');
-      setCurrentOperation('');
-      setSyncMode(null);
-      localStorage.removeItem('zoom_active_sync');
+      setSyncProgress(0);
+      setCurrentOperation('Sync failed to start');
       
-      toast({
-        title: "Sync failed to start",
-        description: error instanceof Error ? error.message : "Unable to start synchronization.",
-        variant: "destructive",
-      });
-    }
-  }, [connection?.id, isSyncing, pollSyncProgress, startStuckSyncMonitoring, toast]);
-
-  const forceCancelSync = useCallback(async () => {
-    if (!connection?.id) return;
-
-    console.log('🛑 [useZoomSync] Force cancel requested');
-    SyncLoggingService.logUserAction('Force Cancel Sync', syncId || undefined);
-
-    try {
-      console.log('🛑 Force cancel sync requested');
+      // Clear localStorage
+      clearLocalStorage();
       
-      // Use the database-level force cancel
-      const result = await SyncStateRecoveryService.forceCancelActiveSync(connection.id);
-      
-      if (result.success) {
-        // Stop all monitoring
-        clearProgressInterval();
-        clearStuckSyncCheck();
-        if (syncId) {
-          SyncHeartbeatService.stopHeartbeat(syncId);
-        }
-        
-        // Reset state
-        setIsSyncing(false);
-        setSyncStatus('idle');
-        setSyncProgress(0);
-        setCurrentOperation('');
-        setSyncId(null);
-        setSyncMode(null);
-        setStuckSyncDetected(false);
-        localStorage.removeItem('zoom_active_sync');
-        
-        // Invalidate queries
-        queryClient.invalidateQueries({ queryKey: ['zoom-sync-stats'] });
-        
-        toast({
-          title: "Sync cancelled",
-          description: result.message,
+      // Show user-friendly error
+      if (errorMessage.includes('Connection test failed')) {
+        toast.error('Zoom connection issue detected', {
+          description: 'Please check your Zoom credentials and try again.'
+        });
+      } else if (errorMessage.includes('timeout')) {
+        toast.error('Sync timeout', {
+          description: 'The sync service is taking too long to respond. Please try again.'
         });
       } else {
-        throw new Error(result.message);
+        toast.error('Failed to start sync', {
+          description: errorMessage
+        });
       }
-    } catch (error) {
-      console.error('Force cancel error:', error);
-      toast({
-        title: "Cancel failed",
-        description: error instanceof Error ? error.message : 'Failed to cancel sync',
-        variant: "destructive",
-      });
+
+      SyncLoggingService.logSyncCommunicationFailure('unknown', error, 1);
     }
-  }, [connection?.id, syncId, clearProgressInterval, clearStuckSyncCheck, queryClient, toast]);
+  }, [connection, isSyncing, fallbackMode, lastConnectionTest, syncMode]);
+
+  const startSyncMonitoring = useCallback((syncId: string) => {
+    if (monitoringIntervalRef.current) {
+      clearInterval(monitoringIntervalRef.current);
+    }
+
+    let lastProgressUpdate = Date.now();
+    let lastProgress = 0;
+    let consecutiveStuckChecks = 0;
+    
+    console.log(`💓 Started heartbeat monitoring for sync: ${syncId}`);
+    
+    monitoringIntervalRef.current = setInterval(async () => {
+      try {
+        SyncLoggingService.logRenderServiceCall('/sync-progress', syncId);
+        
+        // Check both Render and database sources
+        const [renderProgress, dbProgress] = await Promise.allSettled([
+          RenderZoomService.getSyncProgress(syncId),
+          getCurrentSyncStatus(syncId)
+        ]);
+
+        // Use the most recent/accurate progress
+        let progressData;
+        if (renderProgress.status === 'fulfilled' && renderProgress.value.success) {
+          progressData = renderProgress.value;
+          SyncLoggingService.logRenderServiceResponse('/sync-progress', progressData, syncId);
+        } else if (dbProgress.status === 'fulfilled' && dbProgress.value) {
+          progressData = {
+            success: true,
+            status: dbProgress.value.sync_status,
+            progress: dbProgress.value.stage_progress_percentage || 0,
+            currentOperation: dbProgress.value.sync_stage || 'Processing...',
+            processed_items: dbProgress.value.processed_items,
+            total_items: dbProgress.value.total_items
+          };
+          SyncLoggingService.logDatabaseUpdate('zoom_sync_logs', 'getCurrentSyncStatus', progressData, syncId);
+        } else {
+          throw new Error('Unable to get sync progress from any source');
+        }
+
+        console.log(`📊 Sync Progress Check ${syncId}:`, {
+          render: renderProgress.status === 'fulfilled' ? renderProgress.value : 'failed',
+          database: dbProgress.status === 'fulfilled' ? dbProgress.value : 'failed'
+        });
+
+        if (progressData) {
+          const currentProgress = progressData.progress || 0;
+          const operation = progressData.currentOperation || 'Processing...';
+          
+          SyncLoggingService.logProgressUpdate(syncId, currentProgress, operation, 
+            renderProgress.status === 'fulfilled' ? 'render' : 'database');
+
+          // Check for stuck sync
+          if (currentProgress === lastProgress && currentProgress > 0 && currentProgress < 100) {
+            consecutiveStuckChecks++;
+            const minutesStuck = (consecutiveStuckChecks * 2) / 60; // 2 second intervals
+            
+            if (consecutiveStuckChecks >= 60) { // 2 minutes stuck
+              console.warn(`⚠️ [useZoomSync] Sync appears stuck at ${currentProgress}% for ${minutesStuck.toFixed(1)} minutes`);
+              SyncLoggingService.logSyncStuck(syncId, `No progress for ${minutesStuck.toFixed(1)} minutes`, minutesStuck);
+              
+              setStuckSyncDetected(true);
+              
+              if (consecutiveStuckChecks >= 180) { // 6 minutes - auto cancel
+                console.error(`🛑 [useZoomSync] Auto-canceling stuck sync after 6 minutes`);
+                await cancelSync();
+                return;
+              }
+            }
+          } else {
+            consecutiveStuckChecks = 0;
+            setStuckSyncDetected(false);
+            lastProgressUpdate = Date.now();
+          }
+
+          lastProgress = currentProgress;
+          
+          // Update UI state
+          setSyncProgress(currentProgress);
+          setCurrentOperation(operation);
+          
+          // Update localStorage
+          saveToLocalStorage({
+            isSyncing: true,
+            syncProgress: currentProgress,
+            syncStatus: 'syncing',
+            activeSyncId: syncId,
+            lastUpdate: Date.now()
+          });
+
+          // Check for completion
+          if (progressData.status === 'completed' || currentProgress >= 100) {
+            console.log(`🎉 [useZoomSync] Sync completed successfully`);
+            completeSyncMonitoring(true);
+          } else if (progressData.status === 'failed') {
+            console.error(`❌ [useZoomSync] Sync failed:`, progressData.error_message);
+            setSyncError(progressData.error_message || 'Sync failed');
+            completeSyncMonitoring(false);
+          }
+        }
+
+      } catch (error) {
+        console.error(`💥 [useZoomSync] Monitoring error for sync ${syncId}:`, error);
+        SyncLoggingService.logSyncCommunicationFailure(syncId, error, 1);
+        
+        // Try to recover by checking database directly
+        try {
+          const dbStatus = await getCurrentSyncStatus(syncId);
+          if (dbStatus && dbStatus.sync_status === 'failed') {
+            setSyncError(dbStatus.error_message || 'Sync failed');
+            completeSyncMonitoring(false);
+          }
+        } catch (recoveryError) {
+          console.error(`💥 [useZoomSync] Recovery check failed:`, recoveryError);
+        }
+      }
+    }, 2000); // Check every 2 seconds
+
+  }, []);
+
+  const completeSyncMonitoring = useCallback((success: boolean) => {
+    console.log(`💔 Stopping heartbeat monitoring`);
+    
+    if (monitoringIntervalRef.current) {
+      clearInterval(monitoringIntervalRef.current);
+      monitoringIntervalRef.current = null;
+    }
+
+    setIsSyncing(false);
+    setSyncStatus(success ? 'completed' : 'failed');
+    setCurrentOperation(success ? 'Sync completed' : 'Sync failed');
+    setSyncProgress(success ? 100 : 0);
+    setActiveSyncId('');
+    setStuckSyncDetected(false);
+
+    // Clear localStorage
+    clearLocalStorage();
+
+    if (success) {
+      toast.success('Sync completed successfully!');
+    }
+  }, []);
+
+  const cancelSync = useCallback(async () => {
+    if (!activeSyncId) {
+      toast.error('No active sync to cancel');
+      return;
+    }
+
+    try {
+      console.log(`🛑 Attempting to cancel sync: ${activeSyncId}`);
+      SyncLoggingService.logUserAction('Cancel Sync', activeSyncId);
+      
+      const result = await RenderZoomService.cancelSync(activeSyncId);
+      
+      if (result.success) {
+        console.log('✅ Sync cancellation requested successfully');
+        toast.success('Sync cancellation requested');
+      } else {
+        console.error('❌ Failed to cancel sync:', result.error);
+        toast.error(`Failed to cancel sync: ${result.error || 'Unknown error'}`);
+      }
+
+      completeSyncMonitoring(false);
+
+    } catch (error) {
+      console.error('💥 Error cancelling sync:', error);
+      toast.error(`Error cancelling sync: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsSyncing(false);
+      setSyncStatus('idle');
+      setCurrentOperation('Ready to sync');
+      setSyncProgress(0);
+      setActiveSyncId('');
+      setStuckSyncDetected(false);
+      clearLocalStorage();
+    }
+  }, [activeSyncId, completeSyncMonitoring]);
+
+  const testConnection = useCallback(async () => {
+    if (!connection?.id) return;
+    
+    try {
+      const result = await ZoomConnectionTestService.testConnection(connection.id);
+      ZoomConnectionTestService.showTestResults(result);
+      setLastConnectionTest(new Date());
+      return result;
+    } catch (error) {
+      console.error('Connection test error:', error);
+      toast.error('Connection test failed');
+    }
+  }, [connection]);
 
   const forceResetAndRestart = useCallback(async () => {
     if (!connection?.id) return;
-
+    
     try {
-      console.log('🔧 Force reset and restart requested');
-      
-      // Stop all monitoring
-      clearProgressInterval();
-      clearStuckSyncCheck();
-      if (syncId) {
-        SyncHeartbeatService.stopHeartbeat(syncId);
-      }
-      
-      // Force cleanup stuck syncs
+      // Force cleanup
       await SyncRecoveryService.forceCleanupStuckSyncs(connection.id);
       
       // Reset state
       setIsSyncing(false);
-      setSyncStatus('idle');
       setSyncProgress(0);
-      setCurrentOperation('');
-      setSyncId(null);
-      setSyncMode(null);
+      setSyncStatus('idle');
+      setCurrentOperation('Ready to sync');
       setStuckSyncDetected(false);
-      localStorage.removeItem('zoom_active_sync');
+      setActiveSyncId('');
+      setSyncError(null);
       
-      // Invalidate queries
-      queryClient.invalidateQueries({ queryKey: ['zoom-sync-stats'] });
+      // Clear monitoring
+      if (monitoringIntervalRef.current) {
+        clearInterval(monitoringIntervalRef.current);
+        monitoringIntervalRef.current = null;
+      }
       
-      toast({
-        title: "Sync reset complete",
-        description: "You can now start a new sync operation.",
-      });
+      clearLocalStorage();
       
-      // Auto-restart sync after a brief delay
+      toast.success('Sync state reset. You can now start a new sync.');
+      
+      // Auto-restart with incremental sync
       setTimeout(() => {
         startSync(SyncType.INCREMENTAL);
       }, 1000);
       
     } catch (error) {
       console.error('Force reset error:', error);
-      toast({
-        title: "Reset failed",
-        description: error instanceof Error ? error.message : 'Failed to reset sync',
-        variant: "destructive",
-      });
+      toast.error('Failed to reset sync state');
     }
-  }, [connection?.id, syncId, clearProgressInterval, clearStuckSyncCheck, queryClient, toast, startSync]);
+  }, [connection, startSync]);
 
-  const cancelSync = useCallback(async () => {
-    if (!syncId) {
-      // If no syncId but we're syncing, use force cancel
-      if (isSyncing) {
-        return await forceCancelSync();
-      }
-      return;
+  useEffect(() => {
+    // Load state from localStorage on mount
+    const initialState = getInitialState();
+    setIsSyncing(initialState.isSyncing || false);
+    setSyncProgress(initialState.syncProgress || 0);
+    setSyncStatus(initialState.syncStatus || 'idle');
+    setActiveSyncId(initialState.activeSyncId || '');
+
+    // If there's an active sync, start monitoring it
+    if (initialState.isSyncing && initialState.activeSyncId) {
+      console.log(`⚙️ Resuming sync monitoring from localStorage: ${initialState.activeSyncId}`);
+      startSyncMonitoring(initialState.activeSyncId);
     }
 
-    console.log('❌ [useZoomSync] Regular cancel requested');
-    SyncLoggingService.logUserAction('Cancel Sync', syncId);
-
-    try {
-      // Stop monitoring
-      clearProgressInterval();
-      clearStuckSyncCheck();
-      SyncHeartbeatService.stopHeartbeat(syncId);
-      
-      const result = await RenderZoomService.cancelSync(syncId);
-      
-      if (result.success) {
-        setIsSyncing(false);
-        setSyncStatus('idle');
-        setSyncProgress(0);
-        setCurrentOperation('');
-        setSyncId(null);
-        setSyncMode(null);
-        setStuckSyncDetected(false);
-        localStorage.removeItem('zoom_active_sync');
-        
-        toast({
-          title: "Sync cancelled",
-          description: "The synchronization has been cancelled.",
-        });
-      } else {
-        throw new Error(result.error || 'Failed to cancel sync');
-      }
-    } catch (error) {
-      console.error('Cancel sync error:', error);
-      // Fallback to force cancel if regular cancel fails
-      await forceCancelSync();
-    }
-  }, [syncId, clearProgressInterval, clearStuckSyncCheck, toast, isSyncing, forceCancelSync]);
-
-  const testApiConnection = useCallback(async () => {
-    try {
-      const result = await RenderZoomService.testConnection();
-      
-      if (result.success) {
-        toast({
-          title: "Connection test successful",
-          description: result.message || "Zoom API connection is working properly.",
-        });
-      } else {
-        throw new Error(result.message || 'Connection test failed');
-      }
-    } catch (error) {
-      console.error('Error testing connection:', error);
-      toast({
-        title: "Connection test failed",
-        description: error instanceof Error ? error.message : "Unable to test Zoom API connection.",
-        variant: "destructive",
-      });
-    }
-  }, [toast]);
-
-  // Cleanup on unmount
-  React.useEffect(() => {
     return () => {
-      clearProgressInterval();
-      clearStuckSyncCheck();
-      SyncHeartbeatService.stopAllHeartbeats();
+      // Clear the interval when the component unmounts
+      if (monitoringIntervalRef.current) {
+        clearInterval(monitoringIntervalRef.current);
+      }
     };
-  }, [clearProgressInterval, clearStuckSyncCheck]);
+  }, [startSyncMonitoring]);
 
   return {
     isSyncing,
     syncProgress,
     syncStatus,
     currentOperation,
-    activeSyncId: syncId,
     syncMode,
-    stuckSyncDetected,
     startSync,
     cancelSync,
-    forceCancelSync,
+    syncError,
+    fallbackMode,
+    testConnection,
     forceResetAndRestart,
-    testApiConnection,
-    healthCheck: { success: true, error: '' },
+    stuckSyncDetected
   };
 };
