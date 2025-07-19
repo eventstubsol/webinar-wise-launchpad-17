@@ -19,7 +19,7 @@ const ConnectionVisualization = () => (
       <img 
         src="/lovable-uploads/39a2694e-d98b-464b-bc05-52f9c1609776.png" 
         alt="Zoom logo"
-        className="w-20 sm:w-22 md:w-24 lg:w-26 h-auto mb-4"
+        className="w-40 sm:w-44 md:w-48 lg:w-52 h-auto mb-4"
       />
       
     </div>
