@@ -69,7 +69,7 @@ export const ZoomButtonContent: React.FC<ZoomButtonContentProps> = ({
   return (
     <>
       <Wifi className="w-4 h-4" />
-      Validate Connection
+      Connect To Zoom
     </>
   );
 };
