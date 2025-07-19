@@ -16,13 +16,9 @@ export interface SyncResults {
 }
 
 export class EnhancedSyncProcessor {
-  private registrantService: ZoomRegistrantService;
-  private participantService: ZoomParticipantService;
   private validationService: DataValidationService;
 
-  constructor(credentials: any) {
-    this.registrantService = new ZoomRegistrantService(credentials);
-    this.participantService = new ZoomParticipantService(credentials);
+  constructor() {
     this.validationService = new DataValidationService();
   }
 
@@ -87,7 +83,8 @@ export class EnhancedSyncProcessor {
       // Fetch registrants for all webinars (they're always available)
       console.log(`📝 Fetching registrants for webinar ${webinarData.id}`);
       try {
-        const registrants = await this.registrantService.fetchAllRegistrants(webinarData.id);
+        const registrantsResponse = await ZoomRegistrantService.getAllRegistrants(webinarData.id);
+        const registrants = registrantsResponse.success ? registrantsResponse.data : [];
         console.log(`📊 Found ${registrants.length} registrants`);
 
         if (registrants.length > 0) {
@@ -134,7 +131,8 @@ export class EnhancedSyncProcessor {
       if (statusInfo.isEligibleForParticipantSync) {
         console.log(`👥 Fetching participants for past webinar ${webinarData.id}`);
         try {
-          const participants = await this.participantService.fetchAllParticipants(webinarData.id);
+          const participantsResponse = await ZoomParticipantService.getAllParticipants(webinarData.id);
+          const participants = participantsResponse.success ? participantsResponse.data : [];
           console.log(`📊 Found ${participants.length} participants`);
 
           if (participants.length > 0) {
