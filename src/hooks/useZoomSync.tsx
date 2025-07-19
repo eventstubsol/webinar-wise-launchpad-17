@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { ZoomConnection, SyncType } from '@/types/zoom';
@@ -8,6 +8,8 @@ import { SyncManagementService } from '@/services/zoom/sync/SyncManagementServic
 import { SyncDiagnosticService } from '@/services/zoom/sync/SyncDiagnosticService';
 import { SyncHeartbeatService } from '@/services/zoom/sync/SyncHeartbeatService';
 import { SyncRecoveryService } from '@/services/zoom/sync/SyncRecoveryService';
+import { SyncStateRecoveryService } from '@/services/zoom/sync/SyncStateRecoveryService';
+import { SyncLoggingService } from '@/services/zoom/sync/SyncLoggingService';
 
 export const useZoomSync = (connection?: ZoomConnection | null) => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -17,11 +19,51 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
   const [syncId, setSyncId] = useState<string | null>(null);
   const [syncMode, setSyncMode] = useState<'render' | 'direct' | null>(null);
   const [stuckSyncDetected, setStuckSyncDetected] = useState(false);
+  const [isRecovered, setIsRecovered] = useState(false);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const stuckSyncCheckRef = useRef<NodeJS.Timeout | null>(null);
+
+  // State recovery on mount/connection change
+  useEffect(() => {
+    const recoverSyncState = async () => {
+      if (!connection?.id || isRecovered) return;
+
+      SyncLoggingService.logUserAction('Mount/Connection Change', undefined, { connectionId: connection.id });
+      
+      const recoveredState = await SyncStateRecoveryService.recoverActiveSyncState(connection.id);
+      
+      if (recoveredState) {
+        SyncLoggingService.logSyncRecovery(recoveredState.syncId, 'State Recovery', recoveredState);
+        
+        setSyncId(recoveredState.syncId);
+        setIsSyncing(true);
+        setSyncProgress(recoveredState.syncProgress);
+        setSyncStatus('syncing');
+        setCurrentOperation(recoveredState.currentOperation);
+        setStuckSyncDetected(recoveredState.isStuck);
+        setIsRecovered(true);
+
+        if (recoveredState.isStuck) {
+          toast({
+            title: "Sync appears stuck",
+            description: `Found a sync running for ${recoveredState.minutesRunning} minutes. You can cancel it using the Force Cancel button.`,
+            variant: "destructive",
+          });
+        } else {
+          // Resume monitoring
+          startStuckSyncMonitoring(recoveredState.syncId);
+          setTimeout(() => pollSyncProgress(recoveredState.syncId), 2000);
+        }
+      } else {
+        setIsRecovered(true);
+      }
+    };
+
+    recoverSyncState();
+  }, [connection?.id, isRecovered]);
 
   const clearProgressInterval = useCallback(() => {
     if (progressIntervalRef.current) {
@@ -39,6 +81,8 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
   const pollSyncProgress = useCallback(async (syncId: string) => {
     try {
+      SyncLoggingService.logRenderServiceCall('/sync-progress', syncId);
+      
       // Get progress from both Render and database
       const [renderResult, dbResult] = await Promise.allSettled([
         RenderZoomService.getSyncProgress(syncId),
@@ -47,6 +91,9 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
 
       const renderProgress = renderResult.status === 'fulfilled' ? renderResult.value : null;
       const dbProgress = dbResult.status === 'fulfilled' ? dbResult.value : null;
+
+      SyncLoggingService.logRenderServiceResponse('/sync-progress', renderProgress, syncId);
+      SyncLoggingService.logDatabaseUpdate('zoom_sync_logs', 'getCurrentSyncStatus', dbProgress, syncId);
 
       // Enhanced logging for debugging
       console.log(`📊 Sync Progress Check ${syncId}:`, {
@@ -66,6 +113,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       if (renderProgress?.success && dbProgress) {
         const isPhantom = await SyncDiagnosticService.detectPhantomSync(syncId, renderProgress, dbProgress);
         if (isPhantom) {
+          SyncLoggingService.logSyncStuck(syncId, 'Phantom sync detected', 0);
           setStuckSyncDetected(true);
           setCurrentOperation('Sync communication issue detected...');
           return;
@@ -80,8 +128,10 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           status: dbProgress.sync_status,
           currentOperation: dbProgress.sync_stage || 'Processing...'
         };
+        SyncLoggingService.logProgressUpdate(syncId, progressData.progress, progressData.currentOperation, 'database');
       } else if (renderProgress?.success) {
         progressData = renderProgress;
+        SyncLoggingService.logProgressUpdate(syncId, progressData.progress || 0, progressData.currentOperation || 'Processing...', 'render');
       }
 
       if (progressData) {
@@ -129,10 +179,12 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         }
       } else {
         // No progress data available - continue polling but with longer interval
+        SyncLoggingService.logSyncCommunicationFailure(syncId, 'No progress data available', 1);
         console.warn(`📊 No progress data available for sync ${syncId}, continuing...`);
         setTimeout(() => pollSyncProgress(syncId), 5000);
       }
     } catch (error) {
+      SyncLoggingService.logSyncCommunicationFailure(syncId, error, 1);
       console.error('Error polling sync progress:', error);
       setTimeout(() => pollSyncProgress(syncId), 5000);
     }
@@ -148,12 +200,13 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       
       const stalledCheck = await SyncDiagnosticService.detectStalledProgress(connection.id);
       if (stalledCheck.isStalled) {
+        SyncLoggingService.logSyncStuck(syncId, stalledCheck.reason || 'Unknown', 2);
         setStuckSyncDetected(true);
         setCurrentOperation(`Sync appears stuck: ${stalledCheck.reason}`);
         
         toast({
           title: "Sync appears stuck",
-          description: "The sync has been running without progress. Use the Force Reset option.",
+          description: "The sync has been running without progress. Use the Force Cancel option.",
           variant: "destructive",
         });
       }
@@ -179,6 +232,8 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       return;
     }
 
+    SyncLoggingService.logUserAction('Start Sync', undefined, { syncType });
+
     setIsSyncing(true);
     setSyncProgress(5);
     setSyncStatus('syncing');
@@ -192,6 +247,8 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       const result = await SyncManagementService.startReliableSync(connection.id, syncType);
       
       if (result.success && result.syncId) {
+        SyncLoggingService.logSyncStart(result.syncId, connection.id, syncType);
+        
         setSyncId(result.syncId);
         setSyncMode(result.mode);
         setSyncProgress(10);
@@ -228,6 +285,54 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       });
     }
   }, [connection?.id, isSyncing, pollSyncProgress, startStuckSyncMonitoring, toast]);
+
+  const forceCancelSync = useCallback(async () => {
+    if (!connection?.id) return;
+
+    SyncLoggingService.logUserAction('Force Cancel Sync', syncId || undefined);
+
+    try {
+      console.log('🛑 Force cancel sync requested');
+      
+      // Use the database-level force cancel
+      const result = await SyncStateRecoveryService.forceCancelActiveSync(connection.id);
+      
+      if (result.success) {
+        // Stop all monitoring
+        clearProgressInterval();
+        clearStuckSyncCheck();
+        if (syncId) {
+          SyncHeartbeatService.stopHeartbeat(syncId);
+        }
+        
+        // Reset state
+        setIsSyncing(false);
+        setSyncStatus('idle');
+        setSyncProgress(0);
+        setCurrentOperation('');
+        setSyncId(null);
+        setSyncMode(null);
+        setStuckSyncDetected(false);
+        
+        // Invalidate queries
+        queryClient.invalidateQueries({ queryKey: ['zoom-sync-stats'] });
+        
+        toast({
+          title: "Sync cancelled",
+          description: result.message,
+        });
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      console.error('Force cancel error:', error);
+      toast({
+        title: "Cancel failed",
+        description: error instanceof Error ? error.message : 'Failed to cancel sync',
+        variant: "destructive",
+      });
+    }
+  }, [connection?.id, syncId, clearProgressInterval, clearStuckSyncCheck, queryClient, toast]);
 
   const forceResetAndRestart = useCallback(async () => {
     if (!connection?.id) return;
@@ -278,7 +383,15 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
   }, [connection?.id, syncId, clearProgressInterval, clearStuckSyncCheck, queryClient, toast, startSync]);
 
   const cancelSync = useCallback(async () => {
-    if (!syncId) return;
+    if (!syncId) {
+      // If no syncId but we're syncing, use force cancel
+      if (isSyncing) {
+        return await forceCancelSync();
+      }
+      return;
+    }
+
+    SyncLoggingService.logUserAction('Cancel Sync', syncId);
 
     try {
       // Stop monitoring
@@ -306,13 +419,10 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       }
     } catch (error) {
       console.error('Cancel sync error:', error);
-      toast({
-        title: "Cancel failed",
-        description: "Unable to cancel the sync operation.",
-        variant: "destructive",
-      });
+      // Fallback to force cancel if regular cancel fails
+      await forceCancelSync();
     }
-  }, [syncId, clearProgressInterval, clearStuckSyncCheck, toast]);
+  }, [syncId, clearProgressInterval, clearStuckSyncCheck, toast, isSyncing, forceCancelSync]);
 
   const testApiConnection = useCallback(async () => {
     try {
@@ -355,6 +465,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
     stuckSyncDetected,
     startSync,
     cancelSync,
+    forceCancelSync,
     forceResetAndRestart,
     testApiConnection,
     healthCheck: { success: true, error: '' },

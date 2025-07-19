@@ -15,7 +15,8 @@ import {
   XCircle,
   Clock,
   Zap,
-  RotateCcw
+  RotateCcw,
+  StopCircle
 } from 'lucide-react';
 import { useZoomSync } from '@/hooks/useZoomSync';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
@@ -36,6 +37,7 @@ export function ZoomSyncCard() {
   } = syncData;
 
   const stuckSyncDetected = (syncData as any).stuckSyncDetected || false;
+  const forceCancelSync = (syncData as any).forceCancelSync || (() => {});
   const forceResetAndRestart = (syncData as any).forceResetAndRestart || (() => {});
 
   const getSyncStatusInfo = () => {
@@ -45,7 +47,7 @@ export function ZoomSyncCard() {
         label: 'Stuck',
         variant: 'destructive' as const,
         color: 'text-red-600',
-        description: 'Sync appears to be stuck - use Force Reset'
+        description: 'Sync appears to be stuck - use Force Cancel or Reset'
       };
     }
 
@@ -118,7 +120,7 @@ export function ZoomSyncCard() {
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Sync appears to be stuck due to communication issues. Use the Force Reset option to recover.
+              Sync appears to be stuck due to communication issues. Use Force Cancel to stop it immediately, or Force Reset to restart.
             </AlertDescription>
           </Alert>
         )}
@@ -162,26 +164,37 @@ export function ZoomSyncCard() {
               </Button>
             ) : (
               <div className="flex gap-2 w-full">
-                {!stuckSyncDetected && (
-                  <Button 
-                    onClick={cancelSync} 
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    <Square className="w-4 h-4 mr-2" />
-                    Cancel
-                  </Button>
-                )}
+                {/* Always show cancel button when syncing */}
+                <Button 
+                  onClick={cancelSync} 
+                  variant="outline"
+                  className="flex-1"
+                >
+                  <Square className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
                 
+                {/* Force cancel for stuck syncs */}
                 {stuckSyncDetected && (
-                  <Button 
-                    onClick={forceResetAndRestart}
-                    variant="destructive"
-                    className="flex-1"
-                  >
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    Force Reset & Restart
-                  </Button>
+                  <>
+                    <Button 
+                      onClick={forceCancelSync}
+                      variant="destructive"
+                      className="flex-1"
+                    >
+                      <StopCircle className="w-4 h-4 mr-2" />
+                      Force Cancel
+                    </Button>
+                    
+                    <Button 
+                      onClick={forceResetAndRestart}
+                      variant="destructive"
+                      className="flex-1"
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Force Reset
+                    </Button>
+                  </>
                 )}
               </div>
             )}
@@ -197,6 +210,12 @@ export function ZoomSyncCard() {
               <div className="flex justify-between">
                 <span>Heartbeat:</span>
                 <span>{isSyncing ? 'Active' : 'Stopped'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Status:</span>
+                <span className={stuckSyncDetected ? 'text-red-600 font-medium' : ''}>
+                  {stuckSyncDetected ? 'STUCK - Action Required' : 'Normal'}
+                </span>
               </div>
             </div>
           )}
