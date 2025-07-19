@@ -173,6 +173,26 @@ async function performSync(supabase: any, syncLogId: string, connection: any, sy
       }
     }
 
+    // Phase 4: Post-sync validation and status correction
+    await updateSyncProgress(supabase, syncLogId, 95, 'Validating webinar statuses...')
+    
+    try {
+      const { data: statusCorrection } = await supabase
+        .rpc('system_update_webinar_statuses_with_logging')
+      
+      if (statusCorrection && statusCorrection.length > 0) {
+        const result = statusCorrection[0]
+        console.log(`📊 Status validation complete: ${result.updated_count} corrections, ${result.upcoming_count} upcoming, ${result.live_count} live, ${result.ended_count} ended`)
+        
+        if (result.corrections_made && result.corrections_made.length > 0) {
+          console.log('🔧 Status corrections made:', result.corrections_made)
+        }
+      }
+    } catch (validationError) {
+      console.warn('Status validation failed:', validationError)
+      // Don't fail the entire sync for validation errors
+    }
+
     // Complete the sync
     await supabase
       .from('zoom_sync_logs')
@@ -326,39 +346,53 @@ async function processWebinar(supabase: any, connectionId: string, webinar: any)
     .eq('connection_id', connectionId)
     .single()
 
-  const webinarData = {
-    connection_id: connectionId,
-    zoom_webinar_id: webinar.id,
-    webinar_id: webinar.id,
-    uuid: webinar.uuid || webinar.id,
-    topic: webinar.topic,
-    start_time: webinar.start_time,
-    duration: webinar.duration,
-    timezone: webinar.timezone,
-    agenda: webinar.agenda,
-    type: webinar.type,
-    status: webinar.status || 'scheduled',
-    join_url: webinar.join_url,
-    host_id: webinar.host_id || 'unknown',
-    sync_status: 'completed',
-    last_synced_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
-
   if (existingWebinar) {
-    // Update existing webinar
+    // Update existing webinar - REMOVED status field to prevent overriding database calculation
+    const updateData = {
+      zoom_webinar_id: webinar.id,
+      webinar_id: webinar.id,
+      uuid: webinar.uuid || webinar.id,
+      topic: webinar.topic,
+      start_time: webinar.start_time,
+      duration: webinar.duration,
+      timezone: webinar.timezone,
+      agenda: webinar.agenda,
+      type: webinar.type,
+      join_url: webinar.join_url,
+      host_id: webinar.host_id || 'unknown',
+      sync_status: 'completed',
+      last_synced_at: new Date().toISOString()
+      // Note: status field removed - let database trigger calculate the correct status
+    }
+
     await supabase
       .from('zoom_webinars')
-      .update(webinarData)
+      .update(updateData)
       .eq('id', existingWebinar.id)
   } else {
-    // Insert new webinar
+    // Insert new webinar - include status only for new records, trigger will calculate proper value
+    const insertData = {
+      connection_id: connectionId,
+      zoom_webinar_id: webinar.id,
+      webinar_id: webinar.id,
+      uuid: webinar.uuid || webinar.id,
+      topic: webinar.topic,
+      start_time: webinar.start_time,
+      duration: webinar.duration,
+      timezone: webinar.timezone,
+      agenda: webinar.agenda,
+      type: webinar.type,
+      status: webinar.status || 'scheduled', // Database trigger will override with calculated status
+      join_url: webinar.join_url,
+      host_id: webinar.host_id || 'unknown',
+      sync_status: 'completed',
+      last_synced_at: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    }
+
     await supabase
       .from('zoom_webinars')
-      .insert({
-        ...webinarData,
-        created_at: new Date().toISOString()
-      })
+      .insert(insertData)
   }
 }
 

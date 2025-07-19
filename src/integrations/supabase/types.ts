@@ -2040,6 +2040,16 @@ export type Database = {
           ended_count: number
         }[]
       }
+      system_update_webinar_statuses_with_logging: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          updated_count: number
+          upcoming_count: number
+          live_count: number
+          ended_count: number
+          corrections_made: Json
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
