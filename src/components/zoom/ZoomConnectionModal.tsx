@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -76,10 +76,7 @@ export const ZoomConnectionModal: React.FC<ZoomConnectionModalProps> = ({
     onOpenChange(false);
   };
 
-  // Custom handler that prevents closing on outside clicks but allows explicit close actions
   const handleOpenChange = (open: boolean) => {
-    // Only allow closing if it's an explicit action (like clicking X button)
-    // or if we're not in the middle of connecting
     if (!open && step !== 'connecting') {
       handleClose();
     }
@@ -90,6 +87,9 @@ export const ZoomConnectionModal: React.FC<ZoomConnectionModalProps> = ({
       <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Connect Zoom Account</DialogTitle>
+          <DialogDescription>
+            Enter your Zoom Server-to-Server OAuth app credentials to connect your account.
+          </DialogDescription>
         </DialogHeader>
 
         {step === 'form' && (

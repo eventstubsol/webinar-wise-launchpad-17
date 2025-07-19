@@ -141,23 +141,9 @@ class RenderZoomServiceClass {
           this.isWakingUp = false;
         }
         
-        // Show helpful error message
-        toast.error(
-          'Sync service is not responding. The service may be sleeping (free tier limitation).',
-          {
-            duration: 10000,
-            action: {
-              label: 'View Fix Guide',
-              onClick: () => {
-                window.open('/FIX_EDGE_FUNCTION_SYNC_ERROR.md', '_blank');
-              }
-            }
-          }
-        );
-        
         return {
           success: false,
-          error: 'Sync service is currently unavailable. If you\'re on Render\'s free tier, the service may be sleeping. Please wait a moment and try again, or check the Render dashboard.',
+          error: 'Sync service is currently unavailable. The service may be sleeping (free tier limitation).',
           isServiceAvailable: false,
           retryAfter: 60
         };
@@ -173,7 +159,7 @@ class RenderZoomServiceClass {
         method,
         url: `${RENDER_API_BASE_URL}${endpoint}`,
         headers,
-        timeout: endpoint === '/health' ? 10000 : 60000, // Increased timeout to 60 seconds
+        timeout: endpoint === '/health' ? 10000 : 60000,
         ...(data && { data })
       };
 
@@ -196,170 +182,49 @@ class RenderZoomServiceClass {
       console.error(`❌ Render API Error (${endpoint}):`, error);
       
       if (error instanceof AxiosError) {
-        // Handle 401 Authorization error specially
+        if (error.response?.status === 404) {
+          console.log(`📍 Render endpoint ${endpoint} not found (404) - this is expected for some endpoints`);
+          return {
+            success: false,
+            error: `Endpoint ${endpoint} not available on Render backend`,
+            isServiceAvailable: true
+          };
+        }
+        
         if (error.response?.status === 401) {
           console.error('Authorization failed - likely missing Supabase env vars on Render');
           
-          toast.error(
-            'Backend authorization failed. Using direct sync mode.',
-            {
-              duration: 10000,
-              description: 'The Render backend is missing Supabase configuration.',
-              action: {
-                label: 'How to Fix',
-                onClick: () => {
-                  // Create and download fix instructions
-                  const instructions = `
-RENDER BACKEND AUTHORIZATION FIX
-================================
-
-The sync is failing because the Render backend cannot verify your session.
-This happens when Supabase environment variables are not set on Render.
-
-TO FIX:
-1. Go to https://dashboard.render.com
-2. Find service: webinar-wise-launchpad-17
-3. Click "Environment" tab
-4. Add these variables:
-
-    SUPABASE_URL = https://lgajnzldkfpvcuofjxom.supabase.co
-    SUPABASE_SERVICE_ROLE_KEY = (get from Supabase dashboard)
-    SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxnYWpuemxka2ZwdmN1b2ZqeG9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4MjkzOTksImV4cCI6MjA2NjQwNTM5OX0.Czjd8aGqWo31lFYwzGz0RgPBwJxNK3Fr20Mbj6Jv0dA
-   NODE_ENV = production
-
-5. Get the service role key from:
-   https://app.supabase.com/project/lgajnzldkfpvcuofjxom/settings/api
-
-6. After adding, Render will auto-redeploy
-7. Wait 2-3 minutes for deployment to complete
-
-TEMPORARY WORKAROUND:
-The app is now using direct sync mode which bypasses the Render backend.
-This will work but may be slower for large datasets.
-`;
-                  const blob = new Blob([instructions], { type: 'text/plain' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = 'fix-render-auth.txt';
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }
-              }
-            }
-          );
-          
-          // Enable direct sync mode
           this.useDirectSync = true;
           
           return {
             success: false,
-            error: 'Authorization failed. Backend is missing Supabase configuration. Using direct sync mode as fallback.',
-            isServiceAvailable: true
+            error: 'Backend authorization failed. Using direct mode.',
+            isServiceAvailable: false
           };
         }
-        
-        // Handle other specific error cases
-        if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-          this.serviceHealthy = false;
-          
-          toast.error(
-            'Cannot connect to sync service. The service may be offline.',
-            {
-              duration: 10000,
-              description: 'Check the Render dashboard for service status.',
-              action: {
-                label: 'Open Render',
-                onClick: () => {
-                  window.open('https://dashboard.render.com', '_blank');
-                }
-              }
-            }
-          );
-          
-          return {
-            success: false,
-            error: 'Cannot connect to sync service. The backend service may be offline or starting up. Please check the Render dashboard.',
-            isServiceAvailable: false,
-            retryAfter: 60
-          };
-        }
-        
-        if (error.code === 'ECONNABORTED' || error.code === 'TIMEOUT') {
-          toast.error('Request timed out. The service is taking longer than expected to respond.');
-          
-          return {
-            success: false,
-            error: 'Request timed out. The service may be waking up from sleep mode (free tier). Please try again in a moment.',
-            isServiceAvailable: false,
-            retryAfter: 30
-          };
-        }
-        
-        if (error.response?.status === 503) {
-          this.serviceHealthy = false;
-          toast.loading('Service is starting up. Please wait...', { duration: 5000 });
-          
-          return {
-            success: false,
-            error: 'Sync service is starting up. This is normal for free tier services. Please wait 30-60 seconds and try again.',
-            isServiceAvailable: false,
-            retryAfter: 30
-          };
-        }
-
-        if (error.response?.status === 500) {
-          toast.error('Server error. This may be due to configuration issues.');
-          
-          return {
-            success: false,
-            error: 'Internal server error. Please check that all environment variables are correctly set in the Render dashboard.',
-            isServiceAvailable: true
-          };
-        }
-
-        if (error.response?.status === 403) {
-          toast.error('Access denied. You do not have permission for this action.');
-          
-          return {
-            success: false,
-            error: 'Access denied. You do not have permission to access this resource.',
-            isServiceAvailable: true
-          };
-        }
-        
-        // Generic error
-        const errorMessage = error.response?.data?.error || error.message || 'Network error occurred';
-        toast.error(errorMessage);
-        
-        return {
-          success: false,
-          error: errorMessage,
-          isServiceAvailable: error.response?.status ? true : false
-        };
       }
-      
-      // Non-Axios error
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      toast.error(errorMessage);
       
       return {
         success: false,
-        error: errorMessage,
+        error: error instanceof Error ? error.message : 'Request failed',
         isServiceAvailable: false
       };
     }
   }
 
-  async healthCheck(): Promise<ApiResponse> {
-    return this.makeRequest('/health', 'GET', undefined, true);
-  }
+  async validateCredentials(credentials: any): Promise<any> {
+    console.log('🔄 Starting Zoom credential validation...');
 
-  async validateCredentials(credentials: ValidationCredentialsPayload): Promise<ApiResponse> {
     try {
-      // Use Supabase Edge Function as primary validation method
+      // First try Supabase Edge Function
+      console.log('📡 Attempting validation with Supabase Edge Function...');
+      
       const { data, error } = await supabase.functions.invoke('validate-zoom-credentials', {
-        body: credentials
+        body: {
+          account_id: credentials.account_id,
+          client_id: credentials.client_id,
+          client_secret: credentials.client_secret
+        }
       });
 
       if (error) {
@@ -367,28 +232,32 @@ This will work but may be slower for large datasets.
         throw error;
       }
 
-      return {
-        success: data.success,
-        data: data.connection,
-        connection: data.connection,
-        message: data.message,
-        isServiceAvailable: true
-      };
-    } catch (error) {
-      console.error('Validation failed with Supabase Edge Function, trying Render fallback:', error);
-      
-      // Fallback to Render backend if Supabase fails
-      try {
-        return this.makeRequest('/validate-credentials', 'POST', credentials);
-      } catch (renderError) {
-        console.error('Both validation methods failed:', { supabaseError: error, renderError });
+      if (data?.success) {
+        console.log('✅ Validation successful via Supabase Edge Function');
         return {
-          success: false,
-          error: 'Unable to validate credentials - both validation services are unavailable',
-          isServiceAvailable: false
+          success: true,
+          connection: data.connection,
+          message: data.message || 'Credentials validated successfully'
         };
       }
+
+      throw new Error(data?.error || 'Validation failed');
+
+    } catch (supabaseError) {
+      console.error('Supabase validation failed:', supabaseError);
+      
+      // Since Render backend doesn't have the validate-credentials endpoint,
+      // we'll return a more helpful error message
+      return {
+        success: false,
+        error: 'Credential validation service is currently unavailable. Please check your Zoom credentials and try again.',
+        details: supabaseError instanceof Error ? supabaseError.message : 'Unknown error'
+      };
     }
+  }
+
+  async healthCheck(): Promise<ApiResponse> {
+    return this.makeRequest('/health', 'GET', undefined, true);
   }
 
   async testConnection(connectionId?: string): Promise<ApiResponse> {
@@ -509,4 +378,6 @@ This will work but may be slower for large datasets.
   }
 }
 
+// Export as both named and default for backward compatibility
 export const RenderZoomService = new RenderZoomServiceClass();
+export default RenderZoomService;
