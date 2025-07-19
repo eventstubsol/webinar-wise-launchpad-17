@@ -38,7 +38,7 @@ const ConnectionVisualization = () => (
       <img 
         src="/lovable-uploads/61077c71-dae2-4984-902e-fb5dbcc02a17.png" 
         alt="WebinarWise logo"
-        className="w-20 sm:w-22 md:w-24 lg:w-26 h-auto mb-4"
+        className="w-40 sm:w-44 md:w-48 lg:w-52 h-auto mb-4"
       />
       
     </div>
