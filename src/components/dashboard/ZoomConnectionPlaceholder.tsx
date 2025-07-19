@@ -21,7 +21,7 @@ const ConnectionVisualization = () => (
         alt="Zoom logo"
         className="w-20 h-auto mb-3"
       />
-      <span className="text-sm font-semibold text-blue-600">Zoom</span>
+      
     </div>
     
     {/* Disconnected Connection */}
