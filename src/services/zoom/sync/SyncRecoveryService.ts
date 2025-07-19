@@ -6,7 +6,8 @@ import { SyncStatus } from '@/types/zoom';
  * Service to handle stuck sync recovery and cleanup
  */
 export class SyncRecoveryService {
-  private static readonly STUCK_SYNC_TIMEOUT_MINUTES = 15;
+  private static readonly STUCK_SYNC_TIMEOUT_MINUTES = 10; // Reduced from 15 to 10
+  private static readonly INITIALIZING_TIMEOUT_MINUTES = 5; // New: timeout for initializing stage
 
   /**
    * Cancel a specific stuck sync
@@ -163,17 +164,46 @@ export class SyncRecoveryService {
       const now = new Date();
       const startTime = new Date(data.started_at);
       const minutesRunning = Math.floor((now.getTime() - startTime.getTime()) / (1000 * 60));
-      const isStuck = minutesRunning > this.STUCK_SYNC_TIMEOUT_MINUTES;
+      
+      // Different thresholds for different stages
+      const isStuckInInitializing = data.sync_stage === 'initializing' && minutesRunning > this.INITIALIZING_TIMEOUT_MINUTES;
+      const isStuckOverall = minutesRunning > this.STUCK_SYNC_TIMEOUT_MINUTES;
+      const isStuck = isStuckInInitializing || isStuckOverall;
+      
+      // Show reset option for initializing syncs after 5 minutes, others after 10 minutes
+      const canReset = isStuckInInitializing || isStuckOverall || data.sync_stage === 'initializing';
 
       return {
         ...data,
         minutesRunning,
         isStuck,
-        canReset: isStuck || data.sync_stage === 'initializing'
+        canReset,
+        isStuckInInitializing,
+        timeoutThreshold: data.sync_stage === 'initializing' ? this.INITIALIZING_TIMEOUT_MINUTES : this.STUCK_SYNC_TIMEOUT_MINUTES
       };
     } catch (error) {
       console.error('Error getting sync status:', error);
       return null;
+    }
+  }
+
+  /**
+   * Force cancel current sync (immediate action)
+   */
+  static async forceCancelCurrentSync(connectionId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const currentSync = await this.getCurrentSyncStatus(connectionId);
+      if (!currentSync) {
+        return { success: false, message: 'No active sync found to cancel' };
+      }
+
+      return await this.cancelStuckSync(currentSync.id);
+    } catch (error) {
+      console.error('Error force cancelling sync:', error);
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Unknown error' 
+      };
     }
   }
 }

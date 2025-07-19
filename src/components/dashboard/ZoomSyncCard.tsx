@@ -2,7 +2,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Database, Settings, RefreshCw, AlertCircle, Clock } from 'lucide-react';
+import { Database, Settings, RefreshCw, AlertCircle, Clock, X } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useZoomSync } from '@/hooks/useZoomSync';
 import { useQuery } from '@tanstack/react-query';
@@ -62,7 +62,8 @@ export function ZoomSyncCard() {
           processedItems: lastSyncData?.processed_items || 0,
           currentSync,
           hasStuckSync: currentSync?.isStuck || false,
-          canReset: currentSync?.canReset || false
+          canReset: currentSync?.canReset || false,
+          isStuckInInitializing: currentSync?.isStuckInInitializing || false
         };
       } catch (error) {
         console.error('Error fetching sync stats:', error);
@@ -74,12 +75,13 @@ export function ZoomSyncCard() {
           processedItems: 0,
           currentSync: null,
           hasStuckSync: false,
-          canReset: false
+          canReset: false,
+          isStuckInInitializing: false
         };
       }
     },
     enabled: !!connection?.id,
-    refetchInterval: 15000, // Check every 15 seconds for stuck syncs
+    refetchInterval: 10000, // Check every 10 seconds for stuck syncs (more frequent)
     retry: (failureCount, error) => {
       const hasStatus = error && typeof error === 'object' && 'status' in error;
       const status = hasStatus ? (error as any).status : null;
@@ -150,6 +152,7 @@ export function ZoomSyncCard() {
   const isServiceHealthy = healthCheck?.success !== false;
   const canSync = !isSyncing && !isExpired && isServiceHealthy && !requiresReconnection && !syncStats?.hasStuckSync;
   const hasStuckSync = syncStats?.hasStuckSync || false;
+  const canShowForceCancel = syncStats?.canReset || syncStats?.isStuckInInitializing;
 
   return (
     <Card>
@@ -169,23 +172,49 @@ export function ZoomSyncCard() {
           syncState={{ error, requiresReconnection }}
         />
 
-        {/* Stuck Sync Alert */}
+        {/* Stuck Sync Alert - Enhanced */}
         {hasStuckSync && syncStats?.currentSync && (
           <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
             <div className="flex items-start gap-2">
               <Clock className="h-4 w-4 text-amber-600 mt-0.5" />
               <div className="flex-1">
-                <h4 className="text-sm font-medium text-amber-800">Sync Appears Stuck</h4>
+                <h4 className="text-sm font-medium text-amber-800">
+                  {syncStats.isStuckInInitializing ? 'Sync Stuck in Initialization' : 'Sync Appears Stuck'}
+                </h4>
                 <p className="text-sm text-amber-700 mt-1">
-                  Your sync has been running for {syncStats.currentSync.minutesRunning} minutes in the "{syncStats.currentSync.sync_stage}" stage. 
-                  This might indicate a problem.
+                  Your sync has been running for {syncStats.currentSync.minutesRunning} minutes in the "{syncStats.currentSync.sync_stage}" stage.
+                  {syncStats.isStuckInInitializing && ' This is likely due to network connectivity issues.'}
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <SyncResetButton 
+                    connectionId={connection.id}
+                    syncLogId={syncStats.currentSync.id}
+                    variant="force-cancel"
+                    onReset={handleSyncReset}
+                    size="sm"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Show immediate cancel option for initializing syncs over 3 minutes */}
+        {isSyncing && currentOperation.includes('Initializing') && !hasStuckSync && (
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <div className="flex items-start gap-2">
+              <RefreshCw className="h-4 w-4 text-blue-600 mt-0.5 animate-spin" />
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-blue-800">Sync Initializing</h4>
+                <p className="text-sm text-blue-700 mt-1">
+                  If the sync appears stuck, you can cancel and restart it.
                 </p>
                 <div className="mt-2">
                   <SyncResetButton 
                     connectionId={connection.id}
-                    syncLogId={syncStats.currentSync.id}
-                    variant="cancel-current"
+                    variant="force-cancel"
                     onReset={handleSyncReset}
+                    size="sm"
                   />
                 </div>
               </div>
@@ -248,7 +277,7 @@ export function ZoomSyncCard() {
         </div>
 
         {/* Reset button for stuck syncs */}
-        {syncStats?.canReset && (
+        {syncStats?.canReset && !hasStuckSync && (
           <div className="pt-2 border-t">
             <SyncResetButton 
               connectionId={connection.id}

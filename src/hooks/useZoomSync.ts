@@ -49,7 +49,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
-  // Auto-detect and recover stuck syncs
+  // Auto-detect and recover stuck syncs - more aggressive
   useEffect(() => {
     if (!connection?.id) return;
 
@@ -60,20 +60,26 @@ export function useZoomSync(connection: ZoomConnection | null) {
           console.log(`Auto-recovered ${recoveredCount} stuck sync(s)`);
           // Refresh sync stats
           queryClient.invalidateQueries({ queryKey: ['zoom-sync-stats'] });
+          
+          // Show notification
+          toast({
+            title: "Auto-Recovery",
+            description: `Automatically cancelled ${recoveredCount} stuck sync(s)`,
+          });
         }
       } catch (error) {
         console.error('Error in automatic stuck sync recovery:', error);
       }
     };
 
-    // Check for stuck syncs every 5 minutes
-    const interval = setInterval(checkForStuckSyncs, 5 * 60 * 1000);
+    // Check for stuck syncs more frequently - every 2 minutes
+    const interval = setInterval(checkForStuckSyncs, 2 * 60 * 1000);
     
     // Also check immediately
     checkForStuckSyncs();
 
     return () => clearInterval(interval);
-  }, [connection?.id, queryClient]);
+  }, [connection?.id, queryClient, toast]);
 
   const startSync = useCallback(async (syncType: SyncType = SyncType.MANUAL) => {
     if (!connection?.id) {
@@ -85,15 +91,24 @@ export function useZoomSync(connection: ZoomConnection | null) {
       return;
     }
 
-    // Check for existing active syncs first
+    // Check for existing active syncs first - more aggressive detection
     try {
       const currentSync = await SyncRecoveryService.getCurrentSyncStatus(connection.id);
       if (currentSync && !currentSync.isStuck) {
-        toast({
-          title: "Sync Already Running",
-          description: "A sync is already in progress. Please wait for it to complete.",
-          variant: "destructive",
-        });
+        // Show immediate cancel option for initializing syncs over 3 minutes
+        if (currentSync.sync_stage === 'initializing' && currentSync.minutesRunning > 3) {
+          toast({
+            title: "Sync in Initialization",
+            description: `A sync has been initializing for ${currentSync.minutesRunning} minutes. You can cancel it from the sync card.`,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Sync Already Running",
+            description: "A sync is already in progress. Please wait for it to complete or cancel it.",
+            variant: "destructive",
+          });
+        }
         return;
       }
     } catch (error) {
@@ -237,31 +252,46 @@ export function useZoomSync(connection: ZoomConnection | null) {
           });
 
         } else if (result.status === 'running') {
-          // Continue polling, but with timeout protection
-          const maxPollingTime = 20 * 60 * 1000; // 20 minutes
-          const startTime = Date.now();
-          
-          if ((Date.now() - startTime) < maxPollingTime) {
-            setTimeout(() => pollSyncProgress(syncId), 3000);
-          } else {
-            // Sync has been running too long, mark as potentially stuck
-            setSyncState(prev => ({
-              ...prev,
-              currentOperation: 'Sync taking longer than expected...',
-              error: 'Sync may be stuck - consider resetting if it doesn\'t progress'
-            }));
-          }
+          // Continue polling, but with shorter intervals for better responsiveness
+          setTimeout(() => pollSyncProgress(syncId), 2000);
         }
       }
     } catch (error) {
       console.error('Error polling sync progress:', error);
       // Continue polling despite errors, but less frequently
-      setTimeout(() => pollSyncProgress(syncId), 10000);
+      setTimeout(() => pollSyncProgress(syncId), 5000);
     }
   }, [queryClient, toast]);
 
   const cancelSync = useCallback(async () => {
     if (!syncState.syncId) {
+      // Try to force cancel current sync if no syncId available
+      if (connection?.id) {
+        try {
+          const result = await SyncRecoveryService.forceCancelCurrentSync(connection.id);
+          if (result.success) {
+            setSyncState(prev => ({
+              ...prev,
+              isSyncing: false,
+              syncStatus: 'idle',
+              syncProgress: 0,
+              currentOperation: '',
+              syncId: null,
+              error: null,
+              requiresReconnection: false
+            }));
+
+            toast({
+              title: "Sync Cancelled",
+              description: "The sync operation has been cancelled.",
+            });
+            return;
+          }
+        } catch (error) {
+          console.error('Force cancel error:', error);
+        }
+      }
+      
       toast({
         title: "No Active Sync",
         description: "There's no active sync to cancel.",
@@ -300,7 +330,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
         variant: "destructive",
       });
     }
-  }, [syncState.syncId, toast]);
+  }, [syncState.syncId, connection?.id, toast]);
 
   const testApiConnection = useCallback(async () => {
     if (!connection?.id) {
