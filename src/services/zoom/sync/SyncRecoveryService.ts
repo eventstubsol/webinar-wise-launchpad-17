@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { SyncStatus } from '@/types/zoom';
 
@@ -10,7 +9,7 @@ export class SyncRecoveryService {
   private static readonly INITIALIZING_TIMEOUT_MINUTES = 5; // New: timeout for initializing stage
 
   /**
-   * Cancel a specific stuck sync
+   * Cancel a specific stuck sync - Fixed column reference
    */
   static async cancelStuckSync(syncLogId: string): Promise<{ success: boolean; message: string }> {
     try {
@@ -20,7 +19,6 @@ export class SyncRecoveryService {
         .from('zoom_sync_logs')
         .update({
           sync_status: 'cancelled',
-          status: 'cancelled',
           completed_at: new Date().toISOString(),
           error_message: 'Sync cancelled by user due to being stuck',
           updated_at: new Date().toISOString()
@@ -43,19 +41,19 @@ export class SyncRecoveryService {
   }
 
   /**
-   * Detect and automatically recover stuck syncs
+   * Detect and automatically recover stuck syncs - Enhanced version
    */
   static async detectAndRecoverStuckSyncs(connectionId: string): Promise<number> {
     try {
       const stuckSyncCutoff = new Date();
       stuckSyncCutoff.setMinutes(stuckSyncCutoff.getMinutes() - this.STUCK_SYNC_TIMEOUT_MINUTES);
 
-      // Find syncs that are stuck in initializing or running state for too long
+      // Find syncs that are stuck in any active state for too long
       const { data: stuckSyncs, error } = await supabase
         .from('zoom_sync_logs')
-        .select('id, sync_stage, started_at')
+        .select('id, sync_stage, started_at, sync_status')
         .eq('connection_id', connectionId)
-        .in('sync_status', ['started', 'running'])
+        .in('sync_status', ['started', 'running', 'pending'])
         .lt('started_at', stuckSyncCutoff.toISOString());
 
       if (error) {
@@ -82,6 +80,61 @@ export class SyncRecoveryService {
     } catch (error) {
       console.error('Error detecting stuck syncs:', error);
       return 0;
+    }
+  }
+
+  /**
+   * Force cleanup of all stuck syncs for a connection - Nuclear option
+   */
+  static async forceCleanupStuckSyncs(connectionId: string): Promise<{ success: boolean; message: string; count: number }> {
+    try {
+      console.log(`Force cleaning up stuck syncs for connection: ${connectionId}`);
+
+      // Find ALL active syncs (not just old ones)
+      const { data: activeSyncs, error: fetchError } = await supabase
+        .from('zoom_sync_logs')
+        .select('id, sync_status, started_at')
+        .eq('connection_id', connectionId)
+        .in('sync_status', ['started', 'running', 'pending']);
+
+      if (fetchError) {
+        return { success: false, message: fetchError.message, count: 0 };
+      }
+
+      const syncCount = activeSyncs?.length || 0;
+      if (syncCount === 0) {
+        return { success: true, message: 'No active syncs to cleanup', count: 0 };
+      }
+
+      // Cancel ALL active syncs immediately
+      const { error: updateError } = await supabase
+        .from('zoom_sync_logs')
+        .update({
+          sync_status: 'cancelled',
+          completed_at: new Date().toISOString(),
+          error_message: 'Force cancelled - stuck sync cleanup',
+          updated_at: new Date().toISOString()
+        })
+        .eq('connection_id', connectionId)
+        .in('sync_status', ['started', 'running', 'pending']);
+
+      if (updateError) {
+        return { success: false, message: updateError.message, count: 0 };
+      }
+
+      console.log(`✅ Force cleaned up ${syncCount} stuck sync(s)`);
+      
+      return { 
+        success: true, 
+        message: `Successfully cleaned up ${syncCount} stuck sync(s)`, 
+        count: syncCount 
+      };
+    } catch (error) {
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Unknown error',
+        count: 0 
+      };
     }
   }
 

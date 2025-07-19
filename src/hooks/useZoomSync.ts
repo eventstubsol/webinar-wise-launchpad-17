@@ -1,8 +1,8 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { RenderZoomService } from '@/services/zoom/RenderZoomService';
 import { SyncRecoveryService } from '@/services/zoom/sync/SyncRecoveryService';
+import { SyncManagementService } from '@/services/zoom/sync/SyncManagementService';
 import { ZoomConnection, SyncType } from '@/types/zoom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -14,6 +14,7 @@ interface SyncState {
   syncId: string | null;
   error: string | null;
   requiresReconnection: boolean;
+  syncMode: 'render' | 'direct' | null;
 }
 
 export function useZoomSync(connection: ZoomConnection | null) {
@@ -27,29 +28,28 @@ export function useZoomSync(connection: ZoomConnection | null) {
     currentOperation: '',
     syncId: null,
     error: null,
-    requiresReconnection: false
+    requiresReconnection: false,
+    syncMode: null
   });
 
-  // Health check query with better error handling
+  // Enhanced health check with better error handling
   const { data: healthCheck, refetch: refetchHealth } = useQuery({
     queryKey: ['render-health'],
     queryFn: async () => {
       try {
-        const result = await RenderZoomService.healthCheck();
-        return result;
+        const isHealthy = await SyncManagementService.isRenderServiceHealthy();
+        return { success: isHealthy, error: isHealthy ? null : 'Service unavailable' };
       } catch (error) {
         console.error('Health check failed:', error);
         return { success: false, error: 'Service unavailable' };
       }
     },
-    refetchInterval: 60000, // Check every minute
-    retry: (failureCount, error) => {
-      return failureCount < 2;
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: 30000, // Check every 30 seconds
+    retry: 1,
+    retryDelay: 5000,
   });
 
-  // Auto-detect and recover stuck syncs - more aggressive
+  // More aggressive auto-recovery of stuck syncs
   useEffect(() => {
     if (!connection?.id) return;
 
@@ -58,10 +58,8 @@ export function useZoomSync(connection: ZoomConnection | null) {
         const recoveredCount = await SyncRecoveryService.detectAndRecoverStuckSyncs(connection.id);
         if (recoveredCount > 0) {
           console.log(`Auto-recovered ${recoveredCount} stuck sync(s)`);
-          // Refresh sync stats
           queryClient.invalidateQueries({ queryKey: ['zoom-sync-stats'] });
           
-          // Show notification
           toast({
             title: "Auto-Recovery",
             description: `Automatically cancelled ${recoveredCount} stuck sync(s)`,
@@ -72,11 +70,9 @@ export function useZoomSync(connection: ZoomConnection | null) {
       }
     };
 
-    // Check for stuck syncs more frequently - every 2 minutes
-    const interval = setInterval(checkForStuckSyncs, 2 * 60 * 1000);
-    
-    // Also check immediately
+    // Check immediately and then every minute
     checkForStuckSyncs();
+    const interval = setInterval(checkForStuckSyncs, 60000);
 
     return () => clearInterval(interval);
   }, [connection?.id, queryClient, toast]);
@@ -91,54 +87,35 @@ export function useZoomSync(connection: ZoomConnection | null) {
       return;
     }
 
-    // Check for existing active syncs first - more aggressive detection
+    // Check for existing active syncs
     try {
       const currentSync = await SyncRecoveryService.getCurrentSyncStatus(connection.id);
       if (currentSync && !currentSync.isStuck) {
-        // Show immediate cancel option for initializing syncs over 3 minutes
-        if (currentSync.sync_stage === 'initializing' && currentSync.minutesRunning > 3) {
-          toast({
-            title: "Sync in Initialization",
-            description: `A sync has been initializing for ${currentSync.minutesRunning} minutes. You can cancel it from the sync card.`,
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Sync Already Running",
-            description: "A sync is already in progress. Please wait for it to complete or cancel it.",
-            variant: "destructive",
-          });
-        }
+        toast({
+          title: "Sync Already Running",
+          description: "A sync is already in progress. Please wait or cancel it first.",
+          variant: "destructive",
+        });
         return;
       }
     } catch (error) {
       console.error('Error checking current sync status:', error);
     }
 
-    // Check service health first
-    if (healthCheck && !healthCheck.success) {
-      toast({
-        title: "Service Unavailable",
-        description: healthCheck.error || "Render sync service is currently unavailable. Please try again in a few minutes.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setSyncState(prev => ({
       ...prev,
       isSyncing: true,
       syncStatus: 'pending',
-      currentOperation: 'Initializing sync...',
+      currentOperation: 'Preparing sync...',
       error: null,
       requiresReconnection: false,
       syncProgress: 5
     }));
 
     try {
-      console.log(`🔄 Starting ${syncType} sync for connection:`, connection.id);
+      console.log(`🔄 Starting enhanced ${syncType} sync for connection:`, connection.id);
       
-      const result = await RenderZoomService.startSync(connection.id, syncType);
+      const result = await SyncManagementService.startReliableSync(connection.id, syncType);
       
       if (result.success && result.syncId) {
         setSyncState(prev => ({
@@ -146,26 +123,26 @@ export function useZoomSync(connection: ZoomConnection | null) {
           syncStatus: 'running',
           syncId: result.syncId,
           currentOperation: 'Sync started successfully...',
-          syncProgress: 10
+          syncProgress: 10,
+          syncMode: result.mode
         }));
 
         toast({
           title: "Sync Started",
-          description: result.message || "Webinar sync has been initiated.",
+          description: `${result.message} (${result.mode} mode)`,
         });
 
-        // Start polling for progress immediately
-        setTimeout(() => pollSyncProgress(result.syncId), 2000);
+        // Start polling for progress
+        setTimeout(() => pollSyncProgress(result.syncId!), 2000);
 
       } else {
-        throw new Error(result.error || 'Failed to start sync');
+        throw new Error(result.message || 'Failed to start sync');
       }
 
     } catch (error) {
-      console.error('Sync error:', error);
+      console.error('Enhanced sync error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
-      // Check if this is a token/reconnection error
       const requiresReconnection = errorMessage.includes('reconnect') || 
                                    errorMessage.includes('token') ||
                                    errorMessage.includes('expired') ||
@@ -178,10 +155,10 @@ export function useZoomSync(connection: ZoomConnection | null) {
         error: errorMessage,
         currentOperation: '',
         requiresReconnection,
-        syncProgress: 0
+        syncProgress: 0,
+        syncMode: null
       }));
 
-      // Show appropriate error message based on the error type
       if (requiresReconnection) {
         toast({
           title: "Connection Issue",
@@ -202,7 +179,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
         });
       }
     }
-  }, [connection, toast, healthCheck]);
+  }, [connection, toast]);
 
   const pollSyncProgress = useCallback(async (syncId: string) => {
     if (!syncId) return;
@@ -370,12 +347,51 @@ export function useZoomSync(connection: ZoomConnection | null) {
     refetchHealth();
   }, [refetchHealth]);
 
+  const forceCleanupStuckSyncs = useCallback(async () => {
+    if (!connection?.id) return;
+
+    try {
+      const result = await SyncRecoveryService.forceCleanupStuckSyncs(connection.id);
+      
+      if (result.success) {
+        setSyncState(prev => ({
+          ...prev,
+          isSyncing: false,
+          syncStatus: 'idle',
+          syncProgress: 0,
+          currentOperation: '',
+          syncId: null,
+          error: null,
+          requiresReconnection: false,
+          syncMode: null
+        }));
+
+        queryClient.invalidateQueries({ queryKey: ['zoom-sync-stats'] });
+        
+        toast({
+          title: "Cleanup Successful",
+          description: result.message,
+        });
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      console.error('Force cleanup error:', error);
+      toast({
+        title: "Cleanup Failed",
+        description: error instanceof Error ? error.message : 'Failed to cleanup stuck syncs',
+        variant: "destructive",
+      });
+    }
+  }, [connection?.id, queryClient, toast]);
+
   return {
     ...syncState,
     startSync,
     cancelSync,
     testApiConnection,
     healthCheck,
-    forceHealthCheck
+    forceHealthCheck,
+    forceCleanupStuckSyncs
   };
 }

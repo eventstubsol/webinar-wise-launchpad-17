@@ -2,307 +2,209 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Database, Settings, RefreshCw, AlertCircle, Clock, X } from 'lucide-react';
-import { useZoomConnection } from '@/hooks/useZoomConnection';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import { 
+  RefreshCw, 
+  Play, 
+  Square, 
+  AlertTriangle, 
+  CheckCircle2, 
+  XCircle,
+  Clock,
+  Zap
+} from 'lucide-react';
 import { useZoomSync } from '@/hooks/useZoomSync';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { Link } from 'react-router-dom';
-import { SyncStatusMessage } from '@/components/zoom/sync/SyncStatusMessage';
-import { ServiceStatusAlert } from '@/components/zoom/sync/ServiceStatusAlert';
-import { SyncResetButton } from '@/components/zoom/sync/SyncResetButton';
-import { SyncRecoveryService } from '@/services/zoom/sync/SyncRecoveryService';
+import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { SyncType } from '@/types/zoom';
+import { SyncResetButton } from '@/components/zoom/sync/SyncResetButton';
 
 export function ZoomSyncCard() {
-  const { connection, isConnected, isExpired } = useZoomConnection();
-  const { 
-    startSync, 
-    testApiConnection, 
-    isSyncing, 
-    syncProgress, 
-    syncStatus, 
+  const { connection } = useZoomConnection();
+  const {
+    isSyncing,
+    syncProgress,
+    syncStatus,
     currentOperation,
-    error,
-    requiresReconnection,
-    healthCheck,
-    forceHealthCheck
+    syncMode,
+    startSync,
+    cancelSync,
+    forceCleanupStuckSyncs,
+    healthCheck
   } = useZoomSync(connection);
 
-  // Get sync statistics and current sync status
-  const { data: syncStats, refetch: refetchStats } = useQuery({
-    queryKey: ['zoom-sync-stats', connection?.id],
-    queryFn: async () => {
-      if (!connection?.id) return null;
+  const getSyncStatusInfo = () => {
+    if (isSyncing) {
+      return {
+        icon: RefreshCw,
+        label: 'Syncing',
+        variant: 'default' as const,
+        color: 'text-blue-600',
+        description: currentOperation || 'Processing...'
+      };
+    }
 
-      try {
-        const [webinarsResult, syncLogsResult, currentSyncResult] = await Promise.all([
-          supabase
-            .from('zoom_webinars')
-            .select('id, synced_at', { count: 'exact' })
-            .eq('connection_id', connection.id),
-          supabase
-            .from('zoom_sync_logs')
-            .select('*')
-            .eq('connection_id', connection.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-          SyncRecoveryService.getCurrentSyncStatus(connection.id)
-        ]);
-
-        const lastSyncData = syncLogsResult.data;
-        const currentSync = currentSyncResult;
-
+    switch (syncStatus) {
+      case 'completed':
         return {
-          totalWebinars: webinarsResult.count || 0,
-          lastSync: lastSyncData?.completed_at || connection.last_sync_at,
-          lastSyncStatus: lastSyncData?.sync_status || 'idle',
-          lastSyncError: lastSyncData?.error_message,
-          processedItems: lastSyncData?.processed_items || 0,
-          currentSync,
-          hasStuckSync: currentSync?.isStuck || false,
-          canReset: currentSync?.canReset || false,
-          isStuckInInitializing: currentSync?.isStuckInInitializing || false
+          icon: CheckCircle2,
+          label: 'Completed',
+          variant: 'default' as const,
+          color: 'text-green-600',
+          description: 'Last sync completed successfully'
         };
-      } catch (error) {
-        console.error('Error fetching sync stats:', error);
+      case 'failed':
         return {
-          totalWebinars: 0,
-          lastSync: null,
-          lastSyncStatus: 'idle',
-          lastSyncError: null,
-          processedItems: 0,
-          currentSync: null,
-          hasStuckSync: false,
-          canReset: false,
-          isStuckInInitializing: false
+          icon: XCircle,
+          label: 'Failed',
+          variant: 'destructive' as const,
+          color: 'text-red-600',
+          description: 'Last sync encountered an error'
         };
-      }
-    },
-    enabled: !!connection?.id,
-    refetchInterval: 10000, // Check every 10 seconds for stuck syncs (more frequent)
-    retry: (failureCount, error) => {
-      const hasStatus = error && typeof error === 'object' && 'status' in error;
-      const status = hasStatus ? (error as any).status : null;
-      
-      if (typeof status === 'number' && status >= 400 && status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
-  });
-
-  const handleSyncClick = () => {
-    startSync(SyncType.INCREMENTAL);
+      default:
+        return {
+          icon: Clock,
+          label: 'Ready',
+          variant: 'outline' as const,
+          color: 'text-gray-600',
+          description: 'Ready to sync webinar data'
+        };
+    }
   };
 
-  const handleConnectionTest = async () => {
-    await testApiConnection();
+  const statusInfo = getSyncStatusInfo();
+  const StatusIcon = statusInfo.icon;
+  const isRenderHealthy = healthCheck?.success ?? false;
+
+  const handleStartSync = () => {
+    startSync(SyncType.MANUAL);
   };
 
-  const handleSyncReset = () => {
-    // Refetch stats after reset
-    refetchStats();
+  const handleForceCleanup = () => {
+    forceCleanupStuckSyncs();
   };
-
-  if (!isConnected) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="h-5 w-5" />
-            Webinar Data Sync
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-muted-foreground text-sm">
-            Connect your Zoom account to sync webinar data and view analytics.
-          </p>
-          <Button asChild variant="default" size="sm">
-            <Link to="/settings">
-              <Settings className="w-4 h-4 mr-2" />
-              Connect Zoom Account
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Determine current sync status
-  let currentSyncStatus: 'idle' | 'running' | 'completed' | 'failed' | 'pending' = 'idle';
-  let statusMessage = '';
-  
-  if (isSyncing) {
-    currentSyncStatus = syncStatus === 'pending' ? 'pending' : 'running';
-    statusMessage = currentOperation;
-  } else if (syncStatus === 'completed') {
-    currentSyncStatus = 'completed';
-  } else if (syncStatus === 'failed') {
-    currentSyncStatus = 'failed';
-    statusMessage = error || 'Sync failed';
-  } else if (syncStats?.lastSyncStatus === 'completed') {
-    currentSyncStatus = syncStats.processedItems === 0 ? 'idle' : 'completed';
-  } else if (syncStats?.lastSyncStatus === 'failed') {
-    currentSyncStatus = 'failed';
-    statusMessage = syncStats.lastSyncError || 'Unknown error';
-  }
-
-  const isServiceHealthy = healthCheck?.success !== false;
-  const canSync = !isSyncing && !isExpired && isServiceHealthy && !requiresReconnection && !syncStats?.hasStuckSync;
-  const hasStuckSync = syncStats?.hasStuckSync || false;
-  const canShowForceCancel = syncStats?.canReset || syncStats?.isStuckInInitializing;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Database className="h-5 w-5" />
-          Webinar Data Sync (Render API)
-          {(!isServiceHealthy || requiresReconnection || hasStuckSync) && (
-            <AlertCircle className="h-4 w-4 text-red-500" />
-          )}
+        <CardTitle className="flex items-center justify-between">
+          <span>Sync Status</span>
+          <div className="flex items-center gap-2">
+            {syncMode && (
+              <Badge variant="outline" className="text-xs">
+                {syncMode === 'render' ? 'Cloud' : 'Direct'}
+              </Badge>
+            )}
+            <Badge variant={statusInfo.variant} className="flex items-center gap-1">
+              <StatusIcon className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+              {statusInfo.label}
+            </Badge>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <ServiceStatusAlert 
-          healthCheck={healthCheck}
-          onRefresh={forceHealthCheck}
-          syncState={{ error, requiresReconnection }}
-        />
-
-        {/* Stuck Sync Alert - Enhanced */}
-        {hasStuckSync && syncStats?.currentSync && (
-          <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
-            <div className="flex items-start gap-2">
-              <Clock className="h-4 w-4 text-amber-600 mt-0.5" />
-              <div className="flex-1">
-                <h4 className="text-sm font-medium text-amber-800">
-                  {syncStats.isStuckInInitializing ? 'Sync Stuck in Initialization' : 'Sync Appears Stuck'}
-                </h4>
-                <p className="text-sm text-amber-700 mt-1">
-                  Your sync has been running for {syncStats.currentSync.minutesRunning} minutes in the "{syncStats.currentSync.sync_stage}" stage.
-                  {syncStats.isStuckInInitializing && ' This is likely due to network connectivity issues.'}
-                </p>
-                <div className="mt-2 flex gap-2">
-                  <SyncResetButton 
-                    connectionId={connection.id}
-                    syncLogId={syncStats.currentSync.id}
-                    variant="force-cancel"
-                    onReset={handleSyncReset}
-                    size="sm"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Show immediate cancel option for initializing syncs over 3 minutes */}
-        {isSyncing && currentOperation.includes('Initializing') && !hasStuckSync && (
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <div className="flex items-start gap-2">
-              <RefreshCw className="h-4 w-4 text-blue-600 mt-0.5 animate-spin" />
-              <div className="flex-1">
-                <h4 className="text-sm font-medium text-blue-800">Sync Initializing</h4>
-                <p className="text-sm text-blue-700 mt-1">
-                  If the sync appears stuck, you can cancel and restart it.
-                </p>
-                <div className="mt-2">
-                  <SyncResetButton 
-                    connectionId={connection.id}
-                    variant="force-cancel"
-                    onReset={handleSyncReset}
-                    size="sm"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <SyncStatusMessage 
-          status={currentSyncStatus}
-          message={statusMessage}
-          webinarCount={syncStats?.totalWebinars || 0}
-          lastSyncAt={syncStats?.lastSync || undefined}
-        />
-
-        {isSyncing && (
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Progress:</span>
-              <span>{syncProgress}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${syncProgress}%` }}
-              />
-            </div>
-            {currentOperation && (
-              <div className="text-xs text-muted-foreground">
-                {currentOperation}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="flex gap-2 flex-wrap">
-          <Button 
-            onClick={handleSyncClick}
-            disabled={!canSync}
-            size="sm"
-            className="flex-1"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-            {isSyncing ? 'Syncing...' : 'Sync Now'}
-          </Button>
-          
-          <Button 
-            onClick={handleConnectionTest}
-            variant="outline"
-            size="sm"
-            disabled={isSyncing || !isServiceHealthy}
-          >
-            Test Connection
-          </Button>
-          
-          <Button asChild variant="outline" size="sm">
-            <Link to="/settings">
-              <Settings className="w-4 h-4" />
-            </Link>
-          </Button>
-        </div>
-
-        {/* Reset button for stuck syncs */}
-        {syncStats?.canReset && !hasStuckSync && (
-          <div className="pt-2 border-t">
-            <SyncResetButton 
-              connectionId={connection.id}
-              onReset={handleSyncReset}
-            />
-          </div>
-        )}
-
-        <div className="text-xs text-muted-foreground">
-          <div>Total webinars: {syncStats?.totalWebinars || 0}</div>
-          {syncStats?.lastSync && (
-            <div>Last sync: {new Date(syncStats.lastSync).toLocaleString()}</div>
-          )}
-          <div className="flex items-center gap-1 mt-1">
-            Render API status: 
-            <span className={isServiceHealthy ? 'text-green-600' : 'text-red-600'}>
-              {isServiceHealthy ? 'Online' : 'Offline'}
+        {/* Service Health Indicator */}
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-600">Service Status</span>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${isRenderHealthy ? 'bg-green-500' : 'bg-yellow-500'}`} />
+            <span className={isRenderHealthy ? 'text-green-600' : 'text-yellow-600'}>
+              {isRenderHealthy ? 'Healthy' : 'Starting'}
             </span>
           </div>
-          {requiresReconnection && (
-            <div className="text-red-600 mt-1">
-              Connection expired - reconnection required
+        </div>
+
+        <Separator />
+
+        {/* Sync Progress */}
+        {isSyncing && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span>Progress</span>
+              <span>{syncProgress}%</span>
+            </div>
+            <Progress value={syncProgress} className="h-2" />
+            <p className="text-sm text-gray-600">{currentOperation}</p>
+          </div>
+        )}
+
+        {/* Status Description */}
+        {!isSyncing && (
+          <p className="text-sm text-gray-600">{statusInfo.description}</p>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          {!isSyncing ? (
+            <>
+              <Button 
+                onClick={handleStartSync} 
+                disabled={!connection}
+                className="flex-1"
+              >
+                <Play className="w-4 h-4 mr-2" />
+                Start Sync
+              </Button>
+              
+              {/* Force Cleanup Button - Always available when not syncing */}
+              <Button 
+                onClick={handleForceCleanup}
+                variant="outline"
+                size="sm"
+                disabled={!connection}
+                title="Clean up any stuck sync records"
+              >
+                <Zap className="w-4 h-4 mr-2" />
+                Force Cleanup
+              </Button>
+            </>
+          ) : (
+            <div className="flex gap-2 w-full">
+              <Button 
+                onClick={cancelSync} 
+                variant="outline"
+                className="flex-1"
+              >
+                <Square className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+
+              {/* Enhanced Reset Options */}
+              <SyncResetButton 
+                connectionId={connection?.id || ''}
+                variant="force-cancel"
+                size="sm"
+              />
             </div>
           )}
         </div>
+
+        {/* Enhanced Reset Controls */}
+        {connection?.id && (
+          <div className="pt-2 border-t">
+            <div className="flex gap-2">
+              <SyncResetButton 
+                connectionId={connection.id}
+                variant="reset-all"
+                size="sm"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Health Warning */}
+        {!isRenderHealthy && (
+          <div className="flex items-start gap-2 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+            <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm">
+              <p className="text-yellow-800 font-medium">Service Starting</p>
+              <p className="text-yellow-700">
+                The sync service is warming up. Syncs may take longer to start initially.
+              </p>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
