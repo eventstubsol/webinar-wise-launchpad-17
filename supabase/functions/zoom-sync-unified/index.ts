@@ -636,12 +636,11 @@ async function upsertParticipants(supabase: any, participants: any[], webinarDbI
 
   try {
     for (const participant of participants) {
-      const participantId = participant.participant_uuid || participant.uuid || participant.id || `part_${Date.now()}_${Math.random()}`;
+      const participantUuid = participant.participant_uuid || participant.uuid || participant.id || `part_${Date.now()}_${Math.random()}`;
       
       const participantData = {
         webinar_id: webinarDbId,
-        participant_id: participantId,
-        participant_uuid: participant.participant_uuid || participant.uuid || null,
+        participant_uuid: participantUuid,
         participant_user_id: participant.user_id || participant.participant_user_id || null,
         participant_name: participant.name || participant.participant_name || 'Unknown Participant',
         participant_email: participant.user_email || participant.email || null,
@@ -663,7 +662,7 @@ async function upsertParticipants(supabase: any, participants: any[], webinarDbI
       const { error } = await supabase
         .from('zoom_participants')
         .upsert(participantData, {
-          onConflict: 'webinar_id,participant_id',
+          onConflict: 'webinar_id,participant_uuid',
           ignoreDuplicates: false
         });
 
