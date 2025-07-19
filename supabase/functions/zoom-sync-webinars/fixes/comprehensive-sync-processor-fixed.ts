@@ -2,8 +2,151 @@
 /**
  * Comprehensive sync processor with enhanced data fetching and status fixing
  */
-import { ZoomRegistrantService } from '../../../../src/services/zoom/api/ZoomRegistrantService';
-import { ZoomParticipantService } from '../../../../src/services/zoom/api/ZoomParticipantService';
+
+// Zoom API client for edge functions
+class ZoomApiClient {
+  static async get(endpoint: string, accessToken: string): Promise<any> {
+    try {
+      const url = `https://api.zoom.us/v2${endpoint}`;
+      console.log(`🔗 Making API call to: ${url}`);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Zoom API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return { success: true, data, statusCode: response.status };
+    } catch (error) {
+      console.error('API request failed:', error);
+      return {
+        success: false,
+        error: error.message,
+        statusCode: 500,
+        retryable: true
+      };
+    }
+  }
+}
+
+// Zoom Registrant Service for edge functions
+class ZoomRegistrantService {
+  static async getAllRegistrants(webinarId: string, accessToken: string, options: {
+    includeAllStatuses?: boolean;
+    occurrenceId?: string;
+    pageSize?: number;
+  } = {}): Promise<any> {
+    const { includeAllStatuses = true, occurrenceId, pageSize = 300 } = options;
+    
+    try {
+      const allRegistrants: any[] = [];
+      const statuses = includeAllStatuses ? ['approved', 'pending', 'denied'] : ['approved'];
+      
+      for (const status of statuses) {
+        let nextPageToken: string | undefined;
+        let hasMore = true;
+        
+        while (hasMore) {
+          const endpoint = occurrenceId 
+            ? `/webinars/${webinarId}/registrants?occurrence_id=${occurrenceId}&status=${status}&page_size=${pageSize}${nextPageToken ? `&next_page_token=${nextPageToken}` : ''}`
+            : `/webinars/${webinarId}/registrants?status=${status}&page_size=${pageSize}${nextPageToken ? `&next_page_token=${nextPageToken}` : ''}`;
+          
+          const response = await ZoomApiClient.get(endpoint, accessToken);
+          
+          if (!response.success) {
+            console.error(`Failed to fetch ${status} registrants:`, response.error);
+            break;
+          }
+          
+          const registrants = response.data?.registrants || [];
+          
+          const statusRegistrants = registrants.map((r: any) => ({
+            ...r,
+            registration_status: status,
+            occurrence_id: occurrenceId || null
+          }));
+          
+          allRegistrants.push(...statusRegistrants);
+          
+          nextPageToken = response.data?.next_page_token;
+          hasMore = !!nextPageToken && registrants.length === pageSize;
+        }
+      }
+      
+      return {
+        success: true,
+        data: allRegistrants,
+        statusCode: 200
+      };
+      
+    } catch (error) {
+      console.error('Error fetching registrants:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch registrants',
+        statusCode: 500,
+        retryable: true
+      };
+    }
+  }
+}
+
+// Zoom Participant Service for edge functions  
+class ZoomParticipantService {
+  static async getAllParticipants(webinarId: string, accessToken: string, options: {
+    pageSize?: number;
+    occurrenceId?: string;
+  } = {}): Promise<any> {
+    const { pageSize = 300, occurrenceId } = options;
+    
+    try {
+      const allParticipants: any[] = [];
+      let nextPageToken: string | undefined;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const endpoint = occurrenceId
+          ? `/webinars/${webinarId}/participants?occurrence_id=${occurrenceId}&page_size=${pageSize}${nextPageToken ? `&next_page_token=${nextPageToken}` : ''}`
+          : `/webinars/${webinarId}/participants?page_size=${pageSize}${nextPageToken ? `&next_page_token=${nextPageToken}` : ''}`;
+        
+        const response = await ZoomApiClient.get(endpoint, accessToken);
+        
+        if (!response.success) {
+          console.error('Failed to fetch participants:', response.error);
+          break;
+        }
+        
+        const participants = response.data?.participants || [];
+        allParticipants.push(...participants);
+        
+        nextPageToken = response.data?.next_page_token;
+        hasMore = !!nextPageToken && participants.length === pageSize;
+      }
+      
+      return {
+        success: true,
+        data: allParticipants,
+        statusCode: 200
+      };
+      
+    } catch (error) {
+      console.error('Error fetching participants:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch participants',
+        statusCode: 500,
+        retryable: true
+      };
+    }
+  }
+}
 
 export interface ComprehensiveSyncResults {
   webinarsSynced: number;
@@ -221,10 +364,22 @@ async function processWebinarComprehensively(
     let registrantCount = 0;
     let participantCount = 0;
 
+    // Get connection details for API calls
+    const { data: connectionData, error: connectionError } = await supabase
+      .from('zoom_connections')
+      .select('access_token')
+      .eq('id', connectionId)
+      .single();
+
+    if (connectionError || !connectionData?.access_token) {
+      console.error(`❌ Failed to get access token:`, connectionError);
+      throw new Error('Access token not available');
+    }
+
     // Fetch registrants for all webinars (always available)
     console.log(`📝 Fetching registrants for webinar ${webinar.zoom_webinar_id}`);
     try {
-      const registrantsResponse = await ZoomRegistrantService.getAllRegistrants(webinar.zoom_webinar_id);
+      const registrantsResponse = await ZoomRegistrantService.getAllRegistrants(webinar.zoom_webinar_id, connectionData.access_token);
       const registrants = registrantsResponse.success ? registrantsResponse.data : [];
       console.log(`📊 Found ${registrants.length} registrants`);
 
@@ -272,7 +427,7 @@ async function processWebinarComprehensively(
     if (statusInfo.isEligibleForParticipantSync) {
       console.log(`👥 Fetching participants for webinar ${webinar.zoom_webinar_id}`);
       try {
-        const participantsResponse = await ZoomParticipantService.getAllParticipants(webinar.zoom_webinar_id);
+        const participantsResponse = await ZoomParticipantService.getAllParticipants(webinar.zoom_webinar_id, connectionData.access_token);
         const participants = participantsResponse.success ? participantsResponse.data : [];
         console.log(`📊 Found ${participants.length} participants`);
 
