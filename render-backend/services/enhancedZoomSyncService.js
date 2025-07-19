@@ -3,6 +3,8 @@ const { WebinarStatusFixer } = require('../../../src/services/zoom/processors/we
 const supabaseService = require('./supabaseService');
 const zoomService = require('./zoomService');
 
+const EnhancedZoomSyncService = require('./enhancedZoomSyncService');
+
 class EnhancedZoomSyncService {
   constructor() {
     this.REQUEST_TIMEOUT = 30000;
@@ -19,19 +21,58 @@ class EnhancedZoomSyncService {
     let errors = [];
 
     try {
-      // Initialize enhanced processor
-      const processor = new EnhancedSyncProcessor(credentials);
-
-      // Update sync log
+      // Step 1: Fix webinar statuses first using database function
+      console.log(`🔧 Fixing existing webinar statuses...`);
       await supabaseService.updateSyncLog(syncLogId, {
         sync_progress: 5,
-        current_operation: 'Initializing enhanced sync process...',
+        current_operation: 'Fixing webinar statuses...',
         updated_at: new Date().toISOString()
       });
 
-      // Fix existing webinar statuses first
-      console.log(`🔧 Fixing existing webinar statuses...`);
-      await WebinarStatusFixer.fixAllWebinarStatuses(supabaseService.supabase);
+      try {
+        const { data: statusResults, error: statusError } = await supabaseService.supabase.rpc('system_update_webinar_statuses');
+        
+        if (statusError) {
+          console.error('Failed to fix webinar statuses:', statusError);
+        } else {
+          const result = statusResults[0];
+          console.log(`✅ Fixed ${result.updated_count} webinar statuses`);
+        }
+      } catch (statusFixError) {
+        console.error('Error fixing webinar statuses:', statusFixError);
+      }
+
+      // Step 2: Update participant sync status for past webinars
+      console.log(`🔄 Updating participant sync status for past webinars...`);
+      await supabaseService.updateSyncLog(syncLogId, {
+        sync_progress: 10,
+        current_operation: 'Updating participant sync status...',
+        updated_at: new Date().toISOString()
+      });
+
+      try {
+        const { data: updatedWebinars, error: updateError } = await supabaseService.supabase
+          .from('zoom_webinars')
+          .update({
+            participant_sync_status: 'pending',
+            updated_at: new Date().toISOString()
+          })
+          .eq('connection_id', connection.id)
+          .eq('status', 'ended')
+          .eq('participant_sync_status', 'not_applicable')
+          .select('id');
+
+        if (updateError) {
+          console.error('Failed to update participant sync status:', updateError);
+        } else {
+          console.log(`✅ Updated participant sync status for ${updatedWebinars?.length || 0} webinars`);
+        }
+      } catch (updateError) {
+        console.error('Error updating participant sync status:', updateError);
+      }
+
+      // Initialize enhanced processor
+      const processor = new EnhancedSyncProcessor(credentials);
 
       // Test Zoom API connection
       const connectionTest = await this.testZoomConnection(credentials);
@@ -151,7 +192,7 @@ class EnhancedZoomSyncService {
 
       const results = {
         processedWebinars,
-        totalWebinars,
+        totalWebinars: processedWebinars, // Update this with actual count
         totalRegistrants,
         totalParticipants,
         errors
@@ -167,15 +208,8 @@ class EnhancedZoomSyncService {
         sync_progress: 0,
         current_operation: 'Enhanced sync failed',
         error_message: error.message,
-        error_details: {
-          type: error.name || 'Unknown',
-          message: error.message,
-          processedWebinars,
-          totalRegistrants,
-          totalParticipants,
-          errors
-        },
-        updated_at: new Date().toISOString()
+        sync_status: 'failed',
+        completed_at: new Date().toISOString()
       });
 
       throw error;
@@ -271,4 +305,4 @@ class EnhancedZoomSyncService {
   }
 }
 
-module.exports = new EnhancedZoomSyncService();
+module.exports = EnhancedZoomSyncService;

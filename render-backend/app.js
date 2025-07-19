@@ -3,61 +3,63 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
 const cors = require('cors');
-const compression = require('compression');
-const helmet = require('helmet');
+const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
+
+require('dotenv').config();
 
 const app = express();
 
 // Enable CORS
-app.use(cors({
-  origin: true,
-  credentials: true
-}));
+const corsOptions = {
+  origin: '*',
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  allowedHeaders: ['Content-Type', 'Authorization', 'zoom_connection_id', 'sync_type'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
+};
+app.use(cors(corsOptions));
 
-// Security middleware
-app.use(helmet());
-
-// Compression middleware
-app.use(compression());
-
-// Logger middleware
+// Middleware setup
 app.use(logger('dev'));
-
-// Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-
-// Cookie parsing middleware
 app.use(cookieParser());
-
-// Serve static files from the React app
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/zoom-connections', require('./routes/zoom-connections'));
-app.use('/api/zoom-credentials', require('./routes/zoom-credentials'));
-app.use('/api/sync-webinars', require('./routes/sync-webinars'));
-app.use('/api/sync-logs', require('./routes/sync-logs'));
-app.use('/api/webinars', require('./routes/webinars'));
-app.use('/api/analytics', require('./routes/analytics'));
-app.use('/api/fix-webinar-data', require('./routes/fix-webinar-data')); // NEW: Add fix route
-
-// The "catchall" handler: for any request that doesn't
-// match one above, send back React's index.html file.
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname+'/public/index.html'));
+// Request ID middleware
+app.use((req, res, next) => {
+  req.requestId = uuidv4();
+  res.setHeader('X-Request-ID', req.requestId);
+  next();
 });
 
-// Error handling
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+// API routes
+app.use('/api/users', require('./routes/users'));
+app.use('/api/zoom', require('./routes/zoom'));
+app.use('/api/connections', require('./routes/connections'));
+app.use('/api/start-sync', require('./routes/start-sync-async'));
+app.use('/api/sync-logs', require('./routes/sync-logs'));
+app.use('/api/fix-webinar-data', require('./routes/fix-webinar-data'));
+
+// Enhanced sync routes - Add the comprehensive fix routes
+app.use('/api/sync-webinars', require('./routes/sync-webinars'));
+app.use('/api/fix-webinar-data', require('./routes/fix-webinar-data'));
+app.use('/api/comprehensive-fix', require('./routes/comprehensive-fix-webinar-data')); // NEW: Comprehensive fix routes
+
+// catch 404 and forward to error handler
+app.use(function(req, res, next) {
+  res.status(404).send('Not Found');
+});
+
+// error handler
 app.use(function(err, req, res, next) {
   console.error(err.stack);
-  res.status(500).send('Something broke!');
-});
-
-const port = process.env.PORT || 5000;
-app.listen(port, () => {
-  console.log(`Backend listening on port ${port}!`)
+  res.status(500).send('Internal Server Error');
 });
 
 module.exports = app;
