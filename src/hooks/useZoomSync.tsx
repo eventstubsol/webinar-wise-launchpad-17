@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -26,16 +25,28 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const stuckSyncCheckRef = useRef<NodeJS.Timeout | null>(null);
 
-  // State recovery on mount/connection change
+  // Enhanced debug logging for hook usage
+  console.log('🏠 [useZoomSync] Hook Instance Created:', {
+    connectionId: connection?.id,
+    isSyncing,
+    syncProgress,
+    syncStatus,
+    stuckSyncDetected,
+    syncId
+  });
+
+  // State recovery on mount/connection change with enhanced persistence
   useEffect(() => {
     const recoverSyncState = async () => {
       if (!connection?.id || isRecovered) return;
 
+      console.log('🔄 [useZoomSync] Starting state recovery for connection:', connection.id);
       SyncLoggingService.logUserAction('Mount/Connection Change', undefined, { connectionId: connection.id });
       
       const recoveredState = await SyncStateRecoveryService.recoverActiveSyncState(connection.id);
       
       if (recoveredState) {
+        console.log('✅ [useZoomSync] Recovered sync state:', recoveredState);
         SyncLoggingService.logSyncRecovery(recoveredState.syncId, 'State Recovery', recoveredState);
         
         setSyncId(recoveredState.syncId);
@@ -45,6 +56,13 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         setCurrentOperation(recoveredState.currentOperation);
         setStuckSyncDetected(recoveredState.isStuck);
         setIsRecovered(true);
+
+        // Store in localStorage for additional persistence
+        localStorage.setItem('zoom_active_sync', JSON.stringify({
+          syncId: recoveredState.syncId,
+          connectionId: connection.id,
+          timestamp: Date.now()
+        }));
 
         if (recoveredState.isStuck) {
           toast({
@@ -58,12 +76,41 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           setTimeout(() => pollSyncProgress(recoveredState.syncId), 2000);
         }
       } else {
+        console.log('ℹ️ [useZoomSync] No active sync found to recover');
+        // Clear any stale localStorage data
+        localStorage.removeItem('zoom_active_sync');
         setIsRecovered(true);
       }
     };
 
     recoverSyncState();
   }, [connection?.id, isRecovered]);
+
+  // Additional localStorage check on mount
+  useEffect(() => {
+    const checkLocalStorage = () => {
+      const storedSync = localStorage.getItem('zoom_active_sync');
+      if (storedSync && connection?.id) {
+        try {
+          const parsedSync = JSON.parse(storedSync);
+          const isStale = Date.now() - parsedSync.timestamp > 30 * 60 * 1000; // 30 minutes
+          
+          if (isStale || parsedSync.connectionId !== connection.id) {
+            localStorage.removeItem('zoom_active_sync');
+          } else {
+            console.log('📦 [useZoomSync] Found localStorage sync data:', parsedSync);
+          }
+        } catch (error) {
+          console.error('Error parsing localStorage sync data:', error);
+          localStorage.removeItem('zoom_active_sync');
+        }
+      }
+    };
+
+    if (connection?.id) {
+      checkLocalStorage();
+    }
+  }, [connection?.id]);
 
   const clearProgressInterval = useCallback(() => {
     if (progressIntervalRef.current) {
@@ -143,6 +190,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           setIsSyncing(false);
           clearProgressInterval();
           SyncHeartbeatService.stopHeartbeat(syncId);
+          localStorage.removeItem('zoom_active_sync');
           
           queryClient.invalidateQueries({ queryKey: ['zoom-webinars'] });
           queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
@@ -157,6 +205,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           setIsSyncing(false);
           clearProgressInterval();
           SyncHeartbeatService.stopHeartbeat(syncId);
+          localStorage.removeItem('zoom_active_sync');
           
           toast({
             title: "Sync failed",
@@ -168,6 +217,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
           setIsSyncing(false);
           clearProgressInterval();
           SyncHeartbeatService.stopHeartbeat(syncId);
+          localStorage.removeItem('zoom_active_sync');
           
           toast({
             title: "No data to sync",
@@ -232,6 +282,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       return;
     }
 
+    console.log('🚀 [useZoomSync] Starting sync:', { syncType, connectionId: connection.id });
     SyncLoggingService.logUserAction('Start Sync', undefined, { syncType });
 
     setIsSyncing(true);
@@ -253,6 +304,13 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         setSyncMode(result.mode);
         setSyncProgress(10);
         setCurrentOperation('Sync started successfully...');
+        
+        // Store in localStorage
+        localStorage.setItem('zoom_active_sync', JSON.stringify({
+          syncId: result.syncId,
+          connectionId: connection.id,
+          timestamp: Date.now()
+        }));
         
         // Start heartbeat monitoring
         SyncHeartbeatService.startHeartbeat(result.syncId, connection.id);
@@ -277,6 +335,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       setSyncStatus('failed');
       setCurrentOperation('');
       setSyncMode(null);
+      localStorage.removeItem('zoom_active_sync');
       
       toast({
         title: "Sync failed to start",
@@ -289,6 +348,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
   const forceCancelSync = useCallback(async () => {
     if (!connection?.id) return;
 
+    console.log('🛑 [useZoomSync] Force cancel requested');
     SyncLoggingService.logUserAction('Force Cancel Sync', syncId || undefined);
 
     try {
@@ -313,6 +373,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         setSyncId(null);
         setSyncMode(null);
         setStuckSyncDetected(false);
+        localStorage.removeItem('zoom_active_sync');
         
         // Invalidate queries
         queryClient.invalidateQueries({ queryKey: ['zoom-sync-stats'] });
@@ -358,6 +419,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       setSyncId(null);
       setSyncMode(null);
       setStuckSyncDetected(false);
+      localStorage.removeItem('zoom_active_sync');
       
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ['zoom-sync-stats'] });
@@ -391,6 +453,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
       return;
     }
 
+    console.log('❌ [useZoomSync] Regular cancel requested');
     SyncLoggingService.logUserAction('Cancel Sync', syncId);
 
     try {
@@ -409,6 +472,7 @@ export const useZoomSync = (connection?: ZoomConnection | null) => {
         setSyncId(null);
         setSyncMode(null);
         setStuckSyncDetected(false);
+        localStorage.removeItem('zoom_active_sync');
         
         toast({
           title: "Sync cancelled",
