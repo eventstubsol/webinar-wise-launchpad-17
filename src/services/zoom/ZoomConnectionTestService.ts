@@ -11,6 +11,10 @@ export interface ConnectionTestResult {
     responseTime?: number;
     statusCode?: number;
     error?: string;
+    renderServiceStatus?: string;
+    zoomApiStatus?: string;
+    databaseStatus?: string;
+    connectionData?: any;
   };
 }
 
@@ -44,7 +48,7 @@ export class ZoomConnectionTestService {
           success: true,
           message: 'Zoom connection is working properly',
           details: {
-            userInfo: testResult.userInfo,
+            userInfo: testResult.data,
             responseTime,
             statusCode: 200
           }
@@ -56,7 +60,7 @@ export class ZoomConnectionTestService {
           message: testResult.error || 'Connection test failed',
           details: {
             responseTime,
-            statusCode: testResult.statusCode,
+            statusCode: (testResult as any).statusCode || 500,
             error: testResult.error
           }
         };

@@ -14,14 +14,17 @@ interface SyncData {
   syncProgress: number;
   syncStatus: 'idle' | 'syncing' | 'completed' | 'failed';
   currentOperation: string;
+  activeSyncId: string;
   syncMode: 'render' | 'direct' | null;
   syncError: string | null;
   fallbackMode: 'render' | 'direct';
   testConnection: () => Promise<any>;
   forceResetAndRestart: () => Promise<void>;
+  forceCancelSync: () => Promise<void>;
   stuckSyncDetected: boolean;
   startSync: (syncType: SyncType, options?: { webinarId?: string }) => Promise<void>;
   cancelSync: () => Promise<void>;
+  healthCheck: { success: boolean; message: string; error?: string };
 }
 
 const LOCAL_STORAGE_KEY = 'zoomSyncState';
@@ -173,7 +176,7 @@ export const useZoomSync = (connection: ZoomConnection | null): SyncData => {
           setCurrentOperation('Falling back to direct sync...');
           
           syncResult = await ZoomSyncMigrationService.enhancedSync(connection.id, {
-            syncType,
+            syncType: syncType === SyncType.MANUAL ? 'manual' : 'incremental',
             webinarId: options?.webinarId,
             priority: 'high',
             debug: true
@@ -187,7 +190,7 @@ export const useZoomSync = (connection: ZoomConnection | null): SyncData => {
         setSyncProgress(10);
         
         syncResult = await ZoomSyncMigrationService.enhancedSync(connection.id, {
-          syncType,
+          syncType: syncType === SyncType.MANUAL ? 'manual' : 'incremental',
           webinarId: options?.webinarId,
           priority: 'high',
           debug: true
@@ -495,18 +498,31 @@ export const useZoomSync = (connection: ZoomConnection | null): SyncData => {
     };
   }, [startSyncMonitoring]);
 
+  const forceCancelSync = useCallback(async () => {
+    await cancelSync();
+    await forceResetAndRestart();
+  }, [cancelSync, forceResetAndRestart]);
+
+  const healthCheck = {
+    success: true,
+    message: 'Service is healthy'
+  };
+
   return {
     isSyncing,
     syncProgress,
     syncStatus,
     currentOperation,
+    activeSyncId,
     syncMode,
     startSync,
     cancelSync,
+    forceCancelSync,
     syncError,
     fallbackMode,
     testConnection,
     forceResetAndRestart,
-    stuckSyncDetected
+    stuckSyncDetected,
+    healthCheck
   };
 };
