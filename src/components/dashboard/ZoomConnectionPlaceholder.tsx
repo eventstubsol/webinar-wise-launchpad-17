@@ -13,7 +13,7 @@ const AstronautIllustration = () => (
 );
 
 const ConnectionVisualization = () => (
-  <div className="flex items-center justify-center space-x-12 sm:space-x-16 md:space-x-20 lg:space-x-21 mb-20">
+  <div className="flex items-center justify-center space-x-10 sm:space-x-14 md:space-x-16 lg:space-x-16 mb-20">
     {/* Zoom Logo */}
     <div className="flex flex-col items-center">
       <img 
