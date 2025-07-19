@@ -41,7 +41,12 @@ export class ParticipantAnalyticsService {
       const { data: participantData, error } = await supabase
         .from('zoom_participants')
         .select(`
-          *,
+          participant_email,
+          participant_name,
+          duration,
+          join_time,
+          leave_time,
+          webinar_id,
           zoom_webinars!inner(
             id,
             topic,
@@ -49,9 +54,9 @@ export class ParticipantAnalyticsService {
             connection_id
           )
         `)
-        .eq('email', email)
+        .eq('participant_email', email)
         .eq('zoom_webinars.connection_id', connectionId)
-        .order('zoom_webinars.start_time', { ascending: false });
+        .order('zoom_webinars.start_time', { ascending: false }) as any;
 
       if (error || !participantData || participantData.length === 0) {
         return null;
@@ -88,7 +93,7 @@ export class ParticipantAnalyticsService {
 
       return {
         email,
-        name: participantData[0].name,
+        name: participantData[0].participant_name || 'Unknown',
         totalWebinars,
         totalDuration,
         averageEngagement,
@@ -117,7 +122,7 @@ export class ParticipantAnalyticsService {
       }
 
       // Calculate unique participants
-      const uniqueEmails = new Set(participants.map(p => p.email).filter(Boolean));
+      const uniqueEmails = new Set(participants.map((p: any) => p.participant_email).filter(Boolean));
       const totalUniqueParticipants = uniqueEmails.size;
 
       // Calculate average participants per webinar
