@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
@@ -29,11 +29,35 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
   className = '',
 }) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [showConnectionModal, setShowConnectionModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
   const { isValidating, startValidation, credentials, user, validationResult } = useZoomValidation({
-    onConnectionSuccess,
-    onConnectionError,
+    onConnectionSuccess: async (connection) => {
+      console.log('🔄 Connection validation successful, triggering callback...');
+      setIsRefreshing(true);
+      
+      try {
+        // Invalidate connection queries to get fresh data
+        await queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
+        
+        // Call the success callback
+        if (onConnectionSuccess) {
+          await onConnectionSuccess(connection);
+        }
+      } catch (error) {
+        console.error('Error in connection success callback:', error);
+      } finally {
+        setIsRefreshing(false);
+      }
+    },
+    onConnectionError: (error) => {
+      setIsRefreshing(false);
+      onConnectionError?.(error);
+    },
   });
+  
   const { handleDisconnect } = useZoomDisconnect();
 
   // Query to get current connection status
@@ -72,6 +96,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
       const tokenStatus = TokenUtils.getTokenStatus(connection);
       // Use centralized token status logic instead of direct expiration check
       if (tokenStatus === TokenStatus.INVALID || tokenStatus === TokenStatus.REFRESH_EXPIRED) {
+        console.log('🔄 Starting reconnection process...');
         startValidation();
       } else {
         handleDisconnect(connection);
@@ -82,16 +107,38 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
     }
   };
 
-  const handleConnectionSuccess = () => {
+  const handleModalConnectionSuccess = async () => {
     setShowConnectionModal(false);
-    toast({
-      title: "Success!",
-      description: "Your Zoom account has been connected successfully.",
-    });
-    onConnectionSuccess?.(connection!);
+    setIsRefreshing(true);
+    
+    try {
+      // Invalidate and refetch connection data
+      await queryClient.invalidateQueries({ queryKey: ['zoom-connection'] });
+      
+      // Wait a moment for the query to refetch
+      setTimeout(async () => {
+        const freshConnection = await ZoomConnectionService.getPrimaryConnection(user!.id);
+        if (freshConnection) {
+          toast({
+            title: "Success!",
+            description: "Your Zoom account has been connected successfully.",
+          });
+          
+          // Trigger the success callback
+          if (onConnectionSuccess) {
+            await onConnectionSuccess(freshConnection);
+          }
+        }
+        setIsRefreshing(false);
+      }, 1000);
+    } catch (error) {
+      console.error('Error handling modal connection success:', error);
+      setIsRefreshing(false);
+    }
   };
 
-  const isDisabled = isLoadingConnection || isValidating || !user;
+  const isDisabled = isLoadingConnection || isValidating || isRefreshing || !user;
+  const isLoading = isLoadingConnection || isValidating || isRefreshing;
 
   return (
     <div className="flex flex-col items-center space-y-2">
@@ -103,8 +150,8 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
         disabled={isDisabled}
       >
         <ZoomButtonContent
-          isLoading={isLoadingConnection}
-          isValidating={isValidating}
+          isLoading={isLoading}
+          isValidating={isValidating || isRefreshing}
           connection={connection}
         />
       </Button>
@@ -118,7 +165,7 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
       <ZoomConnectionModal
         open={showConnectionModal}
         onOpenChange={setShowConnectionModal}
-        onSuccess={handleConnectionSuccess}
+        onSuccess={handleModalConnectionSuccess}
       />
     </div>
   );
