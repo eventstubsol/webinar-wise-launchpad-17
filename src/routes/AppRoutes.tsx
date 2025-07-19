@@ -1,6 +1,8 @@
+
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { ZoomConnectionGate } from '@/components/auth/ZoomConnectionGate';
 
 // Public Pages
 import Landing from '@/pages/Landing';
@@ -58,6 +60,15 @@ import NotFound from '@/pages/NotFound';
 
 import { ROUTES } from './routeConfig';
 
+// Helper component to combine ProtectedRoute and ZoomConnectionGate
+const ZoomProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <ProtectedRoute>
+    <ZoomConnectionGate>
+      {children}
+    </ZoomConnectionGate>
+  </ProtectedRoute>
+);
+
 export const AppRoutes = () => (
   <Routes>
     {/* Public Routes */}
@@ -73,7 +84,7 @@ export const AppRoutes = () => (
     <Route path={ROUTES.SUPPORT} element={<Support />} />
     <Route path={ROUTES.DOCUMENTATION} element={<Documentation />} />
 
-    {/* Zoom OAuth Callback - needs to be protected */}
+    {/* Zoom OAuth Callback - needs to be protected but not gated */}
     <Route
       path="/auth/zoom/callback"
       element={
@@ -83,7 +94,7 @@ export const AppRoutes = () => (
       }
     />
 
-    {/* Protected Routes - Core */}
+    {/* Protected Routes - Core (No Zoom connection required) */}
     <Route
       path={ROUTES.DASHBOARD}
       element={
@@ -101,7 +112,7 @@ export const AppRoutes = () => (
       }
     />
 
-    {/* Protected Routes - Zoom Integration */}
+    {/* Protected Routes - Zoom Integration (No gating for setup/diagnostics) */}
     <Route
       path={ROUTES.ZOOM_TEST}
       element={
@@ -119,137 +130,137 @@ export const AppRoutes = () => (
       }
     />
 
-    {/* Protected Routes - Data Management */}
+    {/* Protected Routes - Data Management (REQUIRES Zoom connection) */}
     <Route
       path={ROUTES.WEBINARS}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <Webinars />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
     <Route
       path={ROUTES.WEBINAR_DETAIL}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <WebinarDetail />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
     <Route
       path={ROUTES.SYNC_CENTER}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <SyncCenter />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
     <Route
       path={ROUTES.CSV_UPLOAD}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <CSVUpload />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
 
-    {/* Protected Routes - Analytics */}
+    {/* Protected Routes - Analytics (REQUIRES Zoom connection) */}
     <Route
       path={ROUTES.ADVANCED_ANALYTICS}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <AdvancedAnalytics />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
     <Route
       path={ROUTES.AI_INSIGHTS}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <AIInsights />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
     <Route
       path={ROUTES.EMAIL_ANALYTICS}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <EmailAnalytics />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
     <Route
       path={ROUTES.PREDICTIVE_ANALYTICS}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <PredictiveAnalytics />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
 
-    {/* Protected Routes - Email & Campaigns */}
+    {/* Protected Routes - Email & Campaigns (REQUIRES Zoom connection) */}
     <Route
       path={ROUTES.TEMPLATES}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <EmailTemplates />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
     <Route
       path={ROUTES.CAMPAIGNS}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <Campaigns />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
     <Route
       path={ROUTES.SEGMENTATION}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <Segmentation />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
     <Route
       path={ROUTES.PERSONALIZATION}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <Personalization />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
 
-    {/* Protected Routes - Integrations */}
+    {/* Protected Routes - Integrations (REQUIRES Zoom connection) */}
     <Route
       path={ROUTES.CRM}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <CRMIntegrations />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
     <Route
       path={ROUTES.INTEGRATIONS}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <Integrations />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
 
-    {/* Protected Routes - Reports */}
+    {/* Protected Routes - Reports (REQUIRES Zoom connection) */}
     <Route
       path={ROUTES.REPORTS}
       element={
-        <ProtectedRoute>
+        <ZoomProtectedRoute>
           <Reports />
-        </ProtectedRoute>
+        </ZoomProtectedRoute>
       }
     />
 
-    {/* Protected Routes - Admin */}
+    {/* Protected Routes - Admin (No Zoom connection required) */}
     <Route
       path="/admin/users"
       element={

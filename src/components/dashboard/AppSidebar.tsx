@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -36,13 +37,59 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useZoomConnection } from '@/hooks/useZoomConnection';
+import { TokenStatus } from '@/services/zoom/utils/tokenUtils';
+import { useToast } from '@/hooks/use-toast';
 
 export const AppSidebar = () => {
   const location = useLocation();
   const { signOut } = useAuth();
   const { isZoomAdmin } = useUserRole();
+  const { tokenStatus, isLoading } = useZoomConnection();
+  const { toast } = useToast();
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path);
+  const isZoomConnected = tokenStatus === TokenStatus.VALID;
+
+  const handleDisabledClick = () => {
+    toast({
+      title: "Zoom Connection Required",
+      description: "Please connect your Zoom account to access this feature.",
+      variant: "destructive",
+    });
+  };
+
+  const renderMenuItem = (path: string, icon: React.ElementType, label: string, requiresZoom = true) => {
+    const Icon = icon;
+    const shouldDisable = requiresZoom && !isZoomConnected;
+    
+    if (shouldDisable) {
+      return (
+        <SidebarMenuItem key={path}>
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start opacity-50 cursor-not-allowed hover:bg-transparent"
+            onClick={handleDisabledClick}
+            disabled
+          >
+            <Icon className="h-4 w-4 mr-2" />
+            <span>{label}</span>
+          </Button>
+        </SidebarMenuItem>
+      );
+    }
+
+    return (
+      <SidebarMenuItem key={path}>
+        <Button asChild variant={isActive(path) ? 'secondary' : 'ghost'} className="w-full justify-start">
+          <Link to={path}>
+            <Icon className="h-4 w-4 mr-2" />
+            <span>{label}</span>
+          </Link>
+        </Button>
+      </SidebarMenuItem>
+    );
+  };
 
   return (
     <Sidebar>
@@ -56,30 +103,11 @@ export const AppSidebar = () => {
           <SidebarGroupLabel>Webinar Analytics</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/dashboard') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/dashboard">
-                    <LayoutDashboard className="h-4 w-4 mr-2" />
-                    <span>Dashboard</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/webinars') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/webinars">
-                    <Video className="h-4 w-4 mr-2" />
-                    <span>Webinars</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/advanced-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/advanced-analytics">
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    <span>Advanced Analytics</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
+              {/* Dashboard is always accessible */}
+              {renderMenuItem('/dashboard', LayoutDashboard, 'Dashboard', false)}
+              {/* Webinar-related features require Zoom connection */}
+              {renderMenuItem('/webinars', Video, 'Webinars', true)}
+              {renderMenuItem('/advanced-analytics', BarChart3, 'Advanced Analytics', true)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -91,30 +119,9 @@ export const AppSidebar = () => {
           <SidebarGroupLabel>Email Marketing</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/templates') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/templates">
-                    <FileText className="h-4 w-4 mr-2" />
-                    <span>Templates</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/campaigns') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/campaigns">
-                    <Send className="h-4 w-4 mr-2" />
-                    <span>Campaigns</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/email-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/email-analytics">
-                    <Activity className="h-4 w-4 mr-2" />
-                    <span>Email Analytics</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
+              {renderMenuItem('/templates', FileText, 'Templates', true)}
+              {renderMenuItem('/campaigns', Send, 'Campaigns', true)}
+              {renderMenuItem('/email-analytics', Activity, 'Email Analytics', true)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -126,38 +133,10 @@ export const AppSidebar = () => {
           <SidebarGroupLabel>Data Management</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/sync-center') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/sync-center">
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    <span>Sync Center</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/csv-upload') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/csv-upload">
-                    <Upload className="h-4 w-4 mr-2" />
-                    <span>Import Data</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/reports') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/reports">
-                    <Download className="h-4 w-4 mr-2" />
-                    <span>Reports & Export</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/integrations') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/integrations">
-                    <Database className="h-4 w-4 mr-2" />
-                    <span>CRM Integrations</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
+              {renderMenuItem('/sync-center', RefreshCw, 'Sync Center', true)}
+              {renderMenuItem('/csv-upload', Upload, 'Import Data', true)}
+              {renderMenuItem('/reports', Download, 'Reports & Export', true)}
+              {renderMenuItem('/integrations', Database, 'CRM Integrations', true)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -169,38 +148,10 @@ export const AppSidebar = () => {
           <SidebarGroupLabel>AI & Advanced</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/ai-insights') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/ai-insights">
-                    <Brain className="h-4 w-4 mr-2" />
-                    <span>AI Insights</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/personalization') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/personalization">
-                    <Target className="h-4 w-4 mr-2" />
-                    <span>Personalization</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/segmentation') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/segmentation">
-                    <Users className="h-4 w-4 mr-2" />
-                    <span>Segmentation</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <Button asChild variant={isActive('/predictive-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                  <Link to="/predictive-analytics">
-                    <Zap className="h-4 w-4 mr-2" />
-                    <span>Predictive Analytics</span>
-                  </Link>
-                </Button>
-              </SidebarMenuItem>
+              {renderMenuItem('/ai-insights', Brain, 'AI Insights', true)}
+              {renderMenuItem('/personalization', Target, 'Personalization', true)}
+              {renderMenuItem('/segmentation', Users, 'Segmentation', true)}
+              {renderMenuItem('/predictive-analytics', Zap, 'Predictive Analytics', true)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -216,30 +167,10 @@ export const AppSidebar = () => {
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  <SidebarMenuItem>
-                    <Button asChild variant={isActive('/admin/users') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                      <Link to="/admin/users">
-                        <UserCog className="h-4 w-4 mr-2" />
-                        <span>User Management</span>
-                      </Link>
-                    </Button>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <Button asChild variant={isActive('/admin/account-analytics') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                      <Link to="/admin/account-analytics">
-                        <Building className="h-4 w-4 mr-2" />
-                        <span>Account Analytics</span>
-                      </Link>
-                    </Button>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <Button asChild variant={isActive('/admin/webinars') ? 'secondary' : 'ghost'} className="w-full justify-start">
-                      <Link to="/admin/webinars">
-                        <Video className="h-4 w-4 mr-2" />
-                        <span>All Webinars</span>
-                      </Link>
-                    </Button>
-                  </SidebarMenuItem>
+                  {/* Admin pages don't require Zoom connection */}
+                  {renderMenuItem('/admin/users', UserCog, 'User Management', false)}
+                  {renderMenuItem('/admin/account-analytics', Building, 'Account Analytics', false)}
+                  {renderMenuItem('/admin/webinars', Video, 'All Webinars', false)}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -250,6 +181,7 @@ export const AppSidebar = () => {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
+            {/* Settings is always accessible */}
             <Button asChild variant={isActive('/settings') ? 'secondary' : 'ghost'} className="w-full justify-start">
               <Link to="/settings">
                 <Settings className="h-4 w-4 mr-2" />
