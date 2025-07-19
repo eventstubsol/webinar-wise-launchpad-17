@@ -134,8 +134,8 @@ class DirectZoomSyncService {
       await supabase
         .from('zoom_sync_logs')
         .update({
-          current_operation: 'Authenticating with Zoom...',
-          sync_progress: 20
+          metadata: { current_operation: 'Authenticating with Zoom...' },
+          sync_stage: 'authenticating',
         })
         .eq('id', syncLogId);
 
@@ -156,8 +156,8 @@ class DirectZoomSyncService {
       await supabase
         .from('zoom_sync_logs')
         .update({
-          current_operation: 'Fetching webinars...',
-          sync_progress: 40
+          metadata: { current_operation: 'Fetching webinars...' },
+          stage_progress_percentage: 40
         })
         .eq('id', syncLogId);
 

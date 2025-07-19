@@ -15,7 +15,10 @@ export class ConnectionCrud {
       throw error;
     }
 
-    return data;
+    return {
+      ...data,
+      connection_status: data.connection_status as any
+    } as ZoomConnection;
   }
 
   static async getConnection(id: string): Promise<ZoomConnection | null> {
@@ -30,7 +33,10 @@ export class ConnectionCrud {
       return null;
     }
 
-    return data;
+    return data ? {
+      ...data,
+      connection_status: data.connection_status as any
+    } as ZoomConnection : null;
   }
 
   static async getUserConnections(userId: string): Promise<ZoomConnection[]> {
@@ -45,7 +51,10 @@ export class ConnectionCrud {
       throw error;
     }
 
-    return data || [];
+    return (data || []).map(item => ({
+      ...item,
+      connection_status: item.connection_status as any
+    })) as ZoomConnection[];
   }
 
   static async updateConnection(id: string, updates: ZoomConnectionUpdate): Promise<ZoomConnection> {
@@ -61,7 +70,10 @@ export class ConnectionCrud {
       throw error;
     }
 
-    return data;
+    return {
+      ...data,
+      connection_status: data.connection_status as any
+    } as ZoomConnection;
   }
 
   static async deleteConnection(id: string): Promise<boolean> {

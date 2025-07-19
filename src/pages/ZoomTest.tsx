@@ -12,6 +12,7 @@ import { ZoomCredentialsSetupForm } from '@/components/settings/zoom/ZoomCredent
 import { ZoomCredentialsDisplay } from '@/components/settings/zoom/ZoomCredentialsDisplay';
 import { useZoomCredentials } from '@/hooks/useZoomCredentials';
 import { useNavigate } from 'react-router-dom';
+import type { ZoomCredentials } from '@/types/zoomCredentials';
 
 const ZoomTest = () => {
   const navigate = useNavigate();
@@ -118,7 +119,10 @@ const ZoomTest = () => {
                   />
                 ) : (
                   <ZoomCredentialsDisplay
-                    credentials={credentials}
+                    credentials={{
+                      ...credentials,
+                      app_type: (credentials.app_type as 'server_to_server' | 'oauth') || 'server_to_server'
+                    } as ZoomCredentials}
                     onEdit={() => setShowCredentialsForm(true)}
                     onDeleted={() => setShowCredentialsForm(false)}
                   />
