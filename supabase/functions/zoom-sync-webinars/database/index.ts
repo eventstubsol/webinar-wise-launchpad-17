@@ -12,7 +12,9 @@ export {
 
 export {
   saveWebinarToDatabase,
-  updateWebinarParticipantSyncStatus
+  updateWebinarParticipantSyncStatus,
+  validateSyncedWebinarStatuses,
+  refreshAllWebinarStatuses
 } from './webinar-operations.ts';
 
 export {

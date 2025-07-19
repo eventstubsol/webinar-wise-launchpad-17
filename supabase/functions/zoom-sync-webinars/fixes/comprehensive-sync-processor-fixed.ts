@@ -192,6 +192,30 @@ export async function processComprehensiveWebinarSync(
       console.log(`✅ Batch complete: processed ${processedCount}/${totalWebinars} total webinars`);
     }
     
+    // Phase 4: Validate webinar statuses after sync completion
+    console.log(`🔍 FINAL VALIDATION: Checking webinar statuses after sync completion`);
+    await updateSyncStage(supabase, syncLogId, null, 'validating_statuses', 95);
+    
+    try {
+      const { validateSyncedWebinarStatuses, refreshAllWebinarStatuses } = await import('../database/webinar-operations.ts');
+      
+      // Validate the statuses of synced webinars
+      const validationResults = await validateSyncedWebinarStatuses(supabase, connection.id);
+      
+      // If there are incorrect statuses, force a refresh
+      if (validationResults.incorrectStatuses > 0) {
+        console.log(`⚠️ Found ${validationResults.incorrectStatuses} incorrect statuses, forcing refresh...`);
+        await refreshAllWebinarStatuses(supabase);
+        
+        // Re-validate after refresh
+        const postRefreshResults = await validateSyncedWebinarStatuses(supabase, connection.id);
+        console.log(`🔄 Post-refresh validation: ${postRefreshResults.incorrectStatuses} remaining incorrect statuses`);
+      }
+      
+    } catch (validationError) {
+      console.error('❌ Status validation failed but not blocking sync completion:', validationError);
+    }
+
     // Mark sync as completed
     await updateSyncLog(supabase, syncLogId, {
       sync_status: 'completed',

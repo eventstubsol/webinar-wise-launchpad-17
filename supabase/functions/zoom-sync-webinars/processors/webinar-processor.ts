@@ -5,6 +5,54 @@
  */
 
 /**
+ * Validate webinar status calculation after database save
+ */
+async function validateWebinarStatus(
+  supabase: any,
+  webinarId: string,
+  currentStatus: string,
+  startTime: string | null,
+  duration: number | null
+): Promise<void> {
+  try {
+    if (!startTime || !duration) {
+      console.log(`⚠️ STATUS VALIDATION: Skipping validation for webinar ${webinarId} - missing start_time or duration`);
+      return;
+    }
+
+    // Calculate what the status should be using the same logic as the database function
+    const now = new Date();
+    const webinarStart = new Date(startTime);
+    const estimatedEnd = new Date(webinarStart.getTime() + duration * 60 * 1000); // duration in minutes
+    const bufferEnd = new Date(estimatedEnd.getTime() + 5 * 60 * 1000); // 5 minute buffer
+
+    let expectedStatus: string;
+    if (now < webinarStart) {
+      expectedStatus = 'upcoming';
+    } else if (now >= webinarStart && now <= bufferEnd) {
+      expectedStatus = 'live';
+    } else {
+      expectedStatus = 'ended';
+    }
+
+    if (currentStatus !== expectedStatus) {
+      console.log(`⚠️ STATUS MISMATCH: Webinar ${webinarId} has status '${currentStatus}' but should be '${expectedStatus}'`);
+      console.log(`  📅 Start: ${startTime}`);
+      console.log(`  ⏱️ Duration: ${duration} minutes`);
+      console.log(`  🕒 Now: ${now.toISOString()}`);
+      
+      // Log this as a potential issue but don't fail the sync
+      // The database trigger should handle this automatically
+    } else {
+      console.log(`✅ STATUS VALID: Webinar ${webinarId} status '${currentStatus}' is correct`);
+    }
+  } catch (error) {
+    console.error(`❌ STATUS VALIDATION ERROR for webinar ${webinarId}:`, error);
+    // Don't fail the sync for validation errors
+  }
+}
+
+/**
  * Fetch existing webinar from database to preserve calculated fields and ID
  */
 async function fetchExistingWebinar(
@@ -256,7 +304,7 @@ export async function syncBasicWebinarData(
             ignoreDuplicates: false
           }
         )
-        .select('id')
+        .select('id, status, start_time, duration')
         .single();
 
       if (error) {
@@ -265,6 +313,11 @@ export async function syncBasicWebinarData(
       }
 
       webinarRecord = data;
+      
+      // Step 5: Validate status calculation after database save
+      console.log(`🔍 STATUS VALIDATION: Checking calculated status for webinar ${webinarData.id}`);
+      await validateWebinarStatus(supabase, webinarRecord.id, webinarRecord.status, webinarRecord.start_time, webinarRecord.duration);
+      
     } catch (dbError) {
       console.error(`❌ DATABASE ERROR for webinar ${webinarData.id}:`, dbError);
       throw new Error(`Database operation failed: ${dbError.message}`);

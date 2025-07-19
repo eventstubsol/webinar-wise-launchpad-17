@@ -2031,6 +2031,15 @@ export type Database = {
         Args: { user_id: string }
         Returns: boolean
       }
+      system_update_webinar_statuses: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          updated_count: number
+          upcoming_count: number
+          live_count: number
+          ended_count: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
