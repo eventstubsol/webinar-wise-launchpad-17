@@ -4,55 +4,11 @@ import { ZoomConnectButton } from '@/components/zoom/ZoomConnectButton';
 
 const AstronautIllustration = () => (
   <div className="relative flex flex-col items-center mb-12">
-    {/* Speech Bubble */}
-    <div className="relative bg-white rounded-2xl px-6 py-3 shadow-md border border-gray-200 mb-6">
-      <p className="text-gray-800 font-bold text-sm whitespace-nowrap">
-        HOUSTON WE HAVE A PROBLEM
-      </p>
-      {/* Speech bubble tail */}
-      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[10px] border-r-[10px] border-t-[10px] border-l-transparent border-r-transparent border-t-gray-200"></div>
-      <div className="absolute top-full left-1/2 transform -translate-x-1/2 translate-y-[-2px] w-0 h-0 border-l-[8px] border-r-[8px] border-t-[8px] border-l-transparent border-r-transparent border-t-white"></div>
-    </div>
-    
-    {/* Astronaut SVG */}
-    <svg width="140" height="160" viewBox="0 0 140 160" fill="none">
-      {/* Body */}
-      <ellipse cx="70" cy="110" rx="40" ry="45" fill="#F3F4F6" stroke="#D1D5DB" strokeWidth="2"/>
-      
-      {/* Helmet */}
-      <circle cx="70" cy="55" r="40" fill="#6366F1" opacity="0.9"/>
-      <circle cx="70" cy="55" r="35" fill="#8B5CF6" opacity="0.8"/>
-      <circle cx="70" cy="55" r="30" fill="rgba(255,255,255,0.2)"/>
-      
-      {/* Helmet reflection */}
-      <ellipse cx="63" cy="48" rx="10" ry="15" fill="rgba(255,255,255,0.4)"/>
-      
-      {/* Face inside helmet */}
-      <circle cx="63" cy="57" r="2.5" fill="#374151"/>
-      <circle cx="77" cy="57" r="2.5" fill="#374151"/>
-      <ellipse cx="70" cy="65" rx="4" ry="2.5" fill="#374151"/>
-      
-      {/* Arms */}
-      <ellipse cx="40" cy="95" rx="10" ry="18" fill="#F3F4F6" stroke="#D1D5DB" strokeWidth="2"/>
-      <ellipse cx="100" cy="95" rx="10" ry="18" fill="#F3F4F6" stroke="#D1D5DB" strokeWidth="2"/>
-      
-      {/* Gloves */}
-      <circle cx="40" cy="115" r="8" fill="white" stroke="#D1D5DB" strokeWidth="1"/>
-      <circle cx="100" cy="115" r="8" fill="white" stroke="#D1D5DB" strokeWidth="1"/>
-      
-      {/* Chest panel */}
-      <rect x="58" y="90" width="24" height="18" rx="3" fill="white" stroke="#D1D5DB" strokeWidth="1"/>
-      <circle cx="64" cy="99" r="2.5" fill="#EF4444"/>
-      <circle cx="76" cy="99" r="2.5" fill="#10B981"/>
-      
-      {/* Legs */}
-      <ellipse cx="58" cy="140" rx="10" ry="18" fill="#F3F4F6" stroke="#D1D5DB" strokeWidth="2"/>
-      <ellipse cx="82" cy="140" rx="10" ry="18" fill="#F3F4F6" stroke="#D1D5DB" strokeWidth="2"/>
-      
-      {/* Boots */}
-      <ellipse cx="58" cy="152" rx="12" ry="6" fill="#374151"/>
-      <ellipse cx="82" cy="152" rx="12" ry="6" fill="#374151"/>
-    </svg>
+    <img 
+      src="/lovable-uploads/1f1a1d3b-0ac5-44b8-b98b-e82cdd5325e6.png" 
+      alt="Astronaut saying Houston we have a problem"
+      className="w-40 h-auto"
+    />
   </div>
 );
 
