@@ -16,7 +16,7 @@ export interface ZoomWebinarApiResponse {
 }
 
 export interface ListWebinarsOptions {
-  userId: string;
+  userId?: string;
   type?: 'scheduled' | 'past' | 'upcoming';
   pageSize?: number;
   pageNumber?: number;
@@ -101,17 +101,17 @@ export class ZoomWebinarDataService {
     const pastDate = new Date(now.getTime() - dayRange * 24 * 60 * 60 * 1000);
     const futureDate = new Date(now.getTime() + dayRange * 24 * 60 * 60 * 1000);
 
-    const pastOptions = {
+    const pastOptions: ListWebinarsOptions = {
       userId: userId,
-      type: 'past',
+      type: 'past' as const,
       pageSize: pageSize,
       from: pastDate.toISOString().split('T')[0],
       to: now.toISOString().split('T')[0]
     };
 
-    const upcomingOptions = {
+    const upcomingOptions: ListWebinarsOptions = {
       userId: userId,
-      type: 'upcoming',
+      type: 'upcoming' as const,
       pageSize: pageSize,
       from: now.toISOString().split('T')[0],
       to: futureDate.toISOString().split('T')[0]
