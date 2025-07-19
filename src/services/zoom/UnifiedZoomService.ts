@@ -15,6 +15,7 @@ interface ProgressResponse {
   progress?: number;
   currentOperation?: string;
   processed_items?: number;
+  processedCount?: number;
   total_items?: number;
   error_message?: string;
   message?: string;
