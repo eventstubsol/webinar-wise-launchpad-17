@@ -76,9 +76,18 @@ export const ZoomConnectionModal: React.FC<ZoomConnectionModalProps> = ({
     onOpenChange(false);
   };
 
+  // Custom handler that prevents closing on outside clicks but allows explicit close actions
+  const handleOpenChange = (open: boolean) => {
+    // Only allow closing if it's an explicit action (like clicking X button)
+    // or if we're not in the middle of connecting
+    if (!open && step !== 'connecting') {
+      handleClose();
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Connect Zoom Account</DialogTitle>
         </DialogHeader>
