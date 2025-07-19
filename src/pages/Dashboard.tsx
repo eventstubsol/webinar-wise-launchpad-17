@@ -42,24 +42,9 @@ export default function Dashboard() {
           
           {/* Show illustrated placeholder when no Zoom connection */}
           {showConnectionPrompt && (
-            <>
-              <Alert>
-                <Info className="h-4 w-4" />
-                <AlertDescription>
-                  Most features in WebinarWise require a connected Zoom account. Once connected, you'll be able to:
-                  <ul className="list-disc list-inside mt-2 ml-4">
-                    <li>View and analyze your webinars</li>
-                    <li>Access advanced analytics and AI insights</li>
-                    <li>Create email campaigns and templates</li>
-                    <li>Sync data and generate reports</li>
-                  </ul>
-                </AlertDescription>
-              </Alert>
-              
-              <div className="flex justify-center">
-                <ZoomConnectionPlaceholder />
-              </div>
-            </>
+            <div className="flex justify-center">
+              <ZoomConnectionPlaceholder />
+            </div>
           )}
           
           {/* Show connection card when no data but user might be connected */}
