@@ -9,9 +9,11 @@ import { DataTables } from '@/components/dashboard/DataTables';
 import { ZoomConnectionPlaceholder } from '@/components/dashboard/ZoomConnectionPlaceholder';
 import { FirstTimeSyncOnboarding } from '@/components/dashboard/onboarding/FirstTimeSyncOnboarding';
 import { useUserSyncStatus } from '@/hooks/useUserSyncStatus';
+import { useDashboardRefresh } from '@/hooks/useDashboardRefresh';
 
 export default function Dashboard() {
   const { userStatus, isLoading, metrics } = useUserSyncStatus();
+  const { refreshDashboardData } = useDashboardRefresh();
 
   const renderDashboardContent = () => {
     if (isLoading) {

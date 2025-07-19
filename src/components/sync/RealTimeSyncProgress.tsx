@@ -5,19 +5,19 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, CheckCircle, Clock, XCircle, Play, Square } from 'lucide-react';
 import { useZoomSync } from '@/hooks/useZoomSync';
+import { useDashboardRefresh } from '@/hooks/useDashboardRefresh';
 import { ZoomConnection, SyncType } from '@/types/zoom';
 
 interface RealTimeSyncProgressProps {
   connection: ZoomConnection | null;
-  onStartSync?: () => void;
   showControls?: boolean;
 }
 
 export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
   connection,
-  onStartSync,
   showControls = true,
 }) => {
+  const { refreshDashboardData } = useDashboardRefresh();
   const {
     isSyncing,
     syncProgress,
@@ -56,11 +56,9 @@ export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
   };
 
   const handleStartSync = async () => {
-    if (onStartSync) {
-      onStartSync();
-    } else {
-      await startSync(SyncType.INCREMENTAL);
-    }
+    await startSync(SyncType.INCREMENTAL, {
+      onComplete: refreshDashboardData
+    });
   };
 
   if (!connection) {

@@ -16,15 +16,19 @@ interface SyncData {
   stuckSyncDetected: boolean;
   activeSyncId: string;
   syncError: string | null;
+  lastSyncStatus: 'completed' | 'failed' | null;
+  lastSyncTimestamp: string | null;
+  lastSyncCount: number;
   testConnection: () => Promise<any>;
   forceResetAndRestart: () => Promise<void>;
   forceCancelSync: () => Promise<void>;
-  startSync: (syncType: SyncType, options?: { webinarId?: string }) => Promise<void>;
+  startSync: (syncType: SyncType, options?: { webinarId?: string; onComplete?: () => void }) => Promise<void>;
   cancelSync: () => Promise<void>;
   healthCheck: { success: boolean; message: string; error?: string };
 }
 
 const LOCAL_STORAGE_KEY = 'zoomSyncState';
+const SYNC_STATUS_KEY = 'zoomSyncLastStatus';
 
 const getInitialState = () => {
   if (typeof window === 'undefined') {
@@ -58,6 +62,32 @@ const getInitialState = () => {
   }
 };
 
+const getLastSyncStatus = () => {
+  if (typeof window === 'undefined') {
+    return { status: null, timestamp: null, count: 0 };
+  }
+
+  try {
+    const stored = localStorage.getItem(SYNC_STATUS_KEY);
+    return stored ? JSON.parse(stored) : { status: null, timestamp: null, count: 0 };
+  } catch (error) {
+    console.error('Error reading sync status from localStorage:', error);
+    return { status: null, timestamp: null, count: 0 };
+  }
+};
+
+const saveLastSyncStatus = (status: 'completed' | 'failed', count: number = 0) => {
+  try {
+    localStorage.setItem(SYNC_STATUS_KEY, JSON.stringify({
+      status,
+      timestamp: new Date().toISOString(),
+      count
+    }));
+  } catch (error) {
+    console.error('Error saving sync status to localStorage:', error);
+  }
+};
+
 const saveToLocalStorage = (state: any) => {
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
@@ -82,8 +112,15 @@ export const useZoomSync = (connection: ZoomConnection | null): SyncData => {
   const [activeSyncId, setActiveSyncId] = useState(getInitialState().activeSyncId || '');
   const [syncError, setSyncError] = useState<string | null>(null);
   const monitoringIntervalRef = useRef<any>(null);
+  const onCompleteCallbackRef = useRef<(() => void) | null>(null);
 
-  const startSync = useCallback(async (syncType: SyncType, options?: { webinarId?: string }) => {
+  // Load last sync status
+  const lastSyncData = getLastSyncStatus();
+  const [lastSyncStatus] = useState<'completed' | 'failed' | null>(lastSyncData.status);
+  const [lastSyncTimestamp] = useState<string | null>(lastSyncData.timestamp);
+  const [lastSyncCount] = useState<number>(lastSyncData.count);
+
+  const startSync = useCallback(async (syncType: SyncType, options?: { webinarId?: string; onComplete?: () => void }) => {
     if (!connection?.id) {
       toast.error('No connection available');
       return;
@@ -93,6 +130,9 @@ export const useZoomSync = (connection: ZoomConnection | null): SyncData => {
       toast.error('Sync already in progress');
       return;
     }
+
+    // Store the callback for later use
+    onCompleteCallbackRef.current = options?.onComplete || null;
 
     console.log(`🚀 Starting unified sync:`, { syncType, connectionId: connection.id });
 
@@ -173,7 +213,8 @@ export const useZoomSync = (connection: ZoomConnection | null): SyncData => {
           // Check for completion
           if (progressData.status === 'completed' || currentProgress >= 100) {
             console.log(`🎉 Sync completed successfully`);
-            completeSyncMonitoring(true);
+            const processedCount = progressData.processedCount || 0;
+            completeSyncMonitoring(true, processedCount);
           } else if (progressData.status === 'failed') {
             console.error(`❌ Sync failed:`, progressData.error_message);
             setSyncError(progressData.error_message || 'Sync failed');
@@ -188,7 +229,7 @@ export const useZoomSync = (connection: ZoomConnection | null): SyncData => {
 
   }, []);
 
-  const completeSyncMonitoring = useCallback((success: boolean) => {
+  const completeSyncMonitoring = useCallback((success: boolean, processedCount: number = 0) => {
     console.log(`💔 Stopping sync monitoring`);
     
     if (monitoringIntervalRef.current) {
@@ -202,10 +243,20 @@ export const useZoomSync = (connection: ZoomConnection | null): SyncData => {
     setSyncProgress(success ? 100 : 0);
     setActiveSyncId('');
 
+    // Save persistent sync status
+    saveLastSyncStatus(success ? 'completed' : 'failed', processedCount);
+
     clearLocalStorage();
 
     if (success) {
-      toast.success('Sync completed successfully!');
+      toast.success(`Sync completed successfully! ${processedCount > 0 ? `Synced ${processedCount} webinars.` : ''}`);
+      
+      // Trigger the onComplete callback if provided
+      if (onCompleteCallbackRef.current) {
+        console.log('🔄 Triggering data refresh callback');
+        onCompleteCallbackRef.current();
+        onCompleteCallbackRef.current = null;
+      }
     }
   }, []);
 
@@ -332,6 +383,9 @@ export const useZoomSync = (connection: ZoomConnection | null): SyncData => {
     fallbackMode: false,
     stuckSyncDetected: false,
     activeSyncId,
+    lastSyncStatus,
+    lastSyncTimestamp,
+    lastSyncCount,
     startSync,
     cancelSync,
     forceCancelSync,

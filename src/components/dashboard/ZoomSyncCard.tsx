@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,12 +21,12 @@ import {
 } from 'lucide-react';
 import { useZoomSync } from '@/hooks/useZoomSync';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
+import { useDashboardRefresh } from '@/hooks/useDashboardRefresh';
 import { SyncType } from '@/types/zoom';
-
-// Diagnostics panel removed in favor of simplified unified sync
 
 export function ZoomSyncCard() {
   const { connection } = useZoomConnection();
+  const { refreshDashboardData } = useDashboardRefresh();
   const syncData = useZoomSync(connection);
   const {
     isSyncing,
@@ -39,7 +40,10 @@ export function ZoomSyncCard() {
     cancelSync,
     testConnection,
     forceResetAndRestart,
-    stuckSyncDetected
+    stuckSyncDetected,
+    lastSyncStatus,
+    lastSyncTimestamp,
+    lastSyncCount
   } = syncData;
 
   const getSyncStatusInfo = () => {
@@ -95,7 +99,9 @@ export function ZoomSyncCard() {
   const StatusIcon = statusInfo.icon;
 
   const handleStartSync = () => {
-    startSync(SyncType.MANUAL);
+    startSync(SyncType.MANUAL, {
+      onComplete: refreshDashboardData
+    });
   };
 
   return (
@@ -122,6 +128,28 @@ export function ZoomSyncCard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Last Sync Status */}
+        {lastSyncStatus && lastSyncTimestamp && !isSyncing && (
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">Last Sync</span>
+              <Badge variant={lastSyncStatus === 'completed' ? 'secondary' : 'destructive'}>
+                {lastSyncStatus === 'completed' ? 'Success' : 'Failed'}
+              </Badge>
+            </div>
+            <div className="text-xs text-gray-600 space-y-1">
+              <div>
+                {new Date(lastSyncTimestamp).toLocaleString()}
+              </div>
+              {lastSyncCount > 0 && (
+                <div>
+                  {lastSyncCount} webinars synced
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Error Alert */}
         {syncError && (
           <Alert variant="destructive">
@@ -190,7 +218,6 @@ export function ZoomSyncCard() {
 
         {/* Action Buttons */}
         <div className="space-y-2">
-          {/* Primary Actions */}
           <div className="flex gap-2">
             {!isSyncing && !stuckSyncDetected ? (
               <>
@@ -237,8 +264,6 @@ export function ZoomSyncCard() {
               </div>
             )}
           </div>
-
-          {/* Simplified unified sync - diagnostics integrated */}
         </div>
 
         {/* Diagnostic Info */}
