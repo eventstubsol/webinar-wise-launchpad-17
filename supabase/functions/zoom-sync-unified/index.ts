@@ -491,8 +491,11 @@ async function saveParticipantsToDatabase(supabase: any, webinarDbId: string, pa
   
   for (const participant of participants) {
     try {
+      const participantId = participant.participant_uuid || participant.uuid || participant.id || `part_${Date.now()}_${Math.random()}`
+      
       const participantData = {
         webinar_id: webinarDbId,
+        participant_id: participantId,
         participant_uuid: participant.participant_uuid || participant.uuid || null,
         participant_user_id: participant.user_id || participant.participant_user_id || null,
         participant_name: participant.name || participant.participant_name || 'Unknown Participant',
@@ -515,7 +518,7 @@ async function saveParticipantsToDatabase(supabase: any, webinarDbId: string, pa
       const { error } = await supabase
         .from('zoom_participants')
         .upsert(participantData, {
-          onConflict: 'webinar_id,participant_uuid',
+          onConflict: 'webinar_id,participant_id',
           ignoreDuplicates: false
         })
 
