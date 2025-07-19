@@ -18,15 +18,7 @@ import Documentation from '@/pages/Documentation';
 import Dashboard from '@/pages/Dashboard';
 import Settings from '@/pages/Settings';
 
-// Protected Pages - Zoom Integration
-import ZoomTest from '@/pages/ZoomTest';
-import ZoomDiagnostics from '@/pages/ZoomDiagnostics';
-import ZoomOAuthCallback from '@/pages/auth/zoom/callback';
-
 // Protected Pages - Data Management
-import Webinars from '@/pages/Webinars';
-import WebinarDetail from '@/pages/WebinarDetail';
-import SyncCenter from '@/pages/SyncCenter';
 import CSVUpload from '@/pages/CSVUpload';
 
 // Protected Pages - Analytics
@@ -38,7 +30,7 @@ import PredictiveAnalytics from '@/pages/PredictiveAnalytics';
 // Protected Pages - Email & Campaigns
 import EmailTemplates from '@/pages/EmailTemplates';
 import Campaigns from '@/pages/Campaigns';
-import Segmentation from '@/pages/Segmentation';
+// Segmentation page removed
 import Personalization from '@/pages/Personalization';
 
 // Protected Pages - Integrations
@@ -49,9 +41,6 @@ import Integrations from '@/pages/Integrations';
 import Reports from '@/pages/Reports';
 
 // Protected Pages - Admin
-import UserManagement from '@/pages/admin/UserManagement';
-import AccountAnalytics from '@/pages/admin/AccountAnalytics';
-import AllWebinars from '@/pages/admin/AllWebinars';
 
 // 404 Page
 import NotFound from '@/pages/NotFound';
@@ -73,16 +62,6 @@ export const AppRoutes = () => (
     <Route path={ROUTES.SUPPORT} element={<Support />} />
     <Route path={ROUTES.DOCUMENTATION} element={<Documentation />} />
 
-    {/* Zoom OAuth Callback - needs to be protected */}
-    <Route
-      path="/auth/zoom/callback"
-      element={
-        <ProtectedRoute>
-          <ZoomOAuthCallback />
-        </ProtectedRoute>
-      }
-    />
-
     {/* Protected Routes - Core */}
     <Route
       path={ROUTES.DASHBOARD}
@@ -101,49 +80,7 @@ export const AppRoutes = () => (
       }
     />
 
-    {/* Protected Routes - Zoom Integration */}
-    <Route
-      path={ROUTES.ZOOM_TEST}
-      element={
-        <ProtectedRoute>
-          <ZoomTest />
-        </ProtectedRoute>
-      }
-    />
-    <Route
-      path={ROUTES.ZOOM_DIAGNOSTICS}
-      element={
-        <ProtectedRoute>
-          <ZoomDiagnostics />
-        </ProtectedRoute>
-      }
-    />
-
     {/* Protected Routes - Data Management */}
-    <Route
-      path={ROUTES.WEBINARS}
-      element={
-        <ProtectedRoute>
-          <Webinars />
-        </ProtectedRoute>
-      }
-    />
-    <Route
-      path={ROUTES.WEBINAR_DETAIL}
-      element={
-        <ProtectedRoute>
-          <WebinarDetail />
-        </ProtectedRoute>
-      }
-    />
-    <Route
-      path={ROUTES.SYNC_CENTER}
-      element={
-        <ProtectedRoute>
-          <SyncCenter />
-        </ProtectedRoute>
-      }
-    />
     <Route
       path={ROUTES.CSV_UPLOAD}
       element={
@@ -204,14 +141,7 @@ export const AppRoutes = () => (
         </ProtectedRoute>
       }
     />
-    <Route
-      path={ROUTES.SEGMENTATION}
-      element={
-        <ProtectedRoute>
-          <Segmentation />
-        </ProtectedRoute>
-      }
-    />
+    {/* Segmentation route removed */}
     <Route
       path={ROUTES.PERSONALIZATION}
       element={
@@ -250,30 +180,6 @@ export const AppRoutes = () => (
     />
 
     {/* Protected Routes - Admin */}
-    <Route
-      path="/admin/users"
-      element={
-        <ProtectedRoute>
-          <UserManagement />
-        </ProtectedRoute>
-      }
-    />
-    <Route
-      path="/admin/account-analytics"
-      element={
-        <ProtectedRoute>
-          <AccountAnalytics />
-        </ProtectedRoute>
-      }
-    />
-    <Route
-      path="/admin/webinars"
-      element={
-        <ProtectedRoute>
-          <AllWebinars />
-        </ProtectedRoute>
-      }
-    />
 
     {/* Catch-all route for 404 */}
     <Route path="*" element={<NotFound />} />

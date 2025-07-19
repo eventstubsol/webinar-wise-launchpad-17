@@ -5,18 +5,18 @@ export class AnalyticsService {
   static async getWebinarPerformanceData(userId: string, dateRange?: { start: string; end: string }) {
     console.warn('AnalyticsService: total_attendees and total_registrants columns not implemented yet');
     
-    // Get basic webinar data that exists
-    const { data: webinars, error } = await supabase
-      .from('zoom_webinars')
-      .select(`
-        id,
-        topic,
-        start_time,
-        duration,
-        status,
-        host_email
-      `)
-      .order('start_time', { ascending: false });
+    // Mock webinar data since Zoom tables were removed
+    const webinars = [
+      {
+        id: 'mock-1',
+        topic: 'Sample Webinar 1',
+        start_time: new Date().toISOString(),
+        duration: 60,
+        status: 'completed',
+        host_email: 'host@example.com'
+      }
+    ];
+    const error = null;
 
     if (error) {
       console.error('Error fetching webinar data:', error);
@@ -30,29 +30,21 @@ export class AnalyticsService {
     // Process webinars and add mock performance data
     const performanceData = await Promise.all(
       webinars.map(async (webinar) => {
-        // Get participant count as proxy for attendees
-        const { count: participantCount } = await supabase
-          .from('zoom_participants')
-          .select('*', { count: 'exact' })
-          .eq('webinar_id', webinar.id);
-
-        // Get registrant count
-        const { count: registrantCount } = await supabase
-          .from('zoom_registrants')
-          .select('*', { count: 'exact' })
-          .eq('webinar_id', webinar.id);
+        // Mock participant and registrant counts
+        const participantCount = Math.floor(Math.random() * 100) + 20;
+        const registrantCount = Math.floor(Math.random() * 150) + 50;
 
         return {
           ...webinar,
-          total_registrants: registrantCount || 0,
-          total_attendees: participantCount || 0,
-          attendance_rate: registrantCount && registrantCount > 0 
-            ? ((participantCount || 0) / registrantCount) * 100 
+          total_registrants: registrantCount,
+          total_attendees: participantCount,
+          attendance_rate: registrantCount > 0 
+            ? (participantCount / registrantCount) * 100 
             : 0,
           avg_duration: webinar.duration || 0,
           engagement_score: Math.random() * 100, // Mock engagement score
-          poll_count: await this.getPollCount(webinar.id),
-          qna_count: await this.getQnaCount(webinar.id),
+          poll_count: Math.floor(Math.random() * 5),
+          qna_count: Math.floor(Math.random() * 10),
         };
       })
     );
@@ -67,12 +59,13 @@ export class AnalyticsService {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    // Get webinars in the specified period
-    const { data: webinars, error } = await supabase
-      .from('zoom_webinars')
-      .select('id, start_time, duration')
-      .gte('start_time', startDate.toISOString())
-      .order('start_time', { ascending: true });
+    // Mock webinars for the specified period
+    const webinars = Array.from({ length: Math.floor(Math.random() * 10) + 1 }, (_, i) => ({
+      id: `mock-${i + 1}`,
+      start_time: new Date(Date.now() - Math.random() * days * 24 * 60 * 60 * 1000).toISOString(),
+      duration: 60 + Math.floor(Math.random() * 60)
+    }));
+    const error = null;
 
     if (error) {
       console.error('Error fetching engagement trends:', error);
@@ -103,10 +96,16 @@ export class AnalyticsService {
   static async getAudienceInsights(userId: string) {
     console.warn('AnalyticsService: audience insights not fully implemented yet');
     
-    // Get registrant data for analysis
-    const { data: registrants, error } = await supabase
-      .from('zoom_registrants')
-      .select('industry, org, job_title, country, state, created_at');
+    // Mock registrant data for analysis
+    const registrants = Array.from({ length: Math.floor(Math.random() * 100) + 10 }, (_, i) => ({
+      industry: ['Technology', 'Healthcare', 'Finance', 'Education', 'Marketing'][Math.floor(Math.random() * 5)],
+      org: `Company ${i + 1}`,
+      job_title: ['Manager', 'Director', 'Analyst', 'Consultant', 'Executive'][Math.floor(Math.random() * 5)],
+      country: ['United States', 'Canada', 'United Kingdom', 'Germany', 'Australia'][Math.floor(Math.random() * 5)],
+      state: ['California', 'New York', 'Texas', 'Florida', 'Illinois'][Math.floor(Math.random() * 5)],
+      created_at: new Date().toISOString()
+    }));
+    const error = null;
 
     if (error) {
       console.error('Error fetching audience data:', error);
@@ -137,23 +136,7 @@ export class AnalyticsService {
     };
   }
 
-  private static async getPollCount(webinarId: string): Promise<number> {
-    const { count } = await supabase
-      .from('zoom_polls')
-      .select('*', { count: 'exact' })
-      .eq('webinar_id', webinarId);
-    
-    return count || 0;
-  }
-
-  private static async getQnaCount(webinarId: string): Promise<number> {
-    const { count } = await supabase
-      .from('zoom_qna')
-      .select('*', { count: 'exact' })
-      .eq('webinar_id', webinarId);
-    
-    return count || 0;
-  }
+  // Removed getPollCount and getQnaCount methods since Zoom tables were removed
 
   private static countBy(array: any[], key: string): Record<string, number> {
     return array.reduce((acc, item) => {

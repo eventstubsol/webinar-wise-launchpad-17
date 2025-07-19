@@ -4,7 +4,7 @@ import { Route } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import EmailTemplates from '@/pages/EmailTemplates';
 import Campaigns from '@/pages/Campaigns';
-import Segmentation from '@/pages/Segmentation';
+// Segmentation page removed
 import Personalization from '@/pages/Personalization';
 import { ROUTES } from './routeConfig';
 
@@ -26,14 +26,7 @@ export const CampaignRoutes = () => (
         </ProtectedRoute>
       }
     />
-    <Route
-      path={ROUTES.SEGMENTATION}
-      element={
-        <ProtectedRoute>
-          <Segmentation />
-        </ProtectedRoute>
-      }
-    />
+    {/* Segmentation route removed */}
     <Route
       path={ROUTES.PERSONALIZATION}
       element={
