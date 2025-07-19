@@ -8,32 +8,56 @@ import { ZoomWebinar, ZoomRegistrant, WebinarStatus } from '@/types/zoom';
 export class WebinarTransformers {
   /**
    * Transform Zoom API webinar to database format with ALL 39 database fields
-   * FIXED: Proper type conversion and complete field mapping
+   * ENHANCED: Time-based status derivation for accurate status calculation
    */
   static transformWebinarForDatabase(
     apiWebinar: any,
     connectionId: string
   ): Omit<ZoomWebinar, 'id' | 'created_at' | 'updated_at'> {
-    console.log(`🔧 ENHANCED TRANSFORMER: Processing webinar ${apiWebinar.id} with complete field mapping`);
+    console.log(`🔧 ENHANCED TRANSFORMER: Processing webinar ${apiWebinar.id} with complete field mapping and time-based status`);
     
-    // FIXED: Proper status conversion to WebinarStatus enum
-    const normalizeStatus = (status: any): WebinarStatus => {
-      if (!status) return 'available' as WebinarStatus;
+    // ENHANCED: Time-based status derivation with fallback to API status
+    const deriveWebinarStatus = (apiStatus: any, startTime: string | null, duration: number | null): WebinarStatus => {
+      console.log(`🕒 STATUS DERIVATION: API status="${apiStatus}", start_time="${startTime}", duration=${duration}`);
       
+      // If we have specific statuses from API, respect them (cancelled, deleted, etc.)
+      if (apiStatus && ['cancelled', 'deleted', 'unavailable'].includes(apiStatus.toLowerCase())) {
+        const result = apiStatus.toLowerCase() as WebinarStatus;
+        console.log(`📊 Using API status for cancelled/deleted: ${result}`);
+        return result;
+      }
+      
+      // Apply time-based calculation for scheduled webinars or when API status is generic
+      if (startTime && duration) {
+        const start = new Date(startTime);
+        const now = new Date();
+        const end = new Date(start.getTime() + (duration * 60 * 1000));
+        const bufferEnd = new Date(end.getTime() + (5 * 60 * 1000)); // 5 min buffer
+        
+        if (now < start) {
+          console.log(`📊 Time-based status: upcoming (starts in future)`);
+          return WebinarStatus.UPCOMING;
+        } else if (now >= start && now <= bufferEnd) {
+          console.log(`📊 Time-based status: live (currently in progress)`);
+          return WebinarStatus.LIVE;
+        } else {
+          console.log(`📊 Time-based status: ended (past webinar)`);
+          return WebinarStatus.ENDED;
+        }
+      }
+      
+      // Fallback: normalize API status or use default
       const statusMap: Record<string, WebinarStatus> = {
-        'available': 'available' as WebinarStatus,
-        'unavailable': 'unavailable' as WebinarStatus,
-        'started': 'started' as WebinarStatus,
-        'ended': 'ended' as WebinarStatus,
-        'deleted': 'deleted' as WebinarStatus,
-        'scheduled': 'scheduled' as WebinarStatus,
-        'finished': 'finished' as WebinarStatus,
-        'cancelled': 'cancelled' as WebinarStatus
+        'available': WebinarStatus.AVAILABLE,
+        'scheduled': WebinarStatus.UPCOMING, // Map scheduled to upcoming for better clarity
+        'started': WebinarStatus.LIVE,
+        'ended': WebinarStatus.ENDED,
+        'finished': WebinarStatus.ENDED
       };
       
-      const result = statusMap[status.toLowerCase()] || ('available' as WebinarStatus);
-      console.log(`🔧 STATUS CONVERSION: ${status} -> ${result}`);
-      return result;
+      const fallbackStatus = statusMap[apiStatus?.toLowerCase()] || WebinarStatus.AVAILABLE;
+      console.log(`📊 Fallback status: ${fallbackStatus}`);
+      return fallbackStatus;
     };
 
     // Extract settings for comprehensive field mapping
@@ -55,7 +79,7 @@ export class WebinarTransformers {
       topic: apiWebinar.topic || '',
       agenda: apiWebinar.agenda || null,
       webinar_type: apiWebinar.type || 5,
-      status: normalizeStatus(apiWebinar.status), // FIXED: Proper enum conversion
+      status: deriveWebinarStatus(apiWebinar.status, apiWebinar.start_time, apiWebinar.duration), // ENHANCED: Time-based status derivation
       start_time: apiWebinar.start_time || null,
       duration: apiWebinar.duration || null,
       timezone: apiWebinar.timezone || null,

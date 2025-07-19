@@ -8,29 +8,56 @@ import { ZoomWebinar, WebinarStatus } from '@/types/zoom';
 export class ZoomWebinarTransformService {
   /**
    * Transform Zoom API webinar response to database format with ALL required fields
+   * ENHANCED: Time-based status derivation for accurate status calculation
    */
   static transformWebinarForDatabase(
     apiWebinar: any,
     connectionId: string
   ): Omit<ZoomWebinar, 'id' | 'created_at' | 'updated_at'> {
-    console.log(`🔧 TRANSFORM SERVICE: Processing webinar ${apiWebinar.id} with comprehensive field mapping`);
+    console.log(`🔧 TRANSFORM SERVICE: Processing webinar ${apiWebinar.id} with time-based status calculation`);
     
-    // FIXED: Proper status conversion from string to WebinarStatus enum
-    const normalizeStatus = (status: any): WebinarStatus => {
-      if (!status) return 'available' as WebinarStatus;
+    // ENHANCED: Time-based status derivation with fallback to API status
+    const deriveWebinarStatus = (apiStatus: any, startTime: string | null, duration: number | null): WebinarStatus => {
+      console.log(`🕒 STATUS DERIVATION: API status="${apiStatus}", start_time="${startTime}", duration=${duration}`);
       
+      // If we have specific statuses from API, respect them (cancelled, deleted, etc.)
+      if (apiStatus && ['cancelled', 'deleted', 'unavailable'].includes(apiStatus.toLowerCase())) {
+        const result = apiStatus.toLowerCase() as WebinarStatus;
+        console.log(`📊 Using API status for cancelled/deleted: ${result}`);
+        return result;
+      }
+      
+      // Apply time-based calculation for scheduled webinars or when API status is generic
+      if (startTime && duration) {
+        const start = new Date(startTime);
+        const now = new Date();
+        const end = new Date(start.getTime() + (duration * 60 * 1000));
+        const bufferEnd = new Date(end.getTime() + (5 * 60 * 1000)); // 5 min buffer
+        
+        if (now < start) {
+          console.log(`📊 Time-based status: upcoming (starts in future)`);
+          return WebinarStatus.UPCOMING;
+        } else if (now >= start && now <= bufferEnd) {
+          console.log(`📊 Time-based status: live (currently in progress)`);
+          return WebinarStatus.LIVE;
+        } else {
+          console.log(`📊 Time-based status: ended (past webinar)`);
+          return WebinarStatus.ENDED;
+        }
+      }
+      
+      // Fallback: normalize API status or use default
       const statusMap: Record<string, WebinarStatus> = {
-        'available': 'available' as WebinarStatus,
-        'unavailable': 'unavailable' as WebinarStatus,
-        'started': 'started' as WebinarStatus,
-        'ended': 'ended' as WebinarStatus,
-        'deleted': 'deleted' as WebinarStatus,
-        'scheduled': 'scheduled' as WebinarStatus,
-        'finished': 'finished' as WebinarStatus,
-        'cancelled': 'cancelled' as WebinarStatus
+        'available': WebinarStatus.AVAILABLE,
+        'scheduled': WebinarStatus.UPCOMING, // Map scheduled to upcoming for better clarity
+        'started': WebinarStatus.LIVE,
+        'ended': WebinarStatus.ENDED,
+        'finished': WebinarStatus.ENDED
       };
       
-      return statusMap[status.toLowerCase()] || ('available' as WebinarStatus);
+      const fallbackStatus = statusMap[apiStatus?.toLowerCase()] || WebinarStatus.AVAILABLE;
+      console.log(`📊 Fallback status: ${fallbackStatus}`);
+      return fallbackStatus;
     };
 
     // FIXED: Complete mapping of ALL 39 database fields including missing ones
@@ -52,7 +79,7 @@ export class ZoomWebinarTransformService {
       host_email: apiWebinar.host_email || null,
       topic: apiWebinar.topic || '',
       agenda: apiWebinar.agenda || null,
-      status: normalizeStatus(apiWebinar.status),
+      status: deriveWebinarStatus(apiWebinar.status, apiWebinar.start_time, apiWebinar.duration), // ENHANCED: Time-based status derivation
       start_time: apiWebinar.start_time || null,
       duration: apiWebinar.duration || null,
       timezone: apiWebinar.timezone || null,
