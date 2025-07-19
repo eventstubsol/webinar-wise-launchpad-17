@@ -26,47 +26,11 @@ const ConnectionVisualization = () => (
     
     {/* Disconnected Connection */}
     <div className="relative flex items-center">
-      {/* Left Plug */}
-      <div className="relative">
-        <svg width="70" height="45" viewBox="0 0 70 45" fill="none">
-          <rect x="5" y="17" width="45" height="12" rx="6" fill="#3B82F6" stroke="#2563EB" strokeWidth="2"/>
-          <circle cx="52" cy="20" r="2.5" fill="#2563EB"/>
-          <circle cx="52" cy="26" r="2.5" fill="#2563EB"/>
-          <rect x="45" y="19" width="10" height="8" fill="#2563EB"/>
-        </svg>
-        
-        {/* Sparks from left plug */}
-        <div className="absolute -right-1 top-1/2 transform -translate-y-1/2">
-          <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-ping"></div>
-          <div className="w-1 h-1 bg-orange-400 rounded-full animate-ping delay-100 absolute top-3 left-1"></div>
-          <div className="w-1 h-1 bg-red-400 rounded-full animate-ping delay-200 absolute -top-2 left-2"></div>
-        </div>
-      </div>
-      
-      {/* Gap with electricity */}
-      <div className="mx-6 relative">
-        <div className="w-12 h-0.5 bg-gradient-to-r from-blue-400 to-teal-400 opacity-60"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-          <div className="w-1.5 h-1.5 bg-yellow-300 rounded-full animate-pulse"></div>
-        </div>
-      </div>
-      
-      {/* Right Plug */}
-      <div className="relative">
-        <svg width="70" height="45" viewBox="0 0 70 45" fill="none" transform="scale(-1, 1)">
-          <rect x="5" y="17" width="45" height="12" rx="6" fill="#14B8A6" stroke="#0D9488" strokeWidth="2"/>
-          <circle cx="52" cy="20" r="2.5" fill="#0D9488"/>
-          <circle cx="52" cy="26" r="2.5" fill="#0D9488"/>
-          <rect x="45" y="19" width="10" height="8" fill="#0D9488"/>
-        </svg>
-        
-        {/* Sparks from right plug */}
-        <div className="absolute -left-1 top-1/2 transform -translate-y-1/2">
-          <div className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-ping"></div>
-          <div className="w-1 h-1 bg-cyan-400 rounded-full animate-ping delay-150 absolute top-3 right-1"></div>
-          <div className="w-1 h-1 bg-emerald-400 rounded-full animate-ping delay-300 absolute -top-2 right-2"></div>
-        </div>
-      </div>
+      <img 
+        src="/lovable-uploads/624470d7-5a5e-4917-bba9-b266ea6deba4.png" 
+        alt="Disconnected plugs with sparks"
+        className="w-80 h-auto"
+      />
     </div>
     
     {/* WebinarWise Logo */}
