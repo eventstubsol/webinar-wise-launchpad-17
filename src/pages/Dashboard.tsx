@@ -28,16 +28,11 @@ export default function Dashboard() {
       <SidebarInset>
         <DashboardHeader />
         <main className="p-6 space-y-6">
-          {(showConnectionPrompt || isZoomConnected) && (
+          {isZoomConnected && (
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
               <p className="text-gray-600">
-                {showConnectionPrompt 
-                  ? "Connect your Zoom account to unlock powerful webinar analytics and insights"
-                  : isZoomConnected
-                  ? "Welcome back! Here's an overview of your webinars"
-                  : "Get started by connecting your Zoom account and syncing your webinar data"
-                }
+                Welcome back! Here's an overview of your webinars
               </p>
             </div>
           )}
