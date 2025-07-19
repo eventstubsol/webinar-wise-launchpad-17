@@ -356,7 +356,39 @@ This will work but may be slower for large datasets.
   }
 
   async validateCredentials(credentials: ValidationCredentialsPayload): Promise<ApiResponse> {
-    return this.makeRequest('/validate-credentials', 'POST', credentials);
+    try {
+      // Use Supabase Edge Function as primary validation method
+      const { data, error } = await supabase.functions.invoke('validate-zoom-credentials', {
+        body: credentials
+      });
+
+      if (error) {
+        console.error('Supabase Edge Function error:', error);
+        throw error;
+      }
+
+      return {
+        success: data.success,
+        data: data.connection,
+        connection: data.connection,
+        message: data.message,
+        isServiceAvailable: true
+      };
+    } catch (error) {
+      console.error('Validation failed with Supabase Edge Function, trying Render fallback:', error);
+      
+      // Fallback to Render backend if Supabase fails
+      try {
+        return this.makeRequest('/validate-credentials', 'POST', credentials);
+      } catch (renderError) {
+        console.error('Both validation methods failed:', { supabaseError: error, renderError });
+        return {
+          success: false,
+          error: 'Unable to validate credentials - both validation services are unavailable',
+          isServiceAvailable: false
+        };
+      }
+    }
   }
 
   async testConnection(connectionId?: string): Promise<ApiResponse> {

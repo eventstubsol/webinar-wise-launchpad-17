@@ -13,7 +13,7 @@ export class ZoomCredentialsService {
 
     if (error) {
       console.error('Error fetching zoom credentials:', error);
-      return null;
+      throw error;
     }
 
     return data;
