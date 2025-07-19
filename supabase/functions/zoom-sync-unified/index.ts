@@ -326,6 +326,7 @@ async function processWebinarWithEnhancedData(
         
         const transformedParticipants = participants.map(participant => ({
           webinar_id: webinarDbId,
+          participant_id: participant.participant_uuid || participant.id || participant.user_id || `${participant.email}_${participant.join_time}` || `unknown_${Date.now()}`,
           participant_uuid: participant.participant_uuid || null,
           participant_user_id: participant.participant_user_id || null,
           participant_name: participant.name || participant.participant_name,
@@ -347,7 +348,7 @@ async function processWebinarWithEnhancedData(
         const { error: participantsError } = await supabase
           .from('zoom_participants')
           .upsert(transformedParticipants, {
-            onConflict: 'webinar_id,participant_email,join_time',
+            onConflict: 'webinar_id,participant_id',
             ignoreDuplicates: false
           });
 
