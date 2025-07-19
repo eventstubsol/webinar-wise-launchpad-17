@@ -1,14 +1,11 @@
 
-import { BrowserRouter } from "react-router-dom";
-import { AuthProvider } from "./contexts/AuthContext";
-import { AppRoutes } from "./routes/AppRoutes";
-
-const App = () => (
-  <BrowserRouter>
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
-  </BrowserRouter>
-);
+const App = () => {
+  return (
+    <div>
+      <h1>Test App</h1>
+      <p>If you can see this, React is working</p>
+    </div>
+  );
+};
 
 export default App;
