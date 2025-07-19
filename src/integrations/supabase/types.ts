@@ -708,6 +708,88 @@ export type Database = {
           },
         ]
       }
+      rate_limit_tracking: {
+        Row: {
+          api_calls_limit: number
+          api_calls_made: number
+          connection_id: string
+          created_at: string
+          id: string
+          reset_time: string
+          updated_at: string
+          user_id: string
+          warning_threshold: number | null
+        }
+        Insert: {
+          api_calls_limit?: number
+          api_calls_made?: number
+          connection_id: string
+          created_at?: string
+          id?: string
+          reset_time: string
+          updated_at?: string
+          user_id: string
+          warning_threshold?: number | null
+        }
+        Update: {
+          api_calls_limit?: number
+          api_calls_made?: number
+          connection_id?: string
+          created_at?: string
+          id?: string
+          reset_time?: string
+          updated_at?: string
+          user_id?: string
+          warning_threshold?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rate_limit_tracking_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduled_syncs: {
+        Row: {
+          connection_id: string
+          created_at: string
+          id: string
+          scheduled_time: string
+          status: string
+          sync_type: string
+          updated_at: string
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string
+          id?: string
+          scheduled_time: string
+          status?: string
+          sync_type: string
+          updated_at?: string
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string
+          id?: string
+          scheduled_time?: string
+          status?: string
+          sync_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_syncs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       security_logs: {
         Row: {
           created_at: string | null
@@ -1056,11 +1138,86 @@ export type Database = {
         }
         Relationships: []
       }
+      zoom_participants: {
+        Row: {
+          approval_type: string | null
+          attentiveness_score: string | null
+          connection_type: string | null
+          created_at: string | null
+          custom_questions: Json | null
+          device_info: Json | null
+          duration: number | null
+          id: string
+          is_rejoin_session: boolean | null
+          join_time: string | null
+          leave_time: string | null
+          participant_email: string | null
+          participant_name: string | null
+          participant_user_id: string | null
+          participant_uuid: string | null
+          registration_time: string | null
+          updated_at: string | null
+          user_location: Json | null
+          webinar_id: string
+        }
+        Insert: {
+          approval_type?: string | null
+          attentiveness_score?: string | null
+          connection_type?: string | null
+          created_at?: string | null
+          custom_questions?: Json | null
+          device_info?: Json | null
+          duration?: number | null
+          id?: string
+          is_rejoin_session?: boolean | null
+          join_time?: string | null
+          leave_time?: string | null
+          participant_email?: string | null
+          participant_name?: string | null
+          participant_user_id?: string | null
+          participant_uuid?: string | null
+          registration_time?: string | null
+          updated_at?: string | null
+          user_location?: Json | null
+          webinar_id: string
+        }
+        Update: {
+          approval_type?: string | null
+          attentiveness_score?: string | null
+          connection_type?: string | null
+          created_at?: string | null
+          custom_questions?: Json | null
+          device_info?: Json | null
+          duration?: number | null
+          id?: string
+          is_rejoin_session?: boolean | null
+          join_time?: string | null
+          leave_time?: string | null
+          participant_email?: string | null
+          participant_name?: string | null
+          participant_user_id?: string | null
+          participant_uuid?: string | null
+          registration_time?: string | null
+          updated_at?: string | null
+          user_location?: Json | null
+          webinar_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_participants_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       zoom_sync_logs: {
         Row: {
           completed_at: string | null
           connection_id: string
           created_at: string | null
+          duration_seconds: number | null
           error_details: Json | null
           error_message: string | null
           id: string
@@ -1071,11 +1228,13 @@ export type Database = {
           sync_type: string
           total_items: number | null
           updated_at: string | null
+          webinars_synced: number | null
         }
         Insert: {
           completed_at?: string | null
           connection_id: string
           created_at?: string | null
+          duration_seconds?: number | null
           error_details?: Json | null
           error_message?: string | null
           id?: string
@@ -1086,11 +1245,13 @@ export type Database = {
           sync_type: string
           total_items?: number | null
           updated_at?: string | null
+          webinars_synced?: number | null
         }
         Update: {
           completed_at?: string | null
           connection_id?: string
           created_at?: string | null
+          duration_seconds?: number | null
           error_details?: Json | null
           error_message?: string | null
           id?: string
@@ -1101,6 +1262,7 @@ export type Database = {
           sync_type?: string
           total_items?: number | null
           updated_at?: string | null
+          webinars_synced?: number | null
         }
         Relationships: [
           {
