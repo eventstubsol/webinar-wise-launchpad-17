@@ -37,7 +37,7 @@ export class TokenUtils {
   }
 
   /**
-   * Get the status of a connection's token with proper Server-to-Server handling
+   * Get the status of a connection's token with proper expiration checking
    */
   static getTokenStatus(connection: ZoomConnection | null): TokenStatus {
     if (!connection) {
@@ -48,15 +48,22 @@ export class TokenUtils {
       return TokenStatus.INVALID;
     }
 
-    // For Server-to-Server connections, we have different validation logic
+    // Check token expiration FIRST - this applies to both connection types
+    const isExpired = this.isTokenExpired(connection.token_expires_at);
+    
     if (this.isServerToServerConnection(connection)) {
-      // Server-to-Server requires client credentials, not traditional tokens
+      // For Server-to-Server connections
       if (!connection.client_id || !connection.client_secret || !connection.account_id) {
         return TokenStatus.INVALID;
       }
 
-      // For Server-to-Server, if we have valid credentials, always return VALID
-      // Token refresh happens silently in the background without user intervention
+      // CRITICAL FIX: Check token expiration for Server-to-Server too
+      if (isExpired) {
+        console.log('🔍 Server-to-Server token is expired, needs refresh');
+        return TokenStatus.ACCESS_EXPIRED;
+      }
+
+      // Only return VALID if token is not expired
       return TokenStatus.VALID;
     }
 
@@ -69,7 +76,7 @@ export class TokenUtils {
       return TokenStatus.REFRESH_EXPIRED;
     }
 
-    if (this.isTokenExpired(connection.token_expires_at)) {
+    if (isExpired) {
       return TokenStatus.ACCESS_EXPIRED;
     }
 
@@ -94,12 +101,6 @@ export class TokenUtils {
    * Check if connection needs token refresh
    */
   static needsTokenRefresh(connection: ZoomConnection): boolean {
-    // For Server-to-Server connections, check if token is expired but don't require user intervention
-    if (this.isServerToServerConnection(connection)) {
-      return this.isTokenExpired(connection.token_expires_at);
-    }
-    
-    // For OAuth connections, only refresh if access token is expired but refresh token is valid
     const status = this.getTokenStatus(connection);
     return status === TokenStatus.ACCESS_EXPIRED;
   }

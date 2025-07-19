@@ -1,67 +1,147 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 
-interface SyncResponse {
+export interface SyncResult {
   success: boolean;
   syncId?: string;
-  message?: string;
+  error?: string;
+  requiresReconnection?: boolean;
+}
+
+export interface SyncProgressResult {
+  success: boolean;
+  progress?: number;
+  status?: string;
+  currentOperation?: string;
   error?: string;
 }
 
-interface ProgressResponse {
+export interface TestConnectionResult {
   success: boolean;
-  status?: string;
-  progress?: number;
-  currentOperation?: string;
-  processed_items?: number;
-  processedCount?: number;
-  total_items?: number;
-  error_message?: string;
-  message?: string;
+  userInfo?: any;
+  error?: string;
+  requiresReconnection?: boolean;
 }
 
 /**
- * Unified Zoom Service using only Supabase Edge Functions
- * Replaces all render.com functionality with a single, simple service
+ * Unified service for Zoom operations using Supabase Edge Functions
  */
 export class UnifiedZoomService {
   /**
-   * Start a sync process
+   * Start a sync operation with enhanced error handling
    */
-  static async startSync(connectionId: string, syncType: string = 'incremental', webinarId?: string): Promise<SyncResponse> {
+  static async startSync(
+    connectionId: string, 
+    syncType: 'initial' | 'incremental' | 'manual',
+    webinarId?: string
+  ): Promise<SyncResult> {
     try {
-      console.log(`🚀 Starting unified sync:`, { connectionId, syncType, webinarId });
+      console.log(`🚀 Starting unified sync: ${JSON.stringify({ connectionId, syncType, webinarId })}`);
       
+      const requestBody = {
+        connectionId,
+        syncType,
+        webinarId,
+        requestId: crypto.randomUUID()
+      };
+
       const { data, error } = await supabase.functions.invoke('zoom-sync-unified', {
-        body: {
-          action: 'start',
-          connectionId,
-          syncType,
-          webinarId
-        }
+        body: requestBody
       });
 
       if (error) {
-        console.error('Edge function error:', error);
-        throw new Error(error.message || 'Failed to start sync');
+        console.error('❌ Unified sync error:', error);
+        
+        // Check for token-related errors
+        if (error.message?.includes('Access token is expired') || 
+            error.message?.includes('401') ||
+            error.message?.includes('token')) {
+          return {
+            success: false,
+            error: 'Access token expired. Please reconnect your Zoom account.',
+            requiresReconnection: true
+          };
+        }
+        
+        return {
+          success: false,
+          error: error.message || 'Failed to start sync'
+        };
       }
 
       if (!data.success) {
-        throw new Error(data.error || 'Sync failed to start');
+        console.error('❌ Sync failed:', data.error);
+        
+        // Check for token-related errors in response
+        if (data.error?.includes('Access token is expired') || 
+            data.error?.includes('401') ||
+            data.error?.includes('token')) {
+          return {
+            success: false,
+            error: 'Access token expired. Please reconnect your Zoom account.',
+            requiresReconnection: true
+          };
+        }
+        
+        return {
+          success: false,
+          error: data.error || 'Sync failed'
+        };
       }
 
+      console.log('✅ Sync started successfully:', data.syncId);
       return {
         success: true,
-        syncId: data.syncId,
-        message: data.message || 'Sync started successfully'
+        syncId: data.syncId
       };
 
     } catch (error) {
-      console.error('Start sync error:', error);
+      console.error('❌ Start sync error:', error);
+      
+      // Handle specific error types
+      if (error instanceof Error) {
+        if (error.message.includes('Access token is expired') || 
+            error.message.includes('401')) {
+          return {
+            success: false,
+            error: 'Access token expired. Please reconnect your Zoom account.',
+            requiresReconnection: true
+          };
+        }
+      }
+      
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
+  /**
+   * Cancel a sync operation
+   */
+  static async cancelSync(syncId: string): Promise<SyncResult> {
+    try {
+      const { data, error } = await supabase.functions.invoke('zoom-sync-unified', {
+        body: { action: 'cancel', syncId }
+      });
+
+      if (error) {
+        return {
+          success: false,
+          error: error.message || 'Failed to cancel sync'
+        };
+      }
+
+      return {
+        success: data.success,
+        error: data.error
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
       };
     }
   }
@@ -69,115 +149,109 @@ export class UnifiedZoomService {
   /**
    * Get sync progress
    */
-  static async getSyncProgress(syncId: string): Promise<ProgressResponse> {
+  static async getSyncProgress(syncId: string): Promise<SyncProgressResult> {
     try {
-      const { data, error } = await supabase.functions.invoke('zoom-sync-unified', {
-        body: {
-          action: 'progress',
-          syncId
-        }
+      const { data, error } = await supabase.functions.invoke('zoom-sync-progress', {
+        body: { syncId }
       });
 
       if (error) {
-        throw new Error(error.message || 'Failed to get sync progress');
-      }
-
-      return data;
-
-    } catch (error) {
-      console.error('Get progress error:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  }
-
-  /**
-   * Cancel a sync
-   */
-  static async cancelSync(syncId: string): Promise<SyncResponse> {
-    try {
-      const { data, error } = await supabase.functions.invoke('zoom-sync-unified', {
-        body: {
-          action: 'cancel',
-          syncId
-        }
-      });
-
-      if (error) {
-        throw new Error(error.message || 'Failed to cancel sync');
-      }
-
-      return {
-        success: true,
-        message: data.message || 'Sync cancelled successfully'
-      };
-
-    } catch (error) {
-      console.error('Cancel sync error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  }
-
-  /**
-   * Test connection by attempting to validate credentials
-   */
-  static async testConnection(connectionId: string): Promise<{ success: boolean; message: string; details?: any }> {
-    try {
-      // Get connection from database
-      const { data: connection, error } = await supabase
-        .from('zoom_connections')
-        .select('*')
-        .eq('id', connectionId)
-        .single();
-
-      if (error || !connection) {
         return {
           success: false,
-          message: 'Connection not found'
-        };
-      }
-
-      // Simple validation - check if we have required fields
-      if (!connection.access_token || !connection.zoom_user_id) {
-        return {
-          success: false,
-          message: 'Invalid connection - missing required fields'
-        };
-      }
-
-      // Check token expiration
-      const tokenExpiresAt = new Date(connection.token_expires_at);
-      const now = new Date();
-      const isExpired = tokenExpiresAt <= now;
-
-      if (isExpired) {
-        return {
-          success: false,
-          message: 'Access token has expired. Please reconnect your Zoom account.'
+          error: error.message || 'Failed to get sync progress'
         };
       }
 
       return {
         success: true,
-        message: 'Connection is valid',
-        details: {
-          connectionType: connection.connection_type,
-          accountId: connection.zoom_account_id,
-          email: connection.zoom_email,
-          tokenExpiresAt: connection.token_expires_at
-        }
+        progress: data.progress,
+        status: data.status,
+        currentOperation: data.currentOperation
       };
 
     } catch (error) {
-      console.error('Test connection error:', error);
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Connection test failed'
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
+  /**
+   * Test Zoom connection with enhanced error handling
+   */
+  static async testConnection(connectionId: string): Promise<TestConnectionResult> {
+    try {
+      console.log(`🔍 Testing connection: ${connectionId}`);
+      
+      const { data, error } = await supabase.functions.invoke('zoom-test-fetch', {
+        body: { connectionId, action: 'test' }
+      });
+
+      if (error) {
+        console.error('❌ Connection test error:', error);
+        
+        // Check for token-related errors
+        if (error.message?.includes('Access token is expired') || 
+            error.message?.includes('401') ||
+            error.message?.includes('token')) {
+          return {
+            success: false,
+            error: 'Access token expired. Please reconnect your Zoom account.',
+            requiresReconnection: true
+          };
+        }
+        
+        return {
+          success: false,
+          error: error.message || 'Connection test failed'
+        };
+      }
+
+      if (!data.success) {
+        console.error('❌ Connection test failed:', data.error);
+        
+        // Check for token-related errors in response
+        if (data.error?.includes('Access token is expired') || 
+            data.error?.includes('401') ||
+            data.error?.includes('token')) {
+          return {
+            success: false,
+            error: 'Access token expired. Please reconnect your Zoom account.',
+            requiresReconnection: true
+          };
+        }
+        
+        return {
+          success: false,
+          error: data.error || 'Connection test failed'
+        };
+      }
+
+      console.log('✅ Connection test successful');
+      return {
+        success: true,
+        userInfo: data.userInfo
+      };
+
+    } catch (error) {
+      console.error('❌ Test connection error:', error);
+      
+      // Handle specific error types
+      if (error instanceof Error) {
+        if (error.message.includes('Access token is expired') || 
+            error.message.includes('401')) {
+          return {
+            success: false,
+            error: 'Access token expired. Please reconnect your Zoom account.',
+            requiresReconnection: true
+          };
+        }
+      }
+      
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
       };
     }
   }
