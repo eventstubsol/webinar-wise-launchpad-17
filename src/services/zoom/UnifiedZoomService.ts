@@ -14,13 +14,26 @@ export interface SyncProgressResult {
   status?: string;
   currentOperation?: string;
   error?: string;
+  processedCount?: number;
+  error_message?: string;
 }
 
 export interface TestConnectionResult {
   success: boolean;
+  message?: string;
   userInfo?: any;
   error?: string;
   requiresReconnection?: boolean;
+  details?: {
+    userInfo?: any;
+    responseTime?: number;
+    statusCode?: number;
+    error?: string;
+    connectionType?: string;
+    accountId?: string;
+    email?: string;
+    tokenExpiresAt?: string;
+  };
 }
 
 /**
