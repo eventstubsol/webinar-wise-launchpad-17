@@ -71,12 +71,11 @@ const ConnectionVisualization = () => (
     
     {/* WebinarWise Logo */}
     <div className="flex flex-col items-center">
-      <div className="w-20 h-20 bg-gradient-to-br from-teal-500 to-emerald-500 rounded-2xl flex items-center justify-center shadow-lg mb-3">
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-          <path d="M10 10h20v4H10v-4zm0 6h20v4H10v-4zm0 6h15v4H10v-4z" fill="white"/>
-          <circle cx="28" cy="26" r="4" fill="white"/>
-        </svg>
-      </div>
+      <img 
+        src="/lovable-uploads/61077c71-dae2-4984-902e-fb5dbcc02a17.png" 
+        alt="WebinarWise logo"
+        className="w-20 h-auto mb-3"
+      />
       <span className="text-sm font-semibold text-teal-600">WebinarWise</span>
     </div>
   </div>
