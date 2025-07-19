@@ -3,7 +3,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const zoomService = require('../services/zoomService');
-const zoomSyncService = require('../services/zoomSyncService');
+const enhancedZoomSyncService = require('../services/enhancedZoomSyncService'); // CHANGED: Use enhanced service
 const supabaseService = require('../services/supabaseService');
 const { authMiddleware, extractUser } = require('../middleware/auth');
 
@@ -15,7 +15,8 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
       webinarId, 
       debug = false, 
       testMode = false,
-      priority = 'normal' 
+      priority = 'normal',
+      enhanced = true // NEW: Enable enhanced processing by default
     } = req.body;
     const userId = req.userId;
 
@@ -26,7 +27,7 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
       });
     }
 
-    console.log('Syncing webinars for connection:', connection_id, 'user:', userId);
+    console.log(`🚀 Starting ${enhanced ? 'ENHANCED' : 'standard'} sync for connection:`, connection_id, 'user:', userId);
 
     // Get connection and verify ownership
     const connection = await supabaseService.getZoomConnection(connection_id);
@@ -43,7 +44,7 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
     const syncLogData = {
       id: syncId,
       connection_id,
-      sync_type: type,
+      sync_type: enhanced ? `${type}_enhanced` : type, // Mark enhanced syncs
       sync_status: 'running',
       status: 'running',
       started_at: new Date().toISOString(),
@@ -56,6 +57,7 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
         debug,
         testMode,
         priority,
+        enhanced, // Track enhanced mode
         sync_id: syncId,
         user_id: userId
       }
@@ -63,7 +65,6 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
 
     await supabaseService.createSyncLog(syncLogData);
 
-    // Start webinar sync process
     try {
       // Get Zoom credentials
       const credentials = await supabaseService.getZoomCredentials(userId);
@@ -80,14 +81,30 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
         });
       };
 
-      // Start the sync
-      const syncResults = await zoomSyncService.syncWebinars({
-        connection,
-        credentials,
-        syncLogId: syncId,
-        syncType: type,
-        onProgress
-      });
+      let syncResults;
+
+      if (enhanced) {
+        // Use enhanced sync service with registrants & participants
+        console.log(`🚀 Starting ENHANCED sync with full data fetching...`);
+        syncResults = await enhancedZoomSyncService.syncWebinarsWithEnhancedProcessing({
+          connection,
+          credentials,
+          syncLogId: syncId,
+          syncType: type,
+          onProgress
+        });
+      } else {
+        // Fallback to standard sync
+        console.log(`🔄 Starting STANDARD sync (fallback mode)...`);
+        const standardZoomSyncService = require('../services/zoomSyncService');
+        syncResults = await standardZoomSyncService.syncWebinars({
+          connection,
+          credentials,
+          syncLogId: syncId,
+          syncType: type,
+          onProgress
+        });
+      }
 
       // Update sync log as completed
       await supabaseService.updateSyncLog(syncId, {
@@ -95,39 +112,46 @@ router.post('/', authMiddleware, extractUser, async (req, res) => {
         status: 'completed',
         completed_at: new Date().toISOString(),
         processed_items: syncResults.processedWebinars,
-        total_items: syncResults.totalWebinars,
+        total_items: syncResults.totalWebinars || syncResults.processedWebinars,
         webinars_synced: syncResults.processedWebinars,
         error_details: syncResults.errors,
         sync_progress: 100,
-        current_operation: 'Sync completed successfully'
+        current_operation: enhanced 
+          ? `Enhanced sync completed: ${syncResults.totalRegistrants || 0} registrants, ${syncResults.totalParticipants || 0} participants`
+          : 'Standard sync completed successfully'
       });
 
-      console.log('Sync completed:', syncResults);
+      console.log(`✅ ${enhanced ? 'Enhanced' : 'Standard'} sync completed:`, syncResults);
+
+      res.json({
+        success: true,
+        message: `${enhanced ? 'Enhanced webinar sync' : 'Webinar sync'} completed`,
+        syncId,
+        type: enhanced ? `${type}_enhanced` : type,
+        stats: {
+          webinars: syncResults.processedWebinars,
+          registrants: syncResults.totalRegistrants || 0,
+          participants: syncResults.totalParticipants || 0,
+          errors: syncResults.errors?.length || 0
+        }
+      });
 
     } catch (syncError) {
-      console.error('Sync error:', syncError);
+      console.error(`❌ ${enhanced ? 'Enhanced' : 'Standard'} sync error:`, syncError);
       
-      // Update sync log as failed
       await supabaseService.updateSyncLog(syncId, {
         sync_status: 'failed',
         status: 'failed',
-        error_message: `Sync error: ${syncError.message}`,
+        error_message: `${enhanced ? 'Enhanced' : 'Standard'} sync error: ${syncError.message}`,
         completed_at: new Date().toISOString(),
         sync_progress: 0,
-        current_operation: 'Sync failed'
+        current_operation: `${enhanced ? 'Enhanced' : 'Standard'} sync failed`
       });
       throw syncError;
     }
 
-    res.json({
-      success: true,
-      message: 'Webinar sync completed',
-      syncId,
-      type
-    });
-
   } catch (error) {
-    console.error('Sync webinars error:', error);
+    console.error(`❌ Sync webinars error:`, error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to sync webinars'
