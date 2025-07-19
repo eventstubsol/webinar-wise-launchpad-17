@@ -22,8 +22,8 @@ export const FirstTimeSyncOnboarding: React.FC = () => {
           {/* Hero Illustration */}
           <div className="mb-8">
             <img 
-              src="/lovable-uploads/photo-1486312338219-ce68d2c6f44d"
-              alt="Getting started with webinar analytics"
+              src="/lovable-uploads/1a3d7c9d-d1e5-4030-a6e2-1e5b59d886b6.png"
+              alt="Astronaut with rocket flag ready to start sync journey"
               className="w-64 h-48 mx-auto rounded-lg object-cover shadow-lg"
             />
           </div>
