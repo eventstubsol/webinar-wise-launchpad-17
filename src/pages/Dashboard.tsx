@@ -7,6 +7,7 @@ import { MetricsCards } from '@/components/dashboard/MetricsCards';
 import { ChartsSection } from '@/components/dashboard/ChartsSection';
 import { DataTables } from '@/components/dashboard/DataTables';
 import { ZoomConnectionCard } from '@/components/dashboard/ZoomConnectionCard';
+import { ZoomConnectionPlaceholder } from '@/components/dashboard/ZoomConnectionPlaceholder';
 import { useWebinarMetrics } from '@/hooks/useWebinarMetrics';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { TokenStatus } from '@/services/zoom/utils/tokenUtils';
@@ -39,7 +40,7 @@ export default function Dashboard() {
             </p>
           </div>
           
-          {/* Show connection card prominently when no Zoom connection */}
+          {/* Show illustrated placeholder when no Zoom connection */}
           {showConnectionPrompt && (
             <>
               <Alert>
@@ -55,8 +56,8 @@ export default function Dashboard() {
                 </AlertDescription>
               </Alert>
               
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ZoomConnectionCard />
+              <div className="flex justify-center">
+                <ZoomConnectionPlaceholder />
               </div>
             </>
           )}
