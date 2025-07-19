@@ -48,7 +48,7 @@ const ConnectionVisualization = () => (
 export function ZoomConnectionPlaceholder() {
   return (
     <div className="w-full max-w-6xl mx-auto py-24 sm:py-26 md:py-28 lg:py-32">
-      <div className="flex flex-col items-center">
+      <div className="flex flex-col items-center justify-center">
         {/* Astronaut at the top */}
         <AstronautIllustration />
         
