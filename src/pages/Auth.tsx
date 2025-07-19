@@ -12,7 +12,8 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-// Zoom OAuth removed - focusing on email/password authentication
+import { ZoomSignInButton } from '@/components/auth/ZoomSignInButton';
+import { useZoomOAuth } from '@/hooks/useZoomOAuth';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
@@ -37,6 +38,7 @@ const Auth = () => {
   const { signIn, signUp, user, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { initiateZoomOAuth, isLoading: isZoomLoading } = useZoomOAuth();
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -107,7 +109,16 @@ const Auth = () => {
     }
   };
 
-// Zoom authentication removed
+  const handleZoomAuth = async () => {
+    const result = await initiateZoomOAuth('/dashboard');
+    if (!result.success) {
+      toast({
+        title: 'Zoom Authentication Failed',
+        description: 'Please try again or contact support.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   // Show loading spinner while checking authentication
   if (loading) {
@@ -138,8 +149,28 @@ const Auth = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-          {/* Email/Password Authentication Only */}
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            {/* Zoom Sign In */}
+            <div className="mb-6">
+              <ZoomSignInButton
+                onClick={handleZoomAuth}
+                isLoading={isZoomLoading}
+                text="Continue with Zoom"
+              />
+              <p className="mt-2 text-xs text-center text-gray-500">
+                Connect with your Zoom account for seamless integration
+              </p>
+            </div>
+
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center">
+                <Separator />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-gray-500">Or continue with email</span>
+              </div>
+            </div>
+
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">Sign In</TabsTrigger>
                 <TabsTrigger value="register">Sign Up</TabsTrigger>
@@ -160,7 +191,7 @@ const Auth = () => {
                         autoComplete="email"
                         className={`pl-10 ${loginForm.formState.errors.email ? 'border-red-500' : ''}`}
                         placeholder="Email address"
-                        disabled={isLoading}
+                        disabled={isLoading || isZoomLoading}
                       />
                     </div>
                     {loginForm.formState.errors.email && (
@@ -181,13 +212,13 @@ const Auth = () => {
                         autoComplete="current-password"
                         className={`pl-10 pr-10 ${loginForm.formState.errors.password ? 'border-red-500' : ''}`}
                         placeholder="Password"
-                        disabled={isLoading}
+                        disabled={isLoading || isZoomLoading}
                       />
                       <button
                         type="button"
                         className="absolute inset-y-0 right-0 pr-3 flex items-center"
                         onClick={() => setShowPassword(!showPassword)}
-                        disabled={isLoading}
+                        disabled={isLoading || isZoomLoading}
                       >
                         {showPassword ? (
                           <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-500" />
@@ -204,7 +235,7 @@ const Auth = () => {
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={isLoading}
+                    disabled={isLoading || isZoomLoading}
                   >
                     {isLoading ? (
                       <LoadingSpinner size="sm" className="mr-2" />
@@ -231,7 +262,7 @@ const Auth = () => {
                         autoComplete="name"
                         className={`pl-10 ${registerForm.formState.errors.full_name ? 'border-red-500' : ''}`}
                         placeholder="Full name"
-                        disabled={isLoading}
+                        disabled={isLoading || isZoomLoading}
                       />
                     </div>
                     {registerForm.formState.errors.full_name && (
@@ -252,7 +283,7 @@ const Auth = () => {
                         autoComplete="email"
                         className={`pl-10 ${registerForm.formState.errors.email ? 'border-red-500' : ''}`}
                         placeholder="Email address"
-                        disabled={isLoading}
+                        disabled={isLoading || isZoomLoading}
                       />
                     </div>
                     {registerForm.formState.errors.email && (
@@ -273,13 +304,13 @@ const Auth = () => {
                         autoComplete="new-password"
                         className={`pl-10 pr-10 ${registerForm.formState.errors.password ? 'border-red-500' : ''}`}
                         placeholder="Password (min 6 characters)"
-                        disabled={isLoading}
+                        disabled={isLoading || isZoomLoading}
                       />
                       <button
                         type="button"
                         className="absolute inset-y-0 right-0 pr-3 flex items-center"
                         onClick={() => setShowPassword(!showPassword)}
-                        disabled={isLoading}
+                        disabled={isLoading || isZoomLoading}
                       >
                         {showPassword ? (
                           <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-500" />
@@ -296,7 +327,7 @@ const Auth = () => {
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={isLoading}
+                    disabled={isLoading || isZoomLoading}
                   >
                     {isLoading ? (
                       <LoadingSpinner size="sm" className="mr-2" />

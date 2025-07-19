@@ -59,7 +59,8 @@ export function CRMFieldMappingInterface({ connection }: CRMFieldMappingInterfac
 
   const loadAvailableFields = async () => {
     try {
-      const fields = await CRMConnectionManager.getAvailableFields(connection.id);
+      const adapter = CRMConnectionManager.createAdapter(connection);
+      const fields = await adapter.getAvailableFields();
       setAvailableFields(fields);
     } catch (error) {
       toast({

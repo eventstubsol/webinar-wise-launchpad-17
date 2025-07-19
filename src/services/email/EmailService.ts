@@ -3,7 +3,7 @@
  * Uses Render backend instead of Supabase edge functions
  */
 
-// Zoom service removed
+import { RenderZoomService } from '../zoom/RenderZoomService';
 
 const RENDER_API_BASE_URL = process.env.NODE_ENV === 'production' 
   ? 'https://webinar-wise-launchpad-17.onrender.com'
@@ -141,7 +141,7 @@ export class EmailService {
   }
 
   /**
-   * Get auth headers
+   * Get auth headers (reuse from RenderZoomService)
    */
   public static async getAuthHeaders() {
     const { supabase } = await import('@/integrations/supabase/client');

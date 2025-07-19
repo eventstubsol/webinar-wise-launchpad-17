@@ -2,8 +2,9 @@
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { User, Database, Bell, Shield } from 'lucide-react';
+import { User, Video, Database, Bell, Shield } from 'lucide-react';
 import { ProfileSettings } from '@/components/settings/ProfileSettings';
+import { EnhancedZoomSettings } from '@/components/settings/zoom/EnhancedZoomSettings';
 
 export default function Settings() {
   return (
@@ -16,10 +17,14 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="profile" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             Profile
+          </TabsTrigger>
+          <TabsTrigger value="zoom" className="flex items-center gap-2">
+            <Video className="h-4 w-4" />
+            Zoom Integration
           </TabsTrigger>
           <TabsTrigger value="data" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
@@ -37,6 +42,10 @@ export default function Settings() {
 
         <TabsContent value="profile">
           <ProfileSettings />
+        </TabsContent>
+
+        <TabsContent value="zoom">
+          <EnhancedZoomSettings />
         </TabsContent>
 
         <TabsContent value="data">

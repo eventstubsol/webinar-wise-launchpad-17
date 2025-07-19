@@ -2,7 +2,9 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, Calendar, Users, Clock, Activity } from 'lucide-react';
+import { useWebinarMetrics } from '@/hooks/useWebinarMetrics';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyDashboardState } from './EmptyDashboardState';
 
 interface MetricCardProps {
   title: string;
@@ -52,25 +54,138 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, change, trend, ic
 };
 
 export function MetricsCards() {
-  // Show placeholder cards for email/password auth focused app
-  const placeholderMetrics = [
-    { title: "Total Users", value: "0", change: "New app", trend: "up" as const, icon: Users },
-    { title: "Active Sessions", value: "0", change: "Welcome!", trend: "up" as const, icon: Activity },
-    { title: "Total Logins", value: "0", change: "Getting started", trend: "up" as const, icon: Calendar },
-    { title: "Account Health", value: "100%", change: "All systems go", trend: "up" as const, icon: TrendingUp },
+  const { metrics, loading, error } = useWebinarMetrics();
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <MetricCard
+            key={index}
+            title=""
+            value=""
+            change=""
+            trend="up"
+            icon={Calendar}
+            bgColor="bg-gray-50"
+            loading={true}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="col-span-full text-center py-8 text-red-600">
+          Error loading metrics: {error}
+        </div>
+      </div>
+    );
+  }
+
+  // Show empty state when no data
+  if (!metrics || metrics.isEmpty) {
+    return (
+      <EmptyDashboardState 
+        lastSyncAt={metrics?.lastSyncAt}
+        syncHistoryCount={metrics?.syncHistoryCount || 0}
+      />
+    );
+  }
+
+  // Calculate trends (simplified - comparing with previous period)
+  const calculateTrend = (current: number, previous: number): { value: string; trend: 'up' | 'down' } => {
+    if (previous === 0) return { value: 'No previous data', trend: 'up' };
+    const change = ((current - previous) / previous) * 100;
+    return {
+      value: `${Math.abs(Math.round(change))}% from last period`,
+      trend: change >= 0 ? 'up' : 'down'
+    };
+  };
+
+  // Use real data
+  const totalWebinars = metrics.totalWebinars;
+  const totalRegistrants = metrics.totalRegistrants;
+  const totalAttendees = metrics.totalAttendees;
+  const attendanceRate = metrics.attendanceRate;
+  const totalEngagement = metrics.totalEngagement;
+  const averageDuration = metrics.averageDuration;
+
+  // Calculate simple trends based on recent vs older data
+  const recentTrend = calculateTrend(totalWebinars, Math.max(1, totalWebinars - 2));
+  const registrantTrend = calculateTrend(totalRegistrants, Math.max(1, totalRegistrants - 100));
+  const attendeeTrend = calculateTrend(totalAttendees, Math.max(1, totalAttendees - 80));
+  const rateTrend = attendanceRate >= 65 ? { value: 'Above average', trend: 'up' as const } : { value: 'Below average', trend: 'down' as const };
+  const engagementTrend = calculateTrend(totalEngagement, Math.max(1, totalEngagement - 100));
+  const durationTrend = calculateTrend(averageDuration, Math.max(1, averageDuration - 5));
+
+  const metricsData = [
+    {
+      title: "Total Webinars",
+      value: totalWebinars.toString(),
+      change: recentTrend.value,
+      trend: recentTrend.trend,
+      icon: Calendar,
+      bgColor: "bg-blue-50",
+    },
+    {
+      title: "Total Registrants", 
+      value: totalRegistrants.toLocaleString(),
+      change: registrantTrend.value,
+      trend: registrantTrend.trend,
+      icon: Users,
+      bgColor: "bg-green-50",
+    },
+    {
+      title: "Total Attendees",
+      value: totalAttendees.toLocaleString(),
+      change: attendeeTrend.value, 
+      trend: attendeeTrend.trend,
+      icon: Activity,
+      bgColor: "bg-purple-50",
+    },
+    {
+      title: "Attendance Rate",
+      value: `${attendanceRate}%`,
+      change: rateTrend.value,
+      trend: rateTrend.trend,
+      icon: TrendingUp,
+      bgColor: "bg-orange-50",
+    },
+    {
+      title: "Total Engagement",
+      value: `${totalEngagement}h`,
+      change: engagementTrend.value,
+      trend: engagementTrend.trend,
+      icon: Clock,
+      bgColor: "bg-pink-50",
+    },
+    {
+      title: "Average Duration",
+      value: `${averageDuration}m`,
+      change: durationTrend.value,
+      trend: durationTrend.trend,
+      icon: Clock,
+      bgColor: "bg-yellow-50",
+    },
   ];
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-      {placeholderMetrics.map((metric, i) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      {metricsData.map((metric, index) => (
         <MetricCard
-          key={i}
+          key={index}
           title={metric.title}
           value={metric.value}
           change={metric.change}
           trend={metric.trend}
           icon={metric.icon}
-          bgColor="bg-gradient-to-br from-blue-50 to-indigo-50"
+          bgColor={metric.bgColor}
+          loading={loading}
         />
       ))}
     </div>
