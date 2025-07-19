@@ -23,7 +23,7 @@ interface ProgressResponse {
 
 /**
  * Unified Zoom Service using only Supabase Edge Functions
- * Replaces all render.com functionality with a single, simple service
+ * Uses the streamlined set of edge functions after cleanup
  */
 export class UnifiedZoomService {
   /**
@@ -124,53 +124,31 @@ export class UnifiedZoomService {
   }
 
   /**
-   * Test connection by attempting to validate credentials
+   * Test connection using zoom-test-fetch function
    */
   static async testConnection(connectionId: string): Promise<{ success: boolean; message: string; details?: any }> {
     try {
-      // Get connection from database
-      const { data: connection, error } = await supabase
-        .from('zoom_connections')
-        .select('*')
-        .eq('id', connectionId)
-        .single();
+      const { data, error } = await supabase.functions.invoke('zoom-test-fetch');
 
-      if (error || !connection) {
+      if (error) {
         return {
           success: false,
-          message: 'Connection not found'
+          message: error.message || 'Connection test failed'
         };
       }
 
-      // Simple validation - check if we have required fields
-      if (!connection.access_token || !connection.zoom_user_id) {
+      if (!data.success) {
         return {
           success: false,
-          message: 'Invalid connection - missing required fields'
-        };
-      }
-
-      // Check token expiration
-      const tokenExpiresAt = new Date(connection.token_expires_at);
-      const now = new Date();
-      const isExpired = tokenExpiresAt <= now;
-
-      if (isExpired) {
-        return {
-          success: false,
-          message: 'Access token has expired. Please reconnect your Zoom account.'
+          message: data.message || 'Connection test failed',
+          details: data.details
         };
       }
 
       return {
         success: true,
-        message: 'Connection is valid',
-        details: {
-          connectionType: connection.connection_type,
-          accountId: connection.zoom_account_id,
-          email: connection.zoom_email,
-          tokenExpiresAt: connection.token_expires_at
-        }
+        message: data.message || 'Connection is valid',
+        details: data.details
       };
 
     } catch (error) {
@@ -178,6 +156,36 @@ export class UnifiedZoomService {
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Connection test failed'
+      };
+    }
+  }
+
+  /**
+   * Refresh zoom token using zoom-token-refresh function
+   */
+  static async refreshToken(connectionId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('zoom-token-refresh', {
+        body: { connectionId }
+      });
+
+      if (error) {
+        return {
+          success: false,
+          message: error.message || 'Token refresh failed'
+        };
+      }
+
+      return {
+        success: data.success,
+        message: data.success ? 'Token refreshed successfully' : 'Token refresh failed'
+      };
+
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Token refresh failed'
       };
     }
   }
