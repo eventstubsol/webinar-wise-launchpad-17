@@ -13,11 +13,8 @@ export class ZoomInteractionOperations {
 
     const transformedQnA = qnaData.map(item => ({
       webinar_id: webinarDbId,
-      question_id: item.id || item.question_id || `qna_${Date.now()}_${Math.random()}`,
-      question: item.question || '',
-      answer: item.answer || '',
-      asker_name: item.asker_name || '',
-      answerer_name: item.answerer_name || '',
+      question_details: item.question_details || {},
+      answer_details: item.answer_details || {},
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }));
@@ -37,24 +34,28 @@ export class ZoomInteractionOperations {
   /**
    * Upsert poll responses for a webinar
    */
-  static async upsertPollResponses(pollResponses: any[], webinarDbId: string): Promise<void> {
+  static async upsertPollResponses(pollResponses: any[], pollId: string): Promise<void> {
     if (!pollResponses || pollResponses.length === 0) return;
 
-    const transformedPolls = pollResponses.map(poll => ({
-      webinar_id: webinarDbId,
-      poll_id: poll.poll_id || poll.id || `poll_${Date.now()}_${Math.random()}`,
-      title: poll.title || poll.question || 'Poll',
-      questions: JSON.stringify(poll.questions || [poll]),
+    const transformedResponses = pollResponses.map(response => ({
+      poll_id: pollId,
+      participant_name: response.participant_name || '',
+      participant_email: response.participant_email || '',
+      question_details: response.question_details || {},
+      date_time: response.date_time || new Date().toISOString(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }));
 
     const { error } = await supabase
-      .from('zoom_polls')
-      .insert(transformedPolls);
+      .from('zoom_poll_responses')
+      .upsert(transformedResponses, {
+        onConflict: 'poll_id,participant_email',
+        ignoreDuplicates: false
+      });
 
     if (error) {
-      throw new Error(`Failed to upsert poll data: ${error.message}`);
+      throw new Error(`Failed to upsert poll responses: ${error.message}`);
     }
   }
 }

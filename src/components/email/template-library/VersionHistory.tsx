@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RotateCcw, Eye, Calendar, User } from "lucide-react";
 import { Loader2 } from "lucide-react";
-import { SafeHtml } from "@/utils/htmlSanitizer";
 
 interface VersionHistoryProps {
   templateId: string;
@@ -153,9 +152,9 @@ export function VersionHistory({ templateId, onClose, onRestore }: VersionHistor
                 </div>
 
                 <div className="flex-1 p-4 overflow-auto">
-                  <SafeHtml 
-                    html={selectedVersion.html_template}
+                  <div 
                     className="bg-white border rounded p-4"
+                    dangerouslySetInnerHTML={{ __html: selectedVersion.html_template }}
                   />
                 </div>
               </div>

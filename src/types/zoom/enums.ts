@@ -11,20 +11,12 @@ export enum ConnectionStatus {
   ERROR = 'error'
 }
 
-/** Webinar status values - Enhanced with time-based statuses */
+/** Webinar status values */
 export enum WebinarStatus {
-  // API-based statuses
   SCHEDULED = 'scheduled',
-  STARTED = 'started', 
+  STARTED = 'started',
   FINISHED = 'finished',
-  CANCELLED = 'cancelled',
-  AVAILABLE = 'available',
-  UNAVAILABLE = 'unavailable',
-  DELETED = 'deleted',
-  // Time-based statuses (calculated by database function)
-  UPCOMING = 'upcoming',
-  LIVE = 'live',
-  ENDED = 'ended'
+  CANCELLED = 'cancelled'
 }
 
 /** Webinar type values */

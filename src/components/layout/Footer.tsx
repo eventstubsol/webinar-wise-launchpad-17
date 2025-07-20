@@ -27,11 +27,12 @@ export const Footer = ({ className }: BaseComponentProps) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16 max-w-7xl mx-auto">
           <div className="group">
             <div className="flex items-center mb-8">
-              <img 
-                src="/lovable-uploads/3c2a8db7-3750-4dc1-a7b7-f17ec71a02ff.png" 
-                alt="WebinarWise Logo"
-                className="h-18 w-auto group-hover:scale-105 transition-transform duration-300"
-              />
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white shadow-lg group-hover:scale-105 transition-transform duration-300">
+                <Brain className="h-6 w-6" />
+              </div>
+              <span className="ml-3 text-xl font-bold tracking-tight bg-gradient-to-r from-black via-gray-800 to-gray-600 bg-clip-text text-transparent">
+                Webinar Wise
+              </span>
             </div>
             <p className="text-gray-600 leading-relaxed mb-8">
               Transform your Zoom webinar data into actionable business intelligence with professional analytics and insights.
@@ -83,8 +84,7 @@ export const Footer = ({ className }: BaseComponentProps) => {
                 { name: "Blog", href: "/" },
                 { name: "Careers", href: "/" },
                 { name: "Contact", href: "/" },
-                { name: "Privacy Policy", href: "/privacy-policy" },
-                { name: "Terms of Service", href: "/terms" }
+                { name: "Privacy Policy", href: "/" }
               ].map((item, idx) => (
                 <li key={idx}>
                   <Link to={item.href} className="text-gray-600 hover:text-black transition-colors duration-300 flex items-center group">

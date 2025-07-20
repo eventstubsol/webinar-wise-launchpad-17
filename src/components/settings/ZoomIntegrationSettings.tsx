@@ -15,7 +15,6 @@ import { DiagnosticsSection } from './zoom/DiagnosticsSection';
 import { useZoomCredentials } from '@/hooks/useZoomCredentials';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { ZoomConnectButton } from '@/components/zoom/ZoomConnectButton';
-import { ZoomCredentials } from '@/types/zoomCredentials';
 
 export const ZoomIntegrationSettings = () => {
   const [showCredentialsForm, setShowCredentialsForm] = useState(false);
@@ -68,7 +67,7 @@ export const ZoomIntegrationSettings = () => {
         />
       ) : (
         <ZoomCredentialsDisplay
-          credentials={credentials as ZoomCredentials}
+          credentials={credentials}
           onEdit={handleEditCredentials}
           onDeleted={handleCredentialsDeleted}
         />

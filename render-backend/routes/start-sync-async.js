@@ -10,71 +10,52 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Helper function to run sync locally instead of calling edge function
+// Helper function to run sync asynchronously
 async function runSyncAsync(syncLogId, connectionId, syncType, requestId) {
   try {
-    console.log(`[ASYNC] Starting local sync process for sync ${syncLogId}`);
+    console.log(`[ASYNC] Starting async sync process for sync ${syncLogId}`);
     
-    // Get the connection details
-    const connection = await supabaseService.getZoomConnection(connectionId);
-    if (!connection) {
-      throw new Error('Connection not found');
-    }
-
-    // Get credentials
-    const credentials = await supabaseService.getCredentialsByUserId(connection.user_id);
-    if (!credentials) {
-      throw new Error('No active Zoom credentials found');
-    }
-
-    // Import zoom service
-    const { syncWebinars } = require('../services/zoomSyncService');
-    
-    // Update sync log to indicate we're processing
-    await supabaseService.updateSyncLog(syncLogId, {
-      sync_status: 'running',
-      current_operation: 'Fetching webinars from Zoom API...',
-      sync_progress: 10
-    });
-
-    // Run the sync
-    const result = await syncWebinars({
-      connection,
-      credentials,
-      syncLogId,
-      syncType,
-      onProgress: async (progress, operation) => {
-        await supabaseService.updateSyncLog(syncLogId, {
-          sync_progress: progress,
-          current_operation: operation,
-          updated_at: new Date().toISOString()
-        });
+    // Call the edge function
+    const { data: edgeFunctionResult, error: edgeFunctionError } = await supabase.functions.invoke('zoom-sync-webinars-v2', {
+      body: {
+        connectionId: connectionId,
+        syncLogId: syncLogId,
+        syncType: syncType,
+        requestId: requestId
+      },
+      headers: {
+        'zoom_connection_id': connectionId,
+        'sync_type': 'webinars'
       }
     });
 
-    // Update sync log with completion
-    await supabaseService.updateSyncLog(syncLogId, {
-      sync_status: 'completed',
-      completed_at: new Date().toISOString(),
-      total_items: result.totalWebinars || 0,
-      processed_items: result.processedWebinars || 0,
-      sync_progress: 100,
-      current_operation: 'Sync completed successfully'
-    });
+    if (edgeFunctionError) {
+      console.error(`[ASYNC] Edge function error for sync ${syncLogId}:`, edgeFunctionError);
+      
+      // Update sync log with error
+      await supabaseService.updateSyncLog(syncLogId, {
+        sync_status: 'failed',
+        completed_at: new Date().toISOString(),
+        error_message: `Edge function error: ${edgeFunctionError.message}`
+      });
+      
+      return;
+    }
 
-    console.log(`[ASYNC] Local sync completed successfully for sync ${syncLogId}:`, result);
+    console.log(`[ASYNC] Edge function completed successfully for sync ${syncLogId}:`, edgeFunctionResult);
+    
+    // The edge function should update the sync log status itself
+    // We just log the completion here
     
   } catch (error) {
-    console.error(`[ASYNC] Failed to run local sync for ${syncLogId}:`, error);
+    console.error(`[ASYNC] Failed to run async sync for ${syncLogId}:`, error);
     
     // Update sync log with error
     try {
       await supabaseService.updateSyncLog(syncLogId, {
         sync_status: 'failed',
         completed_at: new Date().toISOString(),
-        error_message: `Sync error: ${error.message}`,
-        sync_progress: 0,
-        current_operation: 'Sync failed'
+        error_message: `Async sync error: ${error.message}`
       });
     } catch (updateError) {
       console.error(`[ASYNC] Failed to update sync log:`, updateError);
@@ -212,17 +193,7 @@ router.post('/start-sync', extractUser, async (req, res) => {
 
     // Create sync log using Service Role
     console.log(`📝 [${requestId}] Creating sync log...`);
-    const syncLogData = {
-      connection_id: connection_id,
-      sync_type: sync_type,
-      sync_status: 'started',
-      started_at: new Date().toISOString(),
-      total_items: 0,
-      processed_items: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    const syncLog = await supabaseService.createSyncLog(syncLogData);
+    const syncLog = await supabaseService.createSyncLog(connection_id, sync_type);
     console.log(`✅ [${requestId}] Created sync log:`, syncLog.id);
 
     // Update sync log to running
@@ -290,7 +261,7 @@ async function refreshServerToServerToken(connection, userId) {
     console.log(`✅ Retrieved credentials for user ${userId}`);
 
     // Get new token using client credentials flow
-    const zoomService = require('../services/zoomService');
+    const { zoomService } = require('../services/zoomService');
     const tokenData = await zoomService.getServerToServerToken(
       credentials.client_id,
       credentials.client_secret,
@@ -333,7 +304,7 @@ async function refreshOAuthToken(connection) {
       throw new Error('No refresh token available');
     }
 
-    const zoomService = require('../services/zoomService');
+    const { zoomService } = require('../services/zoomService');
     const tokenData = await zoomService.refreshOAuthToken(connection.refresh_token);
     
     // Update connection in database using Service Role

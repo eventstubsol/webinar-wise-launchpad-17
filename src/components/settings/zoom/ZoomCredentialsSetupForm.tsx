@@ -55,12 +55,8 @@ export const ZoomCredentialsSetupForm: React.FC<ZoomCredentialsSetupFormProps> =
       return;
     }
 
-    // Basic validation
-    const validationErrors = [];
-    if (!formData.account_id.trim()) validationErrors.push('Account ID is required');
-    if (!formData.client_id.trim()) validationErrors.push('Client ID is required');
-    if (!formData.client_secret.trim()) validationErrors.push('Client Secret is required');
-    
+    // Validate form
+    const validationErrors = ZoomCredentialsService.validateCredentials(formData);
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
       return;
@@ -78,7 +74,7 @@ export const ZoomCredentialsSetupForm: React.FC<ZoomCredentialsSetupFormProps> =
       if (credentials) {
         setIsSuccess(true);
         setTimeout(() => {
-          onCredentialsSaved?.(credentials as ZoomCredentials);
+          onCredentialsSaved?.(credentials);
         }, 1500);
       }
     } catch (error) {

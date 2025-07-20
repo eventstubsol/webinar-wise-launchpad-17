@@ -10,13 +10,7 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { Separator } from '@/components/ui/separator';
 
 export const UserSettings = () => {
-  const { profileLoading } = useAuth();
-  const [settings, setSettings] = useState({
-    email_notifications: true,
-    marketing_emails: false,
-    theme_preference: 'system',
-    timezone: 'UTC'
-  });
+  const { settings, profileLoading, updateSettings } = useAuth();
   const [isUpdating, setIsUpdating] = useState(false);
 
   if (profileLoading) {
@@ -40,7 +34,7 @@ export const UserSettings = () => {
   const handleToggle = async (field: keyof typeof settings, value: boolean) => {
     setIsUpdating(true);
     try {
-      setSettings(prev => ({ ...prev, [field]: value }));
+      await updateSettings({ [field]: value });
     } catch (error) {
       console.error('Error updating setting:', error);
     } finally {
@@ -51,7 +45,7 @@ export const UserSettings = () => {
   const handleSelectChange = async (field: keyof typeof settings, value: string) => {
     setIsUpdating(true);
     try {
-      setSettings(prev => ({ ...prev, [field]: value }));
+      await updateSettings({ [field]: value });
     } catch (error) {
       console.error('Error updating setting:', error);
     } finally {

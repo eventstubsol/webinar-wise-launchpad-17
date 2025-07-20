@@ -2,11 +2,12 @@
 import { ConnectionCrud } from './operations/connectionCrud';
 import { ZoomConnectionStatusService } from './operations/connectionStatus';
 import { TokenUtils } from './utils/tokenUtils';
+import { zoomSyncOrchestrator } from './sync/ZoomSyncOrchestrator';
 import { ZoomConnection, ZoomConnectionInsert, ZoomConnectionUpdate, ConnectionStatus } from '@/types/zoom';
-import { UnifiedZoomService } from './UnifiedZoomService';
+import { RenderZoomService } from './RenderZoomService';
 
 /**
- * Main service for managing Zoom connections - now using unified Supabase Edge Functions
+ * Main service for managing Zoom connections - now using Render API
  */
 export class ZoomConnectionService {
   // CRUD Operations
@@ -16,22 +17,22 @@ export class ZoomConnectionService {
   static updateConnection = ConnectionCrud.updateConnection;
   static deleteConnection = ConnectionCrud.deleteConnection;
 
-  // Connection Status Operations
+  // Connection Status Operations - Fixed to use correct method names
   static setPrimaryConnection = ZoomConnectionStatusService.setPrimaryConnection;
   static updateConnectionStatus = ZoomConnectionStatusService.updateConnectionStatus;
   static checkConnectionStatus = ZoomConnectionStatusService.checkConnectionStatus;
   static refreshToken = ZoomConnectionStatusService.refreshToken;
   static getPrimaryConnection = ZoomConnectionStatusService.getPrimaryConnection;
 
-  // Token Utilities
+  // Token Utilities (simplified)
   static isTokenExpired = TokenUtils.isTokenExpired;
   static getTokenStatus = TokenUtils.getTokenStatus;
   static isValidToken = TokenUtils.isValidToken;
 
-  // Unified Sync Operations
+  // Sync Operations - now using Render API
   static async startInitialSync(connectionId: string, options?: { batchSize?: number }) {
     try {
-      const result = await UnifiedZoomService.startSync(connectionId, 'initial');
+      const result = await RenderZoomService.startSync(connectionId, 'initial');
       if (!result.success) {
         throw new Error(result.error || 'Failed to start initial sync');
       }
@@ -47,7 +48,7 @@ export class ZoomConnectionService {
 
   static async startIncrementalSync(connectionId: string) {
     try {
-      const result = await UnifiedZoomService.startSync(connectionId, 'incremental');
+      const result = await RenderZoomService.startSync(connectionId, 'incremental');
       if (!result.success) {
         throw new Error(result.error || 'Failed to start incremental sync');
       }
@@ -63,7 +64,10 @@ export class ZoomConnectionService {
 
   static async syncSingleWebinar(webinarId: string, connectionId: string) {
     try {
-      const result = await UnifiedZoomService.startSync(connectionId, 'manual', webinarId);
+      const result = await RenderZoomService.syncWebinars(connectionId, {
+        webinarId,
+        type: 'manual'
+      });
       if (!result.success) {
         throw new Error(result.error || 'Failed to sync webinar');
       }
@@ -77,9 +81,13 @@ export class ZoomConnectionService {
     }
   }
 
+  static async scheduleAutomaticSync(connectionId: string) {
+    return await zoomSyncOrchestrator.scheduleAutomaticSync(connectionId);
+  }
+
   static async cancelSync(syncId: string) {
     try {
-      const result = await UnifiedZoomService.cancelSync(syncId);
+      const result = await RenderZoomService.cancelSync(syncId);
       return result;
     } catch (error) {
       console.error('Error canceling sync:', error);
@@ -90,30 +98,25 @@ export class ZoomConnectionService {
     }
   }
 
-  static async getSyncProgress(syncId: string) {
-    try {
-      const result = await UnifiedZoomService.getSyncProgress(syncId);
-      return result;
-    } catch (error) {
-      console.error('Error getting sync progress:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      };
-    }
+  static async getSyncStatus() {
+    return await zoomSyncOrchestrator.getSyncStatus();
   }
 
-  // Test connection
-  static async testConnection(connectionId: string) {
+  // Clear all connections - now using Render API
+  static async clearAllConnections(userId: string): Promise<boolean> {
     try {
-      const result = await UnifiedZoomService.testConnection(connectionId);
-      return result;
+      // Get user connections first
+      const connections = await this.getUserConnections(userId);
+      
+      // Disconnect each connection via Render API
+      for (const connection of connections) {
+        await RenderZoomService.disconnectAccount(connection.id);
+      }
+
+      return true;
     } catch (error) {
-      console.error('Error testing connection:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      };
+      console.error('Error clearing connections:', error);
+      return false;
     }
   }
 }

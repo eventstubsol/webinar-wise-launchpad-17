@@ -15,7 +15,7 @@ export class EnhancedWebinarOperations {
     const { data, error } = await supabase
       .from('zoom_webinars')
       .select('*')
-      .eq('zoom_webinar_id', zoomWebinarId)
+      .eq('webinar_id', zoomWebinarId)
       .eq('connection_id', connectionId)
       .maybeSingle();
 
@@ -116,7 +116,7 @@ export class EnhancedWebinarOperations {
         .upsert(
           mergedWebinar,
           {
-            onConflict: 'connection_id,zoom_webinar_id',
+            onConflict: 'connection_id,webinar_id',
             ignoreDuplicates: false
           }
         )

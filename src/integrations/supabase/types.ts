@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
-  }
   public: {
     Tables: {
       analytics_cache: {
@@ -441,154 +436,6 @@ export type Database = {
         }
         Relationships: []
       }
-      oauth_states: {
-        Row: {
-          created_at: string
-          expires_at: string
-          id: string
-          metadata: Json | null
-          return_url: string
-          state: string
-        }
-        Insert: {
-          created_at?: string
-          expires_at: string
-          id?: string
-          metadata?: Json | null
-          return_url?: string
-          state: string
-        }
-        Update: {
-          created_at?: string
-          expires_at?: string
-          id?: string
-          metadata?: Json | null
-          return_url?: string
-          state?: string
-        }
-        Relationships: []
-      }
-      organization_invitations: {
-        Row: {
-          created_at: string | null
-          expires_at: string | null
-          id: string
-          invitation_token: string | null
-          invited_by: string | null
-          organization_id: string | null
-          role: string | null
-          status: string | null
-          updated_at: string | null
-          zoom_email: string
-          zoom_user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          expires_at?: string | null
-          id?: string
-          invitation_token?: string | null
-          invited_by?: string | null
-          organization_id?: string | null
-          role?: string | null
-          status?: string | null
-          updated_at?: string | null
-          zoom_email: string
-          zoom_user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          expires_at?: string | null
-          id?: string
-          invitation_token?: string | null
-          invited_by?: string | null
-          organization_id?: string | null
-          role?: string | null
-          status?: string | null
-          updated_at?: string | null
-          zoom_email?: string
-          zoom_user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "organization_invitations_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      organization_members: {
-        Row: {
-          created_at: string | null
-          id: string
-          joined_at: string | null
-          organization_id: string | null
-          permissions: Json | null
-          role: string
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          joined_at?: string | null
-          organization_id?: string | null
-          permissions?: Json | null
-          role: string
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          joined_at?: string | null
-          organization_id?: string | null
-          permissions?: Json | null
-          role?: string
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "organization_members_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      organizations: {
-        Row: {
-          created_at: string | null
-          id: string
-          name: string | null
-          owner_user_id: string | null
-          settings: Json | null
-          subscription_plan: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          name?: string | null
-          owner_user_id?: string | null
-          settings?: Json | null
-          subscription_plan?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          name?: string | null
-          owner_user_id?: string | null
-          settings?: Json | null
-          subscription_plan?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       processing_queue: {
         Row: {
           completed_at: string | null
@@ -641,7 +488,15 @@ export type Database = {
           user_id?: string | null
           webinar_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "processing_queue_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -651,16 +506,9 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
-          is_zoom_admin: boolean | null
           job_title: string | null
-          organization_id: string | null
           phone: string | null
-          role: string | null
           updated_at: string | null
-          zoom_account_id: string | null
-          zoom_account_level: string | null
-          zoom_provider_refresh_token: string | null
-          zoom_provider_token: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -669,16 +517,9 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
-          is_zoom_admin?: boolean | null
           job_title?: string | null
-          organization_id?: string | null
           phone?: string | null
-          role?: string | null
           updated_at?: string | null
-          zoom_account_id?: string | null
-          zoom_account_level?: string | null
-          zoom_provider_refresh_token?: string | null
-          zoom_provider_token?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -687,26 +528,11 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
-          is_zoom_admin?: boolean | null
           job_title?: string | null
-          organization_id?: string | null
           phone?: string | null
-          role?: string | null
           updated_at?: string | null
-          zoom_account_id?: string | null
-          zoom_account_level?: string | null
-          zoom_provider_refresh_token?: string | null
-          zoom_provider_token?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       rate_limit_tracking: {
         Row: {
@@ -757,27 +583,27 @@ export type Database = {
           connection_id: string
           created_at: string
           id: string
-          scheduled_time: string
+          scheduled_for: string
           status: string
-          sync_type: string
+          sync_config: Json
           updated_at: string
         }
         Insert: {
           connection_id: string
           created_at?: string
           id?: string
-          scheduled_time: string
+          scheduled_for: string
           status?: string
-          sync_type: string
+          sync_config?: Json
           updated_at?: string
         }
         Update: {
           connection_id?: string
           created_at?: string
           id?: string
-          scheduled_time?: string
+          scheduled_for?: string
           status?: string
-          sync_type?: string
+          sync_config?: Json
           updated_at?: string
         }
         Relationships: [
@@ -789,39 +615,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      security_logs: {
-        Row: {
-          created_at: string | null
-          event_type: string
-          id: string
-          ip_address: string | null
-          metadata: Json | null
-          severity: string | null
-          user_agent: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          event_type: string
-          id?: string
-          ip_address?: string | null
-          metadata?: Json | null
-          severity?: string | null
-          user_agent?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          event_type?: string
-          id?: string
-          ip_address?: string | null
-          metadata?: Json | null
-          severity?: string | null
-          user_agent?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
       }
       sync_performance_metrics: {
         Row: {
@@ -901,37 +694,15 @@ export type Database = {
           total_webinars?: number
           updated_at?: string
         }
-        Relationships: []
-      }
-      sync_progress_updates: {
-        Row: {
-          created_at: string | null
-          details: Json | null
-          id: string
-          message: string
-          progress_percentage: number | null
-          sync_id: string
-          update_type: string
-        }
-        Insert: {
-          created_at?: string | null
-          details?: Json | null
-          id?: string
-          message: string
-          progress_percentage?: number | null
-          sync_id: string
-          update_type: string
-        }
-        Update: {
-          created_at?: string | null
-          details?: Json | null
-          id?: string
-          message?: string
-          progress_percentage?: number | null
-          sync_id?: string
-          update_type?: string
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sync_progress_sync_id_fkey"
+            columns: ["sync_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_sync_logs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sync_queue: {
         Row: {
@@ -976,7 +747,22 @@ export type Database = {
           webinar_id?: string | null
           webinar_title?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sync_queue_sync_id_fkey"
+            columns: ["sync_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_sync_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_queue_webinar_id_fkey"
+            columns: ["webinar_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_webinars"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sync_schedules: {
         Row: {
@@ -1000,37 +786,15 @@ export type Database = {
           id?: string
           updated_at?: string
         }
-        Relationships: []
-      }
-      user_organizations: {
-        Row: {
-          admin_user_id: string | null
-          created_at: string | null
-          id: string
-          managed_user_id: string | null
-          permissions: Json | null
-          relationship_type: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          admin_user_id?: string | null
-          created_at?: string | null
-          id?: string
-          managed_user_id?: string | null
-          permissions?: Json | null
-          relationship_type?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          admin_user_id?: string | null
-          created_at?: string | null
-          id?: string
-          managed_user_id?: string | null
-          permissions?: Json | null
-          relationship_type?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sync_schedules_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_connections"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_settings: {
         Row: {
@@ -1062,129 +826,58 @@ export type Database = {
         }
         Relationships: []
       }
-      webinar_metrics: {
-        Row: {
-          attendance_rate: number | null
-          avg_attendance_duration: number | null
-          calculated_at: string | null
-          created_at: string | null
-          engagement_score: number | null
-          id: string
-          peak_concurrent_attendees: number | null
-          registrants_count: number | null
-          total_attendees: number | null
-          unique_attendees: number | null
-          updated_at: string | null
-          webinar_id: string
-        }
-        Insert: {
-          attendance_rate?: number | null
-          avg_attendance_duration?: number | null
-          calculated_at?: string | null
-          created_at?: string | null
-          engagement_score?: number | null
-          id?: string
-          peak_concurrent_attendees?: number | null
-          registrants_count?: number | null
-          total_attendees?: number | null
-          unique_attendees?: number | null
-          updated_at?: string | null
-          webinar_id: string
-        }
-        Update: {
-          attendance_rate?: number | null
-          avg_attendance_duration?: number | null
-          calculated_at?: string | null
-          created_at?: string | null
-          engagement_score?: number | null
-          id?: string
-          peak_concurrent_attendees?: number | null
-          registrants_count?: number | null
-          total_attendees?: number | null
-          unique_attendees?: number | null
-          updated_at?: string | null
-          webinar_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "webinar_metrics_webinar_id_fkey"
-            columns: ["webinar_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_webinars"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       zoom_connections: {
         Row: {
           access_token: string
-          account_id: string | null
-          auto_sync_enabled: boolean | null
-          client_id: string | null
-          client_secret: string | null
           connection_status: string
-          connection_type: string | null
-          created_at: string | null
+          connection_type: string
+          created_at: string
           id: string
-          is_primary: boolean | null
+          is_primary: boolean
           last_sync_at: string | null
-          next_sync_at: string | null
           refresh_token: string | null
-          scopes: string[] | null
-          sync_frequency_hours: number | null
+          scopes: string[]
           token_expires_at: string
-          updated_at: string | null
+          updated_at: string
           user_id: string
           zoom_account_id: string
-          zoom_account_type: string | null
+          zoom_account_type: string
           zoom_email: string
           zoom_user_id: string
         }
         Insert: {
           access_token: string
-          account_id?: string | null
-          auto_sync_enabled?: boolean | null
-          client_id?: string | null
-          client_secret?: string | null
           connection_status?: string
-          connection_type?: string | null
-          created_at?: string | null
+          connection_type?: string
+          created_at?: string
           id?: string
-          is_primary?: boolean | null
+          is_primary?: boolean
           last_sync_at?: string | null
-          next_sync_at?: string | null
           refresh_token?: string | null
-          scopes?: string[] | null
-          sync_frequency_hours?: number | null
+          scopes?: string[]
           token_expires_at: string
-          updated_at?: string | null
+          updated_at?: string
           user_id: string
           zoom_account_id: string
-          zoom_account_type?: string | null
+          zoom_account_type?: string
           zoom_email: string
           zoom_user_id: string
         }
         Update: {
           access_token?: string
-          account_id?: string | null
-          auto_sync_enabled?: boolean | null
-          client_id?: string | null
-          client_secret?: string | null
           connection_status?: string
-          connection_type?: string | null
-          created_at?: string | null
+          connection_type?: string
+          created_at?: string
           id?: string
-          is_primary?: boolean | null
+          is_primary?: boolean
           last_sync_at?: string | null
-          next_sync_at?: string | null
           refresh_token?: string | null
-          scopes?: string[] | null
-          sync_frequency_hours?: number | null
+          scopes?: string[]
           token_expires_at?: string
-          updated_at?: string | null
+          updated_at?: string
           user_id?: string
           zoom_account_id?: string
-          zoom_account_type?: string | null
+          zoom_account_type?: string
           zoom_email?: string
           zoom_user_id?: string
         }
@@ -1197,11 +890,11 @@ export type Database = {
           app_type: string
           client_id: string
           client_secret: string
-          created_at: string | null
+          created_at: string
           description: string | null
           id: string
-          is_active: boolean | null
-          updated_at: string | null
+          is_active: boolean
+          updated_at: string
           user_id: string
         }
         Insert: {
@@ -1210,11 +903,11 @@ export type Database = {
           app_type?: string
           client_id: string
           client_secret: string
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           id?: string
-          is_active?: boolean | null
-          updated_at?: string | null
+          is_active?: boolean
+          updated_at?: string
           user_id: string
         }
         Update: {
@@ -1223,78 +916,132 @@ export type Database = {
           app_type?: string
           client_id?: string
           client_secret?: string
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           id?: string
-          is_active?: boolean | null
-          updated_at?: string | null
+          is_active?: boolean
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
       }
       zoom_participants: {
         Row: {
-          approval_type: string | null
-          attentiveness_score: string | null
-          connection_type: string | null
-          created_at: string | null
-          custom_questions: Json | null
-          device_info: Json | null
+          answered_polling: boolean | null
+          asked_question: boolean | null
+          attentiveness_score: number | null
+          camera_on_duration: number | null
+          created_at: string
+          customer_key: string | null
+          device: string | null
           duration: number | null
+          email: string | null
+          failover: boolean | null
           id: string
+          ip_address: string | null
           is_rejoin_session: boolean | null
           join_time: string | null
           leave_time: string | null
+          location: string | null
+          name: string
+          network_type: string | null
           participant_email: string | null
+          participant_id: string | null
           participant_name: string | null
+          participant_session_id: string | null
+          participant_status: string | null
           participant_user_id: string | null
           participant_uuid: string | null
-          registration_time: string | null
-          updated_at: string | null
-          user_location: Json | null
-          webinar_id: string
+          posted_chat: boolean | null
+          raised_hand: boolean | null
+          registrant_id: string | null
+          session_sequence: number | null
+          share_application_duration: number | null
+          share_desktop_duration: number | null
+          share_whiteboard_duration: number | null
+          status: string | null
+          updated_at: string
+          user_id: string | null
+          version: string | null
+          webinar_id: string | null
         }
         Insert: {
-          approval_type?: string | null
-          attentiveness_score?: string | null
-          connection_type?: string | null
-          created_at?: string | null
-          custom_questions?: Json | null
-          device_info?: Json | null
+          answered_polling?: boolean | null
+          asked_question?: boolean | null
+          attentiveness_score?: number | null
+          camera_on_duration?: number | null
+          created_at?: string
+          customer_key?: string | null
+          device?: string | null
           duration?: number | null
+          email?: string | null
+          failover?: boolean | null
           id?: string
+          ip_address?: string | null
           is_rejoin_session?: boolean | null
           join_time?: string | null
           leave_time?: string | null
+          location?: string | null
+          name: string
+          network_type?: string | null
           participant_email?: string | null
+          participant_id?: string | null
           participant_name?: string | null
+          participant_session_id?: string | null
+          participant_status?: string | null
           participant_user_id?: string | null
           participant_uuid?: string | null
-          registration_time?: string | null
-          updated_at?: string | null
-          user_location?: Json | null
-          webinar_id: string
+          posted_chat?: boolean | null
+          raised_hand?: boolean | null
+          registrant_id?: string | null
+          session_sequence?: number | null
+          share_application_duration?: number | null
+          share_desktop_duration?: number | null
+          share_whiteboard_duration?: number | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string | null
+          version?: string | null
+          webinar_id?: string | null
         }
         Update: {
-          approval_type?: string | null
-          attentiveness_score?: string | null
-          connection_type?: string | null
-          created_at?: string | null
-          custom_questions?: Json | null
-          device_info?: Json | null
+          answered_polling?: boolean | null
+          asked_question?: boolean | null
+          attentiveness_score?: number | null
+          camera_on_duration?: number | null
+          created_at?: string
+          customer_key?: string | null
+          device?: string | null
           duration?: number | null
+          email?: string | null
+          failover?: boolean | null
           id?: string
+          ip_address?: string | null
           is_rejoin_session?: boolean | null
           join_time?: string | null
           leave_time?: string | null
+          location?: string | null
+          name?: string
+          network_type?: string | null
           participant_email?: string | null
+          participant_id?: string | null
           participant_name?: string | null
+          participant_session_id?: string | null
+          participant_status?: string | null
           participant_user_id?: string | null
           participant_uuid?: string | null
-          registration_time?: string | null
-          updated_at?: string | null
-          user_location?: Json | null
-          webinar_id?: string
+          posted_chat?: boolean | null
+          raised_hand?: boolean | null
+          registrant_id?: string | null
+          session_sequence?: number | null
+          share_application_duration?: number | null
+          share_desktop_duration?: number | null
+          share_whiteboard_duration?: number | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string | null
+          version?: string | null
+          webinar_id?: string | null
         }
         Relationships: [
           {
@@ -1306,33 +1053,83 @@ export type Database = {
           },
         ]
       }
-      zoom_polls: {
+      zoom_poll_responses: {
         Row: {
-          created_at: string | null
+          created_at: string
+          date_time: string | null
           id: string
-          poll_id: string
-          questions: Json | null
-          title: string | null
-          updated_at: string | null
-          webinar_id: string
+          participant_email: string | null
+          participant_name: string | null
+          poll_id: string | null
+          question_details: Json | null
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
+          date_time?: string | null
           id?: string
-          poll_id: string
-          questions?: Json | null
-          title?: string | null
-          updated_at?: string | null
-          webinar_id: string
+          participant_email?: string | null
+          participant_name?: string | null
+          poll_id?: string | null
+          question_details?: Json | null
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
+          date_time?: string | null
+          id?: string
+          participant_email?: string | null
+          participant_name?: string | null
+          poll_id?: string | null
+          question_details?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_poll_responses_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "zoom_polls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zoom_polls: {
+        Row: {
+          anonymous: boolean | null
+          created_at: string
+          id: string
+          poll_id: string
+          poll_type: number | null
+          questions: Json | null
+          status: string | null
+          title: string
+          updated_at: string
+          webinar_id: string | null
+        }
+        Insert: {
+          anonymous?: boolean | null
+          created_at?: string
+          id?: string
+          poll_id: string
+          poll_type?: number | null
+          questions?: Json | null
+          status?: string | null
+          title: string
+          updated_at?: string
+          webinar_id?: string | null
+        }
+        Update: {
+          anonymous?: boolean | null
+          created_at?: string
           id?: string
           poll_id?: string
+          poll_type?: number | null
           questions?: Json | null
-          title?: string | null
-          updated_at?: string | null
-          webinar_id?: string
+          status?: string | null
+          title?: string
+          updated_at?: string
+          webinar_id?: string | null
         }
         Relationships: [
           {
@@ -1346,37 +1143,28 @@ export type Database = {
       }
       zoom_qna: {
         Row: {
-          answer: string | null
-          answerer_name: string | null
-          asker_name: string | null
-          created_at: string | null
+          answer_details: Json | null
+          created_at: string
           id: string
-          question: string | null
-          question_id: string
-          updated_at: string | null
-          webinar_id: string
+          question_details: Json | null
+          updated_at: string
+          webinar_id: string | null
         }
         Insert: {
-          answer?: string | null
-          answerer_name?: string | null
-          asker_name?: string | null
-          created_at?: string | null
+          answer_details?: Json | null
+          created_at?: string
           id?: string
-          question?: string | null
-          question_id: string
-          updated_at?: string | null
-          webinar_id: string
+          question_details?: Json | null
+          updated_at?: string
+          webinar_id?: string | null
         }
         Update: {
-          answer?: string | null
-          answerer_name?: string | null
-          asker_name?: string | null
-          created_at?: string | null
+          answer_details?: Json | null
+          created_at?: string
           id?: string
-          question?: string | null
-          question_id?: string
-          updated_at?: string | null
-          webinar_id?: string
+          question_details?: Json | null
+          updated_at?: string
+          webinar_id?: string | null
         }
         Relationships: [
           {
@@ -1390,46 +1178,52 @@ export type Database = {
       }
       zoom_recordings: {
         Row: {
-          created_at: string | null
+          created_at: string
           download_url: string | null
           file_size: number | null
           file_type: string | null
           id: string
+          meeting_uuid: string | null
           play_url: string | null
           recording_end: string | null
           recording_id: string
           recording_start: string | null
           recording_type: string | null
-          updated_at: string | null
-          webinar_id: string
+          status: string | null
+          updated_at: string
+          webinar_id: string | null
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
           download_url?: string | null
           file_size?: number | null
           file_type?: string | null
           id?: string
+          meeting_uuid?: string | null
           play_url?: string | null
           recording_end?: string | null
           recording_id: string
           recording_start?: string | null
           recording_type?: string | null
-          updated_at?: string | null
-          webinar_id: string
+          status?: string | null
+          updated_at?: string
+          webinar_id?: string | null
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
           download_url?: string | null
           file_size?: number | null
           file_type?: string | null
           id?: string
+          meeting_uuid?: string | null
           play_url?: string | null
           recording_end?: string | null
           recording_id?: string
           recording_start?: string | null
           recording_type?: string | null
-          updated_at?: string | null
-          webinar_id?: string
+          status?: string | null
+          updated_at?: string
+          webinar_id?: string | null
         }
         Relationships: [
           {
@@ -1444,83 +1238,110 @@ export type Database = {
       zoom_registrants: {
         Row: {
           address: string | null
+          attended: boolean | null
           city: string | null
           comments: string | null
           country: string | null
-          created_at: string | null
+          create_time: string | null
+          created_at: string
           custom_questions: Json | null
+          duration: number | null
           email: string
           first_name: string | null
           id: string
           industry: string | null
           job_title: string | null
+          join_time: string | null
           join_url: string | null
+          language: string | null
           last_name: string | null
+          leave_time: string | null
           no_of_employees: string | null
           org: string | null
           phone: string | null
           purchasing_time_frame: string | null
-          registrant_id: string
+          registrant_id: string | null
+          registrant_uuid: string | null
           registration_time: string | null
           role_in_purchase_process: string | null
+          source_id: string | null
           state: string | null
           status: string | null
-          updated_at: string | null
-          webinar_id: string
+          tracking_source: string | null
+          updated_at: string
+          webinar_id: string | null
           zip: string | null
         }
         Insert: {
           address?: string | null
+          attended?: boolean | null
           city?: string | null
           comments?: string | null
           country?: string | null
-          created_at?: string | null
+          create_time?: string | null
+          created_at?: string
           custom_questions?: Json | null
+          duration?: number | null
           email: string
           first_name?: string | null
           id?: string
           industry?: string | null
           job_title?: string | null
+          join_time?: string | null
           join_url?: string | null
+          language?: string | null
           last_name?: string | null
+          leave_time?: string | null
           no_of_employees?: string | null
           org?: string | null
           phone?: string | null
           purchasing_time_frame?: string | null
-          registrant_id: string
+          registrant_id?: string | null
+          registrant_uuid?: string | null
           registration_time?: string | null
           role_in_purchase_process?: string | null
+          source_id?: string | null
           state?: string | null
           status?: string | null
-          updated_at?: string | null
-          webinar_id: string
+          tracking_source?: string | null
+          updated_at?: string
+          webinar_id?: string | null
           zip?: string | null
         }
         Update: {
           address?: string | null
+          attended?: boolean | null
           city?: string | null
           comments?: string | null
           country?: string | null
-          created_at?: string | null
+          create_time?: string | null
+          created_at?: string
           custom_questions?: Json | null
+          duration?: number | null
           email?: string
           first_name?: string | null
           id?: string
           industry?: string | null
           job_title?: string | null
+          join_time?: string | null
           join_url?: string | null
+          language?: string | null
           last_name?: string | null
+          leave_time?: string | null
           no_of_employees?: string | null
           org?: string | null
           phone?: string | null
           purchasing_time_frame?: string | null
-          registrant_id?: string
+          registrant_id?: string | null
+          registrant_uuid?: string | null
           registration_time?: string | null
           role_in_purchase_process?: string | null
+          source_id?: string | null
           state?: string | null
           status?: string | null
-          updated_at?: string | null
-          webinar_id?: string
+          tracking_source?: string | null
+          updated_at?: string
+          webinar_id?: string | null
           zip?: string | null
         }
         Relationships: [
@@ -1537,7 +1358,7 @@ export type Database = {
         Row: {
           completed_at: string | null
           connection_id: string
-          created_at: string | null
+          created_at: string
           duration_seconds: number | null
           error_details: Json | null
           error_message: string | null
@@ -1545,18 +1366,19 @@ export type Database = {
           metadata: Json | null
           processed_items: number | null
           stage_progress_percentage: number | null
-          started_at: string | null
+          started_at: string
+          status: string | null
           sync_stage: string | null
           sync_status: string
           sync_type: string
           total_items: number | null
-          updated_at: string | null
+          updated_at: string
           webinars_synced: number | null
         }
         Insert: {
           completed_at?: string | null
           connection_id: string
-          created_at?: string | null
+          created_at?: string
           duration_seconds?: number | null
           error_details?: Json | null
           error_message?: string | null
@@ -1564,18 +1386,19 @@ export type Database = {
           metadata?: Json | null
           processed_items?: number | null
           stage_progress_percentage?: number | null
-          started_at?: string | null
+          started_at?: string
+          status?: string | null
           sync_stage?: string | null
           sync_status?: string
           sync_type: string
           total_items?: number | null
-          updated_at?: string | null
+          updated_at?: string
           webinars_synced?: number | null
         }
         Update: {
           completed_at?: string | null
           connection_id?: string
-          created_at?: string | null
+          created_at?: string
           duration_seconds?: number | null
           error_details?: Json | null
           error_message?: string | null
@@ -1583,12 +1406,13 @@ export type Database = {
           metadata?: Json | null
           processed_items?: number | null
           stage_progress_percentage?: number | null
-          started_at?: string | null
+          started_at?: string
+          status?: string | null
           sync_stage?: string | null
           sync_status?: string
           sync_type?: string
           total_items?: number | null
-          updated_at?: string | null
+          updated_at?: string
           webinars_synced?: number | null
         }
         Relationships: [
@@ -1601,205 +1425,152 @@ export type Database = {
           },
         ]
       }
-      zoom_sync_operation_logs: {
-        Row: {
-          created_at: string | null
-          error_details: Json | null
-          id: string
-          operation_duration_ms: number | null
-          operation_status: string
-          operation_type: string
-          sync_id: string
-          webinar_zoom_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          error_details?: Json | null
-          id?: string
-          operation_duration_ms?: number | null
-          operation_status: string
-          operation_type: string
-          sync_id: string
-          webinar_zoom_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          error_details?: Json | null
-          id?: string
-          operation_duration_ms?: number | null
-          operation_status?: string
-          operation_type?: string
-          sync_id?: string
-          webinar_zoom_id?: string | null
-        }
-        Relationships: []
-      }
-      zoom_token_refresh_log: {
-        Row: {
-          connection_id: string
-          created_at: string | null
-          error_code: string | null
-          error_message: string | null
-          id: string
-          new_token_expires_at: string | null
-          old_token_expires_at: string | null
-          refresh_status: string | null
-          refresh_type: string | null
-        }
-        Insert: {
-          connection_id: string
-          created_at?: string | null
-          error_code?: string | null
-          error_message?: string | null
-          id?: string
-          new_token_expires_at?: string | null
-          old_token_expires_at?: string | null
-          refresh_status?: string | null
-          refresh_type?: string | null
-        }
-        Update: {
-          connection_id?: string
-          created_at?: string | null
-          error_code?: string | null
-          error_message?: string | null
-          id?: string
-          new_token_expires_at?: string | null
-          old_token_expires_at?: string | null
-          refresh_status?: string | null
-          refresh_type?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "zoom_token_refresh_log_connection_id_fkey"
-            columns: ["connection_id"]
-            isOneToOne: false
-            referencedRelation: "zoom_connections"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       zoom_webinars: {
         Row: {
-          actual_participant_count: number | null
           agenda: string | null
+          approval_type: number | null
           avg_attendance_duration: number | null
           connection_id: string
-          created_at: string | null
-          created_at_zoom: string | null
-          duration: number | null
-          encrypted_password: string | null
-          h323_password: string | null
-          host_id: string | null
+          created_at: string
+          creation_source: string | null
+          duration: number
+          encrypted_passcode: string | null
+          h323_passcode: string | null
+          host_email: string
+          host_id: string
           id: string
-          join_url: string | null
+          is_simulive: boolean | null
+          join_url: string
           last_synced_at: string | null
+          occurrence_id: string | null
           occurrences: Json | null
           participant_sync_attempted_at: string | null
           participant_sync_completed_at: string | null
           participant_sync_error: string | null
           participant_sync_status: string | null
           password: string | null
-          pstn_password: string | null
-          registrants_count: number | null
+          record_file_id: string | null
+          recurrence: Json | null
+          registrants_restrict_number: number | null
+          registration_type: number | null
+          registration_url: string | null
           settings: Json | null
-          start_time: string | null
+          start_time: string
           start_url: string | null
-          status: string | null
-          sync_status: string | null
-          timezone: string | null
+          status: string
+          synced_at: string
+          timezone: string
           topic: string
           total_absentees: number | null
           total_attendees: number | null
-          total_participant_minutes: number | null
+          total_minutes: number | null
           total_registrants: number | null
           tracking_fields: Json | null
-          type: number | null
-          unique_attendees: number | null
-          unique_participant_count: number | null
-          updated_at: string | null
+          transition_to_live: boolean | null
+          updated_at: string
           uuid: string | null
+          webinar_created_at: string | null
+          webinar_id: string | null
+          webinar_type: number
+          zoom_uuid: string | null
           zoom_webinar_id: string
         }
         Insert: {
-          actual_participant_count?: number | null
           agenda?: string | null
+          approval_type?: number | null
           avg_attendance_duration?: number | null
           connection_id: string
-          created_at?: string | null
-          created_at_zoom?: string | null
-          duration?: number | null
-          encrypted_password?: string | null
-          h323_password?: string | null
-          host_id?: string | null
+          created_at?: string
+          creation_source?: string | null
+          duration: number
+          encrypted_passcode?: string | null
+          h323_passcode?: string | null
+          host_email: string
+          host_id: string
           id?: string
-          join_url?: string | null
+          is_simulive?: boolean | null
+          join_url: string
           last_synced_at?: string | null
+          occurrence_id?: string | null
           occurrences?: Json | null
           participant_sync_attempted_at?: string | null
           participant_sync_completed_at?: string | null
           participant_sync_error?: string | null
           participant_sync_status?: string | null
           password?: string | null
-          pstn_password?: string | null
-          registrants_count?: number | null
+          record_file_id?: string | null
+          recurrence?: Json | null
+          registrants_restrict_number?: number | null
+          registration_type?: number | null
+          registration_url?: string | null
           settings?: Json | null
-          start_time?: string | null
+          start_time: string
           start_url?: string | null
-          status?: string | null
-          sync_status?: string | null
-          timezone?: string | null
+          status: string
+          synced_at?: string
+          timezone: string
           topic: string
           total_absentees?: number | null
           total_attendees?: number | null
-          total_participant_minutes?: number | null
+          total_minutes?: number | null
           total_registrants?: number | null
           tracking_fields?: Json | null
-          type?: number | null
-          unique_attendees?: number | null
-          unique_participant_count?: number | null
-          updated_at?: string | null
+          transition_to_live?: boolean | null
+          updated_at?: string
           uuid?: string | null
+          webinar_created_at?: string | null
+          webinar_id?: string | null
+          webinar_type: number
+          zoom_uuid?: string | null
           zoom_webinar_id: string
         }
         Update: {
-          actual_participant_count?: number | null
           agenda?: string | null
+          approval_type?: number | null
           avg_attendance_duration?: number | null
           connection_id?: string
-          created_at?: string | null
-          created_at_zoom?: string | null
-          duration?: number | null
-          encrypted_password?: string | null
-          h323_password?: string | null
-          host_id?: string | null
+          created_at?: string
+          creation_source?: string | null
+          duration?: number
+          encrypted_passcode?: string | null
+          h323_passcode?: string | null
+          host_email?: string
+          host_id?: string
           id?: string
-          join_url?: string | null
+          is_simulive?: boolean | null
+          join_url?: string
           last_synced_at?: string | null
+          occurrence_id?: string | null
           occurrences?: Json | null
           participant_sync_attempted_at?: string | null
           participant_sync_completed_at?: string | null
           participant_sync_error?: string | null
           participant_sync_status?: string | null
           password?: string | null
-          pstn_password?: string | null
-          registrants_count?: number | null
+          record_file_id?: string | null
+          recurrence?: Json | null
+          registrants_restrict_number?: number | null
+          registration_type?: number | null
+          registration_url?: string | null
           settings?: Json | null
-          start_time?: string | null
+          start_time?: string
           start_url?: string | null
-          status?: string | null
-          sync_status?: string | null
-          timezone?: string | null
+          status?: string
+          synced_at?: string
+          timezone?: string
           topic?: string
           total_absentees?: number | null
           total_attendees?: number | null
-          total_participant_minutes?: number | null
+          total_minutes?: number | null
           total_registrants?: number | null
           tracking_fields?: Json | null
-          type?: number | null
-          unique_attendees?: number | null
-          unique_participant_count?: number | null
-          updated_at?: string | null
+          transition_to_live?: boolean | null
+          updated_at?: string
           uuid?: string | null
+          webinar_created_at?: string | null
+          webinar_id?: string | null
+          webinar_type?: number
+          zoom_uuid?: string | null
           zoom_webinar_id?: string
         }
         Relationships: [
@@ -1827,24 +1598,14 @@ export type Database = {
         }[]
       }
       calculate_webinar_status: {
-        Args: { webinar_start_time: string; webinar_duration: number }
+        Args:
+          | { webinar_start_time: string; webinar_duration: number }
+          | {
+              webinar_start_time: string
+              webinar_duration: number
+              check_time: string
+            }
         Returns: string
-      }
-      calculate_webinar_status_main: {
-        Args: {
-          webinar_start_time: string
-          webinar_duration: number
-          check_time: string
-        }
-        Returns: string
-      }
-      cleanup_expired_oauth_states: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_old_security_logs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
       }
       enqueue_task: {
         Args: {
@@ -1866,50 +1627,13 @@ export type Database = {
           changed_at: string
         }[]
       }
-      identify_security_definer_views: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          view_name: string
-          view_definition: string
-          should_fix: boolean
-        }[]
+      get_webinar_status: {
+        Args: { webinar_start_time: string; webinar_duration: number }
+        Returns: string
       }
       invalidate_cache_dependencies: {
         Args: { dep_pattern: string }
         Returns: number
-      }
-      is_user_admin: {
-        Args: { user_id: string }
-        Returns: boolean
-      }
-      system_update_webinar_statuses: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          updated_count: number
-          upcoming_count: number
-          live_count: number
-          ended_count: number
-        }[]
-      }
-      system_update_webinar_statuses_with_logging: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          updated_count: number
-          upcoming_count: number
-          live_count: number
-          ended_count: number
-          corrections_made: Json
-        }[]
-      }
-      verify_sync_data_integrity: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          sync_id: string
-          expected_webinars: number
-          actual_webinars: number
-          missing_webinars: number
-          integrity_status: string
-        }[]
       }
     }
     Enums: {
@@ -1921,25 +1645,21 @@ export type Database = {
   }
 }
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = Database[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -1957,16 +1677,14 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -1982,16 +1700,14 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -2007,16 +1723,14 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -2024,16 +1738,14 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | { schema: keyof Database },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never

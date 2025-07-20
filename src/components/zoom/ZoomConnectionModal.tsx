@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -76,20 +76,11 @@ export const ZoomConnectionModal: React.FC<ZoomConnectionModalProps> = ({
     onOpenChange(false);
   };
 
-  const handleOpenChange = (open: boolean) => {
-    if (!open && step !== 'connecting') {
-      handleClose();
-    }
-  };
-
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Connect Zoom Account</DialogTitle>
-          <DialogDescription>
-            Enter your Zoom Server-to-Server OAuth app credentials to connect your account.
-          </DialogDescription>
         </DialogHeader>
 
         {step === 'form' && (

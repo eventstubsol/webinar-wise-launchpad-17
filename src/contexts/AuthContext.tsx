@@ -14,9 +14,20 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { Profile } from '@/types/profile';
 
+interface UserSettings {
+  id: string;
+  email_notifications: boolean;
+  marketing_emails: boolean;
+  theme_preference: 'light' | 'dark' | 'system';
+  timezone: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   profile: Profile | null;
+  settings: UserSettings | null;
   loading: boolean;
   profileLoading: boolean;
   signIn: (email: string, password: string) => Promise<any>;
@@ -25,6 +36,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<any>;
   updatePassword: (password: string) => Promise<any>;
   updateProfile: (updates: Partial<Profile>) => Promise<Profile | null>;
+  updateSettings: (updates: Partial<UserSettings>) => Promise<UserSettings | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,6 +52,7 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
 
@@ -59,14 +72,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (existingProfile) {
-        setProfile({
-          ...existingProfile,
-          role: (existingProfile.role as 'owner' | 'admin' | 'member') || 'member'
-        });
-        return {
-          ...existingProfile,
-          role: (existingProfile.role as 'owner' | 'admin' | 'member') || 'member'
-        };
+        setProfile(existingProfile);
+        return existingProfile;
       }
 
       // If no profile exists, create one
@@ -90,16 +97,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       console.log('[AuthProvider] Profile created successfully:', newProfile);
-      const typedProfile = {
-        ...newProfile,
-        role: (newProfile.role as 'owner' | 'admin' | 'member') || 'member'
-      };
-      setProfile(typedProfile);
-      return typedProfile;
+      setProfile(newProfile);
+      return newProfile;
 
     } catch (error) {
       console.error('[AuthProvider] Profile fetch error:', error);
       setProfile(null);
+      return null;
+    }
+  };
+
+  const fetchSettings = async (userId: string) => {
+    try {
+      console.log('[AuthProvider] Fetching settings for user:', userId);
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+
+      console.log('[AuthProvider] Settings fetched successfully:', data);
+      
+      // Ensure theme_preference is valid
+      const validThemes: ('light' | 'dark' | 'system')[] = ['light', 'dark', 'system'];
+      const theme = validThemes.includes(data.theme_preference as any) ? 
+        data.theme_preference as 'light' | 'dark' | 'system' : 'system';
+      
+      const normalizedSettings: UserSettings = {
+        ...data,
+        theme_preference: theme
+      };
+      
+      setSettings(normalizedSettings);
+      return normalizedSettings;
+    } catch (error) {
+      console.error('[AuthProvider] Settings fetch error:', error);
+      setSettings(null);
       return null;
     }
   };
@@ -115,7 +150,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (user) {
           setProfileLoading(true);
           try {
-            await fetchProfile(user.id);
+            await Promise.all([
+              fetchProfile(user.id),
+              fetchSettings(user.id)
+            ]);
           } catch (error) {
             console.error('[AuthProvider] Error fetching user data:', error);
           } finally {
@@ -149,7 +187,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Use setTimeout to prevent potential deadlock in auth state change
           setTimeout(async () => {
             try {
-              await fetchProfile(user.id);
+              await Promise.all([
+                fetchProfile(user.id),
+                fetchSettings(user.id)
+              ]);
             } catch (error) {
               console.error('[AuthProvider] Error fetching user data after sign in:', error);
             } finally {
@@ -158,6 +199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }, 0);
         } else if (event === 'SIGNED_OUT') {
           setProfile(null);
+          setSettings(null);
           setProfileLoading(false);
         }
       }
@@ -190,7 +232,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password,
         options: {
           data: metadata,
-          emailRedirectTo: `${window.location.origin}/`,
         },
       });
 
@@ -209,6 +250,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setUser(null);
       setProfile(null);
+      setSettings(null);
     } catch (error: any) {
       console.error('Sign-out error:', error.message);
       throw error;
@@ -238,6 +280,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const value: AuthContextType = {
     user,
     profile,
+    settings,
     loading,
     profileLoading,
     signIn,
@@ -258,17 +301,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (error) throw error;
         
-        const typedProfile = {
-          ...data,
-          role: (data.role as 'owner' | 'admin' | 'member') || 'member'
-        };
-        setProfile(typedProfile);
-        return typedProfile;
+        setProfile(data);
+        return data;
       } catch (error) {
         console.error('Error updating profile:', error);
         return null;
       }
     },
+    updateSettings: async (updates: Partial<UserSettings>) => {
+      if (!user) return null;
+      
+      try {
+        const { data, error } = await supabase
+          .from('user_settings')
+          .update(updates)
+          .eq('id', user.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        
+        // Normalize the returned data
+        const validThemes: ('light' | 'dark' | 'system')[] = ['light', 'dark', 'system'];
+        const theme = validThemes.includes(data.theme_preference as any) ? 
+          data.theme_preference as 'light' | 'dark' | 'system' : 'system';
+        
+        const normalizedSettings: UserSettings = {
+          ...data,
+          theme_preference: theme
+        };
+        
+        setSettings(normalizedSettings);
+        return normalizedSettings;
+      } catch (error) {
+        console.error('Error updating settings:', error);
+        return null;
+      }
+    }
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

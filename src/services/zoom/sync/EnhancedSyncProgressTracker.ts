@@ -240,9 +240,9 @@ export class EnhancedSyncProgressTracker {
     try {
       const { data, error } = await supabase
         .from('zoom_sync_logs')
-        .select('id, connection_id, sync_status, sync_stage, started_at, completed_at')
+        .select('*')
         .eq('connection_id', connectionId)
-        .in('sync_status', [SyncStatus.STARTED, SyncStatus.IN_PROGRESS])
+        .in('status', [SyncStatus.STARTED, SyncStatus.IN_PROGRESS])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();

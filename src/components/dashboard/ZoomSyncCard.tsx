@@ -2,292 +2,225 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  RefreshCw, 
-  Play, 
-  Square, 
-  AlertTriangle, 
-  CheckCircle2, 
-  XCircle,
-  Clock,
-  Zap,
-  RotateCcw,
-  StopCircle,
-  TestTube
-} from 'lucide-react';
-import { useZoomSync } from '@/hooks/useZoomSync';
+import { Database, Settings, RefreshCw, AlertCircle } from 'lucide-react';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
-import { useDashboardRefresh } from '@/hooks/useDashboardRefresh';
+import { useZoomSync } from '@/hooks/useZoomSync';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Link } from 'react-router-dom';
+import { SyncStatusMessage } from '@/components/zoom/sync/SyncStatusMessage';
+import { ServiceStatusAlert } from '@/components/zoom/sync/ServiceStatusAlert';
 import { SyncType } from '@/types/zoom';
 
 export function ZoomSyncCard() {
-  const { connection } = useZoomConnection();
-  const { refreshDashboardData } = useDashboardRefresh();
-  const syncData = useZoomSync(connection);
-  const {
-    isSyncing,
-    syncProgress,
-    syncStatus,
+  const { connection, isConnected, isExpired } = useZoomConnection();
+  const { 
+    startSync, 
+    testApiConnection, 
+    isSyncing, 
+    syncProgress, 
+    syncStatus, 
     currentOperation,
-    syncMode,
-    syncError,
-    fallbackMode,
-    startSync,
-    cancelSync,
-    testConnection,
-    forceResetAndRestart,
-    stuckSyncDetected,
-    lastSyncStatus,
-    lastSyncTimestamp,
-    lastSyncCount
-  } = syncData;
+    error,
+    requiresReconnection,
+    healthCheck,
+    forceHealthCheck
+  } = useZoomSync(connection);
 
-  const getSyncStatusInfo = () => {
-    if (stuckSyncDetected) {
-      return {
-        icon: AlertTriangle,
-        label: 'Stuck',
-        variant: 'destructive' as const,
-        color: 'text-red-600',
-        description: 'Sync appears to be stuck - use Force Cancel or Reset'
-      };
-    }
+  // Get sync statistics
+  const { data: syncStats } = useQuery({
+    queryKey: ['zoom-sync-stats', connection?.id],
+    queryFn: async () => {
+      if (!connection?.id) return null;
 
-    if (isSyncing) {
-      return {
-        icon: RefreshCw,
-        label: 'Syncing',
-        variant: 'default' as const,
-        color: 'text-blue-600',
-        description: currentOperation || 'Processing...'
-      };
-    }
+      try {
+        const [webinarsResult, syncLogsResult] = await Promise.all([
+          supabase
+            .from('zoom_webinars')
+            .select('id, synced_at', { count: 'exact' })
+            .eq('connection_id', connection.id),
+          supabase
+            .from('zoom_sync_logs')
+            .select('*')
+            .eq('connection_id', connection.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
 
-    switch (syncStatus) {
-      case 'completed':
+        const lastSyncData = syncLogsResult.data;
+
         return {
-          icon: CheckCircle2,
-          label: 'Completed',
-          variant: 'default' as const,
-          color: 'text-green-600',
-          description: 'Last sync completed successfully'
+          totalWebinars: webinarsResult.count || 0,
+          lastSync: lastSyncData?.completed_at || connection.last_sync_at,
+          lastSyncStatus: lastSyncData?.sync_status || 'idle',
+          lastSyncError: lastSyncData?.error_message,
+          processedItems: lastSyncData?.processed_items || 0,
         };
-      case 'failed':
+      } catch (error) {
+        console.error('Error fetching sync stats:', error);
         return {
-          icon: XCircle,
-          label: 'Failed',
-          variant: 'destructive' as const,
-          color: 'text-red-600',
-          description: 'Last sync encountered an error'
+          totalWebinars: 0,
+          lastSync: null,
+          lastSyncStatus: 'idle',
+          lastSyncError: null,
+          processedItems: 0,
         };
-      default:
-        return {
-          icon: Clock,
-          label: 'Ready',
-          variant: 'outline' as const,
-          color: 'text-gray-600',
-          description: 'Ready to sync webinar data'
-        };
-    }
+      }
+    },
+    enabled: !!connection?.id,
+    refetchInterval: 30000,
+    retry: (failureCount, error) => {
+      const hasStatus = error && typeof error === 'object' && 'status' in error;
+      const status = hasStatus ? (error as any).status : null;
+      
+      if (typeof status === 'number' && status >= 400 && status < 500) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+  });
+
+  const handleSyncClick = () => {
+    startSync(SyncType.INCREMENTAL);
   };
 
-  const statusInfo = getSyncStatusInfo();
-  const StatusIcon = statusInfo.icon;
-
-  const handleStartSync = () => {
-    startSync(SyncType.MANUAL, {
-      onComplete: refreshDashboardData
-    });
+  const handleConnectionTest = async () => {
+    await testApiConnection();
   };
+
+  if (!isConnected) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            Webinar Data Sync
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-muted-foreground text-sm">
+            Connect your Zoom account to sync webinar data and view analytics.
+          </p>
+          <Button asChild variant="default" size="sm">
+            <Link to="/settings">
+              <Settings className="w-4 h-4 mr-2" />
+              Connect Zoom Account
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Determine current sync status
+  let currentSyncStatus: 'idle' | 'running' | 'completed' | 'failed' | 'pending' = 'idle';
+  let statusMessage = '';
+  
+  if (isSyncing) {
+    currentSyncStatus = syncStatus === 'pending' ? 'pending' : 'running';
+    statusMessage = currentOperation;
+  } else if (syncStatus === 'completed') {
+    currentSyncStatus = 'completed';
+  } else if (syncStatus === 'failed') {
+    currentSyncStatus = 'failed';
+    statusMessage = error || 'Sync failed';
+  } else if (syncStats?.lastSyncStatus === 'completed') {
+    currentSyncStatus = syncStats.processedItems === 0 ? 'idle' : 'completed';
+  } else if (syncStats?.lastSyncStatus === 'failed') {
+    currentSyncStatus = 'failed';
+    statusMessage = syncStats.lastSyncError || 'Unknown error';
+  }
+
+  const isServiceHealthy = healthCheck?.success !== false;
+  const canSync = !isSyncing && !isExpired && isServiceHealthy && !requiresReconnection;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>Enhanced Sync Status</span>
-          <div className="flex items-center gap-2">
-            {syncMode && (
-              <Badge variant="outline" className="text-xs">
-                {syncMode === 'render' ? 'Cloud' : 'Direct'}
-              </Badge>
-            )}
-            {fallbackMode && (
-              <Badge variant="secondary" className="text-xs">
-                Fallback Mode
-              </Badge>
-            )}
-            <Badge variant={statusInfo.variant} className="flex items-center gap-1">
-              <StatusIcon className={`w-3 h-3 ${isSyncing && !stuckSyncDetected ? 'animate-spin' : ''}`} />
-              {statusInfo.label}
-            </Badge>
-          </div>
+        <CardTitle className="flex items-center gap-2">
+          <Database className="h-5 w-5" />
+          Webinar Data Sync (Render API)
+          {(!isServiceHealthy || requiresReconnection) && (
+            <AlertCircle className="h-4 w-4 text-red-500" />
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Last Sync Status */}
-        {lastSyncStatus && lastSyncTimestamp && !isSyncing && (
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Last Sync</span>
-              <Badge variant={lastSyncStatus === 'completed' ? 'secondary' : 'destructive'}>
-                {lastSyncStatus === 'completed' ? 'Success' : 'Failed'}
-              </Badge>
-            </div>
-            <div className="text-xs text-gray-600 space-y-1">
-              <div>
-                {new Date(lastSyncTimestamp).toLocaleString()}
-              </div>
-              {lastSyncCount > 0 && (
-                <div>
-                  {lastSyncCount} webinars synced
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <ServiceStatusAlert 
+          healthCheck={healthCheck}
+          onRefresh={forceHealthCheck}
+          syncState={{ error, requiresReconnection }}
+        />
 
-        {/* Error Alert */}
-        {syncError && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              <div className="space-y-2">
-                <p className="font-medium">Sync Error:</p>
-                <p className="text-sm">{syncError}</p>
-                {syncError.includes('Connection test failed') && (
-                  <p className="text-sm">
-                    Try testing your connection or switching to direct sync mode.
-                  </p>
-                )}
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
+        <SyncStatusMessage 
+          status={currentSyncStatus}
+          message={statusMessage}
+          webinarCount={syncStats?.totalWebinars || 0}
+          lastSyncAt={syncStats?.lastSync || undefined}
+        />
 
-        {/* Stuck Sync Alert */}
-        {stuckSyncDetected && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              <div className="space-y-2">
-                <p className="font-medium">Sync Stuck Detected</p>
-                <p className="text-sm">
-                  The sync has been running for several minutes without progress. 
-                  This usually indicates an issue with the Zoom API or network connectivity.
-                </p>
-                <div className="flex gap-2 mt-2">
-                  <Button size="sm" variant="outline" onClick={testConnection}>
-                    Test Connection
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={forceResetAndRestart}>
-                    Force Reset & Restart
-                  </Button>
-                </div>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Sync Progress */}
-        {(isSyncing || stuckSyncDetected) && (
+        {isSyncing && (
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span>Progress</span>
+            <div className="flex justify-between text-sm">
+              <span>Progress:</span>
               <span>{syncProgress}%</span>
             </div>
-            <Progress 
-              value={syncProgress} 
-              className={`h-2 ${stuckSyncDetected ? 'opacity-50' : ''}`} 
-            />
-            <p className={`text-sm ${stuckSyncDetected ? 'text-red-600' : 'text-gray-600'}`}>
-              {currentOperation}
-            </p>
-          </div>
-        )}
-
-        {/* Status Description */}
-        {!isSyncing && !stuckSyncDetected && (
-          <p className="text-sm text-gray-600">{statusInfo.description}</p>
-        )}
-
-        <Separator />
-
-        {/* Action Buttons */}
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            {!isSyncing && !stuckSyncDetected ? (
-              <>
-                <Button 
-                  onClick={handleStartSync} 
-                  disabled={!connection}
-                  className="flex-1"
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  Start Enhanced Sync
-                </Button>
-                <Button 
-                  onClick={testConnection}
-                  variant="outline"
-                  disabled={!connection}
-                >
-                  <TestTube className="w-4 h-4 mr-2" />
-                  Test
-                </Button>
-              </>
-            ) : (
-              <div className="flex gap-2 w-full">
-                <Button 
-                  onClick={cancelSync} 
-                  variant="outline"
-                  className="flex-1"
-                >
-                  <Square className="w-4 h-4 mr-2" />
-                  Cancel
-                </Button>
-                
-                {stuckSyncDetected && (
-                  <>
-                    <Button 
-                      onClick={forceResetAndRestart}
-                      variant="destructive"
-                      className="flex-1"
-                    >
-                      <RotateCcw className="w-4 h-4 mr-2" />
-                      Force Reset
-                    </Button>
-                  </>
-                )}
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${syncProgress}%` }}
+              />
+            </div>
+            {currentOperation && (
+              <div className="text-xs text-muted-foreground">
+                {currentOperation}
               </div>
             )}
           </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleSyncClick}
+            disabled={!canSync}
+            size="sm"
+            className="flex-1"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync Now'}
+          </Button>
+          
+          <Button 
+            onClick={handleConnectionTest}
+            variant="outline"
+            size="sm"
+            disabled={isSyncing || !isServiceHealthy}
+          >
+            Test Connection
+          </Button>
+          
+          <Button asChild variant="outline" size="sm">
+            <Link to="/settings">
+              <Settings className="w-4 h-4" />
+            </Link>
+          </Button>
         </div>
 
-        {/* Diagnostic Info */}
-        <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded space-y-1">
-          <div className="flex justify-between">
-            <span>Sync Mode:</span>
-            <span>{syncMode || 'Detecting...'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Backend:</span>
-            <span>{fallbackMode ? 'Fallback Mode' : 'Unified Edge Functions'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Status:</span>
-            <span className={stuckSyncDetected ? 'text-red-600 font-medium' : ''}>
-              {stuckSyncDetected ? 'STUCK - Action Required' : 'Normal'}
+        <div className="text-xs text-muted-foreground">
+          <div>Total webinars: {syncStats?.totalWebinars || 0}</div>
+          {syncStats?.lastSync && (
+            <div>Last sync: {new Date(syncStats.lastSync).toLocaleString()}</div>
+          )}
+          <div className="flex items-center gap-1 mt-1">
+            Render API status: 
+            <span className={isServiceHealthy ? 'text-green-600' : 'text-red-600'}>
+              {isServiceHealthy ? 'Online' : 'Offline'}
             </span>
           </div>
-          {syncError && (
-            <div className="flex justify-between">
-              <span>Last Error:</span>
-              <span className="text-red-600 text-xs truncate ml-2">
-                {syncError.substring(0, 50)}...
-              </span>
+          {requiresReconnection && (
+            <div className="text-red-600 mt-1">
+              Connection expired - reconnection required
             </div>
           )}
         </div>

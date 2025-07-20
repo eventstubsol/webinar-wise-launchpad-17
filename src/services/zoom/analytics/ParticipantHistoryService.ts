@@ -43,7 +43,7 @@ export class ParticipantHistoryService {
     dateRange?: { startDate: string; endDate: string }
   ): Promise<ParticipantEngagementHistory | null> {
     try {
-      let query = (supabase
+      let query = supabase
         .from('zoom_participants')
         .select(`
           *,
@@ -53,7 +53,7 @@ export class ParticipantHistoryService {
             start_time,
             connection_id
           )
-        `) as any)
+        `)
         .eq('email', participantEmail)
         .eq('zoom_webinars.connection_id', connectionId);
 
@@ -96,7 +96,7 @@ export class ParticipantHistoryService {
 
       return {
         participantEmail,
-        participantName: participantData[0].participant_name || 'Unknown',
+        participantName: participantData[0].name || 'Unknown',
         webinarHistory,
         engagementTrend,
         totalWebinarsAttended,
@@ -178,7 +178,7 @@ export class ParticipantHistoryService {
       }
 
       // Get unique participant emails
-      const uniqueEmails = [...new Set(participants.map((p: any) => p.participant_email).filter(Boolean))];
+      const uniqueEmails = [...new Set(participants.map(p => p.email).filter(Boolean))];
 
       // Get engagement history for each participant
       const participantHistories = await Promise.all(

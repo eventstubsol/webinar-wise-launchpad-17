@@ -34,10 +34,34 @@ export const useSyncPerformanceMetrics = (connectionId?: string, syncId?: string
       if (!connectionId) return [];
 
       try {
-        // Since sync_performance_metrics table doesn't exist yet, return empty array
-        // This prevents build errors while allowing the hook to work without breaking
-        console.log('sync_performance_metrics table not available yet');
-        return [];
+        let query = supabase
+          .from('sync_performance_metrics')
+          .select(`
+            *,
+            zoom_sync_logs!inner (
+              connection_id,
+              created_at,
+              sync_status
+            )
+          `)
+          .eq('zoom_sync_logs.connection_id', connectionId)
+          .order('recorded_at', { ascending: false });
+
+        if (syncId) {
+          query = query.eq('sync_id', syncId);
+        }
+
+        const { data, error } = await query.limit(100);
+        
+        if (error) throw error;
+        
+        return (data || []) as (PerformanceMetric & { 
+          zoom_sync_logs: { 
+            connection_id: string; 
+            created_at: string; 
+            sync_status: string; 
+          } 
+        })[];
       } catch (error) {
         console.error('Error fetching performance metrics:', error);
         return [];
@@ -49,7 +73,7 @@ export const useSyncPerformanceMetrics = (connectionId?: string, syncId?: string
 
   // Calculate metric summaries
   const metricSummaries: MetricSummary[] = React.useMemo(() => {
-    const groupedMetrics = (metrics as PerformanceMetric[]).reduce((acc, metric) => {
+    const groupedMetrics = metrics.reduce((acc, metric) => {
       const key = metric.metric_name;
       if (!acc[key]) {
         acc[key] = [];
@@ -96,25 +120,24 @@ export const useSyncPerformanceMetrics = (connectionId?: string, syncId?: string
   useEffect(() => {
     if (!connectionId) return;
 
-    // Disabled real-time subscription until table exists
-    // const channel = supabase
-    //   .channel(`performance-metrics-${connectionId}`)
-    //   .on(
-    //     'postgres_changes',
-    //     {
-    //       event: 'INSERT',
-    //       schema: 'public',
-    //       table: 'sync_performance_metrics',
-    //     },
-    //     (payload) => {
-    //       const newMetric = payload.new as PerformanceMetric;
-    //       setRealtimeMetrics(prev => [newMetric, ...prev.slice(0, 19)]); // Keep last 20
-    //     }
-    //   )
-    //   .subscribe();
+    const channel = supabase
+      .channel(`performance-metrics-${connectionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'sync_performance_metrics',
+        },
+        (payload) => {
+          const newMetric = payload.new as PerformanceMetric;
+          setRealtimeMetrics(prev => [newMetric, ...prev.slice(0, 19)]); // Keep last 20
+        }
+      )
+      .subscribe();
 
     return () => {
-      // supabase.removeChannel(channel);
+      supabase.removeChannel(channel);
     };
   }, [connectionId]);
 
@@ -127,14 +150,17 @@ export const useSyncPerformanceMetrics = (connectionId?: string, syncId?: string
     metadata?: any
   ) => {
     try {
-      // Table doesn't exist yet, just log for now
-      console.log('Recording metric (table not available yet):', {
-        syncId,
-        metricName,
-        metricValue,
-        metricUnit,
-        metadata
-      });
+      const { error } = await supabase
+        .from('sync_performance_metrics')
+        .insert({
+          sync_id: syncId,
+          metric_name: metricName,
+          metric_value: metricValue,
+          metric_unit: metricUnit,
+          metadata: metadata || {},
+        });
+
+      if (error) throw error;
     } catch (error) {
       console.error('Error recording performance metric:', error);
     }

@@ -160,8 +160,11 @@ export function SyncScheduler({ connectionId }: SyncSchedulerProps) {
     // Create scheduled task
     await supabase.from('scheduled_syncs').insert({
       connection_id: connectionId,
-      scheduled_time: nextSync.toISOString(),
-      sync_type: scheduleConfig.syncMode,
+      scheduled_for: nextSync.toISOString(),
+      sync_config: {
+        syncMode: scheduleConfig.syncMode,
+        dateRange: scheduleConfig.dateRange
+      },
       status: 'pending'
     });
   };

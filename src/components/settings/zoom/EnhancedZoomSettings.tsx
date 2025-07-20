@@ -14,7 +14,8 @@ import {
   Bell
 } from 'lucide-react';
 import { ZoomIntegrationSettings } from '../ZoomIntegrationSettings';
-// Connection management components removed in favor of simplified unified approach
+import { MultiAccountManager } from '@/components/zoom/connection/MultiAccountManager';
+import { ConnectionHealthDashboard } from '@/components/zoom/connection/ConnectionHealthDashboard';
 import { AdvancedSyncConfig } from '@/components/zoom/sync/AdvancedSyncConfig';
 import { PerformanceMetricsDashboard } from '@/components/sync/PerformanceMetricsDashboard';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
@@ -74,21 +75,11 @@ export const EnhancedZoomSettings: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="accounts">
-          <Card>
-            <CardContent className="p-8 text-center">
-              <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">Multi-account management has been simplified in the unified approach</p>
-            </CardContent>
-          </Card>
+          <MultiAccountManager />
         </TabsContent>
 
         <TabsContent value="health">
-          <Card>
-            <CardContent className="p-8 text-center">
-              <Activity className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">Connection health monitoring is now integrated into the main sync card</p>
-            </CardContent>
-          </Card>
+          <ConnectionHealthDashboard />
         </TabsContent>
 
         <TabsContent value="sync">

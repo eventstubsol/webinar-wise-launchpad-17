@@ -1,92 +1,168 @@
 
-import { supabase } from '@/integrations/supabase/client';
-import { ZoomConnection, ZoomConnectionInsert, ZoomConnectionUpdate } from '@/types/zoom';
+import { 
+  ZoomConnection, 
+  ZoomConnectionInsert, 
+  ZoomConnectionUpdate 
+} from '@/types/zoom';
+import { toast } from '@/hooks/use-toast';
+import { ConnectionValidation } from './crud/connectionValidation';
+import { ConnectionDatabase } from './crud/connectionDatabase';
+import { ConnectionEncryption } from './crud/connectionEncryption';
+import { ConnectionTransforms } from './crud/connectionTransforms';
 
+/**
+ * CRUD operations for Zoom connections
+ */
 export class ConnectionCrud {
-  static async createConnection(connection: ZoomConnectionInsert): Promise<ZoomConnection> {
-    const { data, error } = await supabase
-      .from('zoom_connections')
-      .insert(connection)
-      .select()
-      .single();
+  /**
+   * Create a new Zoom connection
+   */
+  static async createConnection(connectionData: ZoomConnectionInsert): Promise<ZoomConnection | null> {
+    try {
+      // Validate input data
+      const validationError = ConnectionValidation.validateInsertData(connectionData);
+      if (validationError) {
+        ConnectionValidation.showValidationError(validationError);
+        return null;
+      }
 
-    if (error) {
-      console.error('Error creating connection:', error);
-      throw error;
-    }
+      // Encrypt tokens before storing
+      const encryptedData = await ConnectionEncryption.encryptInsertData(connectionData);
 
-    return {
-      ...data,
-      connection_status: data.connection_status as any
-    } as ZoomConnection;
-  }
+      // Insert into database
+      const result = await ConnectionDatabase.insertConnection(encryptedData);
+      if (!result) return null;
 
-  static async getConnection(id: string): Promise<ZoomConnection | null> {
-    const { data, error } = await supabase
-      .from('zoom_connections')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
+      // Show success message
+      toast({
+        title: "Success",
+        description: "Zoom account connected successfully!",
+      });
 
-    if (error) {
-      console.error('Error fetching connection:', error);
+      // Decrypt and transform for return
+      const decryptedData = await ConnectionEncryption.decryptConnectionData(result);
+      return ConnectionTransforms.prepareSuccessResponse(decryptedData);
+    } catch (error) {
+      console.error('Unexpected error creating connection:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
       return null;
     }
-
-    return data ? {
-      ...data,
-      connection_status: data.connection_status as any
-    } as ZoomConnection : null;
   }
 
+  /**
+   * Get a connection by ID with decrypted tokens
+   */
+  static async getConnection(id: string): Promise<ZoomConnection | null> {
+    try {
+      const data = await ConnectionDatabase.getConnectionById(id);
+      if (!data) return null;
+
+      // Decrypt tokens and transform
+      const decryptedData = await ConnectionEncryption.decryptConnectionData(data);
+      return ConnectionTransforms.prepareSuccessResponse(decryptedData);
+    } catch (error) {
+      console.error('Unexpected error getting connection:', error);
+      toast({
+        title: "Error",
+        description: "Failed to retrieve connection. Please try again.",
+        variant: "destructive",
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Get all connections for a user
+   */
   static async getUserConnections(userId: string): Promise<ZoomConnection[]> {
-    const { data, error } = await supabase
-      .from('zoom_connections')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    try {
+      const data = await ConnectionDatabase.getConnectionsByUserId(userId);
+      if (!data.length) return [];
 
-    if (error) {
-      console.error('Error fetching user connections:', error);
-      throw error;
+      // Decrypt tokens for all connections
+      const decryptedConnections = await ConnectionEncryption.decryptMultipleConnections(data);
+      return ConnectionTransforms.transformMultipleToZoomConnections(decryptedConnections);
+    } catch (error) {
+      console.error('Unexpected error getting user connections:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load connections. Please try again.",
+        variant: "destructive",
+      });
+      return [];
     }
-
-    return (data || []).map(item => ({
-      ...item,
-      connection_status: item.connection_status as any
-    })) as ZoomConnection[];
   }
 
-  static async updateConnection(id: string, updates: ZoomConnectionUpdate): Promise<ZoomConnection> {
-    const { data, error } = await supabase
-      .from('zoom_connections')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
+  /**
+   * Update a connection
+   */
+  static async updateConnection(id: string, updates: ZoomConnectionUpdate): Promise<ZoomConnection | null> {
+    try {
+      // Validate input data
+      const validationError = ConnectionValidation.validateUpdateData(updates);
+      if (validationError) {
+        ConnectionValidation.showValidationError(validationError);
+        return null;
+      }
 
-    if (error) {
-      console.error('Error updating connection:', error);
-      throw error;
+      // Get user_id for encryption
+      const userId = await ConnectionDatabase.getConnectionUserIdById(id);
+      if (!userId) {
+        toast({
+          title: "Error",
+          description: "Connection not found.",
+          variant: "destructive",
+        });
+        return null;
+      }
+
+      // Encrypt tokens if they're being updated
+      const encryptedUpdates = await ConnectionEncryption.encryptUpdateData(updates, userId);
+
+      // Update in database
+      const result = await ConnectionDatabase.updateConnectionById(id, encryptedUpdates);
+      if (!result) return null;
+
+      // Return with proper type casting
+      return ConnectionTransforms.prepareSuccessResponse(result);
+    } catch (error) {
+      console.error('Unexpected error updating connection:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update connection. Please try again.",
+        variant: "destructive",
+      });
+      return null;
     }
-
-    return {
-      ...data,
-      connection_status: data.connection_status as any
-    } as ZoomConnection;
   }
 
+  /**
+   * Delete a connection
+   */
   static async deleteConnection(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('zoom_connections')
-      .delete()
-      .eq('id', id);
+    try {
+      const success = await ConnectionDatabase.deleteConnectionById(id);
+      
+      if (success) {
+        toast({
+          title: "Success",
+          description: "Zoom account disconnected successfully.",
+        });
+      }
 
-    if (error) {
-      console.error('Error deleting connection:', error);
-      throw error;
+      return success;
+    } catch (error) {
+      console.error('Unexpected error deleting connection:', error);
+      toast({
+        title: "Error",
+        description: "Failed to disconnect account. Please try again.",
+        variant: "destructive",
+      });
+      return false;
     }
-
-    return true;
   }
 }

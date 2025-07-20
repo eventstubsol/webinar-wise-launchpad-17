@@ -47,13 +47,7 @@ const passwordSchema = z.object({
 type PasswordFormData = z.infer<typeof passwordSchema>;
 
 export const AccountSettings = () => {
-  const { user, updatePassword } = useAuth();
-  const [settings, setSettings] = useState({
-    email_notifications: true,
-    marketing_emails: false,
-    theme_preference: 'system',
-    timezone: 'UTC'
-  });
+  const { user, settings, updateSettings, updatePassword } = useAuth();
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordUpdateSuccess, setPasswordUpdateSuccess] = useState(false);
@@ -96,7 +90,7 @@ export const AccountSettings = () => {
   const handleSettingsUpdate = async (key: string, value: any) => {
     setIsUpdatingSettings(true);
     try {
-      setSettings(prev => ({ ...prev, [key]: value }));
+      await updateSettings({ [key]: value });
     } catch (error) {
       console.error('Settings update error:', error);
     } finally {

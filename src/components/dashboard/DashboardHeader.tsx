@@ -5,7 +5,6 @@ import { HeaderSearch } from './header/HeaderSearch';
 import { ZoomStatusSection } from './header/ZoomStatusSection';
 import { UserProfileSection } from './header/UserProfileSection';
 import { NotificationButton } from './header/NotificationButton';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export function DashboardHeader() {
   return (
@@ -18,8 +17,6 @@ export function DashboardHeader() {
         <ZoomStatusSection />
 
         <NotificationButton />
-
-        <ThemeToggle />
 
         <UserProfileSection />
       </div>

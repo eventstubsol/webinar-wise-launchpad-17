@@ -2,28 +2,23 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { ZoomConnectionGate } from '@/components/auth/ZoomConnectionGate';
 
 // Public Pages
 import Landing from '@/pages/Landing';
-import Auth from '@/pages/Auth';
+import Login from '@/pages/Login';
+import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import VerifyEmail from '@/pages/VerifyEmail';
 import Unsubscribe from '@/pages/Unsubscribe';
-import PrivacyPolicy from '@/pages/PrivacyPolicy';
-import TermsOfService from '@/pages/TermsOfService';
-import Support from '@/pages/Support';
-import Documentation from '@/pages/Documentation';
 
 // Protected Pages - Core
 import Dashboard from '@/pages/Dashboard';
 import Settings from '@/pages/Settings';
 
 // Protected Pages - Zoom Integration
-// ZoomTest page removed in favor of simplified unified sync
+import ZoomTest from '@/pages/ZoomTest';
 import ZoomDiagnostics from '@/pages/ZoomDiagnostics';
-import ZoomOAuthCallback from '@/pages/auth/zoom/callback';
 
 // Protected Pages - Data Management
 import Webinars from '@/pages/Webinars';
@@ -50,51 +45,23 @@ import Integrations from '@/pages/Integrations';
 // Protected Pages - Reports
 import Reports from '@/pages/Reports';
 
-// Protected Pages - Admin
-import UserManagement from '@/pages/admin/UserManagement';
-import AccountAnalytics from '@/pages/admin/AccountAnalytics';
-import AllWebinars from '@/pages/admin/AllWebinars';
-
 // 404 Page
 import NotFound from '@/pages/NotFound';
 
 import { ROUTES } from './routeConfig';
 
-// Helper component to combine ProtectedRoute and ZoomConnectionGate
-const ZoomProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <ProtectedRoute>
-    <ZoomConnectionGate>
-      {children}
-    </ZoomConnectionGate>
-  </ProtectedRoute>
-);
-
 export const AppRoutes = () => (
   <Routes>
     {/* Public Routes */}
     <Route path={ROUTES.HOME} element={<Landing />} />
-    <Route path={ROUTES.LOGIN} element={<Auth />} />
-    <Route path={ROUTES.REGISTER} element={<Auth />} />
+    <Route path={ROUTES.LOGIN} element={<Login />} />
+    <Route path={ROUTES.REGISTER} element={<Register />} />
     <Route path={ROUTES.FORGOT_PASSWORD} element={<ForgotPassword />} />
     <Route path={ROUTES.RESET_PASSWORD} element={<ResetPassword />} />
     <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
     <Route path={ROUTES.UNSUBSCRIBE} element={<Unsubscribe />} />
-    <Route path={ROUTES.PRIVACY_POLICY} element={<PrivacyPolicy />} />
-    <Route path={ROUTES.TERMS_OF_SERVICE} element={<TermsOfService />} />
-    <Route path={ROUTES.SUPPORT} element={<Support />} />
-    <Route path={ROUTES.DOCUMENTATION} element={<Documentation />} />
 
-    {/* Zoom OAuth Callback - needs to be protected but not gated */}
-    <Route
-      path="/auth/zoom/callback"
-      element={
-        <ProtectedRoute>
-          <ZoomOAuthCallback />
-        </ProtectedRoute>
-      }
-    />
-
-    {/* Protected Routes - Core (No Zoom connection required) */}
+    {/* Protected Routes - Core */}
     <Route
       path={ROUTES.DASHBOARD}
       element={
@@ -112,8 +79,15 @@ export const AppRoutes = () => (
       }
     />
 
-    {/* Protected Routes - Zoom Integration (No gating for setup/diagnostics) */}
-    {/* ZoomTest route removed - functionality integrated into SyncCenter */}
+    {/* Protected Routes - Zoom Integration */}
+    <Route
+      path={ROUTES.ZOOM_TEST}
+      element={
+        <ProtectedRoute>
+          <ZoomTest />
+        </ProtectedRoute>
+      }
+    />
     <Route
       path={ROUTES.ZOOM_DIAGNOSTICS}
       element={
@@ -123,158 +97,132 @@ export const AppRoutes = () => (
       }
     />
 
-    {/* Protected Routes - Data Management (REQUIRES Zoom connection) */}
+    {/* Protected Routes - Data Management */}
     <Route
       path={ROUTES.WEBINARS}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <Webinars />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
     <Route
       path={ROUTES.WEBINAR_DETAIL}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <WebinarDetail />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
     <Route
       path={ROUTES.SYNC_CENTER}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <SyncCenter />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
     <Route
       path={ROUTES.CSV_UPLOAD}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <CSVUpload />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
 
-    {/* Protected Routes - Analytics (REQUIRES Zoom connection) */}
+    {/* Protected Routes - Analytics */}
     <Route
       path={ROUTES.ADVANCED_ANALYTICS}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <AdvancedAnalytics />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
     <Route
       path={ROUTES.AI_INSIGHTS}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <AIInsights />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
     <Route
       path={ROUTES.EMAIL_ANALYTICS}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <EmailAnalytics />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
     <Route
       path={ROUTES.PREDICTIVE_ANALYTICS}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <PredictiveAnalytics />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
 
-    {/* Protected Routes - Email & Campaigns (REQUIRES Zoom connection) */}
+    {/* Protected Routes - Email & Campaigns */}
     <Route
       path={ROUTES.TEMPLATES}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <EmailTemplates />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
     <Route
       path={ROUTES.CAMPAIGNS}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <Campaigns />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
     <Route
       path={ROUTES.SEGMENTATION}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <Segmentation />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
     <Route
       path={ROUTES.PERSONALIZATION}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <Personalization />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
 
-    {/* Protected Routes - Integrations (REQUIRES Zoom connection) */}
+    {/* Protected Routes - Integrations */}
     <Route
       path={ROUTES.CRM}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <CRMIntegrations />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
     <Route
       path={ROUTES.INTEGRATIONS}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <Integrations />
-        </ZoomProtectedRoute>
+        </ProtectedRoute>
       }
     />
 
-    {/* Protected Routes - Reports (REQUIRES Zoom connection) */}
+    {/* Protected Routes - Reports */}
     <Route
       path={ROUTES.REPORTS}
       element={
-        <ZoomProtectedRoute>
+        <ProtectedRoute>
           <Reports />
-        </ZoomProtectedRoute>
-      }
-    />
-
-    {/* Protected Routes - Admin (No Zoom connection required) */}
-    <Route
-      path="/admin/users"
-      element={
-        <ProtectedRoute>
-          <UserManagement />
-        </ProtectedRoute>
-      }
-    />
-    <Route
-      path="/admin/account-analytics"
-      element={
-        <ProtectedRoute>
-          <AccountAnalytics />
-        </ProtectedRoute>
-      }
-    />
-    <Route
-      path="/admin/webinars"
-      element={
-        <ProtectedRoute>
-          <AllWebinars />
         </ProtectedRoute>
       }
     />

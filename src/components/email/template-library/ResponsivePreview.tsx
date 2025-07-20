@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Monitor, Tablet, Smartphone } from "lucide-react";
-import { SafeHtml } from "@/utils/htmlSanitizer";
 
 interface ResponsivePreviewProps {
   template: EmailTemplate;
@@ -39,8 +38,7 @@ export function ResponsivePreview({ template, onClose }: ResponsivePreviewProps)
           overflow: "hidden"
         }}
       >
-        <SafeHtml 
-          html={template.html_template}
+        <div 
           style={{
             width: "100%",
             height: "100%",
@@ -49,6 +47,7 @@ export function ResponsivePreview({ template, onClose }: ResponsivePreviewProps)
               cssText: clientStyles[emailClient as keyof typeof clientStyles]
             })
           }}
+          dangerouslySetInnerHTML={{ __html: template.html_template }}
         />
       </div>
     );

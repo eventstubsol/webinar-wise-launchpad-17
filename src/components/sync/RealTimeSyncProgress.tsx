@@ -1,156 +1,206 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, CheckCircle, Clock, XCircle, Play, Square } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { 
+  RefreshCw, 
+  Play, 
+  Square, 
+  CheckCircle, 
+  XCircle, 
+  Clock,
+  Activity 
+} from 'lucide-react';
+import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { useZoomSync } from '@/hooks/useZoomSync';
-import { useDashboardRefresh } from '@/hooks/useDashboardRefresh';
-import { ZoomConnection, SyncType } from '@/types/zoom';
+import { SyncType } from '@/types/zoom';
 
 interface RealTimeSyncProgressProps {
-  connection: ZoomConnection | null;
-  showControls?: boolean;
+  onSyncComplete?: () => void;
 }
 
 export const RealTimeSyncProgress: React.FC<RealTimeSyncProgressProps> = ({
-  connection,
-  showControls = true,
+  onSyncComplete,
 }) => {
-  const { refreshDashboardData } = useDashboardRefresh();
-  const {
-    isSyncing,
-    syncProgress,
-    syncStatus,
-    currentOperation,
-    syncError,
-    startSync,
+  const { connection } = useZoomConnection();
+  const { 
+    startSync, 
     cancelSync,
-    testConnection,
+    isSyncing, 
+    syncProgress, 
+    syncStatus, 
+    currentOperation,
+    syncId,
+    healthCheck 
   } = useZoomSync(connection);
 
   const getStatusIcon = () => {
     switch (syncStatus) {
-      case 'syncing':
-        return <Clock className="w-5 h-5 text-blue-500 animate-pulse" />;
+      case 'running':
+        return <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />;
       case 'completed':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
+        return <CheckCircle className="h-5 w-5 text-green-600" />;
       case 'failed':
-        return <XCircle className="w-5 h-5 text-red-500" />;
+        return <XCircle className="h-5 w-5 text-red-600" />;
+      case 'pending':
+        return <Clock className="h-5 w-5 text-orange-600" />;
       default:
-        return <AlertCircle className="w-5 h-5 text-gray-400" />;
+        return <Activity className="h-5 w-5 text-gray-400" />;
     }
   };
 
-  const getStatusColor = () => {
+  const getStatusBadge = () => {
     switch (syncStatus) {
-      case 'syncing':
-        return 'text-blue-600';
+      case 'running':
+        return <Badge variant="default">Syncing</Badge>;
       case 'completed':
-        return 'text-green-600';
+        return <Badge variant="secondary" className="bg-green-100 text-green-800">Completed</Badge>;
       case 'failed':
-        return 'text-red-600';
+        return <Badge variant="destructive">Failed</Badge>;
+      case 'pending':
+        return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Pending</Badge>;
       default:
-        return 'text-gray-600';
+        return <Badge variant="outline">Idle</Badge>;
     }
   };
 
-  const handleStartSync = async () => {
-    await startSync(SyncType.INCREMENTAL, {
-      onComplete: refreshDashboardData
-    });
+  const handleStartSync = async (syncType: SyncType) => {
+    try {
+      await startSync(syncType);
+    } catch (error) {
+      console.error('Failed to start sync:', error);
+    }
   };
 
-  if (!connection) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-gray-500">
-            No Zoom connection available. Please connect your Zoom account first.
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const handleCancelSync = async () => {
+    try {
+      await cancelSync();
+    } catch (error) {
+      console.error('Failed to cancel sync:', error);
+    }
+  };
+
+  const isServiceAvailable = healthCheck?.success;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          {getStatusIcon()}
-          <span>Sync Status</span>
-          <span className={`text-sm font-normal ${getStatusColor()}`}>
-            {syncStatus.charAt(0).toUpperCase() + syncStatus.slice(1)}
-          </span>
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {getStatusIcon()}
+            Real-time Sync Progress
+          </div>
+          {getStatusBadge()}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Progress Bar */}
-        {isSyncing && (
-          <div className="space-y-2">
-            <Progress value={syncProgress} className="h-2" />
-            <div className="text-sm text-gray-600">
-              {syncProgress}% - {currentOperation}
+      <CardContent>
+        <div className="space-y-4">
+          {/* Service Status */}
+          {!isServiceAvailable && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center gap-2 text-yellow-800">
+                <Clock className="h-4 w-4" />
+                <span className="text-sm">
+                  Sync service is currently unavailable. Please try again later.
+                </span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Error Display */}
-        {syncError && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-red-700">{syncError}</div>
+          {/* Connection Status */}
+          {!connection && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-blue-800 text-sm">
+                Please connect your Zoom account to start syncing webinar data.
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Controls */}
-        {showControls && (
-          <div className="flex gap-2">
+          {/* Progress Section */}
+          {isSyncing && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Progress</span>
+                <span className="text-sm text-muted-foreground">{syncProgress}%</span>
+              </div>
+              <Progress value={syncProgress} className="w-full" />
+              
+              {currentOperation && (
+                <div className="text-sm text-muted-foreground">
+                  {currentOperation}
+                </div>
+              )}
+
+              {syncId && (
+                <div className="text-xs text-muted-foreground">
+                  Sync ID: {syncId}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
             {!isSyncing ? (
               <>
-                <Button
-                  onClick={handleStartSync}
-                  disabled={!connection}
-                  className="flex items-center gap-2"
+                <Button 
+                  onClick={() => handleStartSync(SyncType.INCREMENTAL)}
+                  disabled={!connection || !isServiceAvailable}
+                  size="sm"
                 >
-                  <Play className="w-4 h-4" />
-                  Start Sync
+                  <Play className="h-4 w-4 mr-2" />
+                  Quick Sync
                 </Button>
-                <Button
-                  onClick={testConnection}
+                
+                <Button 
+                  onClick={() => handleStartSync(SyncType.INITIAL)}
+                  disabled={!connection || !isServiceAvailable}
                   variant="outline"
-                  disabled={!connection}
+                  size="sm"
                 >
-                  Test Connection
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Full Sync
                 </Button>
               </>
             ) : (
-              <Button
-                onClick={cancelSync}
+              <Button 
+                onClick={handleCancelSync}
                 variant="destructive"
-                className="flex items-center gap-2"
+                size="sm"
               >
-                <Square className="w-4 h-4" />
+                <Square className="h-4 w-4 mr-2" />
                 Cancel Sync
               </Button>
             )}
           </div>
-        )}
 
-        {/* Status Info */}
-        {!isSyncing && syncStatus === 'idle' && (
-          <div className="text-sm text-gray-600">
-            Ready to sync your Zoom webinars. Click "Start Sync" to begin.
-          </div>
-        )}
+          {/* Status Messages */}
+          {syncStatus === 'completed' && (
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="text-green-800 text-sm">
+                Sync completed successfully! Your webinar data is up to date.
+              </div>
+            </div>
+          )}
 
-        {syncStatus === 'completed' && (
-          <div className="text-sm text-green-600">
-            Last sync completed successfully. Your webinar data is up to date.
-          </div>
-        )}
+          {syncStatus === 'failed' && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="text-red-800 text-sm">
+                Sync failed. Please check your connection and try again.
+              </div>
+            </div>
+          )}
+
+          {syncStatus === 'pending' && (
+            <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="text-orange-800 text-sm">
+                Sync is queued and will start shortly.
+              </div>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

@@ -1,2 +1,0 @@
-
-export { FirstTimeSyncOnboarding } from './FirstTimeSyncOnboarding';

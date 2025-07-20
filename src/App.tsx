@@ -1,26 +1,26 @@
 
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { AppRoutes } from "./routes/AppRoutes";
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as SonnerToaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { ThemeProvider } from "@/components/providers/theme-provider";
 
-const App = () => {
-  return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+const queryClient = new QueryClient();
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <TooltipProvider>
-            <AppRoutes />
-            <Toaster />
-            <SonnerToaster />
-          </TooltipProvider>
+          <AppRoutes />
         </AuthProvider>
       </BrowserRouter>
-    </ThemeProvider>
-  );
-};
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;

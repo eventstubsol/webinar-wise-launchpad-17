@@ -8,11 +8,11 @@ import { Users } from 'lucide-react';
 
 interface WebinarForSync {
   id: string;
-  zoom_webinar_id: string;
+  webinar_id: string;
   topic: string;
   start_time: string;
   participant_sync_status: string;
-  participant_sync_completed_at?: string;
+  participant_sync_attempted_at?: string;
 }
 
 interface WebinarSelectionCardProps {
@@ -78,20 +78,20 @@ export function WebinarSelectionCard({
             {webinars.map((webinar) => (
               <div key={webinar.id} className="flex items-center space-x-3 p-3 border rounded-lg">
                 <Checkbox
-                  checked={selectedWebinars.includes(webinar.zoom_webinar_id)}
-                  onCheckedChange={() => onWebinarToggle(webinar.zoom_webinar_id)}
+                  checked={selectedWebinars.includes(webinar.webinar_id)}
+                  onCheckedChange={() => onWebinarToggle(webinar.webinar_id)}
                 />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{webinar.topic}</div>
                   <div className="text-sm text-muted-foreground">
-                    {new Date(webinar.start_time).toLocaleDateString()} • ID: {webinar.zoom_webinar_id}
+                    {new Date(webinar.start_time).toLocaleDateString()} • ID: {webinar.webinar_id}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   {getStatusBadge(webinar.participant_sync_status)}
-                  {webinar.participant_sync_completed_at && (
+                  {webinar.participant_sync_attempted_at && (
                     <div className="text-xs text-muted-foreground">
-                      {new Date(webinar.participant_sync_completed_at).toLocaleString()}
+                      {new Date(webinar.participant_sync_attempted_at).toLocaleString()}
                     </div>
                   )}
                 </div>

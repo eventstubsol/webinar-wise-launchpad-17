@@ -203,175 +203,13 @@ class ZoomService {
   /**
    * Get user's webinars
    */
-  async getWebinars(accessToken, options = {}) {
+  async getWebinars(accessToken, userId = 'me', options = {}) {
     try {
       const params = new URLSearchParams({
-        page_size: options.page_size || 100,
-        page_number: options.page_number || 1,
+        page_size: options.pageSize || 30,
+        page_number: options.pageNumber || 1,
         type: options.type || 'scheduled'
       });
-
-      const response = await axios.get(`${this.baseURL}/users/me/webinars?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      });
-
-      return response.data;
-      
-    } catch (error) {
-      console.error('Get webinars error:', error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Get a specific webinar
-   */
-  async getWebinar(webinarId, accessToken) {
-    try {
-      const response = await axios.get(`${this.baseURL}/webinars/${webinarId}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      });
-
-      return response.data;
-      
-    } catch (error) {
-      console.error('Get webinar error:', error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Get webinar participants (basic endpoint)
-   */
-  async getWebinarParticipants(webinarId, accessToken, options = {}) {
-    try {
-      const params = new URLSearchParams({
-        page_size: options.page_size || 100,
-        page_number: options.page_number || 1
-      });
-
-      const response = await axios.get(`${this.baseURL}/past_webinars/${webinarId}/participants?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      });
-
-      return response.data;
-      
-    } catch (error) {
-      console.error('Get webinar participants error:', error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Get webinar participants report (detailed endpoint with more data)
-   */
-  async getWebinarParticipantsReport(webinarId, accessToken, options = {}) {
-    try {
-      const params = new URLSearchParams({
-        page_size: options.page_size || 300
-      });
-
-      if (options.next_page_token) {
-        params.append('next_page_token', options.next_page_token);
-      }
-
-      const response = await axios.get(`${this.baseURL}/report/webinars/${webinarId}/participants?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      });
-
-      return response.data;
-      
-    } catch (error) {
-      console.error('Get webinar participants report error:', error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Get all users in the account
-   */
-  async getUsers(accessToken, options = {}) {
-    try {
-      const params = new URLSearchParams({
-        page_size: options.page_size || 300,
-        status: options.status || 'active'
-      });
-
-      if (options.page_number) {
-        params.append('page_number', options.page_number);
-      }
-
-      console.log(`\n[ZoomService] GET /users - Params:`, params.toString());
-      console.log(`[ZoomService] Using access token: ${accessToken.substring(0, 20)}...`);
-
-      const response = await axios.get(`${this.baseURL}/users?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      });
-
-      console.log(`[ZoomService] GET /users - Success:`, {
-        status: response.status,
-        total_records: response.data?.total_records,
-        users_count: response.data?.users?.length || 0
-      });
-
-      return response.data;
-      
-    } catch (error) {
-      console.error('[ZoomService] GET /users - Error:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-        code: error.code
-      });
-      
-      // Log specific Zoom API error details
-      if (error.response?.data) {
-        console.error('[ZoomService] Zoom API Error Details:', {
-          code: error.response.data.code,
-          message: error.response.data.message,
-          errors: error.response.data.errors
-        });
-      }
-      
-      throw error;
-    }
-  }
-
-  /**
-   * Get webinars for a specific user
-   */
-  async getUserWebinars(userId, accessToken, options = {}) {
-    try {
-      const params = new URLSearchParams({
-        page_size: options.page_size || 100,
-        page_number: options.page_number || 1,
-        type: options.type || 'scheduled'
-      });
-
-      console.log(`\n[ZoomService] GET /users/${userId}/webinars - Params:`, params.toString());
-      console.log(`[ZoomService] User ID: ${userId}`);
-      console.log(`[ZoomService] Type: ${options.type || 'scheduled'}`);
 
       const response = await axios.get(`${this.baseURL}/users/${userId}/webinars?${params}`, {
         headers: {
@@ -381,34 +219,19 @@ class ZoomService {
         timeout: 30000
       });
 
-      console.log(`[ZoomService] GET /users/${userId}/webinars - Success:`, {
-        status: response.status,
-        total_records: response.data?.total_records,
-        webinars_count: response.data?.webinars?.length || 0
-      });
-
-      return response.data;
+      return {
+        success: true,
+        webinars: response.data.webinars || [],
+        totalRecords: response.data.total_records || 0,
+        pageCount: response.data.page_count || 1
+      };
       
     } catch (error) {
-      console.error(`[ZoomService] GET /users/${userId}/webinars - Error:`, {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-        userId: userId,
-        type: options.type
-      });
-      
-      // Log specific Zoom API error details
-      if (error.response?.data) {
-        console.error('[ZoomService] Zoom API Error Details:', {
-          code: error.response.data.code,
-          message: error.response.data.message,
-          errors: error.response.data.errors
-        });
-      }
-      
-      throw error;
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        status: error.response?.status
+      };
     }
   }
 }
@@ -416,5 +239,4 @@ class ZoomService {
 // Create singleton instance
 const zoomService = new ZoomService();
 
-// Export the instance directly
-module.exports = zoomService;
+module.exports = { zoomService };

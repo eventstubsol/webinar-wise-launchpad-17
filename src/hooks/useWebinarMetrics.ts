@@ -35,7 +35,7 @@ export const useWebinarMetrics = () => {
         const webinars = await WebinarMetricsDataService.fetchWebinars(connection.id);
 
         // Calculate and set metrics
-        const metricsData = await WebinarMetricsCalculator.calculateMetrics(webinars, lastSync?.completed_at || null, syncHistoryCount);
+        const metricsData = await WebinarMetricsCalculator.calculateMetrics(webinars, lastSync, syncHistoryCount);
         setMetrics(metricsData);
 
       } catch (err) {

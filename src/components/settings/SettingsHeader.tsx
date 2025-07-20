@@ -3,7 +3,6 @@ import React from 'react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { Settings } from 'lucide-react';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export function SettingsHeader() {
   const { user, profile } = useAuth();
@@ -21,15 +20,12 @@ export function SettingsHeader() {
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <ThemeToggle />
-          <div className="text-right">
-            <div className="text-sm font-medium text-foreground">
-              {displayName}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {profile?.company || user?.email}
-            </div>
+        <div className="text-right">
+          <div className="text-sm font-medium text-foreground">
+            {displayName}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {profile?.company || user?.email}
           </div>
         </div>
       </div>

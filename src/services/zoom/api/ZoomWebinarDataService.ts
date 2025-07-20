@@ -1,146 +1,524 @@
-import { zoomApiClient, ApiResponse, RequestOptions } from './ZoomApiClient';
-import { ZoomRegistrantService } from './ZoomRegistrantService';
-import { ZoomParticipantService } from './ZoomParticipantService';
-import { EnhancedDataTransformers } from '../utils/transformers/enhancedDataTransformers';
-import { DataValidationService } from '../validation/DataValidationService';
+import { zoomApiClient } from './ZoomApiClient';
+import type { ApiResponse } from './types';
 
-export interface ZoomWebinarApiResponse {
+/**
+ * Zoom API response for webinar list
+ */
+interface ZoomWebinarListResponse {
+  page_count: number;
+  page_number: number;
+  page_size: number;
+  total_records: number;
+  webinars: ZoomWebinarApiResponse[];
+}
+
+/**
+ * Zoom API webinar response format
+ */
+interface ZoomWebinarApiResponse {
   id: string;
   uuid: string;
   host_id: string;
+  host_email: string;
   topic: string;
+  agenda?: string;
+  type: number;
+  status: string;
   start_time: string;
   duration: number;
+  timezone: string;
   join_url: string;
-  [key: string]: any;
+  registration_url?: string;
+  settings: {
+    approval_type: number;
+    registration_type: number;
+    alternative_hosts?: string;
+    [key: string]: any;
+  };
+  occurrences?: Array<{
+    occurrence_id: string;
+    start_time: string;
+    duration: number;
+    status: string;
+  }>;
 }
 
-export interface ListWebinarsOptions {
-  userId?: string;
-  type?: 'scheduled' | 'past' | 'upcoming';
+/**
+ * Options for listing webinars
+ */
+interface ListWebinarsOptions {
+  from?: Date;
+  to?: Date;
+  type?: 'past' | 'upcoming' | 'live';
   pageSize?: number;
-  pageNumber?: number;
-  from?: string;
-  to?: string;
+  dayRange?: number;
 }
 
-export interface SyncProgress {
+/**
+ * Sync progress callback for batch operations
+ */
+interface SyncProgress {
   total: number;
   processed: number;
   failed: number;
   current: string;
 }
 
+/**
+ * Enhanced API response analysis
+ */
+interface ApiResponseAnalysis {
+  hasData: boolean;
+  dataType: string;
+  isAuthenticated: boolean;
+  hasPermissions: boolean;
+  errorCategory: 'NONE' | 'AUTH' | 'PERMISSIONS' | 'RATE_LIMIT' | 'NO_DATA' | 'API_ERROR';
+  userMessage: string;
+  technicalDetails: Record<string, any>;
+}
+
+/**
+ * Service for fetching webinar data from Zoom API
+ */
 export class ZoomWebinarDataService {
   /**
-   * List webinars for a user with pagination and date filtering
+   * Analyze API response for detailed diagnostics
    */
-  static async listWebinars(
-    userId: string,
-    options: ListWebinarsOptions = {},
-    onProgress?: (progress: SyncProgress) => void
-  ): Promise<ZoomWebinarApiResponse[]> {
-    try {
-      let allWebinars: ZoomWebinarApiResponse[] = [];
-      let pageNumber = options.pageNumber || 1;
-      let hasMore = true;
+  private static analyzeApiResponse(response: any, endpoint: string): ApiResponseAnalysis {
+    const analysis: ApiResponseAnalysis = {
+      hasData: false,
+      dataType: typeof response,
+      isAuthenticated: true,
+      hasPermissions: true,
+      errorCategory: 'NONE',
+      userMessage: '',
+      technicalDetails: {}
+    };
 
-      while (hasMore) {
-        const params: any = {
-          page_size: options.pageSize || 300,
-          page_number: pageNumber,
-          type: options.type || 'scheduled'
-        };
+    // Check if response exists
+    if (!response) {
+      analysis.errorCategory = 'API_ERROR';
+      analysis.userMessage = 'No response received from Zoom API';
+      analysis.technicalDetails = { endpoint, response: null };
+      return analysis;
+    }
 
-        if (options.from) params.from = options.from;
-        if (options.to) params.to = options.to;
+    // Authentication check
+    if (response.error && (response.error.includes('401') || response.error.includes('unauthorized'))) {
+      analysis.isAuthenticated = false;
+      analysis.errorCategory = 'AUTH';
+      analysis.userMessage = 'Zoom authentication has expired. Please reconnect your account.';
+      analysis.technicalDetails = { endpoint, error: response.error };
+      return analysis;
+    }
 
-        const queryParams = new URLSearchParams(params).toString();
-        const endpoint = `/users/${userId}/webinars?${queryParams}`;
+    // Permissions check
+    if (response.error && (response.error.includes('403') || response.error.includes('forbidden'))) {
+      analysis.hasPermissions = false;
+      analysis.errorCategory = 'PERMISSIONS';
+      analysis.userMessage = 'Your Zoom account does not have permission to access webinar data. Please check your Zoom app scopes.';
+      analysis.technicalDetails = { endpoint, error: response.error };
+      return analysis;
+    }
 
-        const response = await zoomApiClient.get(endpoint);
+    // Rate limit check
+    if (response.error && (response.error.includes('429') || response.error.includes('rate limit'))) {
+      analysis.errorCategory = 'RATE_LIMIT';
+      analysis.userMessage = 'Zoom API rate limit exceeded. Please try again in a few minutes.';
+      analysis.technicalDetails = { endpoint, error: response.error };
+      return analysis;
+    }
 
-        if (!response.success) {
-          console.error('Failed to list webinars:', response.error);
-          break;
+    // Success response analysis
+    if (response.success && response.data) {
+      const data = response.data;
+      
+      // Check if webinars field exists and is an array
+      if (data.webinars !== undefined) {
+        if (Array.isArray(data.webinars)) {
+          analysis.hasData = data.webinars.length > 0;
+          analysis.dataType = 'array';
+          
+          if (data.webinars.length === 0) {
+            analysis.errorCategory = 'NO_DATA';
+            analysis.userMessage = `No webinars found for the specified date range. Check if you have webinars in your Zoom account.`;
+          } else {
+            analysis.userMessage = `Found ${data.webinars.length} webinars to sync.`;
+          }
+        } else {
+          analysis.errorCategory = 'API_ERROR';
+          analysis.userMessage = 'Unexpected response format from Zoom API (webinars is not an array).';
+          analysis.dataType = typeof data.webinars;
         }
-
-        const webinars = response.data?.webinars || [];
-        allWebinars = allWebinars.concat(webinars);
-
-        if (onProgress) {
-          onProgress({
-            total: response.data?.total_records || 0,
-            processed: allWebinars.length,
-            failed: 0,
-            current: `Page ${pageNumber}`
-          });
-        }
-
-        hasMore = webinars.length === params.page_size && response.data?.page_count > pageNumber;
-        pageNumber++;
+      } else {
+        analysis.errorCategory = 'API_ERROR';
+        analysis.userMessage = 'Zoom API response is missing webinars data. This might be a permissions issue.';
+        analysis.dataType = 'undefined';
       }
 
-      return allWebinars;
+      analysis.technicalDetails = {
+        endpoint,
+        totalRecords: data.total_records,
+        pageCount: data.page_count,
+        pageNumber: data.page_number,
+        webinarsFieldType: typeof data.webinars,
+        webinarsLength: Array.isArray(data.webinars) ? data.webinars.length : 'N/A',
+        responseKeys: Object.keys(data),
+        hasWebinarsField: 'webinars' in data
+      };
+    } else {
+      analysis.errorCategory = 'API_ERROR';
+      analysis.userMessage = 'Invalid response from Zoom API.';
+      analysis.technicalDetails = { 
+        endpoint, 
+        hasSuccess: 'success' in response,
+        hasData: 'data' in response,
+        responseKeys: Object.keys(response)
+      };
+    }
+
+    return analysis;
+  }
+
+  /**
+   * Enhanced logging for API responses with user-friendly messages
+   */
+  private static logApiResponseAnalysis(analysis: ApiResponseAnalysis, context?: string) {
+    const logPrefix = context ? `[${context}]` : '';
+    
+    console.log(`${logPrefix} 🔍 API RESPONSE ANALYSIS:`);
+    console.log(`  📊 Category: ${analysis.errorCategory}`);
+    console.log(`  👤 User Message: ${analysis.userMessage}`);
+    console.log(`  🔧 Technical Details:`, analysis.technicalDetails);
+    
+    // Color-coded logging based on category
+    switch (analysis.errorCategory) {
+      case 'NONE':
+        console.log(`  ✅ Status: Success`);
+        break;
+      case 'NO_DATA':
+        console.log(`  ℹ️ Status: No data found (not an error)`);
+        break;
+      case 'AUTH':
+        console.error(`  🔒 Status: Authentication failed`);
+        break;
+      case 'PERMISSIONS':
+        console.error(`  🚫 Status: Permission denied`);
+        break;
+      case 'RATE_LIMIT':
+        console.warn(`  ⏳ Status: Rate limited`);
+        break;
+      case 'API_ERROR':
+        console.error(`  ❌ Status: API error`);
+        break;
+    }
+  }
+
+  /**
+   * Test API connection and permissions
+   */
+  static async testApiConnection(): Promise<ApiResponseAnalysis> {
+    try {
+      console.log('🔍 TESTING API CONNECTION...');
+      
+      // Test basic user info endpoint first
+      const userResponse = await zoomApiClient.get('/users/me');
+      const userAnalysis = this.analyzeApiResponse(userResponse, '/users/me');
+      
+      if (userAnalysis.errorCategory !== 'NONE') {
+        console.error('❌ USER API TEST FAILED:', userAnalysis.userMessage);
+        return userAnalysis;
+      }
+      
+      console.log('✅ USER API TEST PASSED');
+      
+      // Test webinar list endpoint
+      const webinarResponse = await zoomApiClient.get('/users/me/webinars?page_size=1&type=past');
+      const webinarAnalysis = this.analyzeApiResponse(webinarResponse, '/users/me/webinars');
+      
+      console.log('📊 WEBINAR API TEST RESULT:', webinarAnalysis.userMessage);
+      return webinarAnalysis;
+      
     } catch (error) {
-      console.error('Error listing webinars:', error);
+      console.error('❌ API CONNECTION TEST FAILED:', error);
+      return {
+        hasData: false,
+        dataType: 'error',
+        isAuthenticated: false,
+        hasPermissions: false,
+        errorCategory: 'API_ERROR',
+        userMessage: `Connection test failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        technicalDetails: { error: error instanceof Error ? error.message : error }
+      };
+    }
+  }
+
+  /**
+   * List webinars with extended range support (past + upcoming)
+   */
+  static async listWebinarsWithExtendedRange(
+    userId: string,
+    options: { dayRange?: number; pageSize?: number } = {},
+    onProgress?: (progress: SyncProgress) => void
+  ): Promise<ZoomWebinarApiResponse[]> {
+    const { dayRange = 90, pageSize = 100 } = options;
+    
+    const now = new Date();
+    const pastDate = new Date(now.getTime() - (dayRange * 24 * 60 * 60 * 1000));
+    const futureDate = new Date(now.getTime() + (dayRange * 24 * 60 * 60 * 1000));
+
+    console.log('🔄 EXTENDED RANGE SYNC: Starting webinar fetch', {
+      dayRange,
+      pastDate: pastDate.toISOString(),
+      futureDate: futureDate.toISOString(),
+      pageSize
+    });
+
+    try {
+      // Test API connection first
+      const connectionTest = await this.testApiConnection();
+      if (connectionTest.errorCategory === 'AUTH' || connectionTest.errorCategory === 'PERMISSIONS') {
+        throw new Error(connectionTest.userMessage);
+      }
+
+      // Fetch past webinars
+      if (onProgress) {
+        onProgress({
+          total: 2,
+          processed: 0,
+          failed: 0,
+          current: 'Fetching past webinars...'
+        });
+      }
+
+      console.log('📅 FETCHING PAST WEBINARS...');
+      const pastWebinars = await this.listWebinars(userId, {
+        from: pastDate,
+        to: now,
+        type: 'past',
+        pageSize
+      });
+
+      console.log(`✅ PAST WEBINARS RESULT: ${pastWebinars.length} webinars found`);
+
+      // Fetch upcoming webinars
+      if (onProgress) {
+        onProgress({
+          total: 2,
+          processed: 1,
+          failed: 0,
+          current: 'Fetching upcoming webinars...'
+        });
+      }
+
+      console.log('📅 FETCHING UPCOMING WEBINARS...');
+      const upcomingWebinars = await this.listWebinars(userId, {
+        from: now,
+        to: futureDate,
+        type: 'upcoming',
+        pageSize
+      });
+
+      console.log(`✅ UPCOMING WEBINARS RESULT: ${upcomingWebinars.length} webinars found`);
+
+      // Safely merge and deduplicate webinars
+      const allWebinars = [
+        ...(Array.isArray(pastWebinars) ? pastWebinars : []),
+        ...(Array.isArray(upcomingWebinars) ? upcomingWebinars : [])
+      ];
+      const uniqueWebinars = this.deduplicateWebinars(allWebinars);
+
+      console.log('🔄 DEDUPLICATION COMPLETE:', {
+        pastCount: pastWebinars.length,
+        upcomingCount: upcomingWebinars.length,
+        totalBeforeDedup: allWebinars.length,
+        uniqueCount: uniqueWebinars.length
+      });
+
+      if (onProgress) {
+        onProgress({
+          total: 2,
+          processed: 2,
+          failed: 0,
+          current: uniqueWebinars.length > 0 
+            ? `Found ${uniqueWebinars.length} total webinars`
+            : 'No webinars found in the specified date range'
+        });
+      }
+
+      return uniqueWebinars;
+    } catch (error) {
+      console.error('❌ EXTENDED RANGE SYNC ERROR:', error);
+      
+      if (onProgress) {
+        onProgress({
+          total: 2,
+          processed: 1,
+          failed: 1,
+          current: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        });
+      }
+      
       throw error;
     }
   }
 
   /**
-   * List webinars with extended date range (90 days past + upcoming)
+   * Deduplicate webinars by ID
    */
-  static async listWebinarsWithExtendedRange(
-    userId: string,
-    options: { dayRange?: number; pageSize?: number } = {},
-    onProgress?: (progress: any) => void
+  private static deduplicateWebinars(webinars: ZoomWebinarApiResponse[]): ZoomWebinarApiResponse[] {
+    const seen = new Set<string>();
+    return webinars.filter(webinar => {
+      if (seen.has(webinar.id)) {
+        return false;
+      }
+      seen.add(webinar.id);
+      return true;
+    });
+  }
+
+  /**
+   * List webinars with automatic pagination and enhanced error handling
+   */
+  static async listWebinars(
+    userId: string, 
+    options: ListWebinarsOptions = {},
+    onProgress?: (progress: SyncProgress) => void
   ): Promise<ZoomWebinarApiResponse[]> {
-    const { dayRange = 90, pageSize = 300 } = options;
-    const now = new Date();
-    const pastDate = new Date(now.getTime() - dayRange * 24 * 60 * 60 * 1000);
-    const futureDate = new Date(now.getTime() + dayRange * 24 * 60 * 60 * 1000);
+    const {
+      from,
+      to,
+      type = 'past',
+      pageSize = 100
+    } = options;
 
-    const pastOptions: ListWebinarsOptions = {
-      userId: userId,
-      type: 'past' as const,
-      pageSize: pageSize,
-      from: pastDate.toISOString().split('T')[0],
-      to: now.toISOString().split('T')[0]
-    };
+    const context = `LIST_WEBINARS_${type.toUpperCase()}`;
+    console.log(`🔄 ${context}: Starting webinar list fetch`, {
+      type,
+      from: from?.toISOString(),
+      to: to?.toISOString(),
+      pageSize
+    });
 
-    const upcomingOptions: ListWebinarsOptions = {
-      userId: userId,
-      type: 'upcoming' as const,
-      pageSize: pageSize,
-      from: now.toISOString().split('T')[0],
-      to: futureDate.toISOString().split('T')[0]
-    };
+    const allWebinars: ZoomWebinarApiResponse[] = [];
+    let pageNumber = 1;
+    let hasMore = true;
+    let consecutiveErrors = 0;
+    const maxConsecutiveErrors = 3;
 
     try {
-      const [pastWebinars, upcomingWebinars] = await Promise.all([
-        ZoomWebinarDataService.listWebinars(userId, pastOptions, (progress) => {
-          if (onProgress) {
-            onProgress({
-              ...progress,
-              phase: 'past'
-            });
-          }
-        }),
-        ZoomWebinarDataService.listWebinars(userId, upcomingOptions, (progress) => {
-          if (onProgress) {
-            onProgress({
-              ...progress,
-              phase: 'upcoming'
-            });
-          }
-        })
-      ]);
+      while (hasMore && consecutiveErrors < maxConsecutiveErrors) {
+        const params = new URLSearchParams({
+          page_size: pageSize.toString(),
+          page_number: pageNumber.toString(),
+          type,
+        });
 
-      const allWebinars = pastWebinars.concat(upcomingWebinars);
+        if (from) {
+          params.append('from', from.toISOString().split('T')[0]);
+        }
+        if (to) {
+          params.append('to', to.toISOString().split('T')[0]);
+        }
+
+        const endpoint = `/users/me/webinars?${params}`;
+        console.log(`📡 ${context}: API Request - Page ${pageNumber}`, { endpoint });
+
+        try {
+          const response = await zoomApiClient.get<ZoomWebinarListResponse>(endpoint);
+          
+          // Enhanced response analysis
+          const analysis = this.analyzeApiResponse(response, endpoint);
+          this.logApiResponseAnalysis(analysis, context);
+
+          // Handle different error categories
+          if (analysis.errorCategory === 'AUTH') {
+            throw new Error('Authentication failed: ' + analysis.userMessage);
+          } else if (analysis.errorCategory === 'PERMISSIONS') {
+            throw new Error('Permission denied: ' + analysis.userMessage);
+          } else if (analysis.errorCategory === 'RATE_LIMIT') {
+            console.warn(`⏳ ${context}: Rate limited, waiting before retry...`);
+            await new Promise(resolve => setTimeout(resolve, 60000)); // Wait 1 minute
+            continue;
+          } else if (analysis.errorCategory === 'API_ERROR') {
+            consecutiveErrors++;
+            console.error(`❌ ${context}: API Error (${consecutiveErrors}/${maxConsecutiveErrors}):`, analysis.userMessage);
+            
+            if (consecutiveErrors >= maxConsecutiveErrors) {
+              throw new Error(`API failed after ${maxConsecutiveErrors} attempts: ${analysis.userMessage}`);
+            }
+            
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 1000 * consecutiveErrors));
+            continue;
+          } else if (analysis.errorCategory === 'NO_DATA') {
+            console.log(`ℹ️ ${context}: No webinars found for page ${pageNumber}`);
+            break; // No more data to fetch
+          }
+
+          // Process successful response
+          if (response.success && response.data && Array.isArray(response.data.webinars)) {
+            const { webinars, page_count, page_number: currentPage, total_records } = response.data;
+            
+            console.log(`✅ ${context}: Page ${currentPage} processed successfully`, {
+              webinarsFound: webinars.length,
+              totalRecords: total_records,
+              pageCount: page_count
+            });
+            
+            allWebinars.push(...webinars);
+            consecutiveErrors = 0; // Reset on successful page
+
+            // Update progress
+            if (onProgress) {
+              onProgress({
+                total: total_records || allWebinars.length,
+                processed: allWebinars.length,
+                failed: 0,
+                current: `Page ${currentPage} of ${page_count} (${type})`
+              });
+            }
+
+            hasMore = currentPage < page_count;
+            pageNumber++;
+          } else {
+            // This should be caught by the analysis above, but just in case
+            console.warn(`⚠️ ${context}: Unexpected response structure for page ${pageNumber}`);
+            break;
+          }
+
+        } catch (pageError) {
+          console.error(`❌ ${context}: Error processing page ${pageNumber}:`, pageError);
+          consecutiveErrors++;
+          
+          if (consecutiveErrors >= maxConsecutiveErrors) {
+            console.error(`❌ ${context}: Max consecutive errors reached, stopping pagination`);
+            break;
+          }
+          
+          // Exponential backoff for retries
+          const delay = Math.pow(2, consecutiveErrors) * 1000;
+          console.log(`⏳ ${context}: Retrying page ${pageNumber} after ${delay}ms delay`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+
+      console.log(`🏁 ${context}: Final result`, {
+        totalWebinars: allWebinars.length,
+        pagesProcessed: pageNumber - 1,
+        consecutiveErrors
+      });
+
       return allWebinars;
     } catch (error) {
-      console.error('Error listing webinars with extended range:', error);
+      console.error(`❌ ${context}: Critical error in listWebinars:`, error);
+      
+      // Return what we have so far instead of throwing
+      if (allWebinars.length > 0) {
+        console.log(`🔄 ${context}: Returning partial results (${allWebinars.length} webinars) despite error`);
+        return allWebinars;
+      }
+      
       throw error;
     }
   }
@@ -148,290 +526,171 @@ export class ZoomWebinarDataService {
   /**
    * Get detailed information about a specific webinar
    */
-  static async getWebinar(webinarId: string): Promise<ZoomWebinarApiResponse> {
+  static async getWebinar(webinarId: string): Promise<ZoomWebinarApiResponse | null> {
     try {
-      const response = await zoomApiClient.get(`/webinars/${webinarId}`);
+      const response = await zoomApiClient.get<ZoomWebinarApiResponse>(
+        `/webinars/${webinarId}`
+      );
 
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to get webinar');
+      if (response.success) {
+        return response.data || null;
       }
 
-      return response.data;
+      console.error(`Failed to fetch webinar ${webinarId}:`, response.error);
+      return null;
     } catch (error) {
-      console.error('Error getting webinar:', error);
-      throw error;
+      console.error(`Error fetching webinar ${webinarId}:`, error);
+      return null;
     }
   }
 
-  /**
-   * Get webinar registrants with pagination support
-   */
-  static async getWebinarRegistrants(webinarId: string, options: any = {}): Promise<any[]> {
-    try {
-      let allRegistrants: any[] = [];
-      let nextPageToken: string | undefined;
-      let hasMore = true;
+  static async getWebinarRegistrants(
+    webinarId: string,
+    options: { pageSize?: number; status?: 'pending' | 'approved' | 'denied' } = {}
+  ) {
+    const { pageSize = 100, status = 'approved' } = options;
+    const allRegistrants = [];
+    let pageNumber = 1;
+    let hasMore = true;
 
-      while (hasMore) {
-        const params: any = {
-          page_size: options.page_size || 300
-        };
+    while (hasMore) {
+      try {
+        const params = new URLSearchParams({
+          page_size: pageSize.toString(),
+          page_number: pageNumber.toString(),
+          status,
+        });
 
-        if (nextPageToken) {
-          params.next_page_token = nextPageToken;
-        }
+        const response = await zoomApiClient.get(
+          `/webinars/${webinarId}/registrants?${params}`
+        );
 
-        const queryParams = new URLSearchParams(params).toString();
-        const endpoint = `/webinars/${webinarId}/registrants?${queryParams}`;
-
-        const response = await zoomApiClient.get(endpoint);
-
-        if (!response.success) {
-          console.error('Failed to get webinar registrants:', response.error);
+        if (!response.success || !response.data) {
+          console.error(`Failed to fetch registrants for webinar ${webinarId}:`, response.error);
           break;
         }
 
-        const registrants = response.data?.registrants || [];
-        allRegistrants = allRegistrants.concat(registrants);
-
-        nextPageToken = response.data?.next_page_token;
-        hasMore = !!nextPageToken;
-      }
-
-      return allRegistrants;
-    } catch (error) {
-      console.error('Error getting webinar registrants:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get webinar participants with engagement metrics
-   */
-  static async getWebinarParticipants(webinarId: string, options: any = {}): Promise<any[]> {
-    try {
-      let allParticipants: any[] = [];
-      let nextPageToken: string | undefined;
-      let hasMore = true;
-
-      while (hasMore) {
-        const params: any = {
-          page_size: options.page_size || 300
-        };
-
-        if (nextPageToken) {
-          params.next_page_token = nextPageToken;
+        const { registrants, page_count, page_number: currentPage } = response.data;
+        
+        if (Array.isArray(registrants)) {
+          allRegistrants.push(...registrants);
         }
 
-        const queryParams = new URLSearchParams(params).toString();
-        const endpoint = `/report/webinars/${webinarId}/participants?${queryParams}`;
+        hasMore = currentPage < page_count;
+        pageNumber++;
+      } catch (error) {
+        console.error(`Error fetching registrants for webinar ${webinarId}:`, error);
+        break;
+      }
+    }
 
-        const response = await zoomApiClient.get(endpoint);
+    return allRegistrants;
+  }
 
-        if (!response.success) {
-          console.error('Failed to get webinar participants:', response.error);
+  static async getWebinarParticipants(
+    webinarId: string,
+    options: { pageSize?: number } = {}
+  ) {
+    const { pageSize = 100 } = options;
+    const allParticipants = [];
+    let nextPageToken = '';
+    let hasMore = true;
+
+    while (hasMore) {
+      try {
+        const params = new URLSearchParams({
+          page_size: pageSize.toString(),
+        });
+
+        if (nextPageToken) {
+          params.append('next_page_token', nextPageToken);
+        }
+
+        const response = await zoomApiClient.get(
+          `/report/webinars/${webinarId}/participants?${params}`
+        );
+
+        if (!response.success || !response.data) {
+          console.error(`Failed to fetch participants for webinar ${webinarId}:`, response.error);
           break;
         }
 
-        const participants = response.data?.participants || [];
-        allParticipants = allParticipants.concat(participants);
-
-        nextPageToken = response.data?.next_page_token;
-        hasMore = !!nextPageToken;
-      }
-
-      return allParticipants;
-    } catch (error) {
-      console.error('Error getting webinar participants:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get webinar polls
-   */
-  static async getWebinarPolls(webinarId: string): Promise<any[]> {
-    try {
-      const response = await zoomApiClient.get(`/webinars/${webinarId}/polls`);
-
-      if (!response.success) {
-        console.error('Failed to get webinar polls:', response.error);
-        return [];
-      }
-
-      return response.data?.polls || [];
-    } catch (error) {
-      console.error('Error getting webinar polls:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Get webinar Q&A
-   */
-  static async getWebinarQA(webinarId: string): Promise<any[]> {
-    try {
-      const response = await zoomApiClient.get(`/webinars/${webinarId}/qa`);
-
-      if (!response.success) {
-        console.error('Failed to get webinar Q&A:', response.error);
-        return [];
-      }
-
-      return response.data?.questions || [];
-    } catch (error) {
-      console.error('Error getting webinar Q&A:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Enhanced method to get webinar registrants with comprehensive data
-   */
-  static async getWebinarRegistrantsEnhanced(webinarId: string, options: {
-    includeAllStatuses?: boolean;
-    occurrenceId?: string;
-    validate?: boolean;
-  } = {}): Promise<any> {
-    const { includeAllStatuses = true, occurrenceId, validate = true } = options;
-    
-    try {
-      console.log(`Fetching enhanced registrants for webinar ${webinarId}`);
-      
-      const response = await ZoomRegistrantService.getAllRegistrants(webinarId, {
-        includeAllStatuses,
-        occurrenceId
-      });
-      
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch registrants');
-      }
-      
-      let registrants = response.data || [];
-      
-      // Apply data validation if requested
-      if (validate && registrants.length > 0) {
-        const validation = DataValidationService.validateRegistrantData(registrants);
-        registrants = validation.validatedData;
+        const { participants, next_page_token } = response.data;
         
-        if (validation.issues.length > 0) {
-          console.warn('Registrant data validation issues:', validation.issues);
+        if (Array.isArray(participants)) {
+          const enhancedParticipants = participants.map((participant: any) => ({
+            ...participant,
+            engagement_score: this.calculateEngagementScore(participant),
+            total_duration: participant.duration || 0,
+            join_leave_count: participant.details?.length || 1
+          }));
+
+          allParticipants.push(...enhancedParticipants);
         }
-        
-        console.log(`Registrant data completeness: ${validation.completeness}%`);
+
+        hasMore = !!next_page_token;
+        nextPageToken = next_page_token || '';
+      } catch (error) {
+        console.error(`Error fetching participants for webinar ${webinarId}:`, error);
+        break;
       }
-      
-      console.log(`Successfully fetched ${registrants.length} enhanced registrants`);
-      return registrants;
-      
+    }
+
+    return allParticipants;
+  }
+
+  static async getWebinarPolls(webinarId: string) {
+    try {
+      const response = await zoomApiClient.get(
+        `/webinars/${webinarId}/polls`
+      );
+
+      if (response.success) {
+        return response.data;
+      }
+
+      console.error(`Failed to fetch polls for webinar ${webinarId}:`, response.error);
+      return null;
     } catch (error) {
-      console.error('Error fetching enhanced registrants:', error);
-      throw error;
+      console.error(`Error fetching polls for webinar ${webinarId}:`, error);
+      return null;
     }
   }
-  
-  /**
-   * Enhanced method to get webinar participants with comprehensive engagement data
-   */
-  static async getWebinarParticipantsEnhanced(webinarId: string, options: {
-    includeDetailedReport?: boolean;
-    occurrenceId?: string;
-    validate?: boolean;
-  } = {}): Promise<any> {
-    const { includeDetailedReport = true, occurrenceId, validate = true } = options;
-    
+
+  static async getWebinarQA(webinarId: string) {
     try {
-      console.log(`Fetching enhanced participants for webinar ${webinarId}`);
-      
-      const response = await ZoomParticipantService.getAllParticipants(webinarId, {
-        includeDetailedReport,
-        occurrenceId
-      });
-      
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch participants');
+      const response = await zoomApiClient.get(
+        `/report/webinars/${webinarId}/qa`
+      );
+
+      if (response.success) {
+        return response.data;
       }
-      
-      let participants = response.data || [];
-      
-      // Apply data validation if requested
-      if (validate && participants.length > 0) {
-        const validation = DataValidationService.validateParticipantData(participants);
-        participants = validation.validatedData;
-        
-        if (validation.anomalies.length > 0) {
-          console.warn('Participant data validation anomalies:', validation.anomalies);
-        }
-        
-        if (validation.duplicates.length > 0) {
-          console.warn(`Found ${validation.duplicates.length} duplicate participants`);
-        }
-      }
-      
-      console.log(`Successfully fetched ${participants.length} enhanced participants`);
-      return participants;
-      
+
+      console.error(`Failed to fetch Q&A for webinar ${webinarId}:`, response.error);
+      return null;
     } catch (error) {
-      console.error('Error fetching enhanced participants:', error);
-      throw error;
+      console.error(`Error fetching Q&A for webinar ${webinarId}:`, error);
+      return null;
     }
   }
-  
-  /**
-   * Get comprehensive webinar data with registrants, participants, and validation
-   */
-  static async getComprehensiveWebinarData(webinarId: string, options: {
-    includeRegistrants?: boolean;
-    includeParticipants?: boolean;
-    includeValidation?: boolean;
-    occurrenceId?: string;
-  } = {}): Promise<{
-    webinar: any;
-    registrants: any[];
-    participants: any[];
-    validation?: any;
-  }> {
-    const {
-      includeRegistrants = true,
-      includeParticipants = true,
-      includeValidation = true,
-      occurrenceId
-    } = options;
+
+  private static calculateEngagementScore(participant: any): number {
+    let score = 0;
     
-    try {
-      console.log(`Fetching comprehensive data for webinar ${webinarId}`);
-      
-      // Fetch webinar details
-      const webinar = await this.getWebinar(webinarId);
-      
-      // Fetch registrants and participants in parallel
-      const [registrants, participants] = await Promise.all([
-        includeRegistrants 
-          ? this.getWebinarRegistrantsEnhanced(webinarId, { occurrenceId, validate: false })
-          : Promise.resolve([]),
-        includeParticipants 
-          ? this.getWebinarParticipantsEnhanced(webinarId, { occurrenceId, validate: false })
-          : Promise.resolve([])
-      ]);
-      
-      let validation = null;
-      
-      // Generate comprehensive validation report
-      if (includeValidation && (registrants.length > 0 || participants.length > 0)) {
-        validation = DataValidationService.generateDataQualityReport(registrants, participants);
-        console.log(`Data quality score: ${validation.overall_score}/100`);
-      }
-      
-      return {
-        webinar,
-        registrants,
-        participants,
-        validation
-      };
-      
-    } catch (error) {
-      console.error('Error fetching comprehensive webinar data:', error);
-      throw error;
-    }
+    // Base score from duration (0-40 points)
+    const duration = participant.duration || 0;
+    score += Math.min(40, (duration / 60) * 10); // 10 points per 6 minutes, max 40
+    
+    // Engagement activities (60 points total)
+    if (participant.answered_polling) score += 20;
+    if (participant.asked_question) score += 20;
+    if (participant.posted_chat) score += 10;
+    if (participant.raised_hand) score += 10;
+    
+    return Math.round(Math.min(100, score));
   }
 }
+
+// Export types for use in other services
+export type { ZoomWebinarApiResponse, ListWebinarsOptions, SyncProgress, ApiResponseAnalysis };

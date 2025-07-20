@@ -2,84 +2,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-class TokenEncryption {
-  static async encryptToken(token: string, salt: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(token);
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(salt),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveKey']
-    );
-    
-    const key = await crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt: encoder.encode('supabase-encryption'),
-        iterations: 100000,
-        hash: 'SHA-256'
-      },
-      keyMaterial,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['encrypt']
-    );
-    
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      data
-    );
-    
-    const result = new Uint8Array(iv.length + encrypted.byteLength);
-    result.set(iv);
-    result.set(new Uint8Array(encrypted), iv.length);
-    
-    return btoa(String.fromCharCode(...result));
-  }
-  
-  static async decryptToken(encryptedToken: string, salt: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-    
-    const encrypted = new Uint8Array(atob(encryptedToken).split('').map(c => c.charCodeAt(0)));
-    const iv = encrypted.slice(0, 12);
-    const data = encrypted.slice(12);
-    
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(salt),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveKey']
-    );
-    
-    const key = await crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt: encoder.encode('supabase-encryption'),
-        iterations: 100000,
-        hash: 'SHA-256'
-      },
-      keyMaterial,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['decrypt']
-    );
-    
-    const decrypted = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      data
-    );
-    
-    return decoder.decode(decrypted);
-  }
-}
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -182,14 +104,11 @@ serve(async (req) => {
       const tokenData = await tokenResponse.json();
       const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
 
-      // Encrypt and update connection with new token
-      const encryptionSalt = Deno.env.get('ENCRYPTION_SALT') || 'default-salt';
-      const encryptedAccessToken = await TokenEncryption.encryptToken(tokenData.access_token, encryptionSalt);
-      
+      // Update connection with new plain text token
       const { data: updatedConnection, error: updateError } = await serviceClient
         .from('zoom_connections')
         .update({
-          access_token: encryptedAccessToken,
+          access_token: tokenData.access_token, // Plain text
           token_expires_at: newExpiresAt,
           updated_at: new Date().toISOString(),
         })
@@ -213,19 +132,7 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
-      // For OAuth connections, decrypt and use refresh token
-      const encryptionSalt = Deno.env.get('ENCRYPTION_SALT') || 'default-salt';
-      let refreshToken;
-      try {
-        refreshToken = await TokenEncryption.decryptToken(connection.refresh_token, encryptionSalt);
-      } catch (error) {
-        console.error('Failed to decrypt refresh token:', error);
-        return new Response(
-          JSON.stringify({ error: 'Invalid refresh token' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
+      // For OAuth connections, use refresh token (plain text)
       const tokenResponse = await fetch('https://zoom.us/oauth/token', {
         method: 'POST',
         headers: {
@@ -233,7 +140,7 @@ serve(async (req) => {
         },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
-          refresh_token: refreshToken,
+          refresh_token: connection.refresh_token, // Already plain text
         }),
       });
 
@@ -256,17 +163,12 @@ serve(async (req) => {
       const tokenData = await tokenResponse.json();
       const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
 
-      // Encrypt and update connection with new tokens
-      const encryptedAccessToken = await TokenEncryption.encryptToken(tokenData.access_token, encryptionSalt);
-      const encryptedRefreshToken = tokenData.refresh_token ? 
-        await TokenEncryption.encryptToken(tokenData.refresh_token, encryptionSalt) : 
-        connection.refresh_token; // Keep existing if no new one provided
-      
+      // Update connection with new plain text tokens
       const { data: updatedConnection, error: updateError } = await serviceClient
         .from('zoom_connections')
         .update({
-          access_token: encryptedAccessToken,
-          refresh_token: encryptedRefreshToken,
+          access_token: tokenData.access_token, // Plain text
+          refresh_token: tokenData.refresh_token || connection.refresh_token, // Plain text
           token_expires_at: newExpiresAt,
           updated_at: new Date().toISOString(),
         })

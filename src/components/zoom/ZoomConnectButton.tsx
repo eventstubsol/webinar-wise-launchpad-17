@@ -10,8 +10,6 @@ import { useZoomValidation } from '@/hooks/useZoomValidation';
 import { useZoomDisconnect } from '@/hooks/useZoomDisconnect';
 import { ZoomButtonContent } from './ZoomButtonContent';
 import { ZoomButtonStatus } from './ZoomButtonStatus';
-import { ZoomConnectionModal } from './ZoomConnectionModal';
-import { ZoomCredentials } from '@/types/zoomCredentials';
 
 interface ZoomConnectButtonProps {
   onConnectionSuccess?: (connection: ZoomConnection) => void;
@@ -29,7 +27,6 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
   className = '',
 }) => {
   const { toast } = useToast();
-  const [showConnectionModal, setShowConnectionModal] = useState(false);
   const { isValidating, startValidation, credentials, user, validationResult } = useZoomValidation({
     onConnectionSuccess,
     onConnectionError,
@@ -62,7 +59,16 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
     if (!user) {
       toast({
         title: "Authentication Required",
-        description: "Please log in to connect your Zoom account.",
+        description: "Please log in to validate your Zoom credentials.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!credentials) {
+      toast({
+        title: "Configuration Required",
+        description: "Please configure your Zoom OAuth credentials first.",
         variant: "destructive",
       });
       return;
@@ -77,24 +83,14 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
         handleDisconnect(connection);
       }
     } else {
-      // Open the connection modal instead of starting validation immediately
-      setShowConnectionModal(true);
+      startValidation();
     }
   };
 
-  const handleConnectionSuccess = () => {
-    setShowConnectionModal(false);
-    toast({
-      title: "Success!",
-      description: "Your Zoom account has been connected successfully.",
-    });
-    onConnectionSuccess?.(connection!);
-  };
-
-  const isDisabled = isLoadingConnection || isValidating || !user;
+  const isDisabled = isLoadingConnection || isValidating || !user || (!credentials && !connection);
 
   return (
-    <div className="flex flex-col items-center space-y-2">
+    <div className="space-y-2">
       <Button
         onClick={handleClick}
         variant={getButtonVariant()}
@@ -111,14 +107,8 @@ export const ZoomConnectButton: React.FC<ZoomConnectButtonProps> = ({
       
       <ZoomButtonStatus
         connection={connection}
-        credentials={credentials as ZoomCredentials}
+        credentials={credentials}
         validationResult={validationResult}
-      />
-
-      <ZoomConnectionModal
-        open={showConnectionModal}
-        onOpenChange={setShowConnectionModal}
-        onSuccess={handleConnectionSuccess}
       />
     </div>
   );

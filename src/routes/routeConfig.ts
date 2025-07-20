@@ -9,10 +9,6 @@ export const ROUTES = {
   RESET_PASSWORD: '/reset-password',
   VERIFY_EMAIL: '/verify-email',
   UNSUBSCRIBE: '/unsubscribe',
-  PRIVACY_POLICY: '/privacy-policy',
-  TERMS_OF_SERVICE: '/terms',
-  SUPPORT: '/support',
-  DOCUMENTATION: '/documentation',
 
   // Protected routes - Core
   DASHBOARD: '/dashboard',

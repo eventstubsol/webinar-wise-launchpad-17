@@ -4,7 +4,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
-import { UnifiedZoomService } from '@/services/zoom/UnifiedZoomService';
+import { RenderZoomService } from '@/services/zoom/RenderZoomService';
 import { toast } from 'sonner';
 import { WebinarSelectionCard } from './participant-sync/WebinarSelectionCard';
 import { SyncControlsCard } from './participant-sync/SyncControlsCard';
@@ -12,7 +12,7 @@ import { SyncResultsCard } from './participant-sync/SyncResultsCard';
 
 interface WebinarForSync {
   id: string;
-  zoom_webinar_id: string;
+  webinar_id: string;
   topic: string;
   start_time: string;
   participant_sync_status: string;
@@ -45,7 +45,7 @@ export function ParticipantSyncTester() {
 
       const { data, error } = await supabase
         .from('zoom_webinars')
-        .select('id, zoom_webinar_id, topic, start_time, participant_sync_status, participant_sync_completed_at')
+        .select('id, webinar_id, topic, start_time, participant_sync_status, participant_sync_completed_at')
         .eq('connection_id', connection.id)
         .order('start_time', { ascending: false })
         .limit(50);
@@ -66,8 +66,12 @@ export function ParticipantSyncTester() {
         throw new Error('No connection ID available');
       }
 
-      // Use UnifiedZoomService for participant sync
-      const result = await UnifiedZoomService.startSync(connection.id, 'manual');
+      // Use RenderZoomService for participant sync
+      const result = await RenderZoomService.syncWebinars(connection.id, {
+        type: 'manual',
+        debug: true,
+        testMode: false
+      });
 
       if (!result.success) {
         throw new Error(result.error || 'Sync failed');
@@ -87,7 +91,7 @@ export function ParticipantSyncTester() {
 
         const poll = async () => {
           try {
-            const result = await UnifiedZoomService.getSyncProgress(data.syncId!);
+            const result = await RenderZoomService.getSyncProgress(data.syncId!);
             
             if (result.success && result.status === 'completed') {
               // Create mock sync results for display
@@ -141,7 +145,7 @@ export function ParticipantSyncTester() {
     if (selectedWebinars.length === webinars?.length) {
       setSelectedWebinars([]);
     } else {
-      setSelectedWebinars(webinars?.map(w => w.zoom_webinar_id) || []);
+      setSelectedWebinars(webinars?.map(w => w.webinar_id) || []);
     }
   };
 
@@ -172,7 +176,7 @@ export function ParticipantSyncTester() {
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
-          Now using Unified Edge Functions for participant sync operations.
+          Now using Render API for participant sync operations.
         </AlertDescription>
       </Alert>
 

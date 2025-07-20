@@ -8,21 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { TokenStatus } from '@/services/zoom/utils/tokenUtils';
 import { ZoomConnectionModal } from '@/components/zoom/ZoomConnectionModal';
 import { SyncType } from '@/types/zoom';
 
 export function ZoomStatusSection() {
   const { connection } = useZoomConnection();
-  const { 
-    startSync, 
-    cancelSync, 
-    forceCancelSync, 
-    isSyncing, 
-    syncProgress, 
-    syncStatus, 
-    currentOperation,
-    stuckSyncDetected 
-  } = useZoomSync(connection);
+  const { startSync, cancelSync, isSyncing, syncProgress, syncStatus, currentOperation } = useZoomSync(connection);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
 
   // Query for last sync status
@@ -81,10 +73,7 @@ export function ZoomStatusSection() {
 
   const getSyncStatusBadge = () => {
     if (isSyncing) {
-      const variant = stuckSyncDetected ? 'destructive' : 'default';
-      return <Badge variant={variant}>
-        {stuckSyncDetected ? 'Stuck' : 'Syncing'} ({syncProgress}%)
-      </Badge>;
+      return <Badge variant="default">Syncing ({syncProgress}%)</Badge>;
     }
     if (lastSync) {
       const variant = lastSync.sync_status === 'completed' ? 'secondary' : 'destructive';
@@ -103,25 +92,11 @@ export function ZoomStatusSection() {
 
   const handleCancelSync = async () => {
     try {
-      if (stuckSyncDetected) {
-        await forceCancelSync();
-      } else {
-        await cancelSync();
-      }
+      await cancelSync();
     } catch (error) {
       console.error('Cancel sync failed:', error);
     }
   };
-
-  // Debug logging
-  console.log('🔍 [ZoomStatusSection] Sync State:', {
-    isSyncing,
-    syncStatus,
-    syncProgress,
-    stuckSyncDetected,
-    currentOperation,
-    connection: connection?.id
-  });
 
   return (
     <>
@@ -149,7 +124,7 @@ export function ZoomStatusSection() {
             <div className="font-medium text-sm">Sync Status</div>
             <div className="flex items-center gap-2">
               {getSyncStatusBadge()}
-              {lastSync && !isSyncing && (
+              {lastSync && (
                 <span className="text-xs text-muted-foreground">
                   {format(new Date(lastSync.created_at), 'MMM dd, HH:mm')}
                 </span>
@@ -180,11 +155,11 @@ export function ZoomStatusSection() {
           ) : isSyncing ? (
             <Button 
               onClick={handleCancelSync} 
-              variant={stuckSyncDetected ? "destructive" : "outline"}
+              variant="outline" 
               size="sm"
             >
               <X className="h-4 w-4 mr-2" />
-              {stuckSyncDetected ? 'Force Cancel' : 'Cancel'}
+              Cancel
             </Button>
           ) : (
             <Button 

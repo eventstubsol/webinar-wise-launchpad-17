@@ -1,19 +1,10 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
-  refresh_token?: string;
-  expires_in: number;
-  scope: string;
-}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -21,8 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { code, state } = await req.json();
-    console.log('OAuth exchange request:', { code: code?.substring(0, 10) + '...', state });
+    const { code, state, redirectUri } = await req.json();
 
     if (!code) {
       return new Response(
@@ -31,35 +21,44 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(
+    // Initialize Supabase clients
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! },
+        },
+      }
+    );
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'User not authenticated' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Verify state if provided
-    if (state) {
-      const { data: oauthState } = await supabase
-        .from('oauth_states')
-        .select('*')
-        .eq('state', state)
-        .single();
+    // Get user's Zoom credentials for OAuth
+    const { data: credentials } = await serviceClient
+      .from('zoom_credentials')
+      .select('client_id, client_secret')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .single();
 
-      if (!oauthState || new Date(oauthState.expires_at) < new Date()) {
-        return new Response(
-          JSON.stringify({ error: 'Invalid or expired state parameter' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    }
-
-    // Get Zoom OAuth credentials
-    const zoomClientId = Deno.env.get('ZOOM_OAUTH_CLIENT_ID');
-    const zoomClientSecret = Deno.env.get('ZOOM_OAUTH_CLIENT_SECRET');
-
-    if (!zoomClientId || !zoomClientSecret) {
+    if (!credentials) {
       return new Response(
-        JSON.stringify({ error: 'Zoom OAuth credentials not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'No active Zoom credentials found' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -68,12 +67,12 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${btoa(`${zoomClientId}:${zoomClientSecret}`)}`,
+        'Authorization': `Basic ${btoa(`${credentials.client_id}:${credentials.client_secret}`)}`,
       },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code: code,
-        redirect_uri: `${Deno.env.get('SUPABASE_URL')}/functions/v1/zoom-oauth-callback`,
+        redirect_uri: redirectUri || Deno.env.get('ZOOM_REDIRECT_URI') || '',
       }),
     });
 
@@ -86,46 +85,71 @@ serve(async (req) => {
       );
     }
 
-    const tokenData: TokenResponse = await tokenResponse.json();
+    const tokenData = await tokenResponse.json();
 
     // Get user info from Zoom
     const userResponse = await fetch('https://api.zoom.us/v2/users/me', {
-      headers: {
-        'Authorization': `Bearer ${tokenData.access_token}`,
-      },
+      headers: { 'Authorization': `Bearer ${tokenData.access_token}` },
     });
 
     if (!userResponse.ok) {
+      const errorText = await userResponse.text();
+      console.error('Failed to get user info:', errorText);
       return new Response(
-        JSON.stringify({ error: 'Failed to get user information from Zoom' }),
+        JSON.stringify({ error: 'Failed to get user information' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const userData = await userResponse.json();
+    const zoomUser = await userResponse.json();
+    const tokenExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
+
+    // Store connection with plain text tokens
+    const connectionData = {
+      user_id: user.id,
+      zoom_user_id: zoomUser.id,
+      zoom_account_id: zoomUser.account_id || zoomUser.id,
+      zoom_email: zoomUser.email,
+      zoom_account_type: zoomUser.type === 2 ? 'Licensed' : 'Basic',
+      access_token: tokenData.access_token, // Plain text
+      refresh_token: tokenData.refresh_token, // Plain text
+      token_expires_at: tokenExpiresAt,
+      scopes: tokenData.scope.split(' '),
+      connection_status: 'active',
+      is_primary: true,
+    };
+
+    // Delete existing connections and insert new one
+    await serviceClient
+      .from('zoom_connections')
+      .delete()
+      .eq('user_id', user.id);
+
+    const { data: connection, error: insertError } = await serviceClient
+      .from('zoom_connections')
+      .insert(connectionData)
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('Failed to insert connection:', insertError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to save connection' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
-        tokens: {
-          access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token,
-          expires_in: tokenData.expires_in,
-          scope: tokenData.scope,
-        },
-        user: {
-          id: userData.id,
-          email: userData.email,
-          first_name: userData.first_name,
-          last_name: userData.last_name,
-          account_id: userData.account_id,
-        },
+        message: "Zoom account connected successfully (no encryption)",
+        connection,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('OAuth exchange error:', error);
+    console.error('OAuth exchange function error:', error);
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

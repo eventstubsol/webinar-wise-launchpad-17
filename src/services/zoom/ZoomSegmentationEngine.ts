@@ -135,7 +135,7 @@ export class ZoomSegmentationEngine {
 
       return {
         segment_name: rule.rule_name,
-        participants: matchingParticipants.map(p => p.participant_email || p.participant_name || 'Unknown').filter(Boolean),
+        participants: matchingParticipants.map(p => p.email || p.name).filter(Boolean),
         criteria_met: {
           total_participants: matchingParticipants.length,
           avg_duration: matchingParticipants.reduce((sum, p) => sum + (p.duration || 0), 0) / (matchingParticipants.length || 1),

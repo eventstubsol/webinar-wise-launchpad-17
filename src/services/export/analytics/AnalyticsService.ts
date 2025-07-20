@@ -14,11 +14,7 @@ export class AnalyticsService {
         start_time,
         duration,
         status,
-        zoom_webinar_id,
-        host_id,
-        zoom_connections!inner(
-          zoom_email
-        )
+        host_email
       `)
       .order('start_time', { ascending: false });
 
