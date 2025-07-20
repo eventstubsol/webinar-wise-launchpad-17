@@ -1,14 +1,14 @@
 
 import { useState, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { RenderZoomService } from '@/services/zoom/RenderZoomService';
+import { EdgeFunctionZoomService } from '@/services/zoom/EdgeFunctionZoomService';
 import { ZoomConnection, SyncType } from '@/types/zoom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 interface SyncState {
   isSyncing: boolean;
   syncProgress: number;
-  syncStatus: 'idle' | 'pending' | 'running' | 'completed' | 'failed';
+  syncStatus: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'in_progress';
   currentOperation: string;
   syncId: string | null;
   error: string | null;
@@ -31,9 +31,9 @@ export function useZoomSync(connection: ZoomConnection | null) {
 
   // Health check query with better error handling
   const { data: healthCheck, refetch: refetchHealth } = useQuery({
-    queryKey: ['render-health'],
+    queryKey: ['edge-function-health'],
     queryFn: async () => {
-      const result = await RenderZoomService.healthCheck();
+      const result = await EdgeFunctionZoomService.healthCheck();
       return result;
     },
     refetchInterval: 60000, // Check every minute
@@ -75,7 +75,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
     try {
       console.log(`🔄 Starting ${syncType} sync for connection:`, connection.id);
       
-      const result = await RenderZoomService.startSync(connection.id, syncType);
+      const result = await EdgeFunctionZoomService.startSync(connection.id, syncType);
       
       if (result.success && result.syncId) {
         setSyncState(prev => ({
@@ -143,7 +143,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
     if (!syncId) return;
 
     try {
-      const result = await RenderZoomService.getSyncProgress(syncId);
+      const result = await EdgeFunctionZoomService.getSyncProgress(syncId);
       
       if (result.success) {
         setSyncState(prev => ({
@@ -185,7 +185,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
             variant: "destructive",
           });
 
-        } else if (result.status === 'running' || result.status === 'started') {
+        } else if (result.status === 'running' || result.status === 'pending') {
           // Continue polling
           setTimeout(() => pollSyncProgress(syncId), 2000);
         }
@@ -208,7 +208,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
     }
 
     try {
-      const result = await RenderZoomService.cancelSync(syncState.syncId);
+      const result = await EdgeFunctionZoomService.cancelSync(syncState.syncId);
       
       if (result.success) {
         setSyncState(prev => ({
@@ -250,7 +250,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
     }
 
     try {
-      const result = await RenderZoomService.testConnection(connection.id);
+      const result = await EdgeFunctionZoomService.testConnection(connection.id);
       
       if (result.success) {
         toast({
@@ -273,7 +273,7 @@ export function useZoomSync(connection: ZoomConnection | null) {
   }, [connection, toast]);
 
   const forceHealthCheck = useCallback(async () => {
-    await RenderZoomService.forceHealthCheck();
+    await EdgeFunctionZoomService.forceHealthCheck();
     refetchHealth();
   }, [refetchHealth]);
 
