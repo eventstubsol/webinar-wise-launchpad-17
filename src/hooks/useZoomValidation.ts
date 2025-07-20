@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useZoomCredentials } from '@/hooks/useZoomCredentials';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
 import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
-import { RenderZoomService } from '@/services/zoom/RenderZoomService';
+import { EdgeFunctionZoomService } from '@/services/zoom/EdgeFunctionZoomService';
 import { RenderConnectionService } from '@/services/zoom/RenderConnectionService';
 import { ZoomConnection } from '@/types/zoom';
 
@@ -66,7 +66,7 @@ export const useZoomValidation = ({ onConnectionSuccess, onConnectionError }: Us
       }
 
       // Use Render service for credential validation
-      const result = await RenderZoomService.validateCredentials(credentials);
+      const result = await EdgeFunctionZoomService.validateCredentials(credentials);
       
       if (!result.success) {
         throw new Error(result.error || 'Failed to validate credentials');

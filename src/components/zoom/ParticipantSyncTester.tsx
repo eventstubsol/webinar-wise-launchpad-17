@@ -4,7 +4,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useZoomConnection } from '@/hooks/useZoomConnection';
-import { RenderZoomService } from '@/services/zoom/RenderZoomService';
+import { EdgeFunctionZoomService } from '@/services/zoom/EdgeFunctionZoomService';
 import { toast } from 'sonner';
 import { WebinarSelectionCard } from './participant-sync/WebinarSelectionCard';
 import { SyncControlsCard } from './participant-sync/SyncControlsCard';
@@ -67,7 +67,7 @@ export function ParticipantSyncTester() {
       }
 
       // Use RenderZoomService for participant sync
-      const result = await RenderZoomService.syncWebinars(connection.id, {
+      const result = await EdgeFunctionZoomService.syncWebinars(connection.id, {
         type: 'manual',
         debug: true,
         testMode: false
@@ -91,7 +91,7 @@ export function ParticipantSyncTester() {
 
         const poll = async () => {
           try {
-            const result = await RenderZoomService.getSyncProgress(data.syncId!);
+            const result = await EdgeFunctionZoomService.getSyncProgress(data.syncId!);
             
             if (result.success && result.status === 'completed') {
               // Create mock sync results for display
