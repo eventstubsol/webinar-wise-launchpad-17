@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
 
@@ -10,6 +11,13 @@ interface SyncRequest {
   connection_id: string;
   sync_type?: string;
   options?: any;
+}
+
+interface ZoomConnection {
+  id: string;
+  zoom_user_id: string;
+  access_token: string;
+  connection_status: string;
 }
 
 serve(async (req) => {
@@ -26,6 +34,8 @@ serve(async (req) => {
 
     const { connection_id, sync_type = 'manual', options = {} }: SyncRequest = await req.json();
 
+    console.log(`[ZOOM-SYNC] Starting ${sync_type} sync for connection: ${connection_id}`);
+
     if (!connection_id) {
       return new Response(
         JSON.stringify({ success: false, error: 'connection_id is required' }),
@@ -36,9 +46,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[SYNC-UNIFIED] Starting sync for connection: ${connection_id}, type: ${sync_type}`);
-
-    // Verify the connection exists and is valid
+    // Get the connection details
     const { data: connection, error: connectionError } = await supabase
       .from('zoom_connections')
       .select('*')
@@ -46,7 +54,7 @@ serve(async (req) => {
       .single();
 
     if (connectionError || !connection) {
-      console.error(`[SYNC-UNIFIED] Connection not found: ${connection_id}`);
+      console.error(`[ZOOM-SYNC] Connection not found: ${connection_id}`);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -59,21 +67,23 @@ serve(async (req) => {
       );
     }
 
-    // Create a sync log entry
+    // Create sync log entry
     const { data: syncLog, error: syncLogError } = await supabase
       .from('zoom_sync_logs')
       .insert({
         connection_id: connection_id,
         sync_type: sync_type,
-        sync_status: 'pending',
+        sync_status: 'started',
         started_at: new Date().toISOString(),
-        metadata: options
+        total_items: 0,
+        processed_items: 0,
+        metadata: { sync_type, options }
       })
       .select()
       .single();
 
     if (syncLogError || !syncLog) {
-      console.error(`[SYNC-UNIFIED] Failed to create sync log:`, syncLogError);
+      console.error(`[ZOOM-SYNC] Failed to create sync log:`, syncLogError);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -87,61 +97,34 @@ serve(async (req) => {
     }
 
     const syncId = syncLog.id;
-    console.log(`[SYNC-UNIFIED] Created sync log: ${syncId}`);
+    console.log(`[ZOOM-SYNC] Created sync log: ${syncId}`);
 
-    // Call the zoom-sync-webinars-v2 function to perform the actual sync
-    const { data: syncResult, error: syncError } = await supabase.functions.invoke('zoom-sync-webinars-v2', {
-      body: {
-        connection_id: connection_id,
-        sync_type: sync_type,
-        sync_id: syncId,
-        mode: 'full',
-        options: options
+    // Start background sync process
+    const backgroundSync = async () => {
+      try {
+        await performZoomSync(supabase, connection, syncId, sync_type);
+      } catch (error) {
+        console.error(`[ZOOM-SYNC] Background sync failed:`, error);
+        await supabase
+          .from('zoom_sync_logs')
+          .update({
+            sync_status: 'failed',
+            error_message: error instanceof Error ? error.message : 'Unknown error',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', syncId);
       }
-    });
+    };
 
-    if (syncError) {
-      console.error(`[SYNC-UNIFIED] Sync failed:`, syncError);
-      
-      // Update sync log status to failed
-      await supabase
-        .from('zoom_sync_logs')
-        .update({
-          sync_status: 'failed',
-          error_message: syncError.message,
-          completed_at: new Date().toISOString()
-        })
-        .eq('id', syncId);
+    // Start the background process without awaiting
+    backgroundSync();
 
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: syncError.message || 'Sync failed',
-          syncId: syncId
-        }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
-
-    // Update sync log status to started/running
-    await supabase
-      .from('zoom_sync_logs')
-      .update({
-        sync_status: 'running'
-      })
-      .eq('id', syncId);
-
-    console.log(`[SYNC-UNIFIED] Sync started successfully: ${syncId}`);
-
+    // Return immediate response
     return new Response(
       JSON.stringify({ 
         success: true, 
         syncId: syncId,
-        message: 'Sync started successfully',
-        data: syncResult
+        message: 'Sync started successfully'
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -149,7 +132,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('[SYNC-UNIFIED] Unexpected error:', error);
+    console.error('[ZOOM-SYNC] Unexpected error:', error);
     return new Response(
       JSON.stringify({ 
         success: false, 
@@ -161,4 +144,148 @@ serve(async (req) => {
       }
     );
   }
-})
+});
+
+async function performZoomSync(supabase: any, connection: ZoomConnection, syncId: string, syncType: string) {
+  console.log(`[ZOOM-SYNC] Starting sync process for ${syncId}`);
+  
+  try {
+    // Update sync status to running
+    await supabase
+      .from('zoom_sync_logs')
+      .update({ sync_status: 'running' })
+      .eq('id', syncId);
+
+    // Fetch webinars from Zoom API
+    const webinars = await fetchZoomWebinars(connection.access_token, connection.zoom_user_id);
+    
+    console.log(`[ZOOM-SYNC] Fetched ${webinars.length} webinars`);
+
+    // Update total items
+    await supabase
+      .from('zoom_sync_logs')
+      .update({ 
+        total_items: webinars.length,
+        sync_status: 'running'
+      })
+      .eq('id', syncId);
+
+    let processedCount = 0;
+
+    // Process each webinar
+    for (const webinar of webinars) {
+      try {
+        await processWebinar(supabase, webinar, connection.id);
+        processedCount++;
+        
+        // Update progress
+        await supabase
+          .from('zoom_sync_logs')
+          .update({ 
+            processed_items: processedCount,
+            stage_progress_percentage: Math.round((processedCount / webinars.length) * 100)
+          })
+          .eq('id', syncId);
+
+        console.log(`[ZOOM-SYNC] Processed webinar ${processedCount}/${webinars.length}`);
+      } catch (webinarError) {
+        console.error(`[ZOOM-SYNC] Failed to process webinar ${webinar.id}:`, webinarError);
+        // Continue with next webinar
+      }
+    }
+
+    // Mark sync as completed
+    await supabase
+      .from('zoom_sync_logs')
+      .update({
+        sync_status: 'completed',
+        completed_at: new Date().toISOString(),
+        processed_items: processedCount,
+        stage_progress_percentage: 100
+      })
+      .eq('id', syncId);
+
+    console.log(`[ZOOM-SYNC] Sync completed successfully: ${syncId}`);
+
+  } catch (error) {
+    console.error(`[ZOOM-SYNC] Sync failed:`, error);
+    
+    await supabase
+      .from('zoom_sync_logs')
+      .update({
+        sync_status: 'failed',
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+        completed_at: new Date().toISOString()
+      })
+      .eq('id', syncId);
+    
+    throw error;
+  }
+}
+
+async function fetchZoomWebinars(accessToken: string, userId: string) {
+  const webinars = [];
+  let nextPageToken = '';
+  
+  do {
+    const url = `https://api.zoom.us/v2/users/${userId}/webinars?page_size=100${nextPageToken ? `&next_page_token=${nextPageToken}` : ''}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Zoom API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    webinars.push(...(data.webinars || []));
+    nextPageToken = data.next_page_token || '';
+    
+    // Rate limiting delay
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+  } while (nextPageToken);
+  
+  return webinars;
+}
+
+async function processWebinar(supabase: any, webinar: any, connectionId: string) {
+  // Transform webinar data for database
+  const webinarData = {
+    connection_id: connectionId,
+    zoom_webinar_id: webinar.id,
+    uuid: webinar.uuid,
+    host_id: webinar.host_id,
+    topic: webinar.topic || 'Untitled Webinar',
+    type: webinar.type || 5,
+    status: webinar.status || 'scheduled',
+    start_time: webinar.start_time ? new Date(webinar.start_time).toISOString() : null,
+    duration: webinar.duration || 0,
+    timezone: webinar.timezone || 'UTC',
+    agenda: webinar.agenda || '',
+    join_url: webinar.join_url || '',
+    settings: webinar.settings || {},
+    synced_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  // Upsert webinar
+  const { error } = await supabase
+    .from('zoom_webinars')
+    .upsert(
+      webinarData,
+      {
+        onConflict: 'connection_id,zoom_webinar_id',
+        ignoreDuplicates: false
+      }
+    );
+
+  if (error) {
+    console.error(`[ZOOM-SYNC] Failed to upsert webinar ${webinar.id}:`, error);
+    throw error;
+  }
+}

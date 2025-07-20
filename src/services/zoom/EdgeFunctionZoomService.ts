@@ -93,6 +93,8 @@ class EdgeFunctionZoomServiceClass {
 
   async startSync(connectionId: string, syncType: string = 'manual'): Promise<ApiResponse> {
     try {
+      console.log(`🔄 Starting ${syncType} sync for connection: ${connectionId}`);
+      
       const { data, error } = await supabase.functions.invoke('zoom-sync-unified', {
         body: { 
           connection_id: connectionId, 
@@ -102,12 +104,14 @@ class EdgeFunctionZoomServiceClass {
       });
 
       if (error) {
+        console.error('Sync error:', error);
         return {
           success: false,
           error: error.message || 'Failed to start sync'
         };
       }
 
+      console.log('Sync started successfully:', data);
       return {
         success: true,
         data: data,
@@ -180,35 +184,7 @@ class EdgeFunctionZoomServiceClass {
   }
 
   async syncWebinars(connectionId: string, options: any = {}): Promise<ApiResponse> {
-    try {
-      const { data, error } = await supabase.functions.invoke('zoom-sync-unified', {
-        body: { 
-          connection_id: connectionId,
-          sync_type: options.type || 'manual',
-          options: options
-        }
-      });
-
-      if (error) {
-        return {
-          success: false,
-          error: error.message || 'Failed to sync webinars'
-        };
-      }
-
-      return {
-        success: true,
-        data: data,
-        syncId: data?.syncId,
-        message: 'Webinar sync started successfully'
-      };
-    } catch (error) {
-      console.error('Sync webinars error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to sync webinars'
-      };
-    }
+    return this.startSync(connectionId, options.type || 'manual');
   }
 
   async runPerformanceTest(connectionId: string): Promise<ApiResponse> {
