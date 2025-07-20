@@ -140,7 +140,7 @@ export function ZoomSyncCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Database className="h-5 w-5" />
-          Webinar Data Sync (Render API)
+          Webinar Data Sync (Edge Functions)
           {(!isServiceHealthy || requiresReconnection) && (
             <AlertCircle className="h-4 w-4 text-red-500" />
           )}
@@ -213,7 +213,7 @@ export function ZoomSyncCard() {
             <div>Last sync: {new Date(syncStats.lastSync).toLocaleString()}</div>
           )}
           <div className="flex items-center gap-1 mt-1">
-            Render API status: 
+            Edge Functions status: 
             <span className={isServiceHealthy ? 'text-green-600' : 'text-red-600'}>
               {isServiceHealthy ? 'Online' : 'Offline'}
             </span>

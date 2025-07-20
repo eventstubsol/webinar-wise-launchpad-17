@@ -1,7 +1,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { ZoomConnectionService } from '@/services/zoom/ZoomConnectionService';
+import { EdgeFunctionZoomService } from '@/services/zoom/EdgeFunctionZoomService';
 import { ZoomConnection } from '@/types/zoom';
 
 export const useZoomDisconnect = () => {
@@ -10,11 +10,11 @@ export const useZoomDisconnect = () => {
 
   const disconnectMutation = useMutation({
     mutationFn: async (connection: ZoomConnection) => {
-      const success = await ZoomConnectionService.deleteConnection(connection.id);
-      if (!success) {
-        throw new Error('Failed to disconnect Zoom account');
+      const result = await EdgeFunctionZoomService.disconnectAccount(connection.id);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to disconnect Zoom account');
       }
-      return true;
+      return result;
     },
     onSuccess: () => {
       // Invalidate and refetch connection data

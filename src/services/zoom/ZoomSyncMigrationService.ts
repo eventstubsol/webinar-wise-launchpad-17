@@ -1,41 +1,40 @@
 
-import { RenderZoomService } from './RenderZoomService';
-import { supabase } from '@/integrations/supabase/client';
+import { EdgeFunctionZoomService } from './EdgeFunctionZoomService';
 
 /**
- * Service to handle migration from Edge Functions to Render.com API
- * This service provides the same interface as the old edge functions but uses Render API
+ * Service to handle migration from legacy function calls to Edge Functions
+ * This service provides backward compatibility for old function names
  */
 export class ZoomSyncMigrationService {
   /**
-   * Progressive sync - migrated from edge function
+   * Progressive sync - now using Edge Functions
    */
   static async progressiveSync(connectionId: string, options: {
     webinarId?: string;
     debug?: boolean;
     testMode?: boolean;
   } = {}) {
-    return await RenderZoomService.syncWebinars(connectionId, {
+    return await EdgeFunctionZoomService.syncWebinars(connectionId, {
       type: 'progressive',
       ...options
     });
   }
 
   /**
-   * Simple sync - migrated from edge function
+   * Simple sync - now using Edge Functions
    */
   static async simpleSync(connectionId: string, options: {
     syncType?: 'manual' | 'incremental';
     webinarId?: string;
   } = {}) {
-    return await RenderZoomService.syncWebinars(connectionId, {
+    return await EdgeFunctionZoomService.syncWebinars(connectionId, {
       type: options.syncType || 'manual',
       webinarId: options.webinarId
     });
   }
 
   /**
-   * Enhanced sync - migrated from edge function
+   * Enhanced sync - now using Edge Functions
    */
   static async enhancedSync(connectionId: string, options: {
     syncType?: 'manual' | 'incremental';
@@ -44,36 +43,36 @@ export class ZoomSyncMigrationService {
     testMode?: boolean;
     webinarId?: string;
   } = {}) {
-    return await RenderZoomService.syncWebinars(connectionId, options);
+    return await EdgeFunctionZoomService.syncWebinars(connectionId, options);
   }
 
   /**
-   * Test sync error handling - migrated from edge function
+   * Test sync error handling - now using Edge Functions
    */
   static async testSyncErrorHandling(connectionId: string) {
-    return await RenderZoomService.runPerformanceTest(connectionId);
+    return await EdgeFunctionZoomService.runPerformanceTest(connectionId);
   }
 
   /**
-   * Test rate limits - migrated from edge function
+   * Test rate limits - now using Edge Functions
    */
   static async testRateLimits(connectionId: string) {
-    return await RenderZoomService.runPerformanceTest(connectionId);
+    return await EdgeFunctionZoomService.runPerformanceTest(connectionId);
   }
 
   /**
-   * Get sync progress - now using Render API
+   * Get sync progress - now using Edge Functions
    */
   static async getSyncProgress(syncId: string) {
-    return await RenderZoomService.getSyncProgress(syncId);
+    return await EdgeFunctionZoomService.getSyncProgress(syncId);
   }
 
   /**
    * Legacy function invocation handler
-   * This catches any remaining edge function calls and redirects to Render API
+   * This catches any remaining legacy calls and redirects to Edge Functions
    */
   static async invokeFunction(functionName: string, payload: any) {
-    console.warn(`Legacy edge function called: ${functionName}. Migrating to Render API...`);
+    console.warn(`Legacy function called: ${functionName}. Using Edge Functions...`);
     
     const connectionId = payload.connectionId || payload.connection_id;
     
@@ -98,7 +97,7 @@ export class ZoomSyncMigrationService {
         return await this.testRateLimits(connectionId);
       
       default:
-        throw new Error(`Unknown function: ${functionName}. Please update to use Render API directly.`);
+        throw new Error(`Unknown function: ${functionName}. Please update to use Edge Functions directly.`);
     }
   }
 }
