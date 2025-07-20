@@ -27,12 +27,37 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('[ZOOM-SYNC] Missing environment variables');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Server configuration error' }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
 
-    const { connection_id, sync_type = 'manual', options = {} }: SyncRequest = await req.json();
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    let requestBody;
+    try {
+      requestBody = await req.json();
+    } catch (error) {
+      console.error('[ZOOM-SYNC] Invalid JSON in request body:', error);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid request body' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    const { connection_id, sync_type = 'manual', options = {} }: SyncRequest = requestBody;
 
     console.log(`[ZOOM-SYNC] Starting ${sync_type} sync for connection: ${connection_id}`);
 
@@ -105,19 +130,30 @@ serve(async (req) => {
         await performZoomSync(supabase, connection, syncId, sync_type);
       } catch (error) {
         console.error(`[ZOOM-SYNC] Background sync failed:`, error);
-        await supabase
-          .from('zoom_sync_logs')
-          .update({
-            sync_status: 'failed',
-            error_message: error instanceof Error ? error.message : 'Unknown error',
-            completed_at: new Date().toISOString()
-          })
-          .eq('id', syncId);
+        try {
+          await supabase
+            .from('zoom_sync_logs')
+            .update({
+              sync_status: 'failed',
+              error_message: error instanceof Error ? error.message : 'Unknown error',
+              completed_at: new Date().toISOString()
+            })
+            .eq('id', syncId);
+        } catch (updateError) {
+          console.error(`[ZOOM-SYNC] Failed to update sync log with error:`, updateError);
+        }
       }
     };
 
-    // Start the background process without awaiting
-    backgroundSync();
+    // Use EdgeRuntime.waitUntil for proper background task handling
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+      EdgeRuntime.waitUntil(backgroundSync());
+    } else {
+      // Fallback for environments without EdgeRuntime
+      backgroundSync().catch(error => 
+        console.error('[ZOOM-SYNC] Background sync error:', error)
+      );
+    }
 
     // Return immediate response
     return new Response(
