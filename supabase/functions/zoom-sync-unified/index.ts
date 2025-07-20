@@ -225,7 +225,8 @@ async function processWebinarSync(supabase: any, syncId: string, connection: any
           supabase, 
           webinar, 
           connection.id, 
-          accessToken
+          accessToken,
+          syncId
         );
 
         if (result.success) {
@@ -269,7 +270,8 @@ async function processWebinarWithEnhancedData(
   supabase: any,
   webinar: WebinarData,
   connectionId: string,
-  accessToken: string
+  accessToken: string,
+  syncId?: string
 ): Promise<ProcessingResult> {
   
   const result: ProcessingResult = {
@@ -284,7 +286,7 @@ async function processWebinarWithEnhancedData(
     console.log(`🔄 Processing webinar: ${webinar.topic} (${webinar.id})`);
 
     // First, upsert the webinar
-    const webinarDbId = await upsertWebinar(supabase, webinar, connectionId);
+    const webinarDbId = await upsertWebinar(supabase, webinar, connectionId, syncId);
     if (!webinarDbId) {
       result.error = 'Failed to save webinar to database';
       return result;
@@ -529,12 +531,20 @@ async function fetchWebinarParticipants(accessToken: string, webinarId: string):
   }
 }
 
-async function upsertWebinar(supabase: any, webinar: WebinarData, connectionId: string): Promise<string | null> {
+async function upsertWebinar(supabase: any, webinar: WebinarData, connectionId: string, syncId?: string): Promise<string | null> {
+  const startTime = Date.now();
+  
   try {
+    console.log(`🔄 Attempting to upsert webinar: ${webinar.topic}`);
+    console.log(`📝 Webinar data:`, {
+      connection_id: connectionId,
+      zoom_webinar_id: webinar.id,
+      topic: webinar.topic
+    });
+
     const webinarData = {
       connection_id: connectionId,
       zoom_webinar_id: String(webinar.id), // Convert to string to match database schema
-      webinar_id: String(webinar.id),
       uuid: webinar.uuid || null,
       host_id: webinar.host_id || null,
       topic: webinar.topic,
@@ -554,15 +564,10 @@ async function upsertWebinar(supabase: any, webinar: WebinarData, connectionId: 
       status: webinar.status || 'scheduled',
       occurrences: webinar.occurrences || [],
       tracking_fields: webinar.tracking_fields || [],
+      sync_status: 'synced',
+      last_synced_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-
-    console.log(`🔄 Attempting to upsert webinar: ${webinar.topic}`);
-    console.log(`📝 Webinar data:`, {
-      connection_id: connectionId,
-      zoom_webinar_id: webinar.id,
-      topic: webinar.topic
-    });
 
     const { data, error } = await supabase
       .from('zoom_webinars')
@@ -572,6 +577,8 @@ async function upsertWebinar(supabase: any, webinar: WebinarData, connectionId: 
       })
       .select('id')
       .single();
+
+    const operationDuration = Date.now() - startTime;
 
     if (error) {
       console.error('❌ Error upserting webinar:', {
@@ -584,18 +591,72 @@ async function upsertWebinar(supabase: any, webinar: WebinarData, connectionId: 
         errorHint: error.hint,
         errorCode: error.code
       });
+
+      // Log failed operation
+      if (syncId) {
+        await supabase
+          .from('zoom_sync_operation_logs')
+          .insert({
+            sync_id: syncId,
+            operation_type: 'webinar_upsert',
+            webinar_zoom_id: String(webinar.id),
+            operation_status: 'error',
+            error_details: {
+              message: error.message,
+              code: error.code,
+              details: error.details,
+              hint: error.hint
+            },
+            operation_duration_ms: operationDuration
+          });
+      }
+
       return null;
+    }
+
+    // Log successful operation
+    if (syncId) {
+      await supabase
+        .from('zoom_sync_operation_logs')
+        .insert({
+          sync_id: syncId,
+          operation_type: 'webinar_upsert',
+          webinar_zoom_id: String(webinar.id),
+          operation_status: 'success',
+          operation_duration_ms: operationDuration
+        });
     }
 
     console.log(`✅ Successfully upserted webinar: ${webinar.topic} with DB ID: ${data.id}`);
     return data.id;
   } catch (error) {
+    const operationDuration = Date.now() - startTime;
+    
     console.error('❌ Catch block error in upsertWebinar:', {
       webinarTitle: webinar.topic,
       error: error,
       message: error.message,
       stack: error.stack
     });
+
+    // Log caught error
+    if (syncId) {
+      await supabase
+        .from('zoom_sync_operation_logs')
+        .insert({
+          sync_id: syncId,
+          operation_type: 'webinar_upsert',
+          webinar_zoom_id: String(webinar.id),
+          operation_status: 'error',
+          error_details: {
+            message: error.message,
+            stack: error.stack,
+            type: 'catch_block_error'
+            },
+            operation_duration_ms: operationDuration
+          });
+    }
+
     return null;
   }
 }

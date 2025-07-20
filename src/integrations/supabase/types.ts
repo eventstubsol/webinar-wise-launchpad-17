@@ -1601,6 +1601,39 @@ export type Database = {
           },
         ]
       }
+      zoom_sync_operation_logs: {
+        Row: {
+          created_at: string | null
+          error_details: Json | null
+          id: string
+          operation_duration_ms: number | null
+          operation_status: string
+          operation_type: string
+          sync_id: string
+          webinar_zoom_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_details?: Json | null
+          id?: string
+          operation_duration_ms?: number | null
+          operation_status: string
+          operation_type: string
+          sync_id: string
+          webinar_zoom_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_details?: Json | null
+          id?: string
+          operation_duration_ms?: number | null
+          operation_status?: string
+          operation_type?: string
+          sync_id?: string
+          webinar_zoom_id?: string | null
+        }
+        Relationships: []
+      }
       zoom_token_refresh_log: {
         Row: {
           connection_id: string
@@ -1685,7 +1718,6 @@ export type Database = {
           unique_participant_count: number | null
           updated_at: string | null
           uuid: string | null
-          webinar_id: string | null
           zoom_webinar_id: string
         }
         Insert: {
@@ -1727,7 +1759,6 @@ export type Database = {
           unique_participant_count?: number | null
           updated_at?: string | null
           uuid?: string | null
-          webinar_id?: string | null
           zoom_webinar_id: string
         }
         Update: {
@@ -1769,7 +1800,6 @@ export type Database = {
           unique_participant_count?: number | null
           updated_at?: string | null
           uuid?: string | null
-          webinar_id?: string | null
           zoom_webinar_id?: string
         }
         Relationships: [
@@ -1867,6 +1897,16 @@ export type Database = {
           live_count: number
           ended_count: number
           corrections_made: Json
+        }[]
+      }
+      verify_sync_data_integrity: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          sync_id: string
+          expected_webinars: number
+          actual_webinars: number
+          missing_webinars: number
+          integrity_status: string
         }[]
       }
     }
