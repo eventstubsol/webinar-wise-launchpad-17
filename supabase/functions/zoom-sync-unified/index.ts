@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -147,7 +146,7 @@ async function handleStartSync(supabase: any, body: SyncRequest): Promise<Respon
   console.log(`✅ Created sync log: ${syncId}`);
 
   // Start the sync process asynchronously
-  processWebinarSync(supabase, syncId, connection).catch(error => {
+  processWebinarSync(supabase, syncId, connection, connectionId).catch(error => {
     console.error(`❌ Sync ${syncId} failed:`, error);
   });
 
@@ -161,7 +160,7 @@ async function handleStartSync(supabase: any, body: SyncRequest): Promise<Respon
   );
 }
 
-async function processWebinarSync(supabase: any, syncId: string, connection: any): Promise<void> {
+async function processWebinarSync(supabase: any, syncId: string, connection: any, connectionId: string): Promise<void> {
   let processedCount = 0;
   let errorCount = 0;
   let totalRegistrants = 0;
@@ -171,9 +170,9 @@ async function processWebinarSync(supabase: any, syncId: string, connection: any
   try {
     console.log(`🔄 [${syncId}] Starting webinar sync process`);
     
-    // STEP 1: Database Health Check
+    // STEP 1: Database Health Check - now with actual connection ID
     console.log(`🏥 [${syncId}] Running database health check...`);
-    const healthCheck = await performDatabaseHealthCheck(supabase);
+    const healthCheck = await performDatabaseHealthCheck(supabase, connectionId);
     if (!healthCheck.success) {
       throw new Error(`Database health check failed: ${healthCheck.error}`);
     }
@@ -963,8 +962,8 @@ async function handleTestConnection(supabase: any, body: SyncRequest): Promise<R
   }
 }
 
-// CRITICAL: Database Health Check Function
-async function performDatabaseHealthCheck(supabase: any): Promise<{ success: boolean; error?: string }> {
+// CRITICAL: Database Health Check Function - Fixed to use actual connection ID
+async function performDatabaseHealthCheck(supabase: any, connectionId: string): Promise<{ success: boolean; error?: string }> {
   try {
     console.log('🏥 Running database health check...');
     
@@ -987,9 +986,9 @@ async function performDatabaseHealthCheck(supabase: any): Promise<{ success: boo
 
     console.log('✅ Function test passed:', functionTest);
 
-    // Test 2: Test a simple webinar upsert to verify no conflicts
+    // Test 2: Test a simple webinar upsert to verify no conflicts - using ACTUAL connection ID
     const testWebinarData = {
-      connection_id: '00000000-0000-0000-0000-000000000000', // Use dummy UUID
+      connection_id: connectionId, // Use actual connection_id instead of dummy UUID
       zoom_webinar_id: `health_check_${Date.now()}`,
       topic: 'Health Check Test Webinar',
       type: 5,
