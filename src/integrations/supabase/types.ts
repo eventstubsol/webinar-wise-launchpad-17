@@ -1827,13 +1827,15 @@ export type Database = {
         }[]
       }
       calculate_webinar_status: {
-        Args:
-          | { webinar_start_time: string; webinar_duration: number }
-          | {
-              webinar_start_time: string
-              webinar_duration: number
-              check_time?: string
-            }
+        Args: { webinar_start_time: string; webinar_duration: number }
+        Returns: string
+      }
+      calculate_webinar_status_main: {
+        Args: {
+          webinar_start_time: string
+          webinar_duration: number
+          check_time: string
+        }
         Returns: string
       }
       cleanup_expired_oauth_states: {
