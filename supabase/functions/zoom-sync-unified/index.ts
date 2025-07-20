@@ -533,8 +533,8 @@ async function upsertWebinar(supabase: any, webinar: WebinarData, connectionId: 
   try {
     const webinarData = {
       connection_id: connectionId,
-      zoom_webinar_id: webinar.id,
-      webinar_id: webinar.id,
+      zoom_webinar_id: String(webinar.id), // Convert to string to match database schema
+      webinar_id: String(webinar.id),
       uuid: webinar.uuid || null,
       host_id: webinar.host_id || null,
       topic: webinar.topic,
