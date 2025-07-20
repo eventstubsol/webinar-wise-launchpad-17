@@ -968,10 +968,10 @@ async function performDatabaseHealthCheck(supabase: any): Promise<{ success: boo
   try {
     console.log('🏥 Running database health check...');
     
-    // Test 1: Check if calculate_webinar_status function exists and works
-    // Use all 3 parameters to avoid function ambiguity
+    // Test 1: Check if calculate_webinar_status_main function exists and works
+    // Use the 3-parameter version with explicit parameter names
     const { data: functionTest, error: functionError } = await supabase
-      .rpc('calculate_webinar_status', {
+      .rpc('calculate_webinar_status_main', {
         webinar_start_time: new Date().toISOString(),
         webinar_duration: 60,
         check_time: new Date().toISOString()
