@@ -126,7 +126,7 @@ class EdgeFunctionZoomServiceClass {
   async getSyncProgress(syncId: string): Promise<ApiResponse> {
     try {
       const { data, error } = await supabase.functions.invoke('zoom-sync-progress', {
-        body: { sync_id: syncId }
+        body: { syncId: syncId }
       });
 
       if (error) {
@@ -140,8 +140,8 @@ class EdgeFunctionZoomServiceClass {
         success: true,
         data: data,
         status: data?.status || 'idle',
-        progress: data?.progress || 0,
-        currentOperation: data?.currentOperation
+        progress: data?.progress?.percentage || 0,
+        currentOperation: data?.progress?.currentWebinar || 'Processing...'
       };
     } catch (error) {
       console.error('Get sync progress error:', error);
