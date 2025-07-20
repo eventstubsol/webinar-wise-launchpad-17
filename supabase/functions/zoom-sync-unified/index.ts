@@ -171,6 +171,14 @@ async function processWebinarSync(supabase: any, syncId: string, connection: any
   try {
     console.log(`🔄 [${syncId}] Starting webinar sync process`);
     
+    // STEP 1: Database Health Check
+    console.log(`🏥 [${syncId}] Running database health check...`);
+    const healthCheck = await performDatabaseHealthCheck(supabase);
+    if (!healthCheck.success) {
+      throw new Error(`Database health check failed: ${healthCheck.error}`);
+    }
+    console.log(`✅ [${syncId}] Database health check passed`);
+    
     // Update sync status
     await updateSyncProgress(supabase, syncId, 5, 'Initializing sync...', 0, 0);
 
@@ -952,5 +960,74 @@ async function handleTestConnection(supabase: any, body: SyncRequest): Promise<R
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+  }
+}
+
+// CRITICAL: Database Health Check Function
+async function performDatabaseHealthCheck(supabase: any): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('🏥 Running database health check...');
+    
+    // Test 1: Check if calculate_webinar_status function exists and works
+    const { data: functionTest, error: functionError } = await supabase
+      .rpc('calculate_webinar_status', {
+        webinar_start_time: new Date().toISOString(),
+        webinar_duration: 60
+      });
+
+    if (functionError) {
+      console.error('❌ Function test failed:', functionError);
+      return {
+        success: false,
+        error: `Database function test failed: ${functionError.message}`
+      };
+    }
+
+    console.log('✅ Function test passed:', functionTest);
+
+    // Test 2: Test a simple webinar upsert to verify no conflicts
+    const testWebinarData = {
+      connection_id: '00000000-0000-0000-0000-000000000000', // Use dummy UUID
+      zoom_webinar_id: `health_check_${Date.now()}`,
+      topic: 'Health Check Test Webinar',
+      type: 5,
+      duration: 60,
+      status: 'ended',
+      sync_status: 'health_check',
+      last_synced_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { error: upsertError } = await supabase
+      .from('zoom_webinars')
+      .upsert(testWebinarData, {
+        onConflict: 'connection_id,zoom_webinar_id',
+        ignoreDuplicates: false
+      })
+      .select('id');
+
+    if (upsertError) {
+      console.error('❌ Upsert test failed:', upsertError);
+      return {
+        success: false,
+        error: `Database upsert test failed: ${upsertError.message}`
+      };
+    }
+
+    // Clean up test record
+    await supabase
+      .from('zoom_webinars')
+      .delete()
+      .eq('zoom_webinar_id', testWebinarData.zoom_webinar_id);
+
+    console.log('✅ Database health check completed successfully');
+    return { success: true };
+
+  } catch (error) {
+    console.error('❌ Database health check failed:', error);
+    return {
+      success: false,
+      error: `Health check exception: ${error.message}`
+    };
   }
 }
